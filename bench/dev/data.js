@@ -2420,61 +2420,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 451604,
             "range": "± 85477",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 845932,
             "range": "± 132215",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1671448,
             "range": "± 174245",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3346135,
             "range": "± 489127",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6818650,
             "range": "± 795582",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13648484,
             "range": "± 1414906",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 26766524,
             "range": "± 2911619",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 56929900,
             "range": "± 3499921",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 117590414,
             "range": "± 6195890",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 239688480,
             "range": "± 8918028",
             "unit": "ns/iter"
@@ -2786,61 +2786,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 441851,
             "range": "± 61568",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 836653,
             "range": "± 74557",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1644154,
             "range": "± 206768",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3330060,
             "range": "± 490438",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6991632,
             "range": "± 922967",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14219535,
             "range": "± 1633773",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 28210325,
             "range": "± 2406998",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 54304599,
             "range": "± 3450164",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 110838288,
             "range": "± 5851387",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 232509587,
             "range": "± 9304464",
             "unit": "ns/iter"
@@ -3192,61 +3192,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 437714,
             "range": "± 65828",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 748859,
             "range": "± 67235",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1379870,
             "range": "± 212381",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3030619,
             "range": "± 407851",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6315195,
             "range": "± 848250",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13746259,
             "range": "± 1754152",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 26444912,
             "range": "± 2232553",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 53585336,
             "range": "± 3983346",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 104187815,
             "range": "± 5575213",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 212230628,
             "range": "± 10597287",
             "unit": "ns/iter"
@@ -3558,61 +3558,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 412023,
             "range": "± 51922",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 783647,
             "range": "± 84071",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1434485,
             "range": "± 172859",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3126121,
             "range": "± 448795",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5969605,
             "range": "± 782726",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12660113,
             "range": "± 1240553",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24201829,
             "range": "± 1795756",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 49238409,
             "range": "± 3468978",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 98944933,
             "range": "± 6864908",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 205500282,
             "range": "± 17592557",
             "unit": "ns/iter"
@@ -3964,61 +3964,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 396410,
             "range": "± 44338",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 719493,
             "range": "± 52050",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1374923,
             "range": "± 138150",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2851981,
             "range": "± 384407",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5536619,
             "range": "± 571809",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11660913,
             "range": "± 1009776",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23930434,
             "range": "± 1486819",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 48004793,
             "range": "± 2240790",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 97070451,
             "range": "± 2948359",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 201073521,
             "range": "± 3476494",
             "unit": "ns/iter"
@@ -4330,61 +4330,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 380322,
             "range": "± 36546",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 713282,
             "range": "± 53869",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1327085,
             "range": "± 126713",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2720393,
             "range": "± 287886",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5584287,
             "range": "± 635443",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11969482,
             "range": "± 1102749",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24207884,
             "range": "± 1252221",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45713654,
             "range": "± 1756878",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 93904101,
             "range": "± 2474157",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 192328712,
             "range": "± 4818721",
             "unit": "ns/iter"
@@ -4736,61 +4736,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 345525,
             "range": "± 32203",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 612819,
             "range": "± 69167",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1156295,
             "range": "± 119495",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2557023,
             "range": "± 298004",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 4919314,
             "range": "± 460929",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10006995,
             "range": "± 756762",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20669113,
             "range": "± 1190663",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41260228,
             "range": "± 2072699",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 83836824,
             "range": "± 2284447",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 172795939,
             "range": "± 3275676",
             "unit": "ns/iter"
@@ -5102,61 +5102,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 344819,
             "range": "± 76101",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 611246,
             "range": "± 51294",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1141683,
             "range": "± 136527",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2313071,
             "range": "± 285857",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4703325,
             "range": "± 439930",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 9739724,
             "range": "± 692668",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20858292,
             "range": "± 1169779",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40652722,
             "range": "± 2544014",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 82242349,
             "range": "± 2015680",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 168168897,
             "range": "± 3555169",
             "unit": "ns/iter"
@@ -5508,61 +5508,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 320951,
             "range": "± 35703",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 637813,
             "range": "± 42505",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1202225,
             "range": "± 146829",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2503779,
             "range": "± 267286",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 4934609,
             "range": "± 481693",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10432658,
             "range": "± 1041438",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22017288,
             "range": "± 1193988",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43539370,
             "range": "± 1657527",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88818313,
             "range": "± 2130506",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 181315867,
             "range": "± 4044973",
             "unit": "ns/iter"
@@ -5874,61 +5874,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 344476,
             "range": "± 40522",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 629622,
             "range": "± 70606",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1180160,
             "range": "± 107397",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2481438,
             "range": "± 295128",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4976575,
             "range": "± 416255",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10572073,
             "range": "± 924335",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21703108,
             "range": "± 1197403",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42478592,
             "range": "± 1686451",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 87290840,
             "range": "± 2211741",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175836794,
             "range": "± 4064721",
             "unit": "ns/iter"
@@ -6280,61 +6280,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 346619,
             "range": "± 72582",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 626129,
             "range": "± 81323",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1192592,
             "range": "± 150125",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2486500,
             "range": "± 260332",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5051761,
             "range": "± 525883",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10351359,
             "range": "± 955689",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23335232,
             "range": "± 1869256",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 46139610,
             "range": "± 2206043",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 94132592,
             "range": "± 3340602",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 194859367,
             "range": "± 4658246",
             "unit": "ns/iter"
@@ -6646,61 +6646,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 345084,
             "range": "± 30166",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 657590,
             "range": "± 61260",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1255208,
             "range": "± 117888",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2523653,
             "range": "± 303978",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5284363,
             "range": "± 499261",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11247119,
             "range": "± 760313",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23439008,
             "range": "± 1168732",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45325147,
             "range": "± 1931774",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 93441328,
             "range": "± 3040998",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 189276982,
             "range": "± 4640101",
             "unit": "ns/iter"
@@ -7052,61 +7052,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 344029,
             "range": "± 54469",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 622118,
             "range": "± 51812",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1177220,
             "range": "± 134169",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2530226,
             "range": "± 309955",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5022093,
             "range": "± 434693",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10147419,
             "range": "± 841032",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21772527,
             "range": "± 1188370",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42922987,
             "range": "± 2130685",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87589071,
             "range": "± 1655792",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 182130982,
             "range": "± 5290731",
             "unit": "ns/iter"
@@ -7418,61 +7418,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 344111,
             "range": "± 29248",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 624917,
             "range": "± 71561",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1172736,
             "range": "± 114219",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2506832,
             "range": "± 269411",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4858402,
             "range": "± 484640",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10067482,
             "range": "± 931415",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21183390,
             "range": "± 1352741",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41834359,
             "range": "± 1507749",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84681703,
             "range": "± 2166004",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 172385488,
             "range": "± 3607413",
             "unit": "ns/iter"
@@ -7824,61 +7824,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 325662,
             "range": "± 46243",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 605888,
             "range": "± 82773",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1217024,
             "range": "± 151531",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2514320,
             "range": "± 304209",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5022596,
             "range": "± 591333",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10531524,
             "range": "± 927889",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20673329,
             "range": "± 1190177",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41927363,
             "range": "± 1690589",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86688638,
             "range": "± 2968460",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 177483752,
             "range": "± 6176645",
             "unit": "ns/iter"
@@ -8190,61 +8190,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 311601,
             "range": "± 72432",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 570350,
             "range": "± 46143",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1137605,
             "range": "± 117388",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2442193,
             "range": "± 254147",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4988239,
             "range": "± 474686",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 9676040,
             "range": "± 928673",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21047585,
             "range": "± 1388333",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41607212,
             "range": "± 1788689",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84381753,
             "range": "± 2100343",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 172006154,
             "range": "± 2492793",
             "unit": "ns/iter"
@@ -8596,61 +8596,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 451009,
             "range": "± 59333",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 851946,
             "range": "± 99992",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1577150,
             "range": "± 164278",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3315908,
             "range": "± 533956",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6458221,
             "range": "± 728954",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14098464,
             "range": "± 1385975",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 28306580,
             "range": "± 2188888",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 56376259,
             "range": "± 3237859",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 114514978,
             "range": "± 3708586",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 240377523,
             "range": "± 8005515",
             "unit": "ns/iter"
@@ -8962,61 +8962,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 469269,
             "range": "± 49867",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 862241,
             "range": "± 73463",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1564619,
             "range": "± 194960",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3319893,
             "range": "± 512637",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6502269,
             "range": "± 726828",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13900918,
             "range": "± 1258986",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 27728729,
             "range": "± 2854788",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 55588049,
             "range": "± 3404594",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 115606695,
             "range": "± 4005101",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 230967871,
             "range": "± 7693710",
             "unit": "ns/iter"
@@ -9368,61 +9368,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 395275,
             "range": "± 48465",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 706720,
             "range": "± 61572",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1299341,
             "range": "± 162110",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2672879,
             "range": "± 370838",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5373581,
             "range": "± 607482",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11150386,
             "range": "± 1158843",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22172307,
             "range": "± 1580105",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 46856873,
             "range": "± 2621856",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 96291750,
             "range": "± 3870248",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 193742989,
             "range": "± 6116291",
             "unit": "ns/iter"
@@ -9734,61 +9734,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 371534,
             "range": "± 83483",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 679546,
             "range": "± 68763",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1249719,
             "range": "± 148048",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2705713,
             "range": "± 323181",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5408546,
             "range": "± 704915",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10916952,
             "range": "± 987413",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23017459,
             "range": "± 1464462",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45788053,
             "range": "± 7702191",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 90507617,
             "range": "± 3973725",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 189643383,
             "range": "± 6383420",
             "unit": "ns/iter"
@@ -10140,61 +10140,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 364801,
             "range": "± 59687",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 676907,
             "range": "± 100890",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1363005,
             "range": "± 178186",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2722079,
             "range": "± 381631",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5369964,
             "range": "± 545487",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10764719,
             "range": "± 968854",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22353999,
             "range": "± 1192745",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43513018,
             "range": "± 2260935",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87927842,
             "range": "± 3365943",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179002936,
             "range": "± 3438517",
             "unit": "ns/iter"
@@ -10506,61 +10506,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 363605,
             "range": "± 58561",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 663085,
             "range": "± 71400",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1310518,
             "range": "± 167626",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2742211,
             "range": "± 383457",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5597992,
             "range": "± 663852",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10775933,
             "range": "± 897113",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22209934,
             "range": "± 1256908",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43283924,
             "range": "± 1988714",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 86593331,
             "range": "± 2359702",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 176139317,
             "range": "± 3578541",
             "unit": "ns/iter"
@@ -10912,61 +10912,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 467266,
             "range": "± 83320",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 880448,
             "range": "± 104543",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1608117,
             "range": "± 258041",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3453002,
             "range": "± 560593",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6909302,
             "range": "± 780973",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14284312,
             "range": "± 1669966",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 31141939,
             "range": "± 3447955",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 59428391,
             "range": "± 4272727",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 115784791,
             "range": "± 4657424",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 242961304,
             "range": "± 7533559",
             "unit": "ns/iter"
@@ -11278,61 +11278,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 465636,
             "range": "± 58978",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 846958,
             "range": "± 92906",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1560584,
             "range": "± 203888",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3619628,
             "range": "± 780048",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6581052,
             "range": "± 960071",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14373439,
             "range": "± 1156361",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 28207268,
             "range": "± 2108584",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 54102852,
             "range": "± 3427533",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 110628373,
             "range": "± 3880977",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 228083577,
             "range": "± 8161839",
             "unit": "ns/iter"
@@ -11684,61 +11684,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 369626,
             "range": "± 66696",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 664578,
             "range": "± 106797",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1321650,
             "range": "± 171213",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2684173,
             "range": "± 301809",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5451321,
             "range": "± 552943",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10687862,
             "range": "± 1196046",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22057909,
             "range": "± 1372065",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43914822,
             "range": "± 2460103",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87770915,
             "range": "± 2865574",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179803300,
             "range": "± 3371689",
             "unit": "ns/iter"
@@ -12050,61 +12050,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 359035,
             "range": "± 97132",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 667740,
             "range": "± 124918",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1323046,
             "range": "± 144347",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2666141,
             "range": "± 289023",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5336439,
             "range": "± 644856",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10427516,
             "range": "± 1021577",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22198193,
             "range": "± 1593757",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43596175,
             "range": "± 1734981",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 87014946,
             "range": "± 2381469",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 176482667,
             "range": "± 3660334",
             "unit": "ns/iter"
@@ -12456,61 +12456,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 429115,
             "range": "± 40210",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 825085,
             "range": "± 84322",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1524975,
             "range": "± 148707",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3534268,
             "range": "± 431251",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6454068,
             "range": "± 636643",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13387624,
             "range": "± 1388606",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 26599206,
             "range": "± 1841141",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 54410824,
             "range": "± 3034033",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 107620235,
             "range": "± 5749766",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 225664981,
             "range": "± 8653281",
             "unit": "ns/iter"
@@ -12822,61 +12822,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 430592,
             "range": "± 42005",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 805095,
             "range": "± 79189",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1490842,
             "range": "± 168315",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3304216,
             "range": "± 383016",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6547758,
             "range": "± 801070",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13384625,
             "range": "± 1231374",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 26631208,
             "range": "± 1893762",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 52591208,
             "range": "± 2776684",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 105454862,
             "range": "± 5957981",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 218911306,
             "range": "± 8624785",
             "unit": "ns/iter"
@@ -13228,61 +13228,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 348106,
             "range": "± 74784",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 626370,
             "range": "± 159774",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1216685,
             "range": "± 125188",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2642414,
             "range": "± 304043",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5210272,
             "range": "± 622186",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10262193,
             "range": "± 920657",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20631878,
             "range": "± 1430882",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 40299531,
             "range": "± 1786554",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 81616425,
             "range": "± 3763727",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 167344954,
             "range": "± 3867742",
             "unit": "ns/iter"
@@ -13594,61 +13594,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 341597,
             "range": "± 87937",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 619526,
             "range": "± 165080",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1223337,
             "range": "± 128435",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2601773,
             "range": "± 327014",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5147380,
             "range": "± 623455",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10259476,
             "range": "± 1063837",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20192233,
             "range": "± 1365766",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40614569,
             "range": "± 2136386",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 81713329,
             "range": "± 2319098",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 167081974,
             "range": "± 4024265",
             "unit": "ns/iter"
@@ -14000,61 +14000,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 337036,
             "range": "± 46534",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 633837,
             "range": "± 79498",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1190650,
             "range": "± 134652",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2574967,
             "range": "± 357477",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5165343,
             "range": "± 670184",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10244952,
             "range": "± 1036062",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20893341,
             "range": "± 1494149",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41363377,
             "range": "± 1702699",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 85545385,
             "range": "± 2184012",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 176862186,
             "range": "± 3857820",
             "unit": "ns/iter"
@@ -14366,61 +14366,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 339327,
             "range": "± 33621",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 629784,
             "range": "± 37209",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1192137,
             "range": "± 136574",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2496310,
             "range": "± 300251",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5189642,
             "range": "± 580967",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10400770,
             "range": "± 1026301",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20933841,
             "range": "± 1005149",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41364627,
             "range": "± 2353314",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84744071,
             "range": "± 1922917",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 172224722,
             "range": "± 3794067",
             "unit": "ns/iter"
@@ -14772,61 +14772,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 439433,
             "range": "± 82258",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 854901,
             "range": "± 124615",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1558895,
             "range": "± 210977",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3782689,
             "range": "± 605885",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6987285,
             "range": "± 940437",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14022596,
             "range": "± 1456849",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 27715039,
             "range": "± 2777629",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 55943484,
             "range": "± 3224757",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 113935093,
             "range": "± 4269634",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 234723966,
             "range": "± 8008524",
             "unit": "ns/iter"
@@ -15138,61 +15138,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 425040,
             "range": "± 42955",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 825372,
             "range": "± 112041",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1520409,
             "range": "± 167991",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3638182,
             "range": "± 577761",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6860330,
             "range": "± 872179",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14184282,
             "range": "± 1475506",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 26998100,
             "range": "± 2741112",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 53633715,
             "range": "± 2246537",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 107836946,
             "range": "± 3944784",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 222436490,
             "range": "± 7179540",
             "unit": "ns/iter"
@@ -15544,61 +15544,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 339551,
             "range": "± 36389",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 635119,
             "range": "± 50425",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1187552,
             "range": "± 138280",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2508354,
             "range": "± 273728",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5082793,
             "range": "± 451266",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10096419,
             "range": "± 990280",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20499236,
             "range": "± 1276217",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 40957082,
             "range": "± 1622799",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 84430122,
             "range": "± 2213315",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174464390,
             "range": "± 4154157",
             "unit": "ns/iter"
@@ -15910,61 +15910,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 338563,
             "range": "± 29348",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 630353,
             "range": "± 77911",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1193290,
             "range": "± 106048",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2458749,
             "range": "± 293020",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5007484,
             "range": "± 647228",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10008377,
             "range": "± 912208",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20444564,
             "range": "± 1188782",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40798359,
             "range": "± 1866957",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 82580602,
             "range": "± 2361418",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 163686570,
             "range": "± 3038621",
             "unit": "ns/iter"
@@ -16316,61 +16316,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 432342,
             "range": "± 73764",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 822771,
             "range": "± 97953",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1516580,
             "range": "± 200548",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3018279,
             "range": "± 404647",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6125692,
             "range": "± 836517",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13215502,
             "range": "± 1284483",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 26286856,
             "range": "± 2099768",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 52907514,
             "range": "± 2512093",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 105755070,
             "range": "± 5084538",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 214919359,
             "range": "± 9998276",
             "unit": "ns/iter"
@@ -16682,61 +16682,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 399185,
             "range": "± 38950",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 744124,
             "range": "± 81536",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1413080,
             "range": "± 184912",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2844100,
             "range": "± 425411",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5958571,
             "range": "± 733181",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12348020,
             "range": "± 1192595",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24124831,
             "range": "± 4258004",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 48816817,
             "range": "± 2799446",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 96388619,
             "range": "± 4015592",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 203149405,
             "range": "± 7394574",
             "unit": "ns/iter"
@@ -17088,61 +17088,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 474221,
             "range": "± 56607",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 892911,
             "range": "± 95970",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1677577,
             "range": "± 197848",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3866484,
             "range": "± 602930",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7022624,
             "range": "± 720603",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14208075,
             "range": "± 1324763",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 27623845,
             "range": "± 1971975",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 55724993,
             "range": "± 2478778",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 113789155,
             "range": "± 5289186",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 243702471,
             "range": "± 7062833",
             "unit": "ns/iter"
@@ -17454,61 +17454,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 463613,
             "range": "± 44387",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 873272,
             "range": "± 55533",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1683158,
             "range": "± 206201",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3810598,
             "range": "± 546658",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 7265876,
             "range": "± 752737",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14017899,
             "range": "± 1466272",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 26943890,
             "range": "± 2316854",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 54417288,
             "range": "± 2849001",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 111547394,
             "range": "± 5006791",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 232282404,
             "range": "± 6775483",
             "unit": "ns/iter"
@@ -17860,61 +17860,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 395697,
             "range": "± 42204",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 728527,
             "range": "± 53193",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1379174,
             "range": "± 182056",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2913505,
             "range": "± 349207",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5774819,
             "range": "± 737564",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11763514,
             "range": "± 890078",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23470127,
             "range": "± 1220347",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 47020407,
             "range": "± 3397453",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 94885640,
             "range": "± 4255272",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 191399660,
             "range": "± 5288575",
             "unit": "ns/iter"
@@ -18226,61 +18226,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 392598,
             "range": "± 64891",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 730458,
             "range": "± 60079",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1344094,
             "range": "± 162536",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2915835,
             "range": "± 336432",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5865861,
             "range": "± 713159",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11989237,
             "range": "± 1083497",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23941341,
             "range": "± 1403739",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 47018555,
             "range": "± 2410276",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 94042513,
             "range": "± 2956723",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 192658115,
             "range": "± 5945100",
             "unit": "ns/iter"
@@ -18632,61 +18632,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 343514,
             "range": "± 42363",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 644563,
             "range": "± 58011",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1243098,
             "range": "± 151403",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2694009,
             "range": "± 309338",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5253209,
             "range": "± 585174",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10402414,
             "range": "± 925592",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21352268,
             "range": "± 1492476",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43190620,
             "range": "± 2004941",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87836486,
             "range": "± 2533601",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 195141655,
             "range": "± 10399794",
             "unit": "ns/iter"
@@ -18998,61 +18998,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 354278,
             "range": "± 39102",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 642972,
             "range": "± 52382",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1207272,
             "range": "± 129567",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2611136,
             "range": "± 365410",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5985664,
             "range": "± 1255485",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 9993394,
             "range": "± 1025950",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21241239,
             "range": "± 1279640",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41873898,
             "range": "± 2057109",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85238714,
             "range": "± 2538887",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175367075,
             "range": "± 3416665",
             "unit": "ns/iter"
@@ -19404,61 +19404,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 350244,
             "range": "± 51222",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 664598,
             "range": "± 80162",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1232461,
             "range": "± 122989",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2653748,
             "range": "± 393820",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5420421,
             "range": "± 536361",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11472753,
             "range": "± 1107730",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23281694,
             "range": "± 1461022",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 46453788,
             "range": "± 1937766",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 93200329,
             "range": "± 4204454",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 192447051,
             "range": "± 5556566",
             "unit": "ns/iter"
@@ -19770,61 +19770,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 346393,
             "range": "± 32108",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 667725,
             "range": "± 102059",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1279785,
             "range": "± 135653",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2581625,
             "range": "± 326676",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5136477,
             "range": "± 626409",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10540192,
             "range": "± 1060124",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22420411,
             "range": "± 1436089",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 44522268,
             "range": "± 2279457",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 88339375,
             "range": "± 3988253",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 172747943,
             "range": "± 9420527",
             "unit": "ns/iter"
@@ -20176,61 +20176,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 340593,
             "range": "± 166828",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 644195,
             "range": "± 38080",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1205521,
             "range": "± 108945",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2530754,
             "range": "± 321891",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5114203,
             "range": "± 571286",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10119887,
             "range": "± 887984",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21285774,
             "range": "± 1216637",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42104495,
             "range": "± 1819971",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86850412,
             "range": "± 2439231",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178329100,
             "range": "± 3634770",
             "unit": "ns/iter"
@@ -20542,61 +20542,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 347928,
             "range": "± 42256",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 641263,
             "range": "± 58161",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1215163,
             "range": "± 116066",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2506340,
             "range": "± 274512",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4983417,
             "range": "± 593723",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10237587,
             "range": "± 975570",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20600838,
             "range": "± 1292060",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41199385,
             "range": "± 1975820",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 83428371,
             "range": "± 2931960",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 170365518,
             "range": "± 3253604",
             "unit": "ns/iter"
@@ -20948,61 +20948,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 387344,
             "range": "± 36297",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 714827,
             "range": "± 84733",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1332596,
             "range": "± 136160",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2816491,
             "range": "± 396153",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5554700,
             "range": "± 639925",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11983593,
             "range": "± 1058643",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23310437,
             "range": "± 1444709",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 45744412,
             "range": "± 2381635",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 90941802,
             "range": "± 3145625",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 193649196,
             "range": "± 7554511",
             "unit": "ns/iter"
@@ -21314,61 +21314,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 378919,
             "range": "± 44740",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 695922,
             "range": "± 77424",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1294562,
             "range": "± 110517",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2745231,
             "range": "± 350286",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5404021,
             "range": "± 648104",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11282363,
             "range": "± 1117487",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21964476,
             "range": "± 1564868",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 44115964,
             "range": "± 2468904",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 87257757,
             "range": "± 3996059",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179966269,
             "range": "± 16538703",
             "unit": "ns/iter"
@@ -21720,61 +21720,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 343120,
             "range": "± 52694",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 635486,
             "range": "± 153158",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1233528,
             "range": "± 126283",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2595379,
             "range": "± 302239",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5336317,
             "range": "± 631451",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10618784,
             "range": "± 1135085",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21164685,
             "range": "± 1638162",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41504174,
             "range": "± 2282291",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 83571289,
             "range": "± 2283954",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 170681113,
             "range": "± 3574174",
             "unit": "ns/iter"
@@ -22086,61 +22086,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 348611,
             "range": "± 58449",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 628022,
             "range": "± 77084",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1227727,
             "range": "± 114760",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2549296,
             "range": "± 209969",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5254242,
             "range": "± 568640",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10229353,
             "range": "± 983537",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20607387,
             "range": "± 1404959",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41113241,
             "range": "± 2177227",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 81976850,
             "range": "± 2220809",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 165903279,
             "range": "± 3085748",
             "unit": "ns/iter"
@@ -22492,61 +22492,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 345853,
             "range": "± 43608",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 638496,
             "range": "± 57419",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1259162,
             "range": "± 138617",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2628785,
             "range": "± 335560",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5168518,
             "range": "± 673744",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10828046,
             "range": "± 1060339",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21235760,
             "range": "± 1624837",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42005891,
             "range": "± 2090068",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 84250240,
             "range": "± 2933321",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171205356,
             "range": "± 4255417",
             "unit": "ns/iter"
@@ -22858,61 +22858,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 345003,
             "range": "± 35855",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 623848,
             "range": "± 62762",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1273460,
             "range": "± 136489",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2664487,
             "range": "± 341198",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5217035,
             "range": "± 586380",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10433874,
             "range": "± 1168601",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20540067,
             "range": "± 1605776",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40337754,
             "range": "± 1953203",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 82917867,
             "range": "± 3323879",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 166561630,
             "range": "± 4590127",
             "unit": "ns/iter"
@@ -23264,61 +23264,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 404278,
             "range": "± 52709",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 737647,
             "range": "± 85140",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1449074,
             "range": "± 179450",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3053994,
             "range": "± 410184",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6029246,
             "range": "± 723157",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12047555,
             "range": "± 1088174",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 24194072,
             "range": "± 1615975",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 48651107,
             "range": "± 2106436",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 98733199,
             "range": "± 2932778",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 207293534,
             "range": "± 6112277",
             "unit": "ns/iter"
@@ -23630,61 +23630,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 391632,
             "range": "± 53145",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 742778,
             "range": "± 79065",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1406500,
             "range": "± 189504",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3226898,
             "range": "± 441661",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6041057,
             "range": "± 613356",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11856212,
             "range": "± 919370",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23940707,
             "range": "± 1414031",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 46954358,
             "range": "± 2320017",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 95287402,
             "range": "± 3184036",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 195025271,
             "range": "± 6086891",
             "unit": "ns/iter"
@@ -24036,61 +24036,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 343134,
             "range": "± 36191",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 644645,
             "range": "± 87972",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1211309,
             "range": "± 140847",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2519478,
             "range": "± 359656",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5299791,
             "range": "± 618050",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10296979,
             "range": "± 996653",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21659846,
             "range": "± 1373742",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42978840,
             "range": "± 2006328",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88344157,
             "range": "± 7026540",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 181655080,
             "range": "± 8514066",
             "unit": "ns/iter"
@@ -24402,61 +24402,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 353142,
             "range": "± 44946",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 637913,
             "range": "± 47700",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1247343,
             "range": "± 121780",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2611109,
             "range": "± 351345",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5082796,
             "range": "± 576413",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10191493,
             "range": "± 933826",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20857233,
             "range": "± 1301619",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41246364,
             "range": "± 2312336",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85472516,
             "range": "± 3295165",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174083470,
             "range": "± 6551748",
             "unit": "ns/iter"
@@ -24808,61 +24808,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 338745,
             "range": "± 45104",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 640564,
             "range": "± 67154",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1227159,
             "range": "± 102596",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2535596,
             "range": "± 361289",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5200793,
             "range": "± 510667",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10068297,
             "range": "± 1169595",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21421505,
             "range": "± 1779638",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44024226,
             "range": "± 2550892",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 85837067,
             "range": "± 4374326",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178996034,
             "range": "± 6133198",
             "unit": "ns/iter"
@@ -25174,61 +25174,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 333578,
             "range": "± 56249",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 623773,
             "range": "± 39672",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1211882,
             "range": "± 105965",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2421085,
             "range": "± 322923",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4881362,
             "range": "± 541564",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 9991261,
             "range": "± 1089092",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21096747,
             "range": "± 1331585",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40233967,
             "range": "± 2559598",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84566040,
             "range": "± 2675093",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 172483269,
             "range": "± 4363215",
             "unit": "ns/iter"
@@ -25580,61 +25580,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 347683,
             "range": "± 34177",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 643339,
             "range": "± 69006",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1214191,
             "range": "± 123383",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2463504,
             "range": "± 297246",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5369890,
             "range": "± 642484",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10386736,
             "range": "± 1076524",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21184951,
             "range": "± 1470581",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41829492,
             "range": "± 1571172",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 83720285,
             "range": "± 2482533",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171690292,
             "range": "± 3109124",
             "unit": "ns/iter"
@@ -25946,61 +25946,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 347410,
             "range": "± 44731",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 644233,
             "range": "± 56744",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1168952,
             "range": "± 124061",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2446582,
             "range": "± 319077",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5093608,
             "range": "± 630001",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10250299,
             "range": "± 1003147",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21216126,
             "range": "± 1268624",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41238186,
             "range": "± 1769286",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84891554,
             "range": "± 2221670",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174541369,
             "range": "± 4559985",
             "unit": "ns/iter"
@@ -26352,61 +26352,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 342219,
             "range": "± 32070",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 657468,
             "range": "± 49135",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1219267,
             "range": "± 116650",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2506969,
             "range": "± 313694",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5246436,
             "range": "± 573844",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10529056,
             "range": "± 909173",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21488152,
             "range": "± 1044625",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41934437,
             "range": "± 1894413",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 85020218,
             "range": "± 2328899",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175093193,
             "range": "± 3407794",
             "unit": "ns/iter"
@@ -26718,61 +26718,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 356940,
             "range": "± 62048",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 645305,
             "range": "± 66536",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1216723,
             "range": "± 146417",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2574900,
             "range": "± 311946",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5317759,
             "range": "± 636102",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10475572,
             "range": "± 1008990",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21819266,
             "range": "± 1357720",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43027971,
             "range": "± 1612776",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84415041,
             "range": "± 2385613",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174780481,
             "range": "± 4537211",
             "unit": "ns/iter"
@@ -27124,61 +27124,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 427286,
             "range": "± 45723",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 823157,
             "range": "± 63199",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1556098,
             "range": "± 220944",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3601723,
             "range": "± 564586",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6578443,
             "range": "± 1052652",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13429088,
             "range": "± 1788874",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25669019,
             "range": "± 3029577",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 51431316,
             "range": "± 3779330",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 105742770,
             "range": "± 4744839",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 219050272,
             "range": "± 7381031",
             "unit": "ns/iter"
@@ -27490,61 +27490,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 418993,
             "range": "± 46312",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 798843,
             "range": "± 104505",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1485403,
             "range": "± 204254",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3313161,
             "range": "± 538694",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6778775,
             "range": "± 856308",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13203131,
             "range": "± 1206407",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 25838649,
             "range": "± 2715604",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 51121019,
             "range": "± 3639232",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 106207017,
             "range": "± 12180371",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 218577201,
             "range": "± 7754662",
             "unit": "ns/iter"
@@ -27896,61 +27896,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 467081,
             "range": "± 53151",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 901553,
             "range": "± 55097",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1666702,
             "range": "± 186146",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3608032,
             "range": "± 506290",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6814966,
             "range": "± 823582",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14653182,
             "range": "± 1391539",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 28576811,
             "range": "± 2583457",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 58861885,
             "range": "± 2920968",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 120228235,
             "range": "± 4546850",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 245044085,
             "range": "± 6601833",
             "unit": "ns/iter"
@@ -28262,61 +28262,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 470285,
             "range": "± 55677",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 879073,
             "range": "± 74534",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1636053,
             "range": "± 176085",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3829722,
             "range": "± 629869",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 7042406,
             "range": "± 894313",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14686481,
             "range": "± 1343996",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 28070959,
             "range": "± 1973760",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 56679372,
             "range": "± 2563026",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 114215585,
             "range": "± 3692489",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 238157373,
             "range": "± 5047617",
             "unit": "ns/iter"
@@ -28668,61 +28668,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 389510,
             "range": "± 51093",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 712320,
             "range": "± 54836",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1314535,
             "range": "± 129254",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2758336,
             "range": "± 389511",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5410007,
             "range": "± 633704",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11694950,
             "range": "± 934653",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22641658,
             "range": "± 1621040",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44718035,
             "range": "± 2550453",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88716732,
             "range": "± 3683418",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 184579526,
             "range": "± 5367812",
             "unit": "ns/iter"
@@ -29034,61 +29034,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 373657,
             "range": "± 43098",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 686307,
             "range": "± 59645",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1292087,
             "range": "± 165028",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2865288,
             "range": "± 375667",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5358558,
             "range": "± 580860",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11244321,
             "range": "± 1071066",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21678098,
             "range": "± 1563085",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43165469,
             "range": "± 2393006",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 87658027,
             "range": "± 2664350",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 181106107,
             "range": "± 4840975",
             "unit": "ns/iter"
@@ -29440,61 +29440,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 347333,
             "range": "± 30673",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 632675,
             "range": "± 341836",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1204316,
             "range": "± 123225",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2494000,
             "range": "± 311571",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5123671,
             "range": "± 553832",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10166673,
             "range": "± 858072",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20842849,
             "range": "± 1250107",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 40945020,
             "range": "± 1459183",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 84407636,
             "range": "± 2389252",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175513346,
             "range": "± 3442429",
             "unit": "ns/iter"
@@ -29806,61 +29806,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 341096,
             "range": "± 52417",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 638077,
             "range": "± 52375",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1194831,
             "range": "± 137109",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2529972,
             "range": "± 311231",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4991969,
             "range": "± 585624",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 9879769,
             "range": "± 835579",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20311312,
             "range": "± 957928",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40445024,
             "range": "± 1649695",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 82735073,
             "range": "± 2147617",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 168996504,
             "range": "± 3011987",
             "unit": "ns/iter"
@@ -30212,61 +30212,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 342788,
             "range": "± 28183",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 648227,
             "range": "± 70526",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1226633,
             "range": "± 110963",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2600042,
             "range": "± 369333",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5393139,
             "range": "± 597053",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10199084,
             "range": "± 934897",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20990630,
             "range": "± 1038165",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41952962,
             "range": "± 1990154",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87147083,
             "range": "± 3547026",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179552044,
             "range": "± 3789845",
             "unit": "ns/iter"
@@ -30578,61 +30578,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 343392,
             "range": "± 31649",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 640291,
             "range": "± 36001",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1198835,
             "range": "± 101716",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2404730,
             "range": "± 285203",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5236286,
             "range": "± 565748",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10097132,
             "range": "± 1117702",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21089624,
             "range": "± 1208859",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41109143,
             "range": "± 1757768",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84257004,
             "range": "± 2369761",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171722956,
             "range": "± 3039659",
             "unit": "ns/iter"
@@ -30984,61 +30984,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 361227,
             "range": "± 37940",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 644328,
             "range": "± 78790",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1153857,
             "range": "± 129466",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2593368,
             "range": "± 309523",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 4979494,
             "range": "± 568429",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10043924,
             "range": "± 1067290",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20716690,
             "range": "± 1628003",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 40822823,
             "range": "± 3182307",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86732017,
             "range": "± 4338418",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174798400,
             "range": "± 9383021",
             "unit": "ns/iter"
@@ -31350,61 +31350,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 336813,
             "range": "± 37118",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 633331,
             "range": "± 52309",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1174577,
             "range": "± 144280",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2714910,
             "range": "± 347851",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5386476,
             "range": "± 613186",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 9762619,
             "range": "± 1158619",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 19706227,
             "range": "± 1743915",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 39062546,
             "range": "± 2788312",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 79238532,
             "range": "± 5651947",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 162966673,
             "range": "± 8790584",
             "unit": "ns/iter"
@@ -31756,61 +31756,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 391743,
             "range": "± 39570",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 740591,
             "range": "± 80903",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1336461,
             "range": "± 131180",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2901271,
             "range": "± 432550",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5720611,
             "range": "± 631738",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11627122,
             "range": "± 978830",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23563566,
             "range": "± 1654747",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 46538818,
             "range": "± 1705441",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 96255593,
             "range": "± 2552795",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 193196798,
             "range": "± 5271220",
             "unit": "ns/iter"
@@ -32122,61 +32122,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 388346,
             "range": "± 35042",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 713099,
             "range": "± 113148",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1331808,
             "range": "± 137605",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2759263,
             "range": "± 334631",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5717909,
             "range": "± 748750",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11533302,
             "range": "± 1080269",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22987753,
             "range": "± 1278327",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45791103,
             "range": "± 2017388",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 93962747,
             "range": "± 2779048",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 190426435,
             "range": "± 5275938",
             "unit": "ns/iter"
@@ -32528,61 +32528,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 463177,
             "range": "± 83936",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 855988,
             "range": "± 132414",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1575922,
             "range": "± 201644",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3726944,
             "range": "± 445943",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6926852,
             "range": "± 849766",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13757166,
             "range": "± 1235223",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 27209085,
             "range": "± 2589862",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 54934560,
             "range": "± 3728474",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 111022610,
             "range": "± 4341703",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 236475180,
             "range": "± 7463681",
             "unit": "ns/iter"
@@ -32894,61 +32894,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 460745,
             "range": "± 81375",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 852620,
             "range": "± 101465",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1522648,
             "range": "± 183916",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3521818,
             "range": "± 505199",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6630663,
             "range": "± 793166",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13215341,
             "range": "± 1071131",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 26823674,
             "range": "± 2557456",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 52613779,
             "range": "± 2961388",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 105952084,
             "range": "± 4121967",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 216747731,
             "range": "± 6456256",
             "unit": "ns/iter"
@@ -33300,61 +33300,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 501043,
             "range": "± 61883",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 931693,
             "range": "± 78579",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1737158,
             "range": "± 220628",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3878642,
             "range": "± 538474",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7894978,
             "range": "± 836930",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 15569213,
             "range": "± 1437689",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 30623085,
             "range": "± 2559112",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 61451207,
             "range": "± 3170619",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 125343376,
             "range": "± 5196463",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 255218985,
             "range": "± 7576101",
             "unit": "ns/iter"
@@ -33666,61 +33666,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 497338,
             "range": "± 62712",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 921669,
             "range": "± 127796",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1751089,
             "range": "± 199617",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 4059300,
             "range": "± 607966",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 7647138,
             "range": "± 862107",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 15509020,
             "range": "± 1985569",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 30109640,
             "range": "± 3215692",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 61996472,
             "range": "± 3582267",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 123321138,
             "range": "± 5104258",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 258373803,
             "range": "± 7252830",
             "unit": "ns/iter"
@@ -34072,61 +34072,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 351192,
             "range": "± 26741",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 649638,
             "range": "± 148474",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1222263,
             "range": "± 132699",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2591058,
             "range": "± 295225",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5073705,
             "range": "± 538223",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10419064,
             "range": "± 1096697",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22068234,
             "range": "± 1395549",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44122766,
             "range": "± 2077084",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88657587,
             "range": "± 2216707",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 184429647,
             "range": "± 4321209",
             "unit": "ns/iter"
@@ -34438,61 +34438,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 342874,
             "range": "± 37501",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 644710,
             "range": "± 47331",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1200766,
             "range": "± 123774",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2560799,
             "range": "± 298094",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5141706,
             "range": "± 597198",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10259824,
             "range": "± 1030745",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21371797,
             "range": "± 1100877",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42233090,
             "range": "± 1715866",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85527275,
             "range": "± 3337956",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175682900,
             "range": "± 3089432",
             "unit": "ns/iter"
@@ -34844,61 +34844,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 345496,
             "range": "± 40434",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 646911,
             "range": "± 54741",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1228677,
             "range": "± 115006",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2622006,
             "range": "± 257271",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5029728,
             "range": "± 539530",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10432260,
             "range": "± 984233",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20989052,
             "range": "± 1098498",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41613857,
             "range": "± 2028224",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86719838,
             "range": "± 2481135",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 182633244,
             "range": "± 24609537",
             "unit": "ns/iter"
@@ -35210,61 +35210,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 342432,
             "range": "± 40282",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 640051,
             "range": "± 74324",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1204359,
             "range": "± 137726",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2501137,
             "range": "± 279243",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5159239,
             "range": "± 626524",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10274094,
             "range": "± 1087533",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20405405,
             "range": "± 1153678",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40614006,
             "range": "± 1769035",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 83252207,
             "range": "± 2710460",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 170886433,
             "range": "± 3629491",
             "unit": "ns/iter"
@@ -35616,61 +35616,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 337153,
             "range": "± 45839",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 630980,
             "range": "± 56159",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1244717,
             "range": "± 143393",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2716995,
             "range": "± 350916",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5255541,
             "range": "± 627205",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10278469,
             "range": "± 1097495",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20837026,
             "range": "± 1483544",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41175057,
             "range": "± 1911881",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 82692160,
             "range": "± 2883760",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 168523868,
             "range": "± 3092349",
             "unit": "ns/iter"
@@ -35982,61 +35982,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 333116,
             "range": "± 38749",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 619440,
             "range": "± 49602",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1209325,
             "range": "± 155053",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2656375,
             "range": "± 356728",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5266876,
             "range": "± 575402",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10321768,
             "range": "± 1050753",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20532577,
             "range": "± 1561896",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 39717303,
             "range": "± 1883215",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 80466008,
             "range": "± 2240558",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 163686331,
             "range": "± 3767747",
             "unit": "ns/iter"
@@ -36388,61 +36388,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 344974,
             "range": "± 44525",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 629408,
             "range": "± 92651",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1320768,
             "range": "± 183412",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2661842,
             "range": "± 345018",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5165651,
             "range": "± 592256",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10537035,
             "range": "± 1001545",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21008947,
             "range": "± 1387435",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 40636794,
             "range": "± 2245530",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 82741941,
             "range": "± 2172121",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 168802554,
             "range": "± 3376280",
             "unit": "ns/iter"
@@ -36754,61 +36754,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 336999,
             "range": "± 59090",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 626460,
             "range": "± 66761",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1190494,
             "range": "± 147912",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2548242,
             "range": "± 313756",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5144110,
             "range": "± 558647",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10340770,
             "range": "± 1042954",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20445125,
             "range": "± 1607239",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40590251,
             "range": "± 2538597",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 80538251,
             "range": "± 2913856",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 165001315,
             "range": "± 3370801",
             "unit": "ns/iter"
@@ -37160,61 +37160,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 397637,
             "range": "± 70040",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 727995,
             "range": "± 48602",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1353378,
             "range": "± 132517",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3060217,
             "range": "± 384411",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5701410,
             "range": "± 624314",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11782628,
             "range": "± 892699",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23714091,
             "range": "± 1206619",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 47443751,
             "range": "± 2337966",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 97607002,
             "range": "± 2847660",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 203124671,
             "range": "± 5241698",
             "unit": "ns/iter"
@@ -37526,61 +37526,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 385165,
             "range": "± 39931",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 726069,
             "range": "± 61456",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1348597,
             "range": "± 161330",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2790227,
             "range": "± 345043",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5594633,
             "range": "± 681658",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11528462,
             "range": "± 911009",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23095285,
             "range": "± 1334325",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45659201,
             "range": "± 2212668",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 92912707,
             "range": "± 10818088",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 188120339,
             "range": "± 4147395",
             "unit": "ns/iter"
@@ -37932,61 +37932,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 352097,
             "range": "± 31933",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 660772,
             "range": "± 55816",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1286186,
             "range": "± 143748",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2703621,
             "range": "± 377585",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5575874,
             "range": "± 538090",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10927500,
             "range": "± 1235746",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21048552,
             "range": "± 1664693",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42577256,
             "range": "± 2978067",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 85474455,
             "range": "± 4419861",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175299179,
             "range": "± 7645693",
             "unit": "ns/iter"
@@ -38298,61 +38298,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 346368,
             "range": "± 45125",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 660049,
             "range": "± 44546",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1241597,
             "range": "± 150656",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2593194,
             "range": "± 310692",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5415548,
             "range": "± 637618",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10727630,
             "range": "± 953238",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21388427,
             "range": "± 1548218",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42777855,
             "range": "± 3054106",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84916510,
             "range": "± 3068341",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171663123,
             "range": "± 5674476",
             "unit": "ns/iter"
@@ -38704,61 +38704,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 358796,
             "range": "± 41956",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 651386,
             "range": "± 59646",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1223799,
             "range": "± 124755",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2573334,
             "range": "± 308919",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5186722,
             "range": "± 567645",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10345461,
             "range": "± 993429",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21338585,
             "range": "± 1229988",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42689120,
             "range": "± 1757909",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87680994,
             "range": "± 2318554",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178038062,
             "range": "± 3568253",
             "unit": "ns/iter"
@@ -39070,61 +39070,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 353288,
             "range": "± 24622",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 660934,
             "range": "± 48050",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1223463,
             "range": "± 106934",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2550938,
             "range": "± 289682",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5121512,
             "range": "± 526420",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10767069,
             "range": "± 1054866",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21359484,
             "range": "± 1168098",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42188758,
             "range": "± 2248703",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85012135,
             "range": "± 2359950",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175579816,
             "range": "± 3007613",
             "unit": "ns/iter"
@@ -39476,61 +39476,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 455955,
             "range": "± 100965",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 870652,
             "range": "± 83099",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1604979,
             "range": "± 199964",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3529081,
             "range": "± 568342",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7010425,
             "range": "± 853053",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14370953,
             "range": "± 1494503",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 28055050,
             "range": "± 2464365",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 56262945,
             "range": "± 3219780",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 114165529,
             "range": "± 4224697",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 237392637,
             "range": "± 6565360",
             "unit": "ns/iter"
@@ -39842,61 +39842,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 444999,
             "range": "± 42420",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 876347,
             "range": "± 70718",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1566510,
             "range": "± 187940",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3637220,
             "range": "± 634387",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6916126,
             "range": "± 810653",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13713502,
             "range": "± 1285591",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 27039746,
             "range": "± 2092090",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 53746742,
             "range": "± 2670473",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 109464191,
             "range": "± 5153811",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 227678195,
             "range": "± 6780674",
             "unit": "ns/iter"
@@ -40248,61 +40248,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 353585,
             "range": "± 64374",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 651274,
             "range": "± 61113",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1270738,
             "range": "± 123708",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2694022,
             "range": "± 360944",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5502574,
             "range": "± 724327",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10377440,
             "range": "± 962964",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21085110,
             "range": "± 1285218",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41435809,
             "range": "± 2335754",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 83609178,
             "range": "± 2743427",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171523667,
             "range": "± 3092905",
             "unit": "ns/iter"
@@ -40614,61 +40614,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 340130,
             "range": "± 36933",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 639619,
             "range": "± 67414",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1251198,
             "range": "± 131774",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2597018,
             "range": "± 296608",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5429255,
             "range": "± 662734",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10650318,
             "range": "± 1078312",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20851974,
             "range": "± 1511178",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40782859,
             "range": "± 2114140",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 82685303,
             "range": "± 3139934",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 167268959,
             "range": "± 3321031",
             "unit": "ns/iter"
@@ -41020,61 +41020,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 388678,
             "range": "± 48187",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 719488,
             "range": "± 62432",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1347707,
             "range": "± 163373",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2864443,
             "range": "± 357897",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5878363,
             "range": "± 638623",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11536190,
             "range": "± 1107366",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23012727,
             "range": "± 1208575",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 45791694,
             "range": "± 2468075",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 92195156,
             "range": "± 3695037",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 191933446,
             "range": "± 6620460",
             "unit": "ns/iter"
@@ -41386,61 +41386,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 390001,
             "range": "± 65617",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 715075,
             "range": "± 86530",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1307364,
             "range": "± 161068",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2908998,
             "range": "± 379022",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5657193,
             "range": "± 741627",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11679214,
             "range": "± 1072301",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22850293,
             "range": "± 1457691",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 46464749,
             "range": "± 2086357",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 92563842,
             "range": "± 3083576",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 184716769,
             "range": "± 6223537",
             "unit": "ns/iter"
@@ -41792,61 +41792,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 350495,
             "range": "± 43582",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 651851,
             "range": "± 74976",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1223799,
             "range": "± 123828",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2449379,
             "range": "± 276661",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5021919,
             "range": "± 586491",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10228224,
             "range": "± 1023808",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21070358,
             "range": "± 1263834",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41214951,
             "range": "± 2185529",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 85462795,
             "range": "± 3136068",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175364486,
             "range": "± 6869952",
             "unit": "ns/iter"
@@ -42158,61 +42158,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 349901,
             "range": "± 35690",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 646936,
             "range": "± 47862",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1203735,
             "range": "± 104752",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2507048,
             "range": "± 293963",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5020777,
             "range": "± 534782",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10156092,
             "range": "± 998646",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21120958,
             "range": "± 1244159",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40571646,
             "range": "± 2119904",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 83066715,
             "range": "± 2488810",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 170458784,
             "range": "± 5054407",
             "unit": "ns/iter"
@@ -42564,61 +42564,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 348864,
             "range": "± 48359",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 634790,
             "range": "± 52555",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1249057,
             "range": "± 143708",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2759354,
             "range": "± 310748",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5312085,
             "range": "± 568899",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10237957,
             "range": "± 1142335",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20467721,
             "range": "± 1352288",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41348841,
             "range": "± 4961045",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 82188645,
             "range": "± 3214910",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 169389273,
             "range": "± 3689950",
             "unit": "ns/iter"
@@ -42930,61 +42930,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 342435,
             "range": "± 38262",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 631389,
             "range": "± 59200",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1240857,
             "range": "± 153423",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2592054,
             "range": "± 314063",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5182434,
             "range": "± 601169",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10118937,
             "range": "± 964168",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20446590,
             "range": "± 1281776",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 39944288,
             "range": "± 2681259",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 80281376,
             "range": "± 2415038",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 164759986,
             "range": "± 3592637",
             "unit": "ns/iter"
@@ -43336,61 +43336,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 345584,
             "range": "± 47928",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 645265,
             "range": "± 44713",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1217923,
             "range": "± 132907",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2559347,
             "range": "± 278878",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5060659,
             "range": "± 573010",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10129816,
             "range": "± 984876",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21180755,
             "range": "± 2212112",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 41655949,
             "range": "± 2054152",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 84949417,
             "range": "± 2358263",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 176587975,
             "range": "± 4128968",
             "unit": "ns/iter"
@@ -43702,61 +43702,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 347812,
             "range": "± 38686",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 637977,
             "range": "± 46272",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1196098,
             "range": "± 113987",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2503691,
             "range": "± 283473",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5008257,
             "range": "± 451648",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 9991616,
             "range": "± 855836",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20465747,
             "range": "± 1081920",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 40636237,
             "range": "± 2037934",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 82355991,
             "range": "± 2002974",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 168271627,
             "range": "± 3228263",
             "unit": "ns/iter"
@@ -44108,61 +44108,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 347485,
             "range": "± 40671",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 651411,
             "range": "± 54940",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1215496,
             "range": "± 138964",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2586599,
             "range": "± 283450",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5315582,
             "range": "± 634254",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10517048,
             "range": "± 1570224",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 20638681,
             "range": "± 1114521",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 40820515,
             "range": "± 2023458",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 83264876,
             "range": "± 2422471",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 170070637,
             "range": "± 3681808",
             "unit": "ns/iter"
@@ -44474,61 +44474,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 349243,
             "range": "± 73660",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 630150,
             "range": "± 80557",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1286440,
             "range": "± 164996",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2602553,
             "range": "± 252389",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5228839,
             "range": "± 613655",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10317646,
             "range": "± 951721",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20660204,
             "range": "± 1104028",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41034101,
             "range": "± 1985240",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 83326654,
             "range": "± 2661817",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 169909070,
             "range": "± 4820759",
             "unit": "ns/iter"
@@ -44880,61 +44880,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 343691,
             "range": "± 43831",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 643642,
             "range": "± 87568",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1253510,
             "range": "± 120270",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2582842,
             "range": "± 350569",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5379067,
             "range": "± 709470",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10300296,
             "range": "± 965503",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21215643,
             "range": "± 1196595",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42632335,
             "range": "± 2023983",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86183388,
             "range": "± 2646208",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 177913590,
             "range": "± 4095846",
             "unit": "ns/iter"
@@ -45246,61 +45246,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 354970,
             "range": "± 81210",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 643941,
             "range": "± 85251",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1215845,
             "range": "± 137008",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2527013,
             "range": "± 341337",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5024838,
             "range": "± 514230",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10291213,
             "range": "± 1021765",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21011590,
             "range": "± 1248442",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41358974,
             "range": "± 2273864",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84057913,
             "range": "± 2422483",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171017209,
             "range": "± 3603017",
             "unit": "ns/iter"
@@ -45652,61 +45652,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 341398,
             "range": "± 51531",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 647776,
             "range": "± 88438",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1283437,
             "range": "± 125677",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2610888,
             "range": "± 345175",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5542015,
             "range": "± 692615",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10890133,
             "range": "± 1377466",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21550443,
             "range": "± 1497850",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42377390,
             "range": "± 2433604",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 85159178,
             "range": "± 2633230",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174009489,
             "range": "± 3128422",
             "unit": "ns/iter"
@@ -46018,61 +46018,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 337775,
             "range": "± 34623",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 649682,
             "range": "± 96270",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1215614,
             "range": "± 162362",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2553447,
             "range": "± 322772",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5289660,
             "range": "± 696700",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10190255,
             "range": "± 851972",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21182592,
             "range": "± 1304816",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42181088,
             "range": "± 1847642",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84096531,
             "range": "± 2676106",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 169584202,
             "range": "± 3742472",
             "unit": "ns/iter"
@@ -46424,61 +46424,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 424169,
             "range": "± 67437",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 809383,
             "range": "± 82767",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1518434,
             "range": "± 191198",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3130186,
             "range": "± 370830",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6453400,
             "range": "± 914998",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13143094,
             "range": "± 1362321",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 26362843,
             "range": "± 2208392",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 55270343,
             "range": "± 3420342",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 114202507,
             "range": "± 6656041",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 245575686,
             "range": "± 9479166",
             "unit": "ns/iter"
@@ -46790,61 +46790,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 473146,
             "range": "± 87110",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 883120,
             "range": "± 101448",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1520172,
             "range": "± 191565",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3107410,
             "range": "± 467994",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6181080,
             "range": "± 796128",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13081376,
             "range": "± 1071395",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 26013647,
             "range": "± 2354154",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 51248465,
             "range": "± 2951987",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 104001761,
             "range": "± 4644967",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 221501341,
             "range": "± 7090747",
             "unit": "ns/iter"
@@ -47196,61 +47196,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 344868,
             "range": "± 34104",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 648554,
             "range": "± 79125",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1263056,
             "range": "± 126236",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2618839,
             "range": "± 296874",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5554838,
             "range": "± 709612",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10637038,
             "range": "± 1057342",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21753173,
             "range": "± 2068635",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42753807,
             "range": "± 2289115",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 84752236,
             "range": "± 2569886",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 172426912,
             "range": "± 3357586",
             "unit": "ns/iter"
@@ -47562,61 +47562,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 343340,
             "range": "± 61794",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 636155,
             "range": "± 48596",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1285878,
             "range": "± 144506",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2567678,
             "range": "± 279378",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5288196,
             "range": "± 639092",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10334277,
             "range": "± 917413",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20774121,
             "range": "± 1168608",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41647091,
             "range": "± 2018838",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84495607,
             "range": "± 2383023",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 169717963,
             "range": "± 3194185",
             "unit": "ns/iter"
@@ -47968,61 +47968,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 580615,
             "range": "± 173394",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 1057655,
             "range": "± 171467",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1995521,
             "range": "± 327121",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3740839,
             "range": "± 630346",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 8477231,
             "range": "± 1290272",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 17951420,
             "range": "± 2715538",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 33642007,
             "range": "± 3944645",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 68820960,
             "range": "± 5681719",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 138087680,
             "range": "± 11244220",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 301715734,
             "range": "± 17123268",
             "unit": "ns/iter"
@@ -48334,61 +48334,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 534732,
             "range": "± 142181",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 1057327,
             "range": "± 166074",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 2058905,
             "range": "± 339719",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 4189653,
             "range": "± 680730",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 8336173,
             "range": "± 1387882",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 17455221,
             "range": "± 2230869",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 34228481,
             "range": "± 4682198",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 70702859,
             "range": "± 5187086",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 143831423,
             "range": "± 8832091",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 309351607,
             "range": "± 15094328",
             "unit": "ns/iter"
@@ -48740,61 +48740,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 358427,
             "range": "± 29666",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 684172,
             "range": "± 41646",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1375094,
             "range": "± 156132",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2832181,
             "range": "± 263089",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5786717,
             "range": "± 510793",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11456443,
             "range": "± 922971",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23766174,
             "range": "± 1289430",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 46918900,
             "range": "± 2537821",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 95076203,
             "range": "± 4190022",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 205623876,
             "range": "± 4223607",
             "unit": "ns/iter"
@@ -49106,61 +49106,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 388792,
             "range": "± 26419",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 734404,
             "range": "± 109838",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1381887,
             "range": "± 138346",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2845877,
             "range": "± 382202",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5586211,
             "range": "± 479660",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11530878,
             "range": "± 1032047",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23578724,
             "range": "± 1143402",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 48262218,
             "range": "± 2281896",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 92019752,
             "range": "± 3028028",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 197600644,
             "range": "± 8008061",
             "unit": "ns/iter"
@@ -49512,61 +49512,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 440895,
             "range": "± 95960",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 802789,
             "range": "± 135902",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1564890,
             "range": "± 260731",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3270246,
             "range": "± 432551",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6531410,
             "range": "± 1054753",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12461759,
             "range": "± 1332937",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25067300,
             "range": "± 2002791",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 48510998,
             "range": "± 3901571",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 100723957,
             "range": "± 5913435",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 212167760,
             "range": "± 8268277",
             "unit": "ns/iter"
@@ -49878,61 +49878,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 463202,
             "range": "± 89101",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 768652,
             "range": "± 210614",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1493954,
             "range": "± 267031",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3213315,
             "range": "± 539070",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6652500,
             "range": "± 903419",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12702390,
             "range": "± 1554192",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 25230603,
             "range": "± 2187840",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 49932359,
             "range": "± 3718306",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 101742665,
             "range": "± 5584566",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 213692643,
             "range": "± 7388910",
             "unit": "ns/iter"
@@ -50284,61 +50284,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 422184,
             "range": "± 95867",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 764320,
             "range": "± 122388",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1393696,
             "range": "± 198927",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3055089,
             "range": "± 377344",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5813582,
             "range": "± 885560",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11817404,
             "range": "± 1287813",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 24204589,
             "range": "± 2020895",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 48165574,
             "range": "± 3530130",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 98942873,
             "range": "± 4142380",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 207454232,
             "range": "± 7246854",
             "unit": "ns/iter"
@@ -50650,61 +50650,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 408538,
             "range": "± 256938",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 735746,
             "range": "± 80532",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1390804,
             "range": "± 205976",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2927033,
             "range": "± 444592",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5976434,
             "range": "± 862734",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11743388,
             "range": "± 1460410",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24072231,
             "range": "± 2381167",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 48135098,
             "range": "± 4473419",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 98849550,
             "range": "± 5545861",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 210967121,
             "range": "± 7555752",
             "unit": "ns/iter"
@@ -51056,61 +51056,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 430430,
             "range": "± 80997",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 797444,
             "range": "± 125243",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1475767,
             "range": "± 243247",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3290059,
             "range": "± 511445",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6428506,
             "range": "± 824430",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13009324,
             "range": "± 1425289",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25778843,
             "range": "± 2218437",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 50230175,
             "range": "± 3582789",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 104905290,
             "range": "± 4958661",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 221665680,
             "range": "± 6290807",
             "unit": "ns/iter"
@@ -51422,61 +51422,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 431853,
             "range": "± 79422",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 790263,
             "range": "± 123166",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1485397,
             "range": "± 256341",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3055368,
             "range": "± 421100",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6535017,
             "range": "± 1010850",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12408939,
             "range": "± 1325040",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 25724628,
             "range": "± 2234902",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 51858217,
             "range": "± 4440312",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 105540045,
             "range": "± 5212650",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 225549687,
             "range": "± 7389009",
             "unit": "ns/iter"
@@ -51828,61 +51828,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 442381,
             "range": "± 73284",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 774174,
             "range": "± 121082",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1492118,
             "range": "± 220293",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3338217,
             "range": "± 486548",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6367275,
             "range": "± 767747",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12426487,
             "range": "± 1495063",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 24569741,
             "range": "± 2337786",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 47870786,
             "range": "± 3112960",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 98282662,
             "range": "± 4419775",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 197232327,
             "range": "± 8081356",
             "unit": "ns/iter"
@@ -52194,61 +52194,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 435697,
             "range": "± 83397",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 767816,
             "range": "± 179480",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1547141,
             "range": "± 270324",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3162242,
             "range": "± 432738",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6726164,
             "range": "± 822431",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12483453,
             "range": "± 1269997",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24727290,
             "range": "± 2207783",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 48195135,
             "range": "± 3894365",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 97612669,
             "range": "± 4322973",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 200622769,
             "range": "± 7992357",
             "unit": "ns/iter"
@@ -52600,61 +52600,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 516199,
             "range": "± 74036",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 990786,
             "range": "± 140973",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1875380,
             "range": "± 252435",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3840352,
             "range": "± 478912",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7803352,
             "range": "± 729030",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 15327406,
             "range": "± 1446129",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 31072320,
             "range": "± 3420031",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 64637691,
             "range": "± 3560080",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 136155095,
             "range": "± 8971808",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 287969861,
             "range": "± 6375396",
             "unit": "ns/iter"
@@ -52966,61 +52966,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 538314,
             "range": "± 81647",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 1002406,
             "range": "± 106238",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1941098,
             "range": "± 250293",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3893754,
             "range": "± 398626",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 7774727,
             "range": "± 790605",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 15660536,
             "range": "± 1447480",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 31274010,
             "range": "± 2358044",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 65500155,
             "range": "± 7151934",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 138379480,
             "range": "± 5950524",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 296427455,
             "range": "± 7953966",
             "unit": "ns/iter"
@@ -53372,61 +53372,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 420716,
             "range": "± 83413",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 765610,
             "range": "± 89113",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1438317,
             "range": "± 206205",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3071782,
             "range": "± 432549",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5947103,
             "range": "± 604684",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12422578,
             "range": "± 1074362",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 24863800,
             "range": "± 1402045",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 50250159,
             "range": "± 2263407",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 103220504,
             "range": "± 3579787",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 216921957,
             "range": "± 6688992",
             "unit": "ns/iter"
@@ -53738,61 +53738,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 408577,
             "range": "± 36847",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 770417,
             "range": "± 61813",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1381977,
             "range": "± 141313",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2920352,
             "range": "± 352214",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6137166,
             "range": "± 654543",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12099137,
             "range": "± 951407",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24661523,
             "range": "± 1404771",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 48251181,
             "range": "± 2154946",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 97342174,
             "range": "± 2515334",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 204096536,
             "range": "± 17613237",
             "unit": "ns/iter"
@@ -54144,61 +54144,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 442174,
             "range": "± 47013",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 848982,
             "range": "± 187749",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1536967,
             "range": "± 215294",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3392372,
             "range": "± 529783",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6681270,
             "range": "± 748845",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13808541,
             "range": "± 1607079",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 26511132,
             "range": "± 1855221",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 54773515,
             "range": "± 2993952",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 112502882,
             "range": "± 3748046",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 234853304,
             "range": "± 6983371",
             "unit": "ns/iter"
@@ -54510,61 +54510,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 455819,
             "range": "± 53321",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 840313,
             "range": "± 92500",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1542036,
             "range": "± 177926",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3139059,
             "range": "± 484992",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6694320,
             "range": "± 818001",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13396065,
             "range": "± 1134240",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 26583631,
             "range": "± 2050096",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 52233311,
             "range": "± 3689541",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 107008873,
             "range": "± 10480544",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 220298663,
             "range": "± 6265407",
             "unit": "ns/iter"
@@ -54916,61 +54916,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 357022,
             "range": "± 230555",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 657243,
             "range": "± 52973",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1224510,
             "range": "± 113885",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2505518,
             "range": "± 312328",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5424186,
             "range": "± 664494",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10405333,
             "range": "± 981308",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21392641,
             "range": "± 1215791",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42946083,
             "range": "± 2364878",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 85861979,
             "range": "± 2345403",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 173523244,
             "range": "± 6583425",
             "unit": "ns/iter"
@@ -55282,61 +55282,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 351057,
             "range": "± 41878",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 649007,
             "range": "± 53937",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1223677,
             "range": "± 124749",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2526959,
             "range": "± 289309",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5047353,
             "range": "± 526778",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10426612,
             "range": "± 990382",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20907242,
             "range": "± 1048841",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41723302,
             "range": "± 1958124",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85076210,
             "range": "± 2174895",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 173734648,
             "range": "± 3352838",
             "unit": "ns/iter"
@@ -55688,61 +55688,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 422409,
             "range": "± 50035",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 831935,
             "range": "± 121874",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1489319,
             "range": "± 191159",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3160360,
             "range": "± 422715",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6161658,
             "range": "± 832993",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13174243,
             "range": "± 1285608",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 27029786,
             "range": "± 3000696",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 53998515,
             "range": "± 2749347",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 110107887,
             "range": "± 4661670",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 229276321,
             "range": "± 8254068",
             "unit": "ns/iter"
@@ -56054,61 +56054,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 447876,
             "range": "± 46893",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 853334,
             "range": "± 67418",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1599231,
             "range": "± 213278",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3019148,
             "range": "± 427122",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6335839,
             "range": "± 721891",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13282045,
             "range": "± 1399563",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 27036236,
             "range": "± 2521583",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 52588671,
             "range": "± 2963031",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 107358399,
             "range": "± 4015760",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 228055497,
             "range": "± 14626460",
             "unit": "ns/iter"
@@ -56460,61 +56460,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 360011,
             "range": "± 35440",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 673550,
             "range": "± 58794",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1294654,
             "range": "± 156590",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2677010,
             "range": "± 289790",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5444582,
             "range": "± 701393",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10951007,
             "range": "± 1044323",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22418335,
             "range": "± 1379029",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44160601,
             "range": "± 2119094",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87251899,
             "range": "± 2789381",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178547463,
             "range": "± 3884536",
             "unit": "ns/iter"
@@ -56826,61 +56826,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 343683,
             "range": "± 37524",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 658181,
             "range": "± 55584",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1236229,
             "range": "± 139604",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2580926,
             "range": "± 288719",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5572047,
             "range": "± 659624",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10973203,
             "range": "± 1105277",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22126421,
             "range": "± 1494614",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42273761,
             "range": "± 2254571",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85092433,
             "range": "± 5051904",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171593491,
             "range": "± 3050187",
             "unit": "ns/iter"
@@ -57232,61 +57232,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 371830,
             "range": "± 35711",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 688921,
             "range": "± 48948",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1283855,
             "range": "± 135401",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2702285,
             "range": "± 361383",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5331341,
             "range": "± 519635",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10955168,
             "range": "± 940661",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22905560,
             "range": "± 1217568",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 45800548,
             "range": "± 1865239",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 92705617,
             "range": "± 2427734",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 189185421,
             "range": "± 6005120",
             "unit": "ns/iter"
@@ -57598,61 +57598,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 365232,
             "range": "± 38839",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 682868,
             "range": "± 62587",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1265010,
             "range": "± 119952",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2594245,
             "range": "± 299359",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5217550,
             "range": "± 512364",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10366711,
             "range": "± 895198",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21984582,
             "range": "± 1290596",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 44092395,
             "range": "± 1915370",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 88581996,
             "range": "± 1985294",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 180937134,
             "range": "± 3331749",
             "unit": "ns/iter"
@@ -58004,61 +58004,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 350118,
             "range": "± 35899",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 660303,
             "range": "± 90986",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1232897,
             "range": "± 136089",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2638508,
             "range": "± 300731",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5472063,
             "range": "± 657250",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10608360,
             "range": "± 975429",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21553678,
             "range": "± 3162994",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42911868,
             "range": "± 1978866",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86209770,
             "range": "± 2414372",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 173610148,
             "range": "± 3832878",
             "unit": "ns/iter"
@@ -58370,61 +58370,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 349241,
             "range": "± 31315",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 663498,
             "range": "± 126092",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1294090,
             "range": "± 148935",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2686198,
             "range": "± 304646",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5315896,
             "range": "± 647559",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10649743,
             "range": "± 1013092",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21049928,
             "range": "± 1150247",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41792359,
             "range": "± 2056114",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84216373,
             "range": "± 2894299",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171194932,
             "range": "± 3997443",
             "unit": "ns/iter"
@@ -58776,61 +58776,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 370959,
             "range": "± 29621",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 694112,
             "range": "± 66609",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1290818,
             "range": "± 142391",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2639632,
             "range": "± 325574",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5356964,
             "range": "± 608266",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10820613,
             "range": "± 987838",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22250959,
             "range": "± 1400966",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44206510,
             "range": "± 2089624",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88307718,
             "range": "± 2391219",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179663472,
             "range": "± 3519589",
             "unit": "ns/iter"
@@ -59142,61 +59142,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 362970,
             "range": "± 35560",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 686494,
             "range": "± 119897",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1268331,
             "range": "± 110394",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2631391,
             "range": "± 268904",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5225871,
             "range": "± 553990",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10775811,
             "range": "± 882094",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22220305,
             "range": "± 1421263",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43813003,
             "range": "± 1575700",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 89328223,
             "range": "± 2452414",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179779615,
             "range": "± 3424053",
             "unit": "ns/iter"
@@ -59548,61 +59548,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 356405,
             "range": "± 50666",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 676729,
             "range": "± 54417",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1280052,
             "range": "± 138621",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2563705,
             "range": "± 273590",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5357510,
             "range": "± 588784",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10720955,
             "range": "± 958412",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21737014,
             "range": "± 1370754",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43270976,
             "range": "± 1839900",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88049361,
             "range": "± 2249730",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 182625476,
             "range": "± 3652614",
             "unit": "ns/iter"
@@ -59914,61 +59914,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 371808,
             "range": "± 80437",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 671141,
             "range": "± 87717",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1252418,
             "range": "± 136491",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2575641,
             "range": "± 272080",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5348361,
             "range": "± 601978",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10643120,
             "range": "± 988959",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21691564,
             "range": "± 1351435",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42234161,
             "range": "± 1811845",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85953041,
             "range": "± 2376734",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175459784,
             "range": "± 3883739",
             "unit": "ns/iter"
@@ -60320,61 +60320,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 358829,
             "range": "± 65186",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 655974,
             "range": "± 84980",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1245723,
             "range": "± 113829",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2696391,
             "range": "± 326045",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5419240,
             "range": "± 612464",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10686831,
             "range": "± 967041",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21609051,
             "range": "± 1346098",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42525209,
             "range": "± 1920961",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 85501569,
             "range": "± 2909315",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174352888,
             "range": "± 3366802",
             "unit": "ns/iter"
@@ -60686,61 +60686,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 355340,
             "range": "± 131982",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 656543,
             "range": "± 100482",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1227693,
             "range": "± 177805",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2642082,
             "range": "± 309246",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5311207,
             "range": "± 617353",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10642181,
             "range": "± 1063276",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21205227,
             "range": "± 1393105",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42451712,
             "range": "± 2895894",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84050175,
             "range": "± 2726628",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171205446,
             "range": "± 3535857",
             "unit": "ns/iter"
@@ -61092,61 +61092,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 353236,
             "range": "± 30577",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 657626,
             "range": "± 44078",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1287424,
             "range": "± 139480",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2623841,
             "range": "± 307045",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5364734,
             "range": "± 687694",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10997152,
             "range": "± 1032442",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21876655,
             "range": "± 1425714",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43689457,
             "range": "± 2306040",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87370468,
             "range": "± 2701660",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 177114050,
             "range": "± 3778021",
             "unit": "ns/iter"
@@ -61458,61 +61458,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 360551,
             "range": "± 34256",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 662659,
             "range": "± 47912",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1264413,
             "range": "± 133941",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2700545,
             "range": "± 311289",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5620518,
             "range": "± 663073",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10901885,
             "range": "± 890843",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22188004,
             "range": "± 1473980",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42995508,
             "range": "± 2326240",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85542517,
             "range": "± 2183890",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 173850536,
             "range": "± 3662839",
             "unit": "ns/iter"
@@ -61864,61 +61864,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 352756,
             "range": "± 41521",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 650320,
             "range": "± 78855",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1235842,
             "range": "± 196175",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2600235,
             "range": "± 328695",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5431657,
             "range": "± 587086",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10880414,
             "range": "± 954189",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21134559,
             "range": "± 1251276",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42276204,
             "range": "± 3695853",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 84516792,
             "range": "± 2492580",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174234861,
             "range": "± 4183472",
             "unit": "ns/iter"
@@ -62230,61 +62230,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 349526,
             "range": "± 39684",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 653319,
             "range": "± 73611",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1267428,
             "range": "± 138933",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2667804,
             "range": "± 325827",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5334351,
             "range": "± 569675",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10671398,
             "range": "± 982361",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 20688163,
             "range": "± 1290391",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41605214,
             "range": "± 2365164",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84194850,
             "range": "± 2705993",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 170440117,
             "range": "± 3899454",
             "unit": "ns/iter"
@@ -62636,61 +62636,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 367357,
             "range": "± 45323",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 680964,
             "range": "± 65501",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1275767,
             "range": "± 100958",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2625058,
             "range": "± 291570",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5378313,
             "range": "± 519613",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10617876,
             "range": "± 935908",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22371469,
             "range": "± 1432425",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43598632,
             "range": "± 1880553",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 89057908,
             "range": "± 2039318",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 186728239,
             "range": "± 4984126",
             "unit": "ns/iter"
@@ -63002,61 +63002,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 351654,
             "range": "± 34940",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 675580,
             "range": "± 117642",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1241517,
             "range": "± 126857",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2574957,
             "range": "± 326658",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5280211,
             "range": "± 586205",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10388856,
             "range": "± 873399",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21578205,
             "range": "± 1351703",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42399479,
             "range": "± 2097583",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85739342,
             "range": "± 2478339",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174730238,
             "range": "± 2983401",
             "unit": "ns/iter"
@@ -63408,61 +63408,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 460785,
             "range": "± 35910",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 883002,
             "range": "± 159559",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1607688,
             "range": "± 210001",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3416751,
             "range": "± 507241",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6939753,
             "range": "± 848949",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14301927,
             "range": "± 1366636",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 27966360,
             "range": "± 2247385",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 56294616,
             "range": "± 4061788",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 115975306,
             "range": "± 4576678",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 236559754,
             "range": "± 8814618",
             "unit": "ns/iter"
@@ -63774,61 +63774,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 448064,
             "range": "± 47494",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 865169,
             "range": "± 91978",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1600067,
             "range": "± 216692",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3728445,
             "range": "± 570896",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6756637,
             "range": "± 768157",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14190693,
             "range": "± 1386752",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 27823999,
             "range": "± 2162480",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 55311805,
             "range": "± 3034615",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 111654612,
             "range": "± 5100249",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 232379094,
             "range": "± 11483517",
             "unit": "ns/iter"
@@ -64180,61 +64180,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 414572,
             "range": "± 77381",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 751344,
             "range": "± 47150",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1404448,
             "range": "± 158466",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2967071,
             "range": "± 334265",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5915741,
             "range": "± 702410",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12016617,
             "range": "± 1315876",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25022373,
             "range": "± 1571378",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 50192998,
             "range": "± 2010952",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 104067151,
             "range": "± 3027839",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 216633391,
             "range": "± 6982260",
             "unit": "ns/iter"
@@ -64546,61 +64546,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 420023,
             "range": "± 36334",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 779512,
             "range": "± 74651",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1430709,
             "range": "± 113671",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3002859,
             "range": "± 366718",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6625064,
             "range": "± 749075",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12756381,
             "range": "± 1130669",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 25057408,
             "range": "± 1242860",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 50277017,
             "range": "± 2739542",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 102593507,
             "range": "± 4334750",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 205206443,
             "range": "± 16686002",
             "unit": "ns/iter"
@@ -64952,61 +64952,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 373248,
             "range": "± 46278",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 709904,
             "range": "± 58497",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1324523,
             "range": "± 107372",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2827348,
             "range": "± 309685",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5679017,
             "range": "± 585164",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12182413,
             "range": "± 773214",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25018262,
             "range": "± 1183392",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 48992770,
             "range": "± 1803424",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 96849708,
             "range": "± 2361663",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 202512574,
             "range": "± 4745516",
             "unit": "ns/iter"
@@ -65318,61 +65318,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 366263,
             "range": "± 34947",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 683128,
             "range": "± 41464",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1281636,
             "range": "± 140880",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2701177,
             "range": "± 290503",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5643168,
             "range": "± 606953",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11398520,
             "range": "± 845692",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23528767,
             "range": "± 1099029",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 46287045,
             "range": "± 1961104",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 91166635,
             "range": "± 2378723",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 185179031,
             "range": "± 3891138",
             "unit": "ns/iter"
@@ -65754,61 +65754,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 473284,
             "range": "± 54380",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 882192,
             "range": "± 78116",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1620615,
             "range": "± 218460",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3435131,
             "range": "± 489636",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6912113,
             "range": "± 902437",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13932924,
             "range": "± 1437286",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 27868435,
             "range": "± 2583557",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 56857881,
             "range": "± 3532425",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 116387278,
             "range": "± 4648911",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 239968958,
             "range": "± 16381181",
             "unit": "ns/iter"
@@ -66174,61 +66174,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 473120,
             "range": "± 50929",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 893487,
             "range": "± 82855",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1649370,
             "range": "± 195126",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3796951,
             "range": "± 562906",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 7265036,
             "range": "± 1022147",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14792123,
             "range": "± 1528580",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 29038976,
             "range": "± 2385300",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 58408360,
             "range": "± 4406543",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 112157441,
             "range": "± 4286448",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 237317123,
             "range": "± 7276285",
             "unit": "ns/iter"
@@ -66634,61 +66634,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 349940,
             "range": "± 381527",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 675148,
             "range": "± 55369",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1357928,
             "range": "± 155660",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2818231,
             "range": "± 327363",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5628362,
             "range": "± 680568",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10993561,
             "range": "± 993794",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22808007,
             "range": "± 1596204",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 46975599,
             "range": "± 2481030",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87659503,
             "range": "± 2931467",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 187601723,
             "range": "± 6977141",
             "unit": "ns/iter"
@@ -67054,61 +67054,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 367718,
             "range": "± 45998",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 696277,
             "range": "± 67885",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1297687,
             "range": "± 136395",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2621811,
             "range": "± 305628",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5386986,
             "range": "± 601475",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10932939,
             "range": "± 1212914",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23017990,
             "range": "± 1214269",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42691309,
             "range": "± 1653025",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85306446,
             "range": "± 3026220",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 182364772,
             "range": "± 7206591",
             "unit": "ns/iter"
@@ -67514,61 +67514,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 407511,
             "range": "± 49820",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 741638,
             "range": "± 44085",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1382697,
             "range": "± 137043",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2831995,
             "range": "± 360090",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5979760,
             "range": "± 704657",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11788257,
             "range": "± 997048",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 24038021,
             "range": "± 1564669",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 47881978,
             "range": "± 2544885",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 100131028,
             "range": "± 4502214",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 206596469,
             "range": "± 7965700",
             "unit": "ns/iter"
@@ -67934,61 +67934,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 398388,
             "range": "± 78785",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 761693,
             "range": "± 185362",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1387103,
             "range": "± 128139",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2791730,
             "range": "± 321922",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5894170,
             "range": "± 711660",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11596256,
             "range": "± 1109145",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23302033,
             "range": "± 1403430",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 48075482,
             "range": "± 2768028",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 95269720,
             "range": "± 3513786",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 194425015,
             "range": "± 6350162",
             "unit": "ns/iter"
@@ -68394,61 +68394,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 373380,
             "range": "± 114410",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 694005,
             "range": "± 52059",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1305398,
             "range": "± 140638",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2611577,
             "range": "± 275414",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5398310,
             "range": "± 639744",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11212277,
             "range": "± 836752",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22121486,
             "range": "± 1189787",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43885164,
             "range": "± 1855915",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88322439,
             "range": "± 3028042",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178615649,
             "range": "± 3976453",
             "unit": "ns/iter"
@@ -68814,61 +68814,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 370148,
             "range": "± 47377",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 684375,
             "range": "± 64911",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1275435,
             "range": "± 142022",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2634540,
             "range": "± 314321",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5426326,
             "range": "± 586878",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10895722,
             "range": "± 997226",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22472688,
             "range": "± 1247148",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43185298,
             "range": "± 1996584",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 87944125,
             "range": "± 2614075",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 177965339,
             "range": "± 3752747",
             "unit": "ns/iter"
@@ -69274,61 +69274,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 416380,
             "range": "± 40161",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 778289,
             "range": "± 123794",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1431611,
             "range": "± 155471",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2965533,
             "range": "± 382502",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5723694,
             "range": "± 677683",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12594639,
             "range": "± 988320",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25758461,
             "range": "± 1592270",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 50863067,
             "range": "± 2557483",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 103842805,
             "range": "± 3495642",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 216547776,
             "range": "± 5616417",
             "unit": "ns/iter"
@@ -69694,61 +69694,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 423997,
             "range": "± 44102",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 792326,
             "range": "± 62824",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1432232,
             "range": "± 120433",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3060460,
             "range": "± 381328",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5965537,
             "range": "± 601772",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12317039,
             "range": "± 832964",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24877055,
             "range": "± 1599232",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 49321022,
             "range": "± 2095784",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 97840421,
             "range": "± 2588557",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 203740815,
             "range": "± 7678164",
             "unit": "ns/iter"
@@ -70154,61 +70154,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 376838,
             "range": "± 27615",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 694727,
             "range": "± 43576",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1316356,
             "range": "± 119840",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2626585,
             "range": "± 272479",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5363429,
             "range": "± 538687",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11253902,
             "range": "± 871979",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23544108,
             "range": "± 1325067",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 48924961,
             "range": "± 3831538",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 105143449,
             "range": "± 4811214",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 211730002,
             "range": "± 15546481",
             "unit": "ns/iter"
@@ -70574,61 +70574,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 371019,
             "range": "± 38115",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 689594,
             "range": "± 76566",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1263843,
             "range": "± 127269",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2657866,
             "range": "± 295604",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5250710,
             "range": "± 619110",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10843731,
             "range": "± 1107490",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22666974,
             "range": "± 1462542",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45146379,
             "range": "± 2710444",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 91232038,
             "range": "± 3296332",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 183830239,
             "range": "± 5362439",
             "unit": "ns/iter"
@@ -71034,61 +71034,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 377890,
             "range": "± 41649",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 682475,
             "range": "± 107350",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1272235,
             "range": "± 151313",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2588856,
             "range": "± 262489",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5286739,
             "range": "± 574890",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10735281,
             "range": "± 1039618",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22376299,
             "range": "± 1580746",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44893955,
             "range": "± 2272932",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 91286578,
             "range": "± 2525248",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 189790582,
             "range": "± 4215476",
             "unit": "ns/iter"
@@ -71454,61 +71454,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 362455,
             "range": "± 67793",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 681844,
             "range": "± 55433",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1267207,
             "range": "± 155614",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2648135,
             "range": "± 277733",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5501193,
             "range": "± 650218",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10825683,
             "range": "± 876622",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22161275,
             "range": "± 1409820",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42862978,
             "range": "± 1969809",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 88008194,
             "range": "± 2730672",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 177188609,
             "range": "± 18070626",
             "unit": "ns/iter"
@@ -71914,61 +71914,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 361260,
             "range": "± 50474",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 668212,
             "range": "± 97789",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1312596,
             "range": "± 185856",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2717829,
             "range": "± 303089",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5724992,
             "range": "± 646256",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11123366,
             "range": "± 1149851",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22056043,
             "range": "± 1322493",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43795864,
             "range": "± 2091156",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87504702,
             "range": "± 2342645",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178637813,
             "range": "± 3867745",
             "unit": "ns/iter"
@@ -72334,61 +72334,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 357352,
             "range": "± 64237",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 675502,
             "range": "± 74020",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1274180,
             "range": "± 134435",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2628216,
             "range": "± 316177",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5358970,
             "range": "± 630429",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10879505,
             "range": "± 1164987",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21547439,
             "range": "± 1443246",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43334500,
             "range": "± 1998960",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 86689580,
             "range": "± 2914642",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174808997,
             "range": "± 3694106",
             "unit": "ns/iter"
@@ -72794,61 +72794,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 370375,
             "range": "± 37599",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 684366,
             "range": "± 76336",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1279969,
             "range": "± 117083",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2626698,
             "range": "± 336465",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5296903,
             "range": "± 559341",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10941185,
             "range": "± 1176447",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22610592,
             "range": "± 1393024",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44301414,
             "range": "± 1802894",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 90009984,
             "range": "± 2199235",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 186099475,
             "range": "± 4898652",
             "unit": "ns/iter"
@@ -73214,61 +73214,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 370238,
             "range": "± 52840",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 691978,
             "range": "± 86495",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1296030,
             "range": "± 133193",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2704267,
             "range": "± 256352",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5368097,
             "range": "± 513972",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10790881,
             "range": "± 953125",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22447711,
             "range": "± 1187986",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 44250148,
             "range": "± 1911946",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 90537896,
             "range": "± 2851777",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 182538884,
             "range": "± 12036121",
             "unit": "ns/iter"
@@ -73674,61 +73674,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 370120,
             "range": "± 38275",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 696203,
             "range": "± 78023",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1282340,
             "range": "± 121576",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2635909,
             "range": "± 280826",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5430057,
             "range": "± 556437",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10834237,
             "range": "± 920728",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22381998,
             "range": "± 1214179",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44962377,
             "range": "± 2089312",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 90783303,
             "range": "± 2931397",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 191459253,
             "range": "± 4185194",
             "unit": "ns/iter"
@@ -74094,61 +74094,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 364506,
             "range": "± 29236",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 686436,
             "range": "± 69091",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1263633,
             "range": "± 118492",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2601117,
             "range": "± 281086",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5258247,
             "range": "± 575355",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10677662,
             "range": "± 978196",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22084834,
             "range": "± 1536545",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43339327,
             "range": "± 1850060",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 87484966,
             "range": "± 2231411",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178373556,
             "range": "± 11506567",
             "unit": "ns/iter"
@@ -74554,61 +74554,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 357157,
             "range": "± 33701",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 670252,
             "range": "± 57815",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1310952,
             "range": "± 158765",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2822185,
             "range": "± 314640",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5428202,
             "range": "± 564780",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11037054,
             "range": "± 1152519",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21851540,
             "range": "± 1307465",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42970774,
             "range": "± 1874695",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86729947,
             "range": "± 2544436",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 177304781,
             "range": "± 3525823",
             "unit": "ns/iter"
@@ -74974,61 +74974,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 350730,
             "range": "± 37998",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 663429,
             "range": "± 66737",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1311947,
             "range": "± 131672",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2677907,
             "range": "± 308753",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5284198,
             "range": "± 610995",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10928198,
             "range": "± 1065986",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21691380,
             "range": "± 1233752",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42579610,
             "range": "± 1661534",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85779816,
             "range": "± 2550624",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 173859345,
             "range": "± 3525159",
             "unit": "ns/iter"
@@ -75434,61 +75434,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 439458,
             "range": "± 45882",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 789075,
             "range": "± 59258",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1492758,
             "range": "± 153717",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2911343,
             "range": "± 327110",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6126165,
             "range": "± 640712",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12838880,
             "range": "± 1021532",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25641731,
             "range": "± 1362386",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 51663663,
             "range": "± 1698920",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 105528478,
             "range": "± 3716987",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 219966942,
             "range": "± 7457104",
             "unit": "ns/iter"
@@ -75854,61 +75854,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 423254,
             "range": "± 43651",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 788497,
             "range": "± 123922",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1456874,
             "range": "± 135088",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3140408,
             "range": "± 425121",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6385996,
             "range": "± 645153",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13193917,
             "range": "± 1238195",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 25753170,
             "range": "± 1764661",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 50547747,
             "range": "± 2482552",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 101873953,
             "range": "± 3128027",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 206894762,
             "range": "± 6425897",
             "unit": "ns/iter"
@@ -76314,61 +76314,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 422003,
             "range": "± 67132",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 758506,
             "range": "± 64102",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1444426,
             "range": "± 163201",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3069414,
             "range": "± 414297",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6123498,
             "range": "± 685983",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12136510,
             "range": "± 1159758",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 24735171,
             "range": "± 1395210",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 47764685,
             "range": "± 3240196",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 98386642,
             "range": "± 3023257",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 205724913,
             "range": "± 8268111",
             "unit": "ns/iter"
@@ -76734,61 +76734,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 421896,
             "range": "± 56436",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 752282,
             "range": "± 71808",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1417804,
             "range": "± 167704",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3073604,
             "range": "± 376599",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5937658,
             "range": "± 625485",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11709771,
             "range": "± 1007279",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 23344336,
             "range": "± 1384587",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 46418498,
             "range": "± 2788677",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 94094598,
             "range": "± 3095215",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 197849087,
             "range": "± 7191781",
             "unit": "ns/iter"
@@ -77194,61 +77194,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 418590,
             "range": "± 37037",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 780501,
             "range": "± 61054",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1399283,
             "range": "± 126823",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2803386,
             "range": "± 315709",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5829223,
             "range": "± 743240",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12260653,
             "range": "± 849893",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25212821,
             "range": "± 1298096",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 48967006,
             "range": "± 2697013",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 97283832,
             "range": "± 4133446",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 210063704,
             "range": "± 7387426",
             "unit": "ns/iter"
@@ -77614,61 +77614,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 355876,
             "range": "± 36280",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 637013,
             "range": "± 71236",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1200501,
             "range": "± 136943",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2436471,
             "range": "± 359848",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4950127,
             "range": "± 518735",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10550806,
             "range": "± 1027207",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21164248,
             "range": "± 1387746",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43951796,
             "range": "± 2757496",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 78650666,
             "range": "± 4957797",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 161941004,
             "range": "± 18358919",
             "unit": "ns/iter"
@@ -78074,61 +78074,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 377988,
             "range": "± 41873",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 684517,
             "range": "± 52361",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1307867,
             "range": "± 119890",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2659830,
             "range": "± 296662",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5446652,
             "range": "± 682857",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10892437,
             "range": "± 969730",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22389766,
             "range": "± 1207025",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44690484,
             "range": "± 2120274",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 91238535,
             "range": "± 2619873",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 188243675,
             "range": "± 4874271",
             "unit": "ns/iter"
@@ -78494,61 +78494,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 365851,
             "range": "± 29622",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 684082,
             "range": "± 62848",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1263505,
             "range": "± 137591",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2588907,
             "range": "± 301520",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5248226,
             "range": "± 479082",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10732838,
             "range": "± 1023158",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21817312,
             "range": "± 1193529",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43979478,
             "range": "± 7621911",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 88341158,
             "range": "± 2623652",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179314042,
             "range": "± 3427968",
             "unit": "ns/iter"
@@ -78954,61 +78954,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 508813,
             "range": "± 107785",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 970528,
             "range": "± 111952",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1711788,
             "range": "± 204944",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3718964,
             "range": "± 564704",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7439777,
             "range": "± 903837",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 15648832,
             "range": "± 1630417",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 31138365,
             "range": "± 3243428",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 62522332,
             "range": "± 3613479",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 126753624,
             "range": "± 4456862",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 264851031,
             "range": "± 8839842",
             "unit": "ns/iter"
@@ -79374,61 +79374,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 513568,
             "range": "± 55722",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 954369,
             "range": "± 136351",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1745185,
             "range": "± 259026",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3806542,
             "range": "± 522128",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 7383763,
             "range": "± 979795",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 15157608,
             "range": "± 1590335",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 30053252,
             "range": "± 2426443",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 60845875,
             "range": "± 4374769",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 124777811,
             "range": "± 6142595",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 254348625,
             "range": "± 6376531",
             "unit": "ns/iter"
@@ -79834,61 +79834,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 379762,
             "range": "± 28832",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 707488,
             "range": "± 105800",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1313889,
             "range": "± 129255",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2717656,
             "range": "± 306885",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5634369,
             "range": "± 656455",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11108006,
             "range": "± 920792",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23639860,
             "range": "± 1119262",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 46449734,
             "range": "± 2094675",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 93800183,
             "range": "± 2743929",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 196931502,
             "range": "± 7953289",
             "unit": "ns/iter"
@@ -80254,61 +80254,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 373841,
             "range": "± 45440",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 690756,
             "range": "± 140628",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1279734,
             "range": "± 108226",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2672627,
             "range": "± 336658",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5521475,
             "range": "± 565565",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11074477,
             "range": "± 1023018",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22944598,
             "range": "± 1273638",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45202720,
             "range": "± 1564736",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 90239694,
             "range": "± 2288031",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 185057462,
             "range": "± 3774562",
             "unit": "ns/iter"
@@ -80714,61 +80714,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 353938,
             "range": "± 50808",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 674987,
             "range": "± 102231",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1309311,
             "range": "± 133109",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2713255,
             "range": "± 274741",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5484557,
             "range": "± 609571",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10690634,
             "range": "± 1150942",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21639673,
             "range": "± 1397419",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42999248,
             "range": "± 1998422",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86734094,
             "range": "± 2955992",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 176146018,
             "range": "± 3983301",
             "unit": "ns/iter"
@@ -81134,61 +81134,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 361205,
             "range": "± 58507",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 655607,
             "range": "± 72180",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1233474,
             "range": "± 123709",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2571119,
             "range": "± 335315",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5448232,
             "range": "± 627526",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10583232,
             "range": "± 955654",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21309723,
             "range": "± 1304066",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42037697,
             "range": "± 2363737",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84813188,
             "range": "± 2937443",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171708225,
             "range": "± 16962664",
             "unit": "ns/iter"
@@ -81594,61 +81594,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 375889,
             "range": "± 45415",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 698646,
             "range": "± 58660",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1292729,
             "range": "± 114085",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2631582,
             "range": "± 282710",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5520337,
             "range": "± 552984",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11289547,
             "range": "± 1181381",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23192356,
             "range": "± 1244737",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 45794157,
             "range": "± 1868054",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 94311455,
             "range": "± 2316066",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 194378690,
             "range": "± 3732462",
             "unit": "ns/iter"
@@ -82014,61 +82014,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 369020,
             "range": "± 35457",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 691678,
             "range": "± 62976",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1286541,
             "range": "± 125259",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2722424,
             "range": "± 295536",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5320226,
             "range": "± 513008",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11189298,
             "range": "± 793799",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22721150,
             "range": "± 1266523",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45753024,
             "range": "± 5128520",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 89966222,
             "range": "± 2222269",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 186641430,
             "range": "± 4603082",
             "unit": "ns/iter"
@@ -82474,61 +82474,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 361369,
             "range": "± 33508",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 679032,
             "range": "± 49768",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1252726,
             "range": "± 119107",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2559026,
             "range": "± 334277",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5312405,
             "range": "± 530921",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10674528,
             "range": "± 1040159",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21803158,
             "range": "± 1091399",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44016278,
             "range": "± 2296970",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 89650097,
             "range": "± 2488987",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 187658893,
             "range": "± 4761972",
             "unit": "ns/iter"
@@ -82894,61 +82894,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 354599,
             "range": "± 30507",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 671293,
             "range": "± 91952",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1269231,
             "range": "± 140467",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2638687,
             "range": "± 293692",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5186176,
             "range": "± 555805",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10573191,
             "range": "± 999858",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21339596,
             "range": "± 1235024",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43048300,
             "range": "± 1791699",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 88130401,
             "range": "± 2345880",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 176563308,
             "range": "± 4069306",
             "unit": "ns/iter"
@@ -83354,61 +83354,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 348497,
             "range": "± 36516",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 657492,
             "range": "± 59939",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1247494,
             "range": "± 123007",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2751801,
             "range": "± 344938",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5536534,
             "range": "± 624441",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10768852,
             "range": "± 1061007",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21509179,
             "range": "± 1522023",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 42370253,
             "range": "± 1837018",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86395865,
             "range": "± 3015439",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175532013,
             "range": "± 3708796",
             "unit": "ns/iter"
@@ -83774,61 +83774,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 338604,
             "range": "± 33644",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 656102,
             "range": "± 121475",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1233392,
             "range": "± 126987",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2579613,
             "range": "± 281285",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5500300,
             "range": "± 648320",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10635749,
             "range": "± 1000421",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21076322,
             "range": "± 1429979",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 41875590,
             "range": "± 2143664",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 84469140,
             "range": "± 2887243",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 171839624,
             "range": "± 4058402",
             "unit": "ns/iter"
@@ -84234,61 +84234,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 375431,
             "range": "± 27946",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 694875,
             "range": "± 61166",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1295380,
             "range": "± 133361",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2695929,
             "range": "± 298717",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5315080,
             "range": "± 559550",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11002623,
             "range": "± 900988",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22879538,
             "range": "± 1444503",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 45683580,
             "range": "± 1831612",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 91291089,
             "range": "± 2668642",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 190236852,
             "range": "± 3947966",
             "unit": "ns/iter"
@@ -84654,61 +84654,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 368244,
             "range": "± 27683",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 692136,
             "range": "± 60804",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1288181,
             "range": "± 140803",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2678091,
             "range": "± 305521",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5382315,
             "range": "± 617380",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10846964,
             "range": "± 947354",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21875575,
             "range": "± 1117021",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43679835,
             "range": "± 1571874",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 89392364,
             "range": "± 2874870",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 180202079,
             "range": "± 17089722",
             "unit": "ns/iter"
@@ -85114,61 +85114,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 417666,
             "range": "± 51136",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 750540,
             "range": "± 54938",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1426922,
             "range": "± 170775",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3118637,
             "range": "± 353113",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6171957,
             "range": "± 614036",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12202399,
             "range": "± 1060466",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 24605067,
             "range": "± 1531413",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 48342520,
             "range": "± 2974080",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 99436881,
             "range": "± 3817101",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 205217533,
             "range": "± 6290927",
             "unit": "ns/iter"
@@ -85534,61 +85534,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 405777,
             "range": "± 75958",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 780222,
             "range": "± 49161",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1414293,
             "range": "± 150667",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3120844,
             "range": "± 404640",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5908524,
             "range": "± 610387",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11764661,
             "range": "± 1092308",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24050612,
             "range": "± 1365423",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 48634631,
             "range": "± 2688283",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 95721746,
             "range": "± 2900985",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 193270510,
             "range": "± 8445809",
             "unit": "ns/iter"
@@ -85994,61 +85994,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 368433,
             "range": "± 29982",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 695533,
             "range": "± 82195",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1298351,
             "range": "± 119391",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2745999,
             "range": "± 267528",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5588943,
             "range": "± 570890",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10904275,
             "range": "± 1013820",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21854553,
             "range": "± 1416469",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44933572,
             "range": "± 2234708",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88530017,
             "range": "± 2907193",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178715809,
             "range": "± 4037474",
             "unit": "ns/iter"
@@ -86414,61 +86414,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 370198,
             "range": "± 55642",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 685056,
             "range": "± 57877",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1297666,
             "range": "± 140341",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2720396,
             "range": "± 285448",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5631039,
             "range": "± 573766",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10916686,
             "range": "± 1022670",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22151735,
             "range": "± 1530634",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 44117572,
             "range": "± 2044072",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 89185652,
             "range": "± 2853970",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 177564970,
             "range": "± 12999335",
             "unit": "ns/iter"
@@ -86874,61 +86874,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 367037,
             "range": "± 38718",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 688603,
             "range": "± 66209",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1311187,
             "range": "± 124610",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2667319,
             "range": "± 300188",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5503301,
             "range": "± 588356",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10752167,
             "range": "± 993594",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21887491,
             "range": "± 1644609",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43331016,
             "range": "± 1919510",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 89192495,
             "range": "± 2296149",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 185990500,
             "range": "± 4220264",
             "unit": "ns/iter"
@@ -87294,61 +87294,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 358629,
             "range": "± 38506",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 677093,
             "range": "± 58547",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1285540,
             "range": "± 105958",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2594736,
             "range": "± 276767",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5500048,
             "range": "± 683604",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10568434,
             "range": "± 998883",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21283973,
             "range": "± 1288647",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42001580,
             "range": "± 1892568",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 85283308,
             "range": "± 2496717",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 177055361,
             "range": "± 18564068",
             "unit": "ns/iter"
@@ -87778,61 +87778,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 358414,
             "range": "± 31736",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 694390,
             "range": "± 75285",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1298230,
             "range": "± 124710",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2716916,
             "range": "± 305434",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5550437,
             "range": "± 652982",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11226942,
             "range": "± 1119032",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22454750,
             "range": "± 1453019",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44982610,
             "range": "± 1845246",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 90839186,
             "range": "± 2642846",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 188419137,
             "range": "± 3809848",
             "unit": "ns/iter"
@@ -88198,61 +88198,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 374188,
             "range": "± 34634",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 691645,
             "range": "± 66854",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1312635,
             "range": "± 168846",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2788390,
             "range": "± 337807",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5529936,
             "range": "± 585104",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 11039556,
             "range": "± 863201",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22675778,
             "range": "± 1470619",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 45621212,
             "range": "± 2365398",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 90209961,
             "range": "± 9660452",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 181276883,
             "range": "± 4098778",
             "unit": "ns/iter"
@@ -88682,61 +88682,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 423046,
             "range": "± 126629",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 819765,
             "range": "± 127324",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1502224,
             "range": "± 198988",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3165372,
             "range": "± 462959",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6280911,
             "range": "± 844267",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 12809424,
             "range": "± 1276961",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25501244,
             "range": "± 1956379",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 49685171,
             "range": "± 2821153",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 100249501,
             "range": "± 4377556",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 209893564,
             "range": "± 7881370",
             "unit": "ns/iter"
@@ -89102,61 +89102,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 466298,
             "range": "± 57139",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 884710,
             "range": "± 331704",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1571085,
             "range": "± 203907",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3244861,
             "range": "± 407915",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6594783,
             "range": "± 676815",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13569101,
             "range": "± 1608936",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 27210525,
             "range": "± 2433013",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 53433864,
             "range": "± 2983752",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 107362743,
             "range": "± 3595137",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 209535942,
             "range": "± 7440817",
             "unit": "ns/iter"
@@ -89586,61 +89586,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 350210,
             "range": "± 31594",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 669439,
             "range": "± 58476",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1321083,
             "range": "± 142969",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2848861,
             "range": "± 328241",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5724095,
             "range": "± 644320",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 11079356,
             "range": "± 979746",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22151255,
             "range": "± 1261446",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43616012,
             "range": "± 1735489",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 87287586,
             "range": "± 2800424",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178337180,
             "range": "± 3874114",
             "unit": "ns/iter"
@@ -90006,61 +90006,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 354297,
             "range": "± 44557",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 666557,
             "range": "± 66212",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1292548,
             "range": "± 152514",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2802722,
             "range": "± 300152",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5653316,
             "range": "± 601540",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10902265,
             "range": "± 1151453",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21635313,
             "range": "± 1371466",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42808878,
             "range": "± 2228942",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 86802883,
             "range": "± 2844237",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175021895,
             "range": "± 3945908",
             "unit": "ns/iter"
@@ -90490,61 +90490,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 443288,
             "range": "± 78250",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 839837,
             "range": "± 74181",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1530255,
             "range": "± 210912",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3227426,
             "range": "± 466900",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6599673,
             "range": "± 840736",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13312645,
             "range": "± 1790738",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 26669694,
             "range": "± 2689642",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 54607503,
             "range": "± 3499687",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 112577547,
             "range": "± 4887514",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 237433722,
             "range": "± 9242504",
             "unit": "ns/iter"
@@ -90910,61 +90910,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 441995,
             "range": "± 50171",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 851690,
             "range": "± 117376",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1527437,
             "range": "± 178076",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3373757,
             "range": "± 510420",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6579926,
             "range": "± 954201",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 13584907,
             "range": "± 1317958",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 27219216,
             "range": "± 2772471",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 54131574,
             "range": "± 3794223",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 105037362,
             "range": "± 5506707",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 218916022,
             "range": "± 7693631",
             "unit": "ns/iter"
@@ -91394,61 +91394,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 537322,
             "range": "± 111329",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 1027149,
             "range": "± 107866",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1889896,
             "range": "± 244344",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3854450,
             "range": "± 436276",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7870811,
             "range": "± 920225",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 16816084,
             "range": "± 1631946",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 33021312,
             "range": "± 3016415",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 66589890,
             "range": "± 3492457",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 136020691,
             "range": "± 4764465",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 286366795,
             "range": "± 8566167",
             "unit": "ns/iter"
@@ -91814,61 +91814,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 529013,
             "range": "± 68449",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 1003223,
             "range": "± 396413",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1919751,
             "range": "± 259916",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3946804,
             "range": "± 557842",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 8026191,
             "range": "± 1012207",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 16384861,
             "range": "± 1898942",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 33380893,
             "range": "± 2721993",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 65258119,
             "range": "± 3164281",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 132132962,
             "range": "± 5909604",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 274870256,
             "range": "± 6893343",
             "unit": "ns/iter"
@@ -92298,61 +92298,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 366350,
             "range": "± 42559",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 683842,
             "range": "± 62496",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1289330,
             "range": "± 120666",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2650917,
             "range": "± 275915",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5352975,
             "range": "± 524442",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10837602,
             "range": "± 1087031",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22618536,
             "range": "± 1479785",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44262297,
             "range": "± 1876591",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 91283296,
             "range": "± 2631355",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 188023364,
             "range": "± 3767220",
             "unit": "ns/iter"
@@ -92718,61 +92718,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 363438,
             "range": "± 45434",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 678149,
             "range": "± 75695",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1267830,
             "range": "± 127780",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2622757,
             "range": "± 266060",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5186846,
             "range": "± 427036",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10708400,
             "range": "± 1112143",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22000996,
             "range": "± 1385336",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43302878,
             "range": "± 1885855",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 88048938,
             "range": "± 2366688",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178381329,
             "range": "± 11869964",
             "unit": "ns/iter"
@@ -93202,61 +93202,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 498734,
             "range": "± 64198",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 906326,
             "range": "± 67674",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1771706,
             "range": "± 203763",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3930529,
             "range": "± 489949",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7631364,
             "range": "± 964127",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14695378,
             "range": "± 1448858",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 30097970,
             "range": "± 2536365",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 60400582,
             "range": "± 3065960",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 123648817,
             "range": "± 3660359",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 253520461,
             "range": "± 9269945",
             "unit": "ns/iter"
@@ -93622,61 +93622,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 494544,
             "range": "± 66423",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 942999,
             "range": "± 65441",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1770308,
             "range": "± 209453",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 4024926,
             "range": "± 509062",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6988329,
             "range": "± 924908",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14365436,
             "range": "± 1268471",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 27766037,
             "range": "± 2054861",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 58203295,
             "range": "± 4247707",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 115586733,
             "range": "± 4513345",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 239708025,
             "range": "± 6443793",
             "unit": "ns/iter"
@@ -94106,61 +94106,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 424105,
             "range": "± 48761",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 791635,
             "range": "± 55621",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1482784,
             "range": "± 179150",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3057510,
             "range": "± 442682",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 6019664,
             "range": "± 709269",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 13041131,
             "range": "± 1014623",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 25466728,
             "range": "± 1369115",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 49780278,
             "range": "± 2223251",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 102649423,
             "range": "± 2997154",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 206429658,
             "range": "± 6898568",
             "unit": "ns/iter"
@@ -94526,61 +94526,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 418825,
             "range": "± 53235",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 779289,
             "range": "± 93753",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1438812,
             "range": "± 137590",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2836734,
             "range": "± 405779",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5905686,
             "range": "± 622861",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 12239159,
             "range": "± 910338",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 24732151,
             "range": "± 1267211",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 49386244,
             "range": "± 2283766",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 97604954,
             "range": "± 2905009",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 196601165,
             "range": "± 3162475",
             "unit": "ns/iter"
@@ -95010,61 +95010,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 495164,
             "range": "± 61217",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 948935,
             "range": "± 176309",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1753479,
             "range": "± 207018",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3488627,
             "range": "± 492015",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7200692,
             "range": "± 822670",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 15190292,
             "range": "± 1396901",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 30092344,
             "range": "± 2511138",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 61210595,
             "range": "± 2830979",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 121821761,
             "range": "± 4519730",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 245162070,
             "range": "± 6670144",
             "unit": "ns/iter"
@@ -95430,61 +95430,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 484078,
             "range": "± 42046",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 925123,
             "range": "± 81112",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1702109,
             "range": "± 221504",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3420036,
             "range": "± 493905",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6861092,
             "range": "± 1022082",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 15203461,
             "range": "± 1713263",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 30418866,
             "range": "± 2408079",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 59249409,
             "range": "± 3373729",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 118720822,
             "range": "± 4436147",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 241475746,
             "range": "± 6723169",
             "unit": "ns/iter"
@@ -95914,61 +95914,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 372144,
             "range": "± 30469",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 709007,
             "range": "± 101651",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1310538,
             "range": "± 118548",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2691616,
             "range": "± 323911",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5474167,
             "range": "± 560839",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10808170,
             "range": "± 896616",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 23677749,
             "range": "± 1613166",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 47700085,
             "range": "± 2060045",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 94695564,
             "range": "± 2119759",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 188964913,
             "range": "± 3616305",
             "unit": "ns/iter"
@@ -96334,61 +96334,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 374849,
             "range": "± 160605",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 684875,
             "range": "± 59840",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1263384,
             "range": "± 118382",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2467498,
             "range": "± 275038",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4995800,
             "range": "± 481484",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10305535,
             "range": "± 943441",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21793677,
             "range": "± 1562774",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43301764,
             "range": "± 2379608",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 86612583,
             "range": "± 2361086",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 173809960,
             "range": "± 4016738",
             "unit": "ns/iter"
@@ -96818,61 +96818,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 363862,
             "range": "± 48025",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 686472,
             "range": "± 76746",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1259195,
             "range": "± 80007",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2498638,
             "range": "± 250684",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 4976702,
             "range": "± 434958",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10208837,
             "range": "± 986690",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22282577,
             "range": "± 1130768",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43848342,
             "range": "± 2384563",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 88262568,
             "range": "± 2286908",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 178040146,
             "range": "± 3708339",
             "unit": "ns/iter"
@@ -97238,61 +97238,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 367422,
             "range": "± 38261",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 680900,
             "range": "± 74765",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1256356,
             "range": "± 138940",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2461099,
             "range": "± 291176",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4906913,
             "range": "± 477396",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10131748,
             "range": "± 849768",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 21528249,
             "range": "± 1204532",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43066642,
             "range": "± 2057405",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 86287507,
             "range": "± 2224786",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 173753297,
             "range": "± 16737246",
             "unit": "ns/iter"
@@ -97722,61 +97722,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 506151,
             "range": "± 82364",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 971931,
             "range": "± 94794",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1720408,
             "range": "± 248573",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3427383,
             "range": "± 415822",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7129475,
             "range": "± 854701",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 15292780,
             "range": "± 1407281",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 30575558,
             "range": "± 2634848",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 62068264,
             "range": "± 4500931",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 123731866,
             "range": "± 6968283",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 253486884,
             "range": "± 10016103",
             "unit": "ns/iter"
@@ -98142,61 +98142,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 485476,
             "range": "± 115407",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 932356,
             "range": "± 122470",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1720974,
             "range": "± 208134",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3403669,
             "range": "± 527473",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 7108550,
             "range": "± 987992",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14863328,
             "range": "± 1488985",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 29848671,
             "range": "± 2086088",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 59166892,
             "range": "± 3112044",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 116540685,
             "range": "± 3930754",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 240686102,
             "range": "± 4986357",
             "unit": "ns/iter"
@@ -98626,61 +98626,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 464555,
             "range": "± 40852",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 902760,
             "range": "± 67858",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1684230,
             "range": "± 248257",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 3327929,
             "range": "± 452027",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 7112340,
             "range": "± 819804",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 14588553,
             "range": "± 1489436",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 28858281,
             "range": "± 2510134",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 58217683,
             "range": "± 2739241",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 117502173,
             "range": "± 5533675",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 239146478,
             "range": "± 6991177",
             "unit": "ns/iter"
@@ -99046,61 +99046,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 469194,
             "range": "± 53864",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 891020,
             "range": "± 69634",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1605169,
             "range": "± 179452",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 3206027,
             "range": "± 430732",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 6549712,
             "range": "± 804509",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 14253528,
             "range": "± 1325222",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 28326056,
             "range": "± 1845287",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 56948676,
             "range": "± 2487725",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 114717708,
             "range": "± 4096191",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 236113682,
             "range": "± 7913548",
             "unit": "ns/iter"
@@ -99530,61 +99530,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 361351,
             "range": "± 32754",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 690596,
             "range": "± 56669",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1257443,
             "range": "± 123451",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2475020,
             "range": "± 286003",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5020540,
             "range": "± 541553",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10457550,
             "range": "± 966520",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22051806,
             "range": "± 1405989",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44217441,
             "range": "± 1929590",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 89873734,
             "range": "± 2484395",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179828967,
             "range": "± 3845794",
             "unit": "ns/iter"
@@ -99950,61 +99950,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 362264,
             "range": "± 34077",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 689248,
             "range": "± 49686",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1263479,
             "range": "± 140765",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2474155,
             "range": "± 251245",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4854206,
             "range": "± 449758",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10176615,
             "range": "± 956020",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22032925,
             "range": "± 1519346",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43546151,
             "range": "± 2217084",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 86989942,
             "range": "± 2425074",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175349509,
             "range": "± 4251108",
             "unit": "ns/iter"
@@ -100434,61 +100434,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 361983,
             "range": "± 75409",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 684305,
             "range": "± 77078",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1284103,
             "range": "± 126672",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2554727,
             "range": "± 271025",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5165271,
             "range": "± 484301",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10471793,
             "range": "± 932201",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22358251,
             "range": "± 1105527",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 44856196,
             "range": "± 1892802",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 90475200,
             "range": "± 2435429",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 180635286,
             "range": "± 4725805",
             "unit": "ns/iter"
@@ -100854,61 +100854,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 363051,
             "range": "± 83421",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 682893,
             "range": "± 42658",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1243105,
             "range": "± 129938",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2488690,
             "range": "± 366263",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4910801,
             "range": "± 529758",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10269029,
             "range": "± 785657",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22308964,
             "range": "± 1383957",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 43740274,
             "range": "± 1957587",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 87996029,
             "range": "± 2692974",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 176648616,
             "range": "± 4831799",
             "unit": "ns/iter"
@@ -101338,61 +101338,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 359910,
             "range": "± 34295",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 675779,
             "range": "± 74298",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1250633,
             "range": "± 125499",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2540152,
             "range": "± 317561",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 5100417,
             "range": "± 651750",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10432032,
             "range": "± 1127913",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 21791126,
             "range": "± 1595292",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43011148,
             "range": "± 2699936",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 86152249,
             "range": "± 2645854",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 172888110,
             "range": "± 5138789",
             "unit": "ns/iter"
@@ -101758,61 +101758,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 354863,
             "range": "± 37091",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 683121,
             "range": "± 110110",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1285924,
             "range": "± 142058",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2656680,
             "range": "± 330695",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 5023622,
             "range": "± 620501",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10417456,
             "range": "± 959913",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22019849,
             "range": "± 1336221",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 44142785,
             "range": "± 2264721",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 86580984,
             "range": "± 6526516",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 175897652,
             "range": "± 5273449",
             "unit": "ns/iter"
@@ -102242,61 +102242,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/2",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
             "value": 374725,
             "range": "± 35903",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/4",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
             "value": 697273,
             "range": "± 65547",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/8",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
             "value": 1279775,
             "range": "± 120452",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/16",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
             "value": 2506040,
             "range": "± 358172",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/32",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
             "value": 4982174,
             "range": "± 641847",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/64",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
             "value": 10343841,
             "range": "± 986213",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/128",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
             "value": 22434459,
             "range": "± 1205753",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/256",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
             "value": 43630697,
             "range": "± 1942266",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/512",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
             "value": 89411778,
             "range": "± 2581328",
             "unit": "ns/iter"
           },
           {
-            "name": "sync /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
             "value": 179279385,
             "range": "± 4282405",
             "unit": "ns/iter"
@@ -102662,61 +102662,61 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/2",
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
             "value": 367479,
             "range": "± 60259",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/4",
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
             "value": 684918,
             "range": "± 60126",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/8",
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
             "value": 1262970,
             "range": "± 103837",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/16",
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
             "value": 2507250,
             "range": "± 273211",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/32",
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
             "value": 4936916,
             "range": "± 542502",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/64",
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
             "value": 10254801,
             "range": "± 1140145",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/128",
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
             "value": 22046712,
             "range": "± 1306766",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/256",
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
             "value": 42868087,
             "range": "± 7779076",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/512",
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
             "value": 86427861,
             "range": "± 2871251",
             "unit": "ns/iter"
           },
           {
-            "name": "async /ws_concurrent_conn_calls/fast_call/1024",
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
             "value": 174805678,
             "range": "± 3396087",
             "unit": "ns/iter"
