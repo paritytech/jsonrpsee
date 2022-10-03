@@ -2600,36 +2600,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2490395,
-            "range": "± 39392",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5862944,
-            "range": "± 47824",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11465439,
-            "range": "± 159086",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56373197,
-            "range": "± 357174",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112836894,
-            "range": "± 591256",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 149482,
             "range": "± 8450",
@@ -2963,36 +2933,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 486586877,
             "range": "± 10959388",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2486814,
-            "range": "± 45186",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5869202,
-            "range": "± 47923",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11451262,
-            "range": "± 54336",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56536666,
-            "range": "± 320134",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112439359,
-            "range": "± 454688",
             "unit": "ns/iter"
           },
           {
@@ -3372,36 +3312,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2504124,
-            "range": "± 45375",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5867603,
-            "range": "± 87773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11482941,
-            "range": "± 160654",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56603357,
-            "range": "± 565600",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 113051802,
-            "range": "± 751088",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 145586,
             "range": "± 18137",
@@ -3735,36 +3645,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 486779991,
             "range": "± 37260462",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2510156,
-            "range": "± 48012",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5895381,
-            "range": "± 154159",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11499579,
-            "range": "± 96864",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56587797,
-            "range": "± 584499",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112646107,
-            "range": "± 776541",
             "unit": "ns/iter"
           },
           {
@@ -4144,36 +4024,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2376591,
-            "range": "± 21490",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5627143,
-            "range": "± 52664",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11083885,
-            "range": "± 65110",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54366974,
-            "range": "± 218675",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108086636,
-            "range": "± 308788",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 117167,
             "range": "± 3049",
@@ -4507,36 +4357,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 471341539,
             "range": "± 9957043",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2362107,
-            "range": "± 33690",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5653873,
-            "range": "± 43315",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11100521,
-            "range": "± 57604",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54335693,
-            "range": "± 237532",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108320338,
-            "range": "± 395680",
             "unit": "ns/iter"
           },
           {
@@ -4916,36 +4736,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2343293,
-            "range": "± 43627",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5540204,
-            "range": "± 38678",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10877809,
-            "range": "± 96758",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53545716,
-            "range": "± 227468",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106806608,
-            "range": "± 360154",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96028,
             "range": "± 2809",
@@ -5279,36 +5069,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 396212227,
             "range": "± 6843891",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2346583,
-            "range": "± 46554",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5538569,
-            "range": "± 32029",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10879439,
-            "range": "± 69247",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53564681,
-            "range": "± 262920",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106759151,
-            "range": "± 386168",
             "unit": "ns/iter"
           },
           {
@@ -5688,36 +5448,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2339931,
-            "range": "± 23362",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5570042,
-            "range": "± 24316",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10958557,
-            "range": "± 35064",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53688457,
-            "range": "± 435842",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107005310,
-            "range": "± 426281",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 97151,
             "range": "± 2974",
@@ -6051,36 +5781,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 412053241,
             "range": "± 10990832",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2342979,
-            "range": "± 11149",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5552912,
-            "range": "± 26292",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10925739,
-            "range": "± 31116",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53687763,
-            "range": "± 143523",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106982416,
-            "range": "± 388302",
             "unit": "ns/iter"
           },
           {
@@ -6460,36 +6160,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2353918,
-            "range": "± 30276",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5576142,
-            "range": "± 38205",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10984539,
-            "range": "± 43314",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53607874,
-            "range": "± 67011",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106841327,
-            "range": "± 464869",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 98822,
             "range": "± 3773",
@@ -6823,36 +6493,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 399607224,
             "range": "± 6856695",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2356495,
-            "range": "± 28719",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5574307,
-            "range": "± 35354",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10960881,
-            "range": "± 42199",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53622155,
-            "range": "± 62007",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106847809,
-            "range": "± 98879",
             "unit": "ns/iter"
           },
           {
@@ -7232,36 +6872,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2351691,
-            "range": "± 8402",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5574484,
-            "range": "± 26045",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11042040,
-            "range": "± 22392",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53643733,
-            "range": "± 411129",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106907680,
-            "range": "± 107215",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 99872,
             "range": "± 3191",
@@ -7595,36 +7205,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 414977962,
             "range": "± 6686230",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2346664,
-            "range": "± 13141",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5566917,
-            "range": "± 19397",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10930571,
-            "range": "± 50200",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53598320,
-            "range": "± 43620",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106865724,
-            "range": "± 220086",
             "unit": "ns/iter"
           },
           {
@@ -8004,36 +7584,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2351389,
-            "range": "± 34922",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5619556,
-            "range": "± 52056",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10989497,
-            "range": "± 74829",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53783497,
-            "range": "± 189489",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107221143,
-            "range": "± 416493",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 93911,
             "range": "± 2441",
@@ -8367,36 +7917,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 350384722,
             "range": "± 13638927",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2417235,
-            "range": "± 47347",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5605288,
-            "range": "± 67088",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10963233,
-            "range": "± 74761",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53899353,
-            "range": "± 252328",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107351036,
-            "range": "± 526608",
             "unit": "ns/iter"
           },
           {
@@ -8776,36 +8296,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2482371,
-            "range": "± 36876",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5851045,
-            "range": "± 103890",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11468114,
-            "range": "± 74866",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56456280,
-            "range": "± 425344",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112650169,
-            "range": "± 797741",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 149626,
             "range": "± 11268",
@@ -9139,36 +8629,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 505961071,
             "range": "± 11695936",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2490467,
-            "range": "± 41667",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5846579,
-            "range": "± 69128",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11470207,
-            "range": "± 121278",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56462367,
-            "range": "± 321560",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112699836,
-            "range": "± 700356",
             "unit": "ns/iter"
           },
           {
@@ -9548,36 +9008,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2416687,
-            "range": "± 39002",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5621623,
-            "range": "± 78077",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11020974,
-            "range": "± 73176",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54028167,
-            "range": "± 141243",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107963374,
-            "range": "± 346633",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 118132,
             "range": "± 6301",
@@ -9911,36 +9341,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 466335861,
             "range": "± 12316740",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2383009,
-            "range": "± 46802",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5622964,
-            "range": "± 59783",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11066992,
-            "range": "± 95747",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54093380,
-            "range": "± 189045",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108227459,
-            "range": "± 567559",
             "unit": "ns/iter"
           },
           {
@@ -10320,36 +9720,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2260157,
-            "range": "± 30582",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5512062,
-            "range": "± 59647",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11003804,
-            "range": "± 117366",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53940122,
-            "range": "± 373096",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106670044,
-            "range": "± 542295",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96894,
             "range": "± 2044",
@@ -10683,36 +10053,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 359982077,
             "range": "± 6504964",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2279219,
-            "range": "± 39616",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5522103,
-            "range": "± 57637",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11024244,
-            "range": "± 117035",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53936171,
-            "range": "± 326517",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107675751,
-            "range": "± 514593",
             "unit": "ns/iter"
           },
           {
@@ -11092,36 +10432,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2489719,
-            "range": "± 89336",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5857358,
-            "range": "± 69249",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11474368,
-            "range": "± 74559",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56450685,
-            "range": "± 1111312",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112594320,
-            "range": "± 626664",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 154083,
             "range": "± 31115",
@@ -11455,36 +10765,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 476338191,
             "range": "± 14450247",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2503158,
-            "range": "± 29073",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5866569,
-            "range": "± 52444",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11492617,
-            "range": "± 78820",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56429893,
-            "range": "± 446231",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112602046,
-            "range": "± 1059055",
             "unit": "ns/iter"
           },
           {
@@ -11864,36 +11144,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2212272,
-            "range": "± 7588",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5425934,
-            "range": "± 12825",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10832075,
-            "range": "± 29217",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53479181,
-            "range": "± 66467",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106685670,
-            "range": "± 86170",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95473,
             "range": "± 2647",
@@ -12227,36 +11477,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 387300759,
             "range": "± 5666293",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2223650,
-            "range": "± 13339",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5437781,
-            "range": "± 13617",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10849731,
-            "range": "± 28305",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53494882,
-            "range": "± 80194",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106670470,
-            "range": "± 80259",
             "unit": "ns/iter"
           },
           {
@@ -12636,36 +11856,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2408817,
-            "range": "± 42381",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5713336,
-            "range": "± 90656",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11288080,
-            "range": "± 115839",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 55611009,
-            "range": "± 687269",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 110362074,
-            "range": "± 994999",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 149554,
             "range": "± 14631",
@@ -12999,36 +12189,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 474143173,
             "range": "± 10057813",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2428485,
-            "range": "± 31704",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5727513,
-            "range": "± 57193",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11274110,
-            "range": "± 88325",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 55535039,
-            "range": "± 518637",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 110023667,
-            "range": "± 1319622",
             "unit": "ns/iter"
           },
           {
@@ -13408,36 +12568,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2332970,
-            "range": "± 41948",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5588295,
-            "range": "± 53806",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11077160,
-            "range": "± 95524",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54293164,
-            "range": "± 350006",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108443735,
-            "range": "± 528939",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 94490,
             "range": "± 2366",
@@ -13771,36 +12901,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 382542612,
             "range": "± 5360467",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2312725,
-            "range": "± 43933",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5569848,
-            "range": "± 46517",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11094012,
-            "range": "± 103570",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54298666,
-            "range": "± 463403",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108181069,
-            "range": "± 367328",
             "unit": "ns/iter"
           },
           {
@@ -14180,36 +13280,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2344368,
-            "range": "± 8602",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5540341,
-            "range": "± 12938",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10919892,
-            "range": "± 60536",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53546169,
-            "range": "± 146591",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106806775,
-            "range": "± 663314",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 97454,
             "range": "± 2774",
@@ -14543,36 +13613,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 436500139,
             "range": "± 5198376",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2342957,
-            "range": "± 6276",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5536725,
-            "range": "± 47465",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10886239,
-            "range": "± 30420",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53540587,
-            "range": "± 53815",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106823235,
-            "range": "± 145122",
             "unit": "ns/iter"
           },
           {
@@ -14952,36 +13992,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2417550,
-            "range": "± 33844",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5758864,
-            "range": "± 44507",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11319519,
-            "range": "± 64622",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 55629208,
-            "range": "± 473203",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 110812969,
-            "range": "± 1084445",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 154330,
             "range": "± 9982",
@@ -15315,36 +14325,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 473750649,
             "range": "± 11052240",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2424055,
-            "range": "± 19053",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5768098,
-            "range": "± 77958",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11346328,
-            "range": "± 140117",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 55605979,
-            "range": "± 450536",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 110817657,
-            "range": "± 993732",
             "unit": "ns/iter"
           },
           {
@@ -15724,36 +14704,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2521169,
-            "range": "± 51933",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5760009,
-            "range": "± 75453",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11147988,
-            "range": "± 106100",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54262369,
-            "range": "± 227454",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108162526,
-            "range": "± 661635",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 93496,
             "range": "± 2123",
@@ -16087,36 +15037,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 433815494,
             "range": "± 6157321",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2522335,
-            "range": "± 57052",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5708458,
-            "range": "± 66773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11135048,
-            "range": "± 110420",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54231872,
-            "range": "± 231798",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107711389,
-            "range": "± 661757",
             "unit": "ns/iter"
           },
           {
@@ -16496,36 +15416,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2446199,
-            "range": "± 68590",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5978384,
-            "range": "± 151458",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11411235,
-            "range": "± 210496",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56731058,
-            "range": "± 858121",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 113166677,
-            "range": "± 1645029",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 131271,
             "range": "± 46390",
@@ -16859,36 +15749,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 429553266,
             "range": "± 8330426",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2518754,
-            "range": "± 86856",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5786994,
-            "range": "± 93716",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11561340,
-            "range": "± 225907",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56366836,
-            "range": "± 828497",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 111775414,
-            "range": "± 1679514",
             "unit": "ns/iter"
           },
           {
@@ -17268,36 +16128,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2337776,
-            "range": "± 32449",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5583557,
-            "range": "± 44601",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10993707,
-            "range": "± 85314",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54118135,
-            "range": "± 251367",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108068519,
-            "range": "± 380554",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 159078,
             "range": "± 11494",
@@ -17631,36 +16461,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 500148762,
             "range": "± 14078479",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2342334,
-            "range": "± 25431",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5582389,
-            "range": "± 44908",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11021019,
-            "range": "± 69190",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54115048,
-            "range": "± 227317",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107981628,
-            "range": "± 378006",
             "unit": "ns/iter"
           },
           {
@@ -18040,36 +16840,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2381951,
-            "range": "± 56175",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5615849,
-            "range": "± 47955",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11068022,
-            "range": "± 73904",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54224801,
-            "range": "± 276926",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108200517,
-            "range": "± 475009",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 123943,
             "range": "± 5417",
@@ -18403,36 +17173,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 506792346,
             "range": "± 15327968",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2378086,
-            "range": "± 19621",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5639705,
-            "range": "± 46430",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11001733,
-            "range": "± 87924",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54572540,
-            "range": "± 406728",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108057727,
-            "range": "± 475809",
             "unit": "ns/iter"
           },
           {
@@ -18812,36 +17552,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2340858,
-            "range": "± 45607",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5540875,
-            "range": "± 29545",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10865387,
-            "range": "± 78669",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53507868,
-            "range": "± 65519",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106787225,
-            "range": "± 109842",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95506,
             "range": "± 2844",
@@ -19175,36 +17885,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 448703102,
             "range": "± 5281786",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2429360,
-            "range": "± 64271",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5642752,
-            "range": "± 84139",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10931157,
-            "range": "± 99047",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53544863,
-            "range": "± 263401",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106851317,
-            "range": "± 281768",
             "unit": "ns/iter"
           },
           {
@@ -19584,36 +18264,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2340389,
-            "range": "± 26258",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5544517,
-            "range": "± 38759",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10873860,
-            "range": "± 78504",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53489212,
-            "range": "± 176539",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106970644,
-            "range": "± 264775",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96877,
             "range": "± 2031",
@@ -19947,36 +18597,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 445412124,
             "range": "± 15648336",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2337179,
-            "range": "± 43608",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5539653,
-            "range": "± 22027",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10867418,
-            "range": "± 43894",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53537273,
-            "range": "± 98936",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106899754,
-            "range": "± 411073",
             "unit": "ns/iter"
           },
           {
@@ -20356,36 +18976,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2345031,
-            "range": "± 41450",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5627338,
-            "range": "± 73462",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10970816,
-            "range": "± 79320",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53639078,
-            "range": "± 202520",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107416914,
-            "range": "± 304731",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96146,
             "range": "± 2785",
@@ -20719,36 +19309,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 430042166,
             "range": "± 5776701",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2410495,
-            "range": "± 48515",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5633622,
-            "range": "± 68323",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11000925,
-            "range": "± 94333",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53935272,
-            "range": "± 240535",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107250889,
-            "range": "± 420143",
             "unit": "ns/iter"
           },
           {
@@ -21128,36 +19688,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2367311,
-            "range": "± 12611",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5607858,
-            "range": "± 17310",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10964848,
-            "range": "± 20108",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53813022,
-            "range": "± 161841",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107418130,
-            "range": "± 745881",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 111747,
             "range": "± 11316",
@@ -21491,36 +20021,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 487459080,
             "range": "± 15941660",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2379934,
-            "range": "± 14128",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5622113,
-            "range": "± 29805",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11019009,
-            "range": "± 44629",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54143673,
-            "range": "± 188333",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107375732,
-            "range": "± 161225",
             "unit": "ns/iter"
           },
           {
@@ -21900,36 +20400,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2228520,
-            "range": "± 11507",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5445093,
-            "range": "± 18462",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10864913,
-            "range": "± 38656",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53433428,
-            "range": "± 82529",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106593092,
-            "range": "± 358890",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 94768,
             "range": "± 2014",
@@ -22263,36 +20733,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 390190641,
             "range": "± 6205680",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2226937,
-            "range": "± 10746",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5435596,
-            "range": "± 12737",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10852403,
-            "range": "± 32643",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53430325,
-            "range": "± 300367",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106634446,
-            "range": "± 244145",
             "unit": "ns/iter"
           },
           {
@@ -22672,36 +21112,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2232095,
-            "range": "± 16272",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5445738,
-            "range": "± 12631",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10889971,
-            "range": "± 42136",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53486498,
-            "range": "± 102101",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106643397,
-            "range": "± 112411",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95475,
             "range": "± 4458",
@@ -23035,36 +21445,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 389064373,
             "range": "± 6376654",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2214684,
-            "range": "± 30026",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5474753,
-            "range": "± 37517",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10863586,
-            "range": "± 45934",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53476985,
-            "range": "± 110234",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106633943,
-            "range": "± 430745",
             "unit": "ns/iter"
           },
           {
@@ -23444,36 +21824,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2404578,
-            "range": "± 33419",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5662949,
-            "range": "± 50770",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11142153,
-            "range": "± 153496",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54532643,
-            "range": "± 200346",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108578274,
-            "range": "± 807073",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 124235,
             "range": "± 5688",
@@ -23807,36 +22157,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 519345437,
             "range": "± 12450129",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2396559,
-            "range": "± 37288",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5685625,
-            "range": "± 75680",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11126673,
-            "range": "± 146829",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54584335,
-            "range": "± 210132",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108779304,
-            "range": "± 340030",
             "unit": "ns/iter"
           },
           {
@@ -24216,36 +22536,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2358210,
-            "range": "± 43688",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5574975,
-            "range": "± 64662",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10978118,
-            "range": "± 98250",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53946129,
-            "range": "± 238085",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107295660,
-            "range": "± 686578",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 101482,
             "range": "± 5907",
@@ -24579,36 +22869,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 433047846,
             "range": "± 15061840",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2348290,
-            "range": "± 44639",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5572020,
-            "range": "± 73427",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10982776,
-            "range": "± 133968",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53858958,
-            "range": "± 201803",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107385984,
-            "range": "± 781487",
             "unit": "ns/iter"
           },
           {
@@ -24988,36 +23248,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2347453,
-            "range": "± 22688",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5564187,
-            "range": "± 174011",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10977151,
-            "range": "± 51095",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53749940,
-            "range": "± 991295",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107053570,
-            "range": "± 539261",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 97939,
             "range": "± 3490",
@@ -25351,36 +23581,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 418740745,
             "range": "± 10801788",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2349705,
-            "range": "± 13116",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5562065,
-            "range": "± 21355",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10927875,
-            "range": "± 79830",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53707958,
-            "range": "± 220267",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107142370,
-            "range": "± 248415",
             "unit": "ns/iter"
           },
           {
@@ -25760,36 +23960,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2347846,
-            "range": "± 12199",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5559465,
-            "range": "± 48894",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10922491,
-            "range": "± 23390",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53589495,
-            "range": "± 61980",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106843336,
-            "range": "± 241238",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 99480,
             "range": "± 2610",
@@ -26123,36 +24293,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 426901169,
             "range": "± 6142932",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2345894,
-            "range": "± 8114",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5546482,
-            "range": "± 9772",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10888671,
-            "range": "± 22183",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53540446,
-            "range": "± 61110",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106797199,
-            "range": "± 120741",
             "unit": "ns/iter"
           },
           {
@@ -26532,36 +24672,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2345065,
-            "range": "± 12024",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5548237,
-            "range": "± 12178",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10913277,
-            "range": "± 92447",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53558471,
-            "range": "± 37565",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106785438,
-            "range": "± 67276",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96537,
             "range": "± 1565",
@@ -26895,36 +25005,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 449244956,
             "range": "± 7761535",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2346492,
-            "range": "± 7643",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5564433,
-            "range": "± 18068",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10973449,
-            "range": "± 23944",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53598924,
-            "range": "± 65119",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106801937,
-            "range": "± 54113",
             "unit": "ns/iter"
           },
           {
@@ -27304,36 +25384,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2501460,
-            "range": "± 69659",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5852110,
-            "range": "± 72690",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11505162,
-            "range": "± 85930",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56536209,
-            "range": "± 306864",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112868408,
-            "range": "± 754449",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 150569,
             "range": "± 11022",
@@ -27667,36 +25717,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 487693844,
             "range": "± 11729350",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2506547,
-            "range": "± 41057",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5881254,
-            "range": "± 73405",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11516024,
-            "range": "± 110756",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56512673,
-            "range": "± 527664",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112656042,
-            "range": "± 807460",
             "unit": "ns/iter"
           },
           {
@@ -28076,36 +26096,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2444448,
-            "range": "± 63276",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5813654,
-            "range": "± 64664",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11403281,
-            "range": "± 109707",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56047351,
-            "range": "± 505337",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 111229227,
-            "range": "± 689091",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 156708,
             "range": "± 23035",
@@ -28439,36 +26429,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 482569132,
             "range": "± 11194535",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2444708,
-            "range": "± 33451",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5759602,
-            "range": "± 42065",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11306682,
-            "range": "± 177302",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56131276,
-            "range": "± 404666",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112019916,
-            "range": "± 1146832",
             "unit": "ns/iter"
           },
           {
@@ -28848,36 +26808,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2450586,
-            "range": "± 59034",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5783345,
-            "range": "± 59169",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11206767,
-            "range": "± 81576",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54767677,
-            "range": "± 254688",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 109196712,
-            "range": "± 534572",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 110181,
             "range": "± 4569",
@@ -29211,36 +27141,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 481093740,
             "range": "± 9402848",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2433708,
-            "range": "± 45230",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5785860,
-            "range": "± 70303",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11221331,
-            "range": "± 93058",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54744117,
-            "range": "± 377788",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 109184968,
-            "range": "± 400630",
             "unit": "ns/iter"
           },
           {
@@ -29620,36 +27520,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2494982,
-            "range": "± 49175",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5704729,
-            "range": "± 73950",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11082331,
-            "range": "± 93193",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53981517,
-            "range": "± 378866",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107575494,
-            "range": "± 379499",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95944,
             "range": "± 3138",
@@ -29983,36 +27853,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 453832764,
             "range": "± 5768449",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2367300,
-            "range": "± 75101",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5699788,
-            "range": "± 81806",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11106851,
-            "range": "± 66885",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54119670,
-            "range": "± 218925",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107673145,
-            "range": "± 490148",
             "unit": "ns/iter"
           },
           {
@@ -30392,36 +28232,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2415561,
-            "range": "± 42702",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5575883,
-            "range": "± 62184",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10959277,
-            "range": "± 107329",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53851585,
-            "range": "± 219963",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107181229,
-            "range": "± 381481",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96742,
             "range": "± 2288",
@@ -30755,36 +28565,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 418322610,
             "range": "± 10576339",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2386580,
-            "range": "± 50962",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5622379,
-            "range": "± 57391",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10972641,
-            "range": "± 76830",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53822438,
-            "range": "± 178867",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107346457,
-            "range": "± 305007",
             "unit": "ns/iter"
           },
           {
@@ -31164,36 +28944,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2539480,
-            "range": "± 71715",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5840070,
-            "range": "± 79957",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11282396,
-            "range": "± 119956",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54816320,
-            "range": "± 387520",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 109122743,
-            "range": "± 686061",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 105850,
             "range": "± 5695",
@@ -31527,36 +29277,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 470182241,
             "range": "± 13086435",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2478411,
-            "range": "± 42420",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5791786,
-            "range": "± 81503",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11272680,
-            "range": "± 113638",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54847473,
-            "range": "± 472087",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108251816,
-            "range": "± 549503",
             "unit": "ns/iter"
           },
           {
@@ -31936,36 +29656,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2387110,
-            "range": "± 24096",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5700492,
-            "range": "± 34014",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11147047,
-            "range": "± 75576",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54509052,
-            "range": "± 360923",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108651478,
-            "range": "± 786283",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 114882,
             "range": "± 3330",
@@ -32299,36 +29989,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 521963297,
             "range": "± 12971521",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2392944,
-            "range": "± 26066",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5694442,
-            "range": "± 65558",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11152941,
-            "range": "± 154761",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54499790,
-            "range": "± 358239",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108705484,
-            "range": "± 457786",
             "unit": "ns/iter"
           },
           {
@@ -32708,36 +30368,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2469097,
-            "range": "± 52745",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5845100,
-            "range": "± 95359",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11512702,
-            "range": "± 94745",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56532133,
-            "range": "± 265928",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112829078,
-            "range": "± 748451",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 142657,
             "range": "± 13760",
@@ -33071,36 +30701,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 500245630,
             "range": "± 9927903",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2471855,
-            "range": "± 43281",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5849531,
-            "range": "± 61722",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11490436,
-            "range": "± 94907",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56572013,
-            "range": "± 807224",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112666530,
-            "range": "± 1326764",
             "unit": "ns/iter"
           },
           {
@@ -33480,36 +31080,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2473016,
-            "range": "± 36275",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5824800,
-            "range": "± 102016",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11458017,
-            "range": "± 84394",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56143400,
-            "range": "± 1216292",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 111708205,
-            "range": "± 805302",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 173060,
             "range": "± 21693",
@@ -33843,36 +31413,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 535931813,
             "range": "± 14336773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2467640,
-            "range": "± 51350",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5818336,
-            "range": "± 109305",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11454657,
-            "range": "± 93411",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56099571,
-            "range": "± 419321",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 111985342,
-            "range": "± 882235",
             "unit": "ns/iter"
           },
           {
@@ -34252,36 +31792,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2357862,
-            "range": "± 13997",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5579778,
-            "range": "± 42892",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10950209,
-            "range": "± 37642",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53663893,
-            "range": "± 80302",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106908600,
-            "range": "± 82569",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 101732,
             "range": "± 2700",
@@ -34615,36 +32125,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 445313263,
             "range": "± 4924069",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2363405,
-            "range": "± 20175",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5573094,
-            "range": "± 26473",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10953565,
-            "range": "± 53118",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53695230,
-            "range": "± 262606",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107037858,
-            "range": "± 154523",
             "unit": "ns/iter"
           },
           {
@@ -35024,36 +32504,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2305792,
-            "range": "± 25938",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5529316,
-            "range": "± 35120",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10950518,
-            "range": "± 77631",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53901502,
-            "range": "± 280429",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107423722,
-            "range": "± 553240",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96166,
             "range": "± 3665",
@@ -35387,36 +32837,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 453625034,
             "range": "± 6123091",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2429625,
-            "range": "± 56143",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5651469,
-            "range": "± 61766",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10867831,
-            "range": "± 22497",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53492999,
-            "range": "± 168607",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106826597,
-            "range": "± 120485",
             "unit": "ns/iter"
           },
           {
@@ -35796,36 +33216,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2276152,
-            "range": "± 33120",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5533005,
-            "range": "± 45048",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11056081,
-            "range": "± 108205",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53954408,
-            "range": "± 319828",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107499009,
-            "range": "± 403403",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 94141,
             "range": "± 3114",
@@ -36159,36 +33549,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 386638061,
             "range": "± 7133520",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2252972,
-            "range": "± 25224",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5524366,
-            "range": "± 47276",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10989512,
-            "range": "± 95231",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53470860,
-            "range": "± 312026",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107421165,
-            "range": "± 439831",
             "unit": "ns/iter"
           },
           {
@@ -36568,36 +33928,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2211197,
-            "range": "± 32346",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5423537,
-            "range": "± 29945",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10844115,
-            "range": "± 84062",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53412677,
-            "range": "± 332929",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106640655,
-            "range": "± 267858",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 94983,
             "range": "± 2470",
@@ -36931,36 +34261,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 386682934,
             "range": "± 6850892",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2214077,
-            "range": "± 26042",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5417197,
-            "range": "± 64826",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10843295,
-            "range": "± 62952",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53407228,
-            "range": "± 194204",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106596957,
-            "range": "± 467146",
             "unit": "ns/iter"
           },
           {
@@ -37340,36 +34640,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2384957,
-            "range": "± 25172",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5714623,
-            "range": "± 57204",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11162858,
-            "range": "± 55045",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54472307,
-            "range": "± 261159",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108524040,
-            "range": "± 205126",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 112881,
             "range": "± 3406",
@@ -37703,36 +34973,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 494477422,
             "range": "± 10788670",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2395179,
-            "range": "± 38341",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5722917,
-            "range": "± 45333",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11153680,
-            "range": "± 58104",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54518593,
-            "range": "± 183549",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108643640,
-            "range": "± 207031",
             "unit": "ns/iter"
           },
           {
@@ -38112,36 +35352,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2239629,
-            "range": "± 32857",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5485043,
-            "range": "± 23074",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10912357,
-            "range": "± 65451",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53548295,
-            "range": "± 374515",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106729957,
-            "range": "± 415777",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96920,
             "range": "± 4542",
@@ -38475,36 +35685,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 330957186,
             "range": "± 9716535",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2218830,
-            "range": "± 18807",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5480649,
-            "range": "± 45121",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10867169,
-            "range": "± 55746",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53473099,
-            "range": "± 239470",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106702793,
-            "range": "± 310146",
             "unit": "ns/iter"
           },
           {
@@ -38884,36 +36064,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2345138,
-            "range": "± 6300",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5543873,
-            "range": "± 9494",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10874605,
-            "range": "± 21440",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53534579,
-            "range": "± 61008",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106769664,
-            "range": "± 72670",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 94498,
             "range": "± 3241",
@@ -39247,36 +36397,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 367100510,
             "range": "± 6310364",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2345215,
-            "range": "± 6012",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5544652,
-            "range": "± 7355",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10863149,
-            "range": "± 13324",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53445181,
-            "range": "± 56757",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106702629,
-            "range": "± 219222",
             "unit": "ns/iter"
           },
           {
@@ -39656,36 +36776,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2482725,
-            "range": "± 36271",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5866782,
-            "range": "± 71871",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11483465,
-            "range": "± 92430",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56496039,
-            "range": "± 625119",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112701383,
-            "range": "± 667930",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 146909,
             "range": "± 9667",
@@ -40019,36 +37109,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 415158281,
             "range": "± 12070935",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2476706,
-            "range": "± 22562",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5872049,
-            "range": "± 51016",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11475628,
-            "range": "± 102801",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56588656,
-            "range": "± 422819",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112887999,
-            "range": "± 530809",
             "unit": "ns/iter"
           },
           {
@@ -40428,36 +37488,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2237393,
-            "range": "± 22124",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5446558,
-            "range": "± 13730",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10877726,
-            "range": "± 35278",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53489971,
-            "range": "± 85139",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106649839,
-            "range": "± 320603",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95474,
             "range": "± 2530",
@@ -40791,36 +37821,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 321679891,
             "range": "± 5244862",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2285789,
-            "range": "± 47353",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5516918,
-            "range": "± 73184",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10987177,
-            "range": "± 127799",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53940827,
-            "range": "± 426671",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107764082,
-            "range": "± 585937",
             "unit": "ns/iter"
           },
           {
@@ -41200,36 +38200,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2443956,
-            "range": "± 62820",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5768248,
-            "range": "± 67232",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11206013,
-            "range": "± 80814",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54536570,
-            "range": "± 285663",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108954488,
-            "range": "± 942163",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 117898,
             "range": "± 4220",
@@ -41563,36 +38533,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 437540577,
             "range": "± 8798413",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2387081,
-            "range": "± 36459",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5770443,
-            "range": "± 66242",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11199603,
-            "range": "± 101229",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54665743,
-            "range": "± 254416",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108721740,
-            "range": "± 795049",
             "unit": "ns/iter"
           },
           {
@@ -41972,36 +38912,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2398326,
-            "range": "± 77176",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5654285,
-            "range": "± 115742",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11059381,
-            "range": "± 234702",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53998754,
-            "range": "± 553798",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108063209,
-            "range": "± 774760",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 91077,
             "range": "± 3932",
@@ -42335,36 +39245,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 361613635,
             "range": "± 16545904",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2317561,
-            "range": "± 51289",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5705307,
-            "range": "± 104754",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11032109,
-            "range": "± 158506",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53979701,
-            "range": "± 353437",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108025604,
-            "range": "± 600127",
             "unit": "ns/iter"
           },
           {
@@ -42744,36 +39624,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2206104,
-            "range": "± 10898",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5408863,
-            "range": "± 32888",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10831237,
-            "range": "± 39013",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53346744,
-            "range": "± 84916",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106527090,
-            "range": "± 135719",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 93741,
             "range": "± 1978",
@@ -43107,36 +39957,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 335202364,
             "range": "± 6800223",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2245067,
-            "range": "± 9814",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5456512,
-            "range": "± 18242",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10905935,
-            "range": "± 42734",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53518687,
-            "range": "± 82327",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106714278,
-            "range": "± 259972",
             "unit": "ns/iter"
           },
           {
@@ -43516,36 +40336,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2347917,
-            "range": "± 18082",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5717680,
-            "range": "± 94700",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11052997,
-            "range": "± 129244",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54086906,
-            "range": "± 339454",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107806866,
-            "range": "± 564399",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96901,
             "range": "± 3740",
@@ -43879,36 +40669,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 366861490,
             "range": "± 5411619",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2345849,
-            "range": "± 7497",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5545787,
-            "range": "± 7363",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10880563,
-            "range": "± 110235",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53538706,
-            "range": "± 281856",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106772972,
-            "range": "± 66779",
             "unit": "ns/iter"
           },
           {
@@ -44288,36 +41048,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2210382,
-            "range": "± 49404",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5430992,
-            "range": "± 48820",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10846525,
-            "range": "± 127216",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53394579,
-            "range": "± 301376",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106620809,
-            "range": "± 451954",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95828,
             "range": "± 1927",
@@ -44651,36 +41381,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 326883616,
             "range": "± 6762123",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2217747,
-            "range": "± 42507",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5420937,
-            "range": "± 63208",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10846974,
-            "range": "± 113485",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53410922,
-            "range": "± 315868",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106608096,
-            "range": "± 552083",
             "unit": "ns/iter"
           },
           {
@@ -45060,36 +41760,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2364147,
-            "range": "± 54839",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5546025,
-            "range": "± 66349",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10874531,
-            "range": "± 73459",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53572832,
-            "range": "± 251235",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106841360,
-            "range": "± 493854",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95760,
             "range": "± 3008",
@@ -45423,36 +42093,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 354938038,
             "range": "± 4202035",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2350215,
-            "range": "± 44762",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5555197,
-            "range": "± 77624",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10880557,
-            "range": "± 108014",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53533494,
-            "range": "± 229282",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106758945,
-            "range": "± 307203",
             "unit": "ns/iter"
           },
           {
@@ -45832,36 +42472,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2238453,
-            "range": "± 15911",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5463507,
-            "range": "± 8347",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10874124,
-            "range": "± 25164",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53488528,
-            "range": "± 74933",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106669459,
-            "range": "± 143958",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95418,
             "range": "± 2310",
@@ -46195,36 +42805,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 346772708,
             "range": "± 8334681",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2233943,
-            "range": "± 26980",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5455402,
-            "range": "± 7789",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10868924,
-            "range": "± 23812",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53478928,
-            "range": "± 68120",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106669059,
-            "range": "± 115589",
             "unit": "ns/iter"
           },
           {
@@ -46604,36 +43184,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2515515,
-            "range": "± 47218",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5962992,
-            "range": "± 68303",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11647344,
-            "range": "± 148901",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 57092950,
-            "range": "± 552717",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 113667373,
-            "range": "± 981841",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 142029,
             "range": "± 9876",
@@ -46967,36 +43517,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 378617912,
             "range": "± 9552427",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2501532,
-            "range": "± 44381",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5908684,
-            "range": "± 83038",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11454758,
-            "range": "± 161867",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56733979,
-            "range": "± 649727",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 113577221,
-            "range": "± 1464378",
             "unit": "ns/iter"
           },
           {
@@ -47376,36 +43896,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2240524,
-            "range": "± 16073",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5458745,
-            "range": "± 27022",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10899601,
-            "range": "± 46029",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53536126,
-            "range": "± 144534",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106758405,
-            "range": "± 173861",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96039,
             "range": "± 2533",
@@ -47739,36 +44229,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 328597466,
             "range": "± 4874175",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2233698,
-            "range": "± 7791",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5456975,
-            "range": "± 31429",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10911460,
-            "range": "± 35921",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53510125,
-            "range": "± 99814",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106685206,
-            "range": "± 133509",
             "unit": "ns/iter"
           },
           {
@@ -48148,36 +44608,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2451340,
-            "range": "± 51206",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5798727,
-            "range": "± 99737",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11345140,
-            "range": "± 61340",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 55914101,
-            "range": "± 631866",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 111637852,
-            "range": "± 1095376",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 183756,
             "range": "± 18538",
@@ -48511,36 +44941,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 442458064,
             "range": "± 20398645",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2457212,
-            "range": "± 32417",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5797755,
-            "range": "± 68263",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11353248,
-            "range": "± 78860",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56051191,
-            "range": "± 1114636",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112121326,
-            "range": "± 980360",
             "unit": "ns/iter"
           },
           {
@@ -48920,36 +45320,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2392692,
-            "range": "± 39709",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5586473,
-            "range": "± 45879",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10974869,
-            "range": "± 54548",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53808796,
-            "range": "± 242790",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107329387,
-            "range": "± 497362",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 100550,
             "range": "± 2146",
@@ -49283,36 +45653,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 339449909,
             "range": "± 11119489",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2359114,
-            "range": "± 29531",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5604156,
-            "range": "± 47567",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10942979,
-            "range": "± 78780",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53786073,
-            "range": "± 194532",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107296999,
-            "range": "± 290682",
             "unit": "ns/iter"
           },
           {
@@ -49692,36 +46032,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2250223,
-            "range": "± 19307",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5483184,
-            "range": "± 23143",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10907431,
-            "range": "± 64483",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53601068,
-            "range": "± 154389",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106929133,
-            "range": "± 295410",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 100948,
             "range": "± 7491",
@@ -50055,36 +46365,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 375680475,
             "range": "± 9971299",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2261362,
-            "range": "± 30751",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5480386,
-            "range": "± 22507",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10905684,
-            "range": "± 67391",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53592060,
-            "range": "± 165632",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106912238,
-            "range": "± 439421",
             "unit": "ns/iter"
           },
           {
@@ -50464,36 +46744,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2325556,
-            "range": "± 33288",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5548065,
-            "range": "± 26276",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10901625,
-            "range": "± 32225",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53622555,
-            "range": "± 169713",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107122491,
-            "range": "± 395978",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 100810,
             "range": "± 6369",
@@ -50827,36 +47077,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 386705918,
             "range": "± 11727133",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2341581,
-            "range": "± 44821",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5568312,
-            "range": "± 49421",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10924195,
-            "range": "± 69027",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53783068,
-            "range": "± 344963",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107154552,
-            "range": "± 192766",
             "unit": "ns/iter"
           },
           {
@@ -51236,36 +47456,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2336985,
-            "range": "± 30585",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5563374,
-            "range": "± 56597",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10963219,
-            "range": "± 105154",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53723855,
-            "range": "± 260583",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107169228,
-            "range": "± 288919",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 111797,
             "range": "± 5998",
@@ -51599,36 +47789,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 377084052,
             "range": "± 19204664",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2336967,
-            "range": "± 27898",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5562170,
-            "range": "± 64433",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10929703,
-            "range": "± 59573",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53690532,
-            "range": "± 126458",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107128146,
-            "range": "± 1228955",
             "unit": "ns/iter"
           },
           {
@@ -52008,36 +48168,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2241607,
-            "range": "± 12599",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5456342,
-            "range": "± 17475",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10860395,
-            "range": "± 55303",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53521677,
-            "range": "± 139552",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106857104,
-            "range": "± 785158",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 103179,
             "range": "± 6814",
@@ -52371,36 +48501,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 376247938,
             "range": "± 11750215",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2236377,
-            "range": "± 20118",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5487092,
-            "range": "± 18726",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10888103,
-            "range": "± 93151",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53570818,
-            "range": "± 111553",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106845481,
-            "range": "± 145254",
             "unit": "ns/iter"
           },
           {
@@ -52780,36 +48880,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2375629,
-            "range": "± 57791",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5507855,
-            "range": "± 75257",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10871987,
-            "range": "± 105057",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54253342,
-            "range": "± 294832",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108274537,
-            "range": "± 610617",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 121265,
             "range": "± 10620",
@@ -53143,36 +49213,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 440046888,
             "range": "± 8598383",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2347393,
-            "range": "± 51557",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5637985,
-            "range": "± 76466",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10944213,
-            "range": "± 86619",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54359221,
-            "range": "± 303722",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108315990,
-            "range": "± 516793",
             "unit": "ns/iter"
           },
           {
@@ -53552,36 +49592,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2402676,
-            "range": "± 45974",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5700330,
-            "range": "± 74901",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11147968,
-            "range": "± 99847",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54525571,
-            "range": "± 244902",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108683616,
-            "range": "± 575174",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 126516,
             "range": "± 10293",
@@ -53915,36 +49925,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 421149664,
             "range": "± 11901879",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2416030,
-            "range": "± 48273",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5689564,
-            "range": "± 67747",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11160378,
-            "range": "± 98376",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54473643,
-            "range": "± 280480",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108817031,
-            "range": "± 662667",
             "unit": "ns/iter"
           },
           {
@@ -54324,36 +50304,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2436231,
-            "range": "± 47848",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5776622,
-            "range": "± 47725",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11332491,
-            "range": "± 265297",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 55931156,
-            "range": "± 384860",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 111687717,
-            "range": "± 403904",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 145685,
             "range": "± 10822",
@@ -54687,36 +50637,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 393708532,
             "range": "± 17695116",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2433712,
-            "range": "± 21641",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5784562,
-            "range": "± 79446",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11359057,
-            "range": "± 49818",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 55898887,
-            "range": "± 604865",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 111739832,
-            "range": "± 706281",
             "unit": "ns/iter"
           },
           {
@@ -55096,36 +51016,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2352904,
-            "range": "± 13948",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5552357,
-            "range": "± 18042",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10886517,
-            "range": "± 72140",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53562652,
-            "range": "± 62292",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106842926,
-            "range": "± 375335",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 97989,
             "range": "± 1789",
@@ -55459,36 +51349,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 352848547,
             "range": "± 5765401",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2419315,
-            "range": "± 62146",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5639909,
-            "range": "± 76824",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11008409,
-            "range": "± 122535",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53778777,
-            "range": "± 251976",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107216013,
-            "range": "± 245337",
             "unit": "ns/iter"
           },
           {
@@ -55868,36 +51728,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2502637,
-            "range": "± 40296",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5876681,
-            "range": "± 66365",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11516027,
-            "range": "± 106882",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56499781,
-            "range": "± 384634",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 113180647,
-            "range": "± 910063",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 144907,
             "range": "± 8855",
@@ -56231,36 +52061,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 372675949,
             "range": "± 8359286",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2503189,
-            "range": "± 57470",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5823209,
-            "range": "± 80557",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11502569,
-            "range": "± 108690",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56770928,
-            "range": "± 603998",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112924675,
-            "range": "± 942165",
             "unit": "ns/iter"
           },
           {
@@ -56640,36 +52440,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2255109,
-            "range": "± 10133",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5481836,
-            "range": "± 11589",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10942943,
-            "range": "± 66665",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53553079,
-            "range": "± 81758",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106745045,
-            "range": "± 163573",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 97048,
             "range": "± 2268",
@@ -57003,36 +52773,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 343030180,
             "range": "± 4662740",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2233192,
-            "range": "± 8536",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5461444,
-            "range": "± 14733",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10881885,
-            "range": "± 38018",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53508575,
-            "range": "± 74472",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106721672,
-            "range": "± 289214",
             "unit": "ns/iter"
           },
           {
@@ -57412,36 +53152,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2350534,
-            "range": "± 15072",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5548114,
-            "range": "± 8497",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10888680,
-            "range": "± 30191",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53602839,
-            "range": "± 62830",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106844443,
-            "range": "± 166785",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 100844,
             "range": "± 2005",
@@ -57775,36 +53485,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 374647790,
             "range": "± 3455419",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2417447,
-            "range": "± 64303",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5552140,
-            "range": "± 62475",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10897090,
-            "range": "± 98141",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53792389,
-            "range": "± 267096",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107520455,
-            "range": "± 410018",
             "unit": "ns/iter"
           },
           {
@@ -58184,36 +53864,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2222086,
-            "range": "± 17776",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5433433,
-            "range": "± 36286",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10865651,
-            "range": "± 37288",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53461653,
-            "range": "± 74873",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106629413,
-            "range": "± 88877",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 94625,
             "range": "± 3255",
@@ -58547,36 +54197,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 324883490,
             "range": "± 5198265",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2207514,
-            "range": "± 5095",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5413068,
-            "range": "± 9965",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10835891,
-            "range": "± 31535",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53375548,
-            "range": "± 151729",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106559822,
-            "range": "± 77672",
             "unit": "ns/iter"
           },
           {
@@ -58956,36 +54576,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2285732,
-            "range": "± 6975",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5492491,
-            "range": "± 13573",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10852361,
-            "range": "± 27489",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53586501,
-            "range": "± 160743",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106860225,
-            "range": "± 365146",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 102375,
             "range": "± 3333",
@@ -59319,36 +54909,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 379322624,
             "range": "± 5696317",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2357547,
-            "range": "± 7865",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5614570,
-            "range": "± 21008",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11004034,
-            "range": "± 29146",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53649440,
-            "range": "± 48515",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106889554,
-            "range": "± 162862",
             "unit": "ns/iter"
           },
           {
@@ -59728,36 +55288,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2465863,
-            "range": "± 75936",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5696276,
-            "range": "± 98910",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10899231,
-            "range": "± 88888",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53761798,
-            "range": "± 319767",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107503103,
-            "range": "± 594543",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 101971,
             "range": "± 4960",
@@ -60091,36 +55621,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 379032691,
             "range": "± 6455422",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2444435,
-            "range": "± 72579",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5624259,
-            "range": "± 74942",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10933321,
-            "range": "± 102271",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53807175,
-            "range": "± 310670",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107298537,
-            "range": "± 490839",
             "unit": "ns/iter"
           },
           {
@@ -60500,36 +56000,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2228812,
-            "range": "± 26533",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5455352,
-            "range": "± 36916",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10864475,
-            "range": "± 33819",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53456929,
-            "range": "± 121701",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106635558,
-            "range": "± 184923",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 95881,
             "range": "± 2573",
@@ -60863,36 +56333,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 327295546,
             "range": "± 4843359",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2233310,
-            "range": "± 39303",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5435937,
-            "range": "± 47605",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10848825,
-            "range": "± 37755",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53411779,
-            "range": "± 91641",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106622008,
-            "range": "± 86114",
             "unit": "ns/iter"
           },
           {
@@ -61272,36 +56712,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2251150,
-            "range": "± 8622",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5472578,
-            "range": "± 9145",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10898121,
-            "range": "± 36213",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53514804,
-            "range": "± 78094",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106721756,
-            "range": "± 331980",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 97427,
             "range": "± 1479",
@@ -61635,36 +57045,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 330386765,
             "range": "± 5008815",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2265583,
-            "range": "± 16290",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5473391,
-            "range": "± 9422",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10906512,
-            "range": "± 36104",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53531760,
-            "range": "± 102479",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106726670,
-            "range": "± 93380",
             "unit": "ns/iter"
           },
           {
@@ -62044,36 +57424,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2213908,
-            "range": "± 45503",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5417233,
-            "range": "± 81164",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10921724,
-            "range": "± 116972",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53490678,
-            "range": "± 361216",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106632484,
-            "range": "± 313404",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 96952,
             "range": "± 2124",
@@ -62407,36 +57757,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 329065227,
             "range": "± 5358645",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2221570,
-            "range": "± 51013",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5437319,
-            "range": "± 69899",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10883948,
-            "range": "± 118685",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53425038,
-            "range": "± 362968",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106731808,
-            "range": "± 649222",
             "unit": "ns/iter"
           },
           {
@@ -62816,36 +58136,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2347758,
-            "range": "± 9606",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5553337,
-            "range": "± 18980",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10938251,
-            "range": "± 40150",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53572948,
-            "range": "± 102855",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106833061,
-            "range": "± 418969",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 102731,
             "range": "± 3474",
@@ -63179,36 +58469,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 358417177,
             "range": "± 7032461",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2355476,
-            "range": "± 42715",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5615096,
-            "range": "± 99722",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11053993,
-            "range": "± 112616",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54060052,
-            "range": "± 411436",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107726930,
-            "range": "± 462020",
             "unit": "ns/iter"
           },
           {
@@ -63588,36 +58848,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2495546,
-            "range": "± 38201",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5869593,
-            "range": "± 43346",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11480086,
-            "range": "± 92098",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56574233,
-            "range": "± 338220",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112924335,
-            "range": "± 696519",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 150155,
             "range": "± 6210",
@@ -63951,36 +59181,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 402376240,
             "range": "± 9588830",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2497179,
-            "range": "± 37689",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5867707,
-            "range": "± 52205",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11502193,
-            "range": "± 91934",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56483519,
-            "range": "± 403500",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112939397,
-            "range": "± 534933",
             "unit": "ns/iter"
           },
           {
@@ -64360,36 +59560,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2397114,
-            "range": "± 40019",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5654952,
-            "range": "± 49484",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11030636,
-            "range": "± 55781",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54059708,
-            "range": "± 199789",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107938622,
-            "range": "± 466591",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 121102,
             "range": "± 3446",
@@ -64723,36 +59893,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 372846356,
             "range": "± 21041886",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2392562,
-            "range": "± 77261",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5652517,
-            "range": "± 116882",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11330042,
-            "range": "± 120138",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54865186,
-            "range": "± 392176",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108274825,
-            "range": "± 793809",
             "unit": "ns/iter"
           },
           {
@@ -65132,36 +60272,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2352116,
-            "range": "± 7640",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5603330,
-            "range": "± 22620",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10990366,
-            "range": "± 26444",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53681695,
-            "range": "± 145861",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106930092,
-            "range": "± 261823",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_round_trip/fast_call",
             "value": 104640,
             "range": "± 7501",
@@ -65495,36 +60605,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 390344797,
             "range": "± 5888885",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2355754,
-            "range": "± 8166",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5572111,
-            "range": "± 30089",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11021184,
-            "range": "± 27433",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53682982,
-            "range": "± 70658",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106940580,
-            "range": "± 159821",
             "unit": "ns/iter"
           },
           {
@@ -65934,36 +61014,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2486043,
-            "range": "± 37168",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5859947,
-            "range": "± 67106",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11434898,
-            "range": "± 61440",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56345545,
-            "range": "± 639131",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112267636,
-            "range": "± 615968",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 187342,
             "range": "± 32190",
@@ -66351,36 +61401,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 420836404,
             "range": "± 10021570",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2488161,
-            "range": "± 31012",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5858354,
-            "range": "± 83076",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11425867,
-            "range": "± 73471",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56196920,
-            "range": "± 507449",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112206476,
-            "range": "± 718316",
             "unit": "ns/iter"
           },
           {
@@ -66814,36 +61834,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2236997,
-            "range": "± 16233",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5447911,
-            "range": "± 39860",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10992194,
-            "range": "± 34262",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53585387,
-            "range": "± 115347",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106756136,
-            "range": "± 167172",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 105920,
             "range": "± 1414",
@@ -67231,36 +62221,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 340132622,
             "range": "± 7394355",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2230083,
-            "range": "± 19685",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5455387,
-            "range": "± 62574",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10987955,
-            "range": "± 38332",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53575251,
-            "range": "± 105483",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106650619,
-            "range": "± 366180",
             "unit": "ns/iter"
           },
           {
@@ -67694,36 +62654,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2463871,
-            "range": "± 69116",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5772173,
-            "range": "± 91681",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11232272,
-            "range": "± 109617",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54857992,
-            "range": "± 499845",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 109197676,
-            "range": "± 609947",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 126591,
             "range": "± 7573",
@@ -68111,36 +63041,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 453371710,
             "range": "± 11449876",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2448235,
-            "range": "± 60556",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5685253,
-            "range": "± 82164",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11203237,
-            "range": "± 128264",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54617104,
-            "range": "± 311320",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108898315,
-            "range": "± 856733",
             "unit": "ns/iter"
           },
           {
@@ -68574,36 +63474,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2348959,
-            "range": "± 16955",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5548066,
-            "range": "± 15316",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10878089,
-            "range": "± 16866",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53715784,
-            "range": "± 299148",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107402822,
-            "range": "± 423254",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 109380,
             "range": "± 1339",
@@ -68991,36 +63861,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 352531073,
             "range": "± 5831074",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2351074,
-            "range": "± 11057",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5652747,
-            "range": "± 74939",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10963990,
-            "range": "± 109534",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53798909,
-            "range": "± 264169",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107383690,
-            "range": "± 555102",
             "unit": "ns/iter"
           },
           {
@@ -69454,36 +64294,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2394926,
-            "range": "± 32754",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5684337,
-            "range": "± 61681",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11186118,
-            "range": "± 115313",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54580663,
-            "range": "± 513505",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108613394,
-            "range": "± 607438",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 130244,
             "range": "± 6296",
@@ -69871,36 +64681,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 404189296,
             "range": "± 15374822",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2387481,
-            "range": "± 41045",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5651924,
-            "range": "± 67269",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11115674,
-            "range": "± 153203",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54620213,
-            "range": "± 319501",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108870783,
-            "range": "± 743337",
             "unit": "ns/iter"
           },
           {
@@ -70334,36 +65114,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2355598,
-            "range": "± 33680",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5571951,
-            "range": "± 14556",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11026661,
-            "range": "± 52194",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53683657,
-            "range": "± 66044",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106986822,
-            "range": "± 123404",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 113737,
             "range": "± 10658",
@@ -70751,36 +65501,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 416993093,
             "range": "± 12327972",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2358778,
-            "range": "± 9517",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5576959,
-            "range": "± 36049",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10946213,
-            "range": "± 34688",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53653925,
-            "range": "± 291446",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107029693,
-            "range": "± 202427",
             "unit": "ns/iter"
           },
           {
@@ -71214,36 +65934,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2348455,
-            "range": "± 8629",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5553889,
-            "range": "± 17310",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10896404,
-            "range": "± 25105",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53573309,
-            "range": "± 86604",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106874307,
-            "range": "± 92732",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 113176,
             "range": "± 1567",
@@ -71631,36 +66321,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 391284472,
             "range": "± 2786375",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2350687,
-            "range": "± 12094",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5549644,
-            "range": "± 12971",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10891234,
-            "range": "± 24743",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53617806,
-            "range": "± 45522",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106866713,
-            "range": "± 88961",
             "unit": "ns/iter"
           },
           {
@@ -72094,36 +66754,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2236983,
-            "range": "± 11504",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5456005,
-            "range": "± 14581",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10870260,
-            "range": "± 48086",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53495078,
-            "range": "± 88305",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106692739,
-            "range": "± 144578",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 105879,
             "range": "± 3080",
@@ -72511,36 +67141,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 316793414,
             "range": "± 4771223",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2235047,
-            "range": "± 9518",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5456196,
-            "range": "± 15279",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10865358,
-            "range": "± 40620",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53479774,
-            "range": "± 75746",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106670197,
-            "range": "± 76837",
             "unit": "ns/iter"
           },
           {
@@ -72974,36 +67574,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2356259,
-            "range": "± 23432",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5582003,
-            "range": "± 24887",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10974119,
-            "range": "± 33651",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53632572,
-            "range": "± 35550",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106894162,
-            "range": "± 152669",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 113256,
             "range": "± 3674",
@@ -73391,36 +67961,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 390369372,
             "range": "± 4774441",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2353665,
-            "range": "± 42418",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5568379,
-            "range": "± 65123",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10910749,
-            "range": "± 107570",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53627157,
-            "range": "± 217778",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106961646,
-            "range": "± 377244",
             "unit": "ns/iter"
           },
           {
@@ -73854,36 +68394,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2359661,
-            "range": "± 13043",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5560498,
-            "range": "± 16921",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10905474,
-            "range": "± 21831",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53611416,
-            "range": "± 415955",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106921853,
-            "range": "± 94861",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 111547,
             "range": "± 2015",
@@ -74271,36 +68781,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 349353061,
             "range": "± 4532247",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2353680,
-            "range": "± 12031",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5556094,
-            "range": "± 11064",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10891776,
-            "range": "± 28750",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53560346,
-            "range": "± 66784",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106902728,
-            "range": "± 393016",
             "unit": "ns/iter"
           },
           {
@@ -74734,36 +69214,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2223965,
-            "range": "± 7582",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5443485,
-            "range": "± 12154",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10855113,
-            "range": "± 35762",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53462515,
-            "range": "± 58915",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107208577,
-            "range": "± 522420",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 104318,
             "range": "± 1199",
@@ -75151,36 +69601,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 312764688,
             "range": "± 3554013",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2222844,
-            "range": "± 6728",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5439636,
-            "range": "± 19515",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10838603,
-            "range": "± 29960",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53447565,
-            "range": "± 72288",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106636338,
-            "range": "± 79455",
             "unit": "ns/iter"
           },
           {
@@ -75614,36 +70034,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2393327,
-            "range": "± 59844",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5671274,
-            "range": "± 66259",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11120938,
-            "range": "± 55403",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54393692,
-            "range": "± 430481",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108423834,
-            "range": "± 687378",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 128236,
             "range": "± 4328",
@@ -76031,36 +70421,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 407254250,
             "range": "± 9231692",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2392154,
-            "range": "± 46844",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5664928,
-            "range": "± 76762",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11090328,
-            "range": "± 78796",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54489183,
-            "range": "± 400417",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108579176,
-            "range": "± 319641",
             "unit": "ns/iter"
           },
           {
@@ -76494,36 +70854,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2417950,
-            "range": "± 65607",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5708562,
-            "range": "± 66505",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11162635,
-            "range": "± 146371",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54525756,
-            "range": "± 210946",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 109123470,
-            "range": "± 703695",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 127289,
             "range": "± 6556",
@@ -76911,36 +71241,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 451553483,
             "range": "± 13132240",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2415845,
-            "range": "± 53676",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5717602,
-            "range": "± 61549",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11171196,
-            "range": "± 170693",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54671272,
-            "range": "± 270941",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 109025112,
-            "range": "± 429717",
             "unit": "ns/iter"
           },
           {
@@ -77374,36 +71674,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2542851,
-            "range": "± 66086",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5853647,
-            "range": "± 81505",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11311953,
-            "range": "± 87204",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54601627,
-            "range": "± 432877",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108431494,
-            "range": "± 595151",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 112703,
             "range": "± 5152",
@@ -77791,36 +72061,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 356846431,
             "range": "± 6758287",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2531384,
-            "range": "± 80593",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5827630,
-            "range": "± 85512",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11322625,
-            "range": "± 84845",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54914061,
-            "range": "± 367653",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 109447279,
-            "range": "± 510791",
             "unit": "ns/iter"
           },
           {
@@ -78254,36 +72494,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2353133,
-            "range": "± 43521",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5556850,
-            "range": "± 72536",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10885345,
-            "range": "± 78687",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53595189,
-            "range": "± 189929",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106902650,
-            "range": "± 196809",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 110356,
             "range": "± 2320",
@@ -78671,36 +72881,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 363350614,
             "range": "± 4388088",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2351556,
-            "range": "± 49609",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5553803,
-            "range": "± 67319",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10901405,
-            "range": "± 81929",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53657321,
-            "range": "± 299182",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106842547,
-            "range": "± 361540",
             "unit": "ns/iter"
           },
           {
@@ -79134,36 +73314,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2461483,
-            "range": "± 48189",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5834571,
-            "range": "± 83229",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11450911,
-            "range": "± 116220",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56159890,
-            "range": "± 660673",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112028286,
-            "range": "± 991454",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 199353,
             "range": "± 26541",
@@ -79551,36 +73701,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 427592362,
             "range": "± 12201059",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2461420,
-            "range": "± 88317",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5842579,
-            "range": "± 98984",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11464258,
-            "range": "± 145037",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 55881092,
-            "range": "± 793365",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 110764064,
-            "range": "± 1192028",
             "unit": "ns/iter"
           },
           {
@@ -80014,36 +74134,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2359927,
-            "range": "± 17405",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5589366,
-            "range": "± 26524",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10953679,
-            "range": "± 29757",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53731545,
-            "range": "± 333666",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107056196,
-            "range": "± 243289",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 113281,
             "range": "± 1171",
@@ -80431,36 +74521,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 406769922,
             "range": "± 3711527",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2356696,
-            "range": "± 7800",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5588736,
-            "range": "± 49934",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11023276,
-            "range": "± 40195",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53711424,
-            "range": "± 39563",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107032662,
-            "range": "± 90171",
             "unit": "ns/iter"
           },
           {
@@ -80894,36 +74954,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2230506,
-            "range": "± 14095",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5442203,
-            "range": "± 26363",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10868797,
-            "range": "± 54129",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53503693,
-            "range": "± 106714",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106700336,
-            "range": "± 182612",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 104412,
             "range": "± 940",
@@ -81311,36 +75341,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 323478793,
             "range": "± 5349237",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2232724,
-            "range": "± 10730",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5445178,
-            "range": "± 21220",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10860307,
-            "range": "± 61100",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53493642,
-            "range": "± 85966",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106676835,
-            "range": "± 150201",
             "unit": "ns/iter"
           },
           {
@@ -81774,36 +75774,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2355319,
-            "range": "± 6738",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5583354,
-            "range": "± 20482",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10974280,
-            "range": "± 30301",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53692740,
-            "range": "± 392767",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106956360,
-            "range": "± 239537",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 114446,
             "range": "± 1643",
@@ -82191,36 +76161,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 415919652,
             "range": "± 5038054",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2360132,
-            "range": "± 21236",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5578898,
-            "range": "± 31971",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10954169,
-            "range": "± 41179",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53686594,
-            "range": "± 97156",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107046187,
-            "range": "± 126066",
             "unit": "ns/iter"
           },
           {
@@ -82654,36 +76594,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2352676,
-            "range": "± 34639",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5563891,
-            "range": "± 46950",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10900463,
-            "range": "± 54041",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53647689,
-            "range": "± 82623",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106892509,
-            "range": "± 82768",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 110799,
             "range": "± 2014",
@@ -83071,36 +76981,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 348043475,
             "range": "± 4614837",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2350161,
-            "range": "± 10442",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5546630,
-            "range": "± 10781",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10873303,
-            "range": "± 22676",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53736598,
-            "range": "± 208348",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106765894,
-            "range": "± 161742",
             "unit": "ns/iter"
           },
           {
@@ -83534,36 +77414,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2218977,
-            "range": "± 11165",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5435854,
-            "range": "± 19984",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10857620,
-            "range": "± 39558",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53602396,
-            "range": "± 274669",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106804102,
-            "range": "± 316172",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 103304,
             "range": "± 1474",
@@ -83951,36 +77801,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 312694287,
             "range": "± 6024970",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2225675,
-            "range": "± 20704",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5441680,
-            "range": "± 33124",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10852250,
-            "range": "± 49480",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53524596,
-            "range": "± 157007",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106873340,
-            "range": "± 362155",
             "unit": "ns/iter"
           },
           {
@@ -84414,36 +78234,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2363610,
-            "range": "± 28295",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5568017,
-            "range": "± 31025",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10930213,
-            "range": "± 27484",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53621176,
-            "range": "± 77079",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106989064,
-            "range": "± 222955",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 112397,
             "range": "± 1473",
@@ -84831,36 +78621,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 402544925,
             "range": "± 4147236",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2356016,
-            "range": "± 8060",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5587156,
-            "range": "± 45822",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10939108,
-            "range": "± 66906",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53634873,
-            "range": "± 154588",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106864755,
-            "range": "± 173212",
             "unit": "ns/iter"
           },
           {
@@ -85294,36 +79054,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2391399,
-            "range": "± 50705",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5733362,
-            "range": "± 58758",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11254882,
-            "range": "± 129123",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54792146,
-            "range": "± 356284",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108902983,
-            "range": "± 569595",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 125370,
             "range": "± 6023",
@@ -85711,36 +79441,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 391174053,
             "range": "± 11368905",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2458955,
-            "range": "± 54037",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5745851,
-            "range": "± 108282",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11222935,
-            "range": "± 78272",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54510146,
-            "range": "± 667696",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108664872,
-            "range": "± 481915",
             "unit": "ns/iter"
           },
           {
@@ -86174,36 +79874,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2365399,
-            "range": "± 66264",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5580448,
-            "range": "± 75427",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11010566,
-            "range": "± 100735",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53706595,
-            "range": "± 294437",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107460788,
-            "range": "± 473420",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 111296,
             "range": "± 2837",
@@ -86591,36 +80261,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 394378713,
             "range": "± 3170827",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2362045,
-            "range": "± 64631",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5621216,
-            "range": "± 81992",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10954363,
-            "range": "± 101801",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53658310,
-            "range": "± 413190",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107544967,
-            "range": "± 453629",
             "unit": "ns/iter"
           },
           {
@@ -87054,36 +80694,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2533361,
-            "range": "± 54483",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5743945,
-            "range": "± 94463",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11158456,
-            "range": "± 104201",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54281642,
-            "range": "± 291112",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108048131,
-            "range": "± 497719",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 110237,
             "range": "± 2684",
@@ -87471,36 +81081,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 386918463,
             "range": "± 3622068",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2510277,
-            "range": "± 57574",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5751150,
-            "range": "± 65443",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11039394,
-            "range": "± 123705",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53978810,
-            "range": "± 348821",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108010086,
-            "range": "± 487077",
             "unit": "ns/iter"
           },
           {
@@ -87958,36 +81538,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2347518,
-            "range": "± 22234",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5557625,
-            "range": "± 29773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10923173,
-            "range": "± 69989",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53741357,
-            "range": "± 336837",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107072757,
-            "range": "± 222006",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 110882,
             "range": "± 1796",
@@ -88375,36 +81925,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 366632893,
             "range": "± 4664925",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2347553,
-            "range": "± 13279",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5563656,
-            "range": "± 58472",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10918802,
-            "range": "± 123700",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53797808,
-            "range": "± 508503",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107237157,
-            "range": "± 483722",
             "unit": "ns/iter"
           },
           {
@@ -88862,36 +82382,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2477662,
-            "range": "± 32080",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5760115,
-            "range": "± 82324",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11479573,
-            "range": "± 166729",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56409598,
-            "range": "± 607625",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112683807,
-            "range": "± 619350",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 181836,
             "range": "± 10994",
@@ -89279,36 +82769,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 346361177,
             "range": "± 9009800",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2510489,
-            "range": "± 56249",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5886755,
-            "range": "± 97824",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11607840,
-            "range": "± 143345",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56766069,
-            "range": "± 616364",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 114159833,
-            "range": "± 1308988",
             "unit": "ns/iter"
           },
           {
@@ -89766,36 +83226,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2258763,
-            "range": "± 11679",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5487746,
-            "range": "± 11363",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10959173,
-            "range": "± 48521",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53566064,
-            "range": "± 89179",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106746184,
-            "range": "± 91352",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 107259,
             "range": "± 2027",
@@ -90183,36 +83613,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 316029523,
             "range": "± 2946081",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2250066,
-            "range": "± 10137",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5485771,
-            "range": "± 37537",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10966403,
-            "range": "± 44424",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53538020,
-            "range": "± 326225",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106756089,
-            "range": "± 108065",
             "unit": "ns/iter"
           },
           {
@@ -90670,36 +84070,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2426749,
-            "range": "± 38378",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5841015,
-            "range": "± 78823",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11484025,
-            "range": "± 130487",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56058942,
-            "range": "± 641259",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112140937,
-            "range": "± 1041055",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 179060,
             "range": "± 15834",
@@ -91087,36 +84457,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 367320235,
             "range": "± 12947409",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2497291,
-            "range": "± 50899",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5854269,
-            "range": "± 87932",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11474395,
-            "range": "± 121349",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56268125,
-            "range": "± 553889",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112704322,
-            "range": "± 937454",
             "unit": "ns/iter"
           },
           {
@@ -91574,36 +84914,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2486397,
-            "range": "± 85191",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5848658,
-            "range": "± 65563",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11501523,
-            "range": "± 129935",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56239476,
-            "range": "± 751732",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112338325,
-            "range": "± 911079",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 212372,
             "range": "± 30189",
@@ -91991,36 +85301,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 441731827,
             "range": "± 10571794",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2473010,
-            "range": "± 62592",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5838754,
-            "range": "± 127548",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11486462,
-            "range": "± 133438",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56308397,
-            "range": "± 1214792",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 111992265,
-            "range": "± 635659",
             "unit": "ns/iter"
           },
           {
@@ -92478,36 +85758,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2353590,
-            "range": "± 20097",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5588696,
-            "range": "± 34031",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10941361,
-            "range": "± 38861",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53647935,
-            "range": "± 107207",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106895713,
-            "range": "± 193320",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 112598,
             "range": "± 1690",
@@ -92895,36 +86145,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 340646989,
             "range": "± 5137872",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2359805,
-            "range": "± 18262",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5570403,
-            "range": "± 26878",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10940995,
-            "range": "± 38074",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53637679,
-            "range": "± 104489",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106932261,
-            "range": "± 264926",
             "unit": "ns/iter"
           },
           {
@@ -93382,36 +86602,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2490851,
-            "range": "± 22896",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5859984,
-            "range": "± 82542",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11459433,
-            "range": "± 105944",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56279096,
-            "range": "± 655183",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112476686,
-            "range": "± 955336",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 205464,
             "range": "± 12742",
@@ -93799,36 +86989,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 409718650,
             "range": "± 7365162",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2487175,
-            "range": "± 27694",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5846993,
-            "range": "± 71872",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11448188,
-            "range": "± 88189",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56255343,
-            "range": "± 492884",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112898296,
-            "range": "± 761312",
             "unit": "ns/iter"
           },
           {
@@ -94286,36 +87446,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2387683,
-            "range": "± 20382",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5702096,
-            "range": "± 103992",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11161027,
-            "range": "± 61449",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54607155,
-            "range": "± 238695",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108742414,
-            "range": "± 249757",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 143457,
             "range": "± 5272",
@@ -94703,36 +87833,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 386027451,
             "range": "± 6604903",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2390166,
-            "range": "± 17288",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5746727,
-            "range": "± 29370",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11220789,
-            "range": "± 68136",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 54600851,
-            "range": "± 182241",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 108810724,
-            "range": "± 115193",
             "unit": "ns/iter"
           },
           {
@@ -95190,36 +88290,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2483172,
-            "range": "± 45326",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5861842,
-            "range": "± 56787",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11523883,
-            "range": "± 122555",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 56478875,
-            "range": "± 765584",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 112580205,
-            "range": "± 536277",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 199687,
             "range": "± 15269",
@@ -95607,36 +88677,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 413020095,
             "range": "± 8776034",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2483543,
-            "range": "± 47968",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5859006,
-            "range": "± 69713",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11504891,
-            "range": "± 89536",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 56458476,
-            "range": "± 624519",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 112611333,
-            "range": "± 870010",
             "unit": "ns/iter"
           },
           {
@@ -96094,36 +89134,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2349938,
-            "range": "± 34384",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5563459,
-            "range": "± 31017",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10935178,
-            "range": "± 55636",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53809410,
-            "range": "± 575930",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107282255,
-            "range": "± 358005",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 118372,
             "range": "± 1677",
@@ -96511,36 +89521,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 389498890,
             "range": "± 5360935",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2343293,
-            "range": "± 16114",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5555718,
-            "range": "± 16662",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10929652,
-            "range": "± 32983",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53695923,
-            "range": "± 396437",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106889368,
-            "range": "± 484247",
             "unit": "ns/iter"
           },
           {
@@ -96998,36 +89978,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2425060,
-            "range": "± 57031",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5668233,
-            "range": "± 80543",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10990133,
-            "range": "± 130694",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53557039,
-            "range": "± 250006",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 107517270,
-            "range": "± 483112",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 119251,
             "range": "± 1455",
@@ -97415,36 +90365,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 351786941,
             "range": "± 5013104",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2425067,
-            "range": "± 53249",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5658624,
-            "range": "± 90438",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10951735,
-            "range": "± 108728",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53930716,
-            "range": "± 269721",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107475893,
-            "range": "± 336965",
             "unit": "ns/iter"
           },
           {
@@ -97902,36 +90822,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2425218,
-            "range": "± 36311",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5735831,
-            "range": "± 61784",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 11265371,
-            "range": "± 86099",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 55593752,
-            "range": "± 333620",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 111114834,
-            "range": "± 488127",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 207049,
             "range": "± 16781",
@@ -98319,36 +91209,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 392510657,
             "range": "± 7700237",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2447906,
-            "range": "± 31402",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5783011,
-            "range": "± 71284",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 11330273,
-            "range": "± 104652",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 55758405,
-            "range": "± 615717",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 111520511,
-            "range": "± 702502",
             "unit": "ns/iter"
           },
           {
@@ -98806,36 +91666,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2336029,
-            "range": "± 57689",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5579627,
-            "range": "± 64701",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10930249,
-            "range": "± 76171",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 54002066,
-            "range": "± 869902",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 108008634,
-            "range": "± 424377",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 199081,
             "range": "± 18060",
@@ -99223,36 +92053,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 380840820,
             "range": "± 6344128",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2300017,
-            "range": "± 27822",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5562055,
-            "range": "± 40938",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10928005,
-            "range": "± 77215",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53923087,
-            "range": "± 291470",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107844656,
-            "range": "± 429339",
             "unit": "ns/iter"
           },
           {
@@ -99710,36 +92510,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2351747,
-            "range": "± 21091",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5559500,
-            "range": "± 17386",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10963629,
-            "range": "± 44020",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53735034,
-            "range": "± 311095",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106984631,
-            "range": "± 231818",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 119085,
             "range": "± 3484",
@@ -100127,36 +92897,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 395066806,
             "range": "± 3941102",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2344444,
-            "range": "± 15571",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5557182,
-            "range": "± 23722",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10904578,
-            "range": "± 56719",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53654270,
-            "range": "± 104312",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107097042,
-            "range": "± 326031",
             "unit": "ns/iter"
           },
           {
@@ -100614,36 +93354,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2351783,
-            "range": "± 10222",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5560551,
-            "range": "± 15055",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10919606,
-            "range": "± 39427",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53665679,
-            "range": "± 63251",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106967849,
-            "range": "± 167146",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 118038,
             "range": "± 1772",
@@ -101031,36 +93741,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 413149075,
             "range": "± 9165493",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2352209,
-            "range": "± 10307",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5555472,
-            "range": "± 25470",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10920748,
-            "range": "± 41642",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53626329,
-            "range": "± 104402",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106938522,
-            "range": "± 92457",
             "unit": "ns/iter"
           },
           {
@@ -101518,36 +94198,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2235787,
-            "range": "± 6110",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5458246,
-            "range": "± 11657",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10885765,
-            "range": "± 81351",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53487033,
-            "range": "± 67899",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106739261,
-            "range": "± 87269",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 110569,
             "range": "± 1521",
@@ -101935,36 +94585,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 325433545,
             "range": "± 4418025",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2246183,
-            "range": "± 8407",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5466758,
-            "range": "± 10178",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10906927,
-            "range": "± 79651",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53539895,
-            "range": "± 55949",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 106744939,
-            "range": "± 150373",
             "unit": "ns/iter"
           },
           {
@@ -102422,36 +95042,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/ws_batch_requests/slow_call/2",
-            "value": 2348679,
-            "range": "± 18753",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/5",
-            "value": 5547561,
-            "range": "± 9381",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/10",
-            "value": 10887219,
-            "range": "± 19720",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/50",
-            "value": 53574839,
-            "range": "± 93315",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/slow_call/100",
-            "value": 106816418,
-            "range": "± 187380",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/ws_custom_headers_handshake/0kb",
             "value": 117845,
             "range": "± 3112",
@@ -102839,36 +95429,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_batch_requests/memory_intense/100",
             "value": 387227259,
             "range": "± 2123107",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/2",
-            "value": 2442318,
-            "range": "± 60736",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/5",
-            "value": 5652705,
-            "range": "± 80322",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/10",
-            "value": 10999548,
-            "range": "± 100144",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/50",
-            "value": 53963685,
-            "range": "± 291198",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/slow_call/100",
-            "value": 107777064,
-            "range": "± 343367",
             "unit": "ns/iter"
           },
           {
