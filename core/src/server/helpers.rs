@@ -160,6 +160,24 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	}
 }
 
+/// Figure out if this is a sufficiently complete request that we can extract [`Id`] out of, or just plain
+/// unparseable garbage.
+pub fn prepare_batch_error(data: &[u8]) -> Result<(Vec<Id<'_>>, ErrorCode), ErrorCode> {
+	match serde_json::from_slice::<Vec<&serde_json::value::RawValue>>(data) {
+		Ok(values) => {
+			let ids = values
+				.into_iter()
+				.map(|value| match serde_json::from_str::<InvalidRequest>(value.get()) {
+					Ok(req) => req.id,
+					Err(_) => Id::Null,
+				})
+				.collect();
+			Ok((ids, ErrorCode::InvalidRequest))
+		}
+		Err(_) => Err(ErrorCode::ParseError),
+	}
+}
+
 /// A permitted subscription.
 #[derive(Debug)]
 pub struct SubscriptionPermit {

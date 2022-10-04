@@ -245,15 +245,13 @@ async fn invalid_batched_method_calls() {
 	let req = r#"[123]"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	// Note: according to the spec the `id` should be `null` here, not 123.
-	assert_eq!(response.body, invalid_request(Id::Num(123)));
+	assert_eq!(response.body, invalid_batch(vec![Id::Null]));
 
 	// batch with invalid request
 	let req = r#"[1, 2, 3]"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	// Note: according to the spec this should return an array of three `Invalid Request`s
-	assert_eq!(response.body, parse_error(Id::Null));
+	assert_eq!(response.body, invalid_batch(vec![Id::Null, Id::Null, Id::Null]));
 
 	// invalid JSON in batch
 	let req = r#"[
