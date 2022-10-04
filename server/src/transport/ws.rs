@@ -3,7 +3,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{FutureDriver, StopHandle};
-use crate::logger::{self, Logger};
+use crate::logger::{self, Logger, TransportProtocol};
 use crate::server::{MethodResult, ServiceData};
 
 use futures_channel::mpsc;
@@ -180,13 +180,13 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 
 	let response = match methods.method_with_name(name) {
 		None => {
-			logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
+			logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::WebSocket);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
 			MethodResult::SendAndLogger(response)
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
 				match method.claim(name, resources) {
 					Ok(guard) => {
 						let r = (callback)(id, params, max_response_body_size as usize);
@@ -201,7 +201,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				}
 			}
 			MethodKind::Async(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
 				match method.claim(name, resources) {
 					Ok(guard) => {
 						let id = id.into_owned();
@@ -219,7 +219,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				}
 			}
 			MethodKind::Subscription(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::Subscription);
+				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 				match method.claim(name, resources) {
 					Ok(guard) => {
 						if let Some(cn) = bounded_subscriptions.acquire() {
@@ -240,7 +240,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				}
 			}
 			MethodKind::Unsubscription(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription);
+				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription, TransportProtocol::WebSocket);
 
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);
@@ -252,7 +252,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 	let r = response.as_inner();
 
 	tx_log_from_str(&r.result, max_log_length);
-	logger.on_result(name, r.success, request_start);
+	logger.on_result(name, r.success, request_start, TransportProtocol::WebSocket);
 	response
 }
 
@@ -341,7 +341,7 @@ pub(crate) async fn background_task<L: Logger>(
 			};
 		};
 
-		let request_start = logger.on_request();
+		let request_start = logger.on_request(TransportProtocol::WebSocket);
 
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
 		match first_non_whitespace {
@@ -369,10 +369,10 @@ pub(crate) async fn background_task<L: Logger>(
 
 					match process_single_request(data, call).await {
 						MethodResult::JustLogger(r) => {
-							logger.on_response(&r.result, request_start);
+							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 						}
 						MethodResult::SendAndLogger(r) => {
-							logger.on_response(&r.result, request_start);
+							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 							let _ = sink.send_raw(r.result);
 						}
 					};
@@ -386,7 +386,7 @@ pub(crate) async fn background_task<L: Logger>(
 					Id::Null,
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 				);
-				logger.on_response(&response.result, request_start);
+				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
 				let _ = sink.send_raw(response.result);
 			}
 			Some(b'[') => {
@@ -417,7 +417,7 @@ pub(crate) async fn background_task<L: Logger>(
 					.await;
 
 					tx_log_from_str(&response.result, max_log_length);
-					logger.on_response(&response.result, request_start);
+					logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
 					let _ = sink.send_raw(response.result);
 				};
 
@@ -429,7 +429,7 @@ pub(crate) async fn background_task<L: Logger>(
 		}
 	};
 
-	logger.on_disconnect(remote_addr);
+	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee

@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params};
+use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params, TransportProtocol};
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
@@ -39,28 +39,28 @@ struct Timings;
 impl logger::Logger for Timings {
 	type Instant = Instant;
 
-	fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest) {
+	fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest, _t: TransportProtocol) {
 		println!("[Logger::on_connect] remote_addr {:?}, headers: {:?}", remote_addr, request);
 	}
 
-	fn on_request(&self) -> Self::Instant {
+	fn on_request(&self, _t: TransportProtocol) -> Self::Instant {
 		println!("[Logger::on_request]");
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind, _t: TransportProtocol) {
 		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
-	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
+	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant, _t: TransportProtocol) {
 		println!("[Logger::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
 	}
 
-	fn on_response(&self, result: &str, started_at: Self::Instant) {
+	fn on_response(&self, result: &str, started_at: Self::Instant, _t: TransportProtocol) {
 		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	}
 
-	fn on_disconnect(&self, remote_addr: SocketAddr) {
+	fn on_disconnect(&self, remote_addr: SocketAddr, _t: TransportProtocol) {
 		println!("[Logger::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }

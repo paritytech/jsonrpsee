@@ -60,6 +60,26 @@ impl std::fmt::Display for MethodKind {
 	}
 }
 
+/// The transport protocol used to send or receive a call or request.
+#[derive(Debug, Copy, Clone)]
+pub enum TransportProtocol {
+	/// HTTP transport.
+	Http,
+	/// WebSocket transport.
+	WebSocket,
+}
+
+impl std::fmt::Display for TransportProtocol {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = match self {
+			Self::Http => "http",
+			Self::WebSocket => "websocket",
+		};
+
+		write!(f, "{}", s)
+	}
+}
+
 /// Defines a logger specifically for WebSocket connections with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
@@ -71,38 +91,38 @@ pub trait Logger: Send + Sync + Clone + 'static {
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
 
 	/// Called when a new client connects
-	fn on_connect(&self, _remote_addr: SocketAddr, _request: &HttpRequest);
+	fn on_connect(&self, _remote_addr: SocketAddr, _request: &HttpRequest, _t: TransportProtocol);
 
 	/// Called when a new JSON-RPC request comes to the server.
-	fn on_request(&self) -> Self::Instant;
+	fn on_request(&self, transport: TransportProtocol) -> Self::Instant;
 
 	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
-	fn on_call(&self, method_name: &str, params: Params, kind: MethodKind);
+	fn on_call(&self, method_name: &str, params: Params, kind: MethodKind, transport: TransportProtocol);
 
 	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple times.
-	fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant);
+	fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant, transport: TransportProtocol);
 
 	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
-	fn on_response(&self, result: &str, started_at: Self::Instant);
+	fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol);
 
 	/// Called when a client disconnects
-	fn on_disconnect(&self, _remote_addr: SocketAddr);
+	fn on_disconnect(&self, _remote_addr: SocketAddr, transport: TransportProtocol);
 }
 
 impl Logger for () {
 	type Instant = ();
 
-	fn on_connect(&self, _: SocketAddr, _: &HttpRequest) -> Self::Instant {}
+	fn on_connect(&self, _: SocketAddr, _: &HttpRequest, _p: TransportProtocol) -> Self::Instant {}
 
-	fn on_request(&self) -> Self::Instant {}
+	fn on_request(&self, _p: TransportProtocol) -> Self::Instant {}
 
-	fn on_call(&self, _: &str, _: Params, _: MethodKind) {}
+	fn on_call(&self, _: &str, _: Params, _: MethodKind, _p: TransportProtocol) {}
 
-	fn on_result(&self, _: &str, _: bool, _: Self::Instant) {}
+	fn on_result(&self, _: &str, _: bool, _: Self::Instant, _p: TransportProtocol) {}
 
-	fn on_response(&self, _: &str, _: Self::Instant) {}
+	fn on_response(&self, _: &str, _: Self::Instant, _p: TransportProtocol) {}
 
-	fn on_disconnect(&self, _: SocketAddr) {}
+	fn on_disconnect(&self, _: SocketAddr, _p: TransportProtocol) {}
 }
 
 impl<A, B> Logger for (A, B)
@@ -112,32 +132,32 @@ where
 {
 	type Instant = (A::Instant, B::Instant);
 
-	fn on_connect(&self, remote_addr: std::net::SocketAddr, request: &HttpRequest) {
-		self.0.on_connect(remote_addr, request);
-		self.1.on_connect(remote_addr, request);
+	fn on_connect(&self, remote_addr: std::net::SocketAddr, request: &HttpRequest, transport: TransportProtocol) {
+		self.0.on_connect(remote_addr, request, transport);
+		self.1.on_connect(remote_addr, request, transport);
 	}
 
-	fn on_request(&self) -> Self::Instant {
-		(self.0.on_request(), self.1.on_request())
+	fn on_request(&self, transport: TransportProtocol) -> Self::Instant {
+		(self.0.on_request(transport), self.1.on_request(transport))
 	}
 
-	fn on_call(&self, method_name: &str, params: Params, kind: MethodKind) {
-		self.0.on_call(method_name, params.clone(), kind);
-		self.1.on_call(method_name, params, kind);
+	fn on_call(&self, method_name: &str, params: Params, kind: MethodKind, transport: TransportProtocol) {
+		self.0.on_call(method_name, params.clone(), kind, transport);
+		self.1.on_call(method_name, params, kind, transport);
 	}
 
-	fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant) {
-		self.0.on_result(method_name, success, started_at.0);
-		self.1.on_result(method_name, success, started_at.1);
+	fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant, transport: TransportProtocol) {
+		self.0.on_result(method_name, success, started_at.0, transport);
+		self.1.on_result(method_name, success, started_at.1, transport);
 	}
 
-	fn on_response(&self, result: &str, started_at: Self::Instant) {
-		self.0.on_response(result, started_at.0);
-		self.1.on_response(result, started_at.1);
+	fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {
+		self.0.on_response(result, started_at.0, transport);
+		self.1.on_response(result, started_at.1, transport);
 	}
 
-	fn on_disconnect(&self, remote_addr: SocketAddr) {
-		self.0.on_disconnect(remote_addr);
-		self.1.on_disconnect(remote_addr);
+	fn on_disconnect(&self, remote_addr: SocketAddr, transport: TransportProtocol) {
+		self.0.on_disconnect(remote_addr, transport);
+		self.1.on_disconnect(remote_addr, transport);
 	}
 }
