@@ -30,7 +30,6 @@
 use std::fmt;
 
 use crate::error::CallError;
-use alloc::collections::BTreeMap;
 use anyhow::anyhow;
 use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
@@ -260,40 +259,6 @@ impl<'a> ParamsSequence<'a> {
 	}
 }
 
-/// [Serializable JSON-RPC parameters](https://www.jsonrpc.org/specification#parameter_structures)
-///
-/// If your type implements `Into<JsonValue>`, call that in favor of `serde_json::to:value` to
-/// construct the parameters. Because `serde_json::to_value` serializes the type which allocates
-/// whereas `Into<JsonValue>` doesn't in most cases.
-#[derive(Serialize, Debug, Clone)]
-#[serde(untagged)]
-pub enum ParamsSer<'a> {
-	/// Positional params (heap allocated).
-	Array(Vec<JsonValue>),
-	/// Positional params (slice).
-	ArrayRef(&'a [JsonValue]),
-	/// Params by name.
-	Map(BTreeMap<&'a str, JsonValue>),
-}
-
-impl<'a> From<BTreeMap<&'a str, JsonValue>> for ParamsSer<'a> {
-	fn from(map: BTreeMap<&'a str, JsonValue>) -> Self {
-		Self::Map(map)
-	}
-}
-
-impl<'a> From<Vec<JsonValue>> for ParamsSer<'a> {
-	fn from(arr: Vec<JsonValue>) -> Self {
-		Self::Array(arr)
-	}
-}
-
-impl<'a> From<&'a [JsonValue]> for ParamsSer<'a> {
-	fn from(slice: &'a [JsonValue]) -> Self {
-		Self::ArrayRef(slice)
-	}
-}
-
 /// Id of a subscription, communicated by the server.
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -410,7 +375,7 @@ impl<'a> Id<'a> {
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id, JsonValue, Params, ParamsSer, SubscriptionId, TwoPointZero};
+	use super::{Cow, Id, JsonValue, Params, SubscriptionId, TwoPointZero};
 	use crate::response::SubscriptionPayload;
 
 	#[test]
@@ -447,23 +412,6 @@ mod test {
 			vec![Id::Null, Id::Number(0), Id::Number(2), Id::Number(3), Id::Str("\"3".into()), Id::Str("test".into())];
 		let serialized = serde_json::to_string(&d).unwrap();
 		assert_eq!(serialized, r#"[null,0,2,3,"\"3","test"]"#);
-	}
-
-	#[test]
-	fn params_serialize() {
-		let test_vector = &[
-			("[]", ParamsSer::Array(serde_json::from_str("[]").unwrap())),
-			("[42,23]", ParamsSer::Array(serde_json::from_str("[42,23]").unwrap())),
-			(
-				r#"{"a":42,"b":null,"c":"aa"}"#,
-				ParamsSer::Map(serde_json::from_str(r#"{"a":42,"b":null,"c":"aa"}"#).unwrap()),
-			),
-		];
-
-		for (initial_ser, params) in test_vector {
-			let serialized = serde_json::to_string(params).unwrap();
-			assert_eq!(&serialized, initial_ser);
-		}
 	}
 
 	#[test]

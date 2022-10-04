@@ -28,17 +28,16 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures_util::future::FutureExt;
-use futures_util::task::AtomicWaker;
 use jsonrpsee_core::Error;
+use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::{self, Duration, Interval};
 
 /// Polling for server stop monitor interval in milliseconds.
-const STOP_MONITOR_POLLING_INTERVAL: u64 = 1000;
+const STOP_MONITOR_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// This is a flexible collection of futures that need to be driven to completion
 /// alongside some other future, such as connection handlers that need to be
@@ -53,7 +52,7 @@ pub(crate) struct FutureDriver<F> {
 
 impl<F> Default for FutureDriver<F> {
 	fn default() -> Self {
-		let mut heartbeat = time::interval(Duration::from_millis(STOP_MONITOR_POLLING_INTERVAL));
+		let mut heartbeat = time::interval(STOP_MONITOR_POLLING_INTERVAL);
 
 		heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
@@ -62,11 +61,6 @@ impl<F> Default for FutureDriver<F> {
 }
 
 impl<F> FutureDriver<F> {
-	/// Get the count of remaining futures on this driver
-	pub(crate) fn count(&self) -> usize {
-		self.futures.len()
-	}
-
 	/// Add a new future to this driver
 	pub(crate) fn add(&mut self, future: F) {
 		self.futures.push(future);
@@ -152,92 +146,72 @@ where
 	}
 }
 
-#[derive(Debug)]
-struct MonitorInner {
-	shutdown_requested: AtomicBool,
-	waker: AtomicWaker,
-}
-
-/// Monitor for checking whether the server has been flagged to shut down.
 #[derive(Debug, Clone)]
-pub(crate) struct StopMonitor(Arc<MonitorInner>);
+pub(crate) struct StopHandle(watch::Receiver<()>);
 
-impl Drop for StopMonitor {
-	fn drop(&mut self) {
-		if Arc::strong_count(&self.0) == 1 {
-			self.0.waker.wake();
-		}
-	}
-}
-
-impl StopMonitor {
-	pub(crate) fn new() -> Self {
-		StopMonitor(Arc::new(MonitorInner { shutdown_requested: AtomicBool::new(false), waker: AtomicWaker::new() }))
+impl StopHandle {
+	pub(crate) fn new(rx: watch::Receiver<()>) -> Self {
+		Self(rx)
 	}
 
 	pub(crate) fn shutdown_requested(&self) -> bool {
-		// We expect this method to be polled frequently, skipping an iteration isn't problematic, so relaxed
-		// ordering is optimal.
-		self.0.shutdown_requested.load(Ordering::Relaxed)
+		// if a message has been seen, it means that `stop` has been called.
+		self.0.has_changed().unwrap_or(true)
 	}
 
-	pub(crate) fn handle(&self) -> ServerHandle {
-		ServerHandle(Arc::downgrade(&self.0))
+	pub(crate) async fn shutdown(&mut self) {
+		// Err(_) implies that the `sender` has been dropped.
+		// Ok(_) implies that `stop` has been called.
+		let _ = self.0.changed().await;
 	}
 }
 
-/// Handle that is able to stop the running server or wait for it to finish
-/// its execution.
+/// Server handle.
+///
+/// When all [`StopHandle`]'s have been `dropped` or `stop` has been called
+/// the server will be stopped.
 #[derive(Debug, Clone)]
-pub struct ServerHandle(Weak<MonitorInner>);
+pub struct ServerHandle(Arc<watch::Sender<()>>);
 
 impl ServerHandle {
-	/// Requests server to stop. Returns an error if server was already stopped.
-	///
-	/// Returns a future that can be awaited for when the server shuts down.
-	pub fn stop(self) -> Result<ShutdownWaiter, Error> {
-		if let Some(arc) = Weak::upgrade(&self.0) {
-			// We proceed only if the previous value of the flag was `false`
-			if !arc.shutdown_requested.swap(true, Ordering::Relaxed) {
-				return Ok(ShutdownWaiter(self.0));
-			}
-		}
-		Err(Error::AlreadyStopped)
+	/// Create a new server handle.
+	pub fn new(tx: watch::Sender<()>) -> Self {
+		Self(Arc::new(tx))
+	}
+
+	/// Tell the server to stop without waiting for the server to stop.
+	pub fn stop(&self) -> Result<(), Error> {
+		self.0.send(()).map_err(|_| Error::AlreadyStopped)
+	}
+
+	/// Wait for the server to stop.
+	pub async fn stopped(self) {
+		self.0.closed().await
+	}
+
+	/// Check if the server has been stopped.
+	pub fn is_stopped(&self) -> bool {
+		self.0.is_closed()
 	}
 }
 
-impl Future for ServerHandle {
-	type Output = ();
+/// Limits the number of connections.
+pub(crate) struct ConnectionGuard(Arc<Semaphore>);
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		let mut shutdown_waiter = ShutdownWaiter(self.0.clone());
-
-		shutdown_waiter.poll_unpin(cx)
+impl ConnectionGuard {
+	pub(crate) fn new(limit: usize) -> Self {
+		Self(Arc::new(Semaphore::new(limit)))
 	}
-}
 
-/// A `Future` that resolves once the server has stopped.
-#[derive(Debug)]
-pub struct ShutdownWaiter(Weak<MonitorInner>);
-
-impl Future for ShutdownWaiter {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		match Weak::upgrade(&self.0) {
-			None => return Poll::Ready(()),
-			Some(arc) => {
-				arc.waker.register(cx.waker());
-				drop(arc);
-			}
+	pub(crate) fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
+		match self.0.clone().try_acquire_owned() {
+			Ok(guard) => Some(guard),
+			Err(TryAcquireError::Closed) => unreachable!("Semaphore::Close is never called and can't be closed; qed"),
+			Err(TryAcquireError::NoPermits) => None,
 		}
+	}
 
-		// Re-check the count after dropping the `Arc` above in case another
-		// thread has dropped final `Arc` in the mean time, else the future
-		// might never resolve.
-		match Weak::strong_count(&self.0) {
-			0 => Poll::Ready(()),
-			_ => Poll::Pending,
-		}
+	pub(crate) fn available_connections(&self) -> usize {
+		self.0.available_permits()
 	}
 }

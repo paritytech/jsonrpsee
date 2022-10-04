@@ -24,31 +24,98 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::Error;
 use jsonrpsee_types::SubscriptionId;
 use serde::Serialize;
 use serde_json::value::RawValue;
 
-/// Marker trait for types that can be serialized as JSON array/sequence.
+/// Marker trait for types that can be serialized as JSON compatible strings.
 ///
-/// If your type isn't a sequence, for example `String`, `usize` or similar
-/// you must insert it in a tuple, slice, array or Vec for it to work.
-pub trait ToRpcParams: Serialize {
-	/// Serialize the type as a JSON array.
-	fn to_rpc_params(&self) -> Result<Box<RawValue>, serde_json::Error> {
-		serde_json::to_string(&self).map(|json| RawValue::from_string(json).expect("JSON String; qed"))
-	}
+/// This trait ensures the correctness of the RPC parameters.
+///
+/// # Note
+///
+/// Please consider using the [`crate::params::ArrayParams`] and [`crate::params::ObjectParams`] than
+/// implementing this trait.
+///
+/// # Examples
+///
+/// ## Implementation for hard-coded strings
+///
+/// ```rust
+/// use jsonrpsee_core::traits::ToRpcParams;
+/// use serde_json::value::RawValue;
+/// use jsonrpsee_core::Error;
+///
+/// struct ManualParam;
+///
+/// impl ToRpcParams for ManualParam {
+///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+///         // Manually define a valid JSONRPC parameter.
+///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(Some).map_err(Error::ParseError)
+///     }
+/// }
+/// ```
+///
+/// ## Implementation for JSON serializable structures
+///
+/// ```rust
+/// use jsonrpsee_core::traits::ToRpcParams;
+/// use serde_json::value::RawValue;
+/// use serde::Serialize;
+/// use jsonrpsee_core::Error;
+///
+/// #[derive(Serialize)]
+/// struct SerParam {
+///     param_1: u8,
+///     param_2: String,
+/// };
+///
+/// impl ToRpcParams for SerParam {
+///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+///         let s = String::from_utf8(serde_json::to_vec(&self)?).expect("Valid UTF8 format");
+///         RawValue::from_string(s).map(Some).map_err(Error::ParseError)
+///     }
+/// }
+/// ```
+pub trait ToRpcParams {
+	/// Consume and serialize the type as a JSON raw value.
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error>;
 }
 
-impl<P: Serialize> ToRpcParams for &[P] {}
-impl<P: Serialize> ToRpcParams for Vec<P> {}
-impl<P, const N: usize> ToRpcParams for [P; N] where [P; N]: Serialize {}
+// To not bound the `ToRpcParams: Serialize` define a custom implementation
+// for types which are serializable.
+macro_rules! to_rpc_params_impl {
+	() => {
+		fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+			let json = serde_json::to_string(&self).map_err(Error::ParseError)?;
+			RawValue::from_string(json).map(Some).map_err(Error::ParseError)
+		}
+	};
+}
+
+impl<P: Serialize> ToRpcParams for &[P] {
+	to_rpc_params_impl!();
+}
+
+impl<P: Serialize> ToRpcParams for Vec<P> {
+	to_rpc_params_impl!();
+}
+impl<P, const N: usize> ToRpcParams for [P; N]
+where
+	[P; N]: Serialize,
+{
+	to_rpc_params_impl!();
+}
 
 macro_rules! tuple_impls {
-    ($($len:expr => ($($n:tt $name:ident)+))+) => {
-        $(
-            impl<$($name: Serialize),+> ToRpcParams for ($($name,)+) {}
-        )+
-    }
+	($($len:expr => ($($n:tt $name:ident)+))+) => {
+		$(
+			impl<$($name: Serialize),+> ToRpcParams for ($($name,)+) {
+				to_rpc_params_impl!();
+			}
+		)+
+	}
 }
 
 tuple_impls! {

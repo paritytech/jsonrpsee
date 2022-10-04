@@ -43,8 +43,9 @@ use std::time::Duration;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::rpc_params;
+use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
+use jsonrpsee::server::{RpcModule, ServerBuilder};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -53,12 +54,12 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let (addr, _handler) = run_server().await?;
+	let addr = run_server().await?;
 	let url = format!("http://{}", addr);
 
 	// Use RPC client to get the response of `say_hello` method.
 	let client = HttpClientBuilder::default().build(&url)?;
-	let response: String = client.request("say_hello", None).await?;
+	let response: String = client.request("say_hello", rpc_params![]).await?;
 	println!("[main]: response: {:?}", response);
 
 	// Use hyper client to manually submit a `GET /health` request.
@@ -79,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
+async fn run_server() -> anyhow::Result<SocketAddr> {
 	// Custom tower service to handle the RPC requests
 	let service_builder = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
@@ -87,7 +88,7 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 		.timeout(Duration::from_secs(2));
 
 	let server =
-		HttpServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+		ServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
 	let addr = server.local_addr()?;
 
@@ -95,7 +96,11 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 	module.register_method("system_health", |_, _| Ok(serde_json::json!({ "health": true }))).unwrap();
 
-	let handler = server.start(module)?;
+	let handle = server.start(module)?;
 
-	Ok((addr, handler))
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(handle.stopped());
+
+	Ok(addr)
 }

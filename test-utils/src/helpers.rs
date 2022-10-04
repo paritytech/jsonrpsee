@@ -29,7 +29,7 @@ use std::net::SocketAddr;
 
 use crate::mocks::{Body, HttpResponse, Id, Uri};
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Request, Response, Server};
+use hyper::{Client, Request, Response, Server};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -160,6 +160,18 @@ pub fn server_notification(method: &str, params: Value) -> String {
 
 pub async fn http_request(body: Body, uri: Uri) -> Result<HttpResponse, String> {
 	let client = hyper::Client::new();
+	http_post(client, body, uri).await
+}
+
+pub async fn http2_request(body: Body, uri: Uri) -> Result<HttpResponse, String> {
+	let client = hyper::Client::builder().http2_only(true).build_http();
+	http_post(client, body, uri).await
+}
+
+async fn http_post<C>(client: Client<C, Body>, body: Body, uri: Uri) -> Result<HttpResponse, String>
+where
+	C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+{
 	let r = hyper::Request::post(uri)
 		.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static("application/json"))
 		.body(body)
@@ -168,7 +180,6 @@ pub async fn http_request(body: Body, uri: Uri) -> Result<HttpResponse, String> 
 
 	let (parts, body) = res.into_parts();
 	let bytes = hyper::body::to_bytes(body).await.unwrap();
-
 	Ok(HttpResponse { status: parts.status, header: parts.headers, body: String::from_utf8(bytes.to_vec()).unwrap() })
 }
 

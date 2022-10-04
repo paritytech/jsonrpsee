@@ -25,9 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::types::error::{ErrorCode, ErrorObject};
-use crate::types::ParamsSer;
+
 use crate::HttpClientBuilder;
 use jsonrpsee_core::client::{ClientT, IdKind};
+use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
@@ -52,10 +53,8 @@ async fn method_call_with_wrong_id_kind() {
 		http_server_with_hardcoded_response(ok_response(exp.into(), Id::Num(0))).with_default_timeout().await.unwrap();
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
-	assert!(matches!(
-		client.request::<String>("o", None).with_default_timeout().await.unwrap(),
-		Err(Error::InvalidRequestId)
-	));
+	let res: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
+	assert!(matches!(res, Err(Error::InvalidRequestId)));
 }
 
 #[tokio::test]
@@ -67,7 +66,7 @@ async fn method_call_with_id_str() {
 		.unwrap();
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
-	let response: String = client.request::<String>("o", None).with_default_timeout().await.unwrap().unwrap();
+	let response: String = client.request("o", rpc_params![]).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(&response, exp);
 }
 
@@ -77,7 +76,7 @@ async fn notification_works() {
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client
-		.notification("i_dont_care_about_the_response_because_the_server_should_not_respond", None)
+		.notification("i_dont_care_about_the_response_because_the_server_should_not_respond", rpc_params![])
 		.with_default_timeout()
 		.await
 		.unwrap()
@@ -137,8 +136,10 @@ async fn subscription_response_to_request() {
 
 #[tokio::test]
 async fn batch_request_works() {
-	let batch_request =
-		vec![("say_hello", rpc_params![]), ("say_goodbye", rpc_params![0_u64, 1, 2]), ("get_swag", None)];
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("say_hello", rpc_params![]).unwrap();
+	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
+	batch_request.insert("get_swag", rpc_params![]).unwrap();
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
@@ -147,16 +148,18 @@ async fn batch_request_works() {
 
 #[tokio::test]
 async fn batch_request_out_of_order_response() {
-	let batch_request =
-		vec![("say_hello", rpc_params! {}), ("say_goodbye", rpc_params![0_u64, 1, 2]), ("get_swag", None)];
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("say_hello", rpc_params![]).unwrap();
+	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
+	batch_request.insert("get_swag", rpc_params![]).unwrap();
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
-async fn run_batch_request_with_response<'a>(
-	batch: Vec<(&'a str, Option<ParamsSer<'a>>)>,
+async fn run_batch_request_with_response(
+	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
@@ -169,7 +172,7 @@ async fn run_request_with_response(response: String) -> Result<String, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
-	client.request("say_hello", None).with_default_timeout().await.unwrap()
+	client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap()
 }
 
 fn assert_jsonrpc_error_response(err: Error, exp: ErrorObjectOwned) {
