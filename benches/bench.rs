@@ -3,9 +3,8 @@ use std::sync::Arc;
 use criterion::*;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
-use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
-use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
-use jsonrpsee::types::{Id, ParamsSer, RequestSer};
+use helpers::{http_client, ws_client, ClientT, HeaderMap, SubscriptionClientT, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
+use jsonrpsee::types::{Id, RequestSer};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -61,6 +60,8 @@ fn v2_serialize(req: RequestSer<'_>) -> String {
 }
 
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
+	use jsonrpsee::types::ParamsSer;
+
 	crit.bench_function("jsonrpsee_types_v2_array_ref", |b| {
 		b.iter(|| {
 			let params = &[1_u64.into(), 2_u32.into()];
@@ -183,22 +184,25 @@ fn batch_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	for method in request.methods() {
-		let bench_name = format!("{}/{}", name, method);
-		let mut group = crit.benchmark_group(request.group_name(&bench_name));
-		for batch_size in [2, 5, 10, 50, 100usize].iter() {
-			let batch = vec![(method, None); *batch_size];
-			group.throughput(Throughput::Elements(*batch_size as u64));
-			group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
-				b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
-			});
-		}
-		group.finish();
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
+
+	let bench_name = format!("{}/{}", name, fast_call);
+	let mut group = crit.benchmark_group(request.group_name(&bench_name));
+	for batch_size in [2, 5, 10, 50, 100usize].iter() {
+		let batch = vec![(fast_call, None); *batch_size];
+
+		group.throughput(Throughput::Elements(*batch_size as u64));
+		group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
+			b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
+		});
 	}
 }
 
 fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
-	let methods = request.methods();
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
+
 	let mut group = crit.benchmark_group(request.group_name(name));
 	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
@@ -223,7 +227,7 @@ fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, 
 							let futs = FuturesUnordered::new();
 
 							for _ in 0..10 {
-								futs.push(client.request::<String>(methods[0], None));
+								futs.push(client.request::<String>(fast_call, None));
 							}
 
 							join_all(futs).await;
@@ -266,8 +270,8 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 								let fut = client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).then(
 									|sub| async move {
 										let mut s = sub.unwrap();
-										let res = s.next().await.unwrap().unwrap();
-										res
+
+										s.next().await.unwrap().unwrap()
 									},
 								);
 
@@ -287,8 +291,10 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 
 // As this is so slow only fast calls are executed in this benchmark.
 fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
-	let method = request.methods()[0];
-	let bench_name = format!("{}/{}", name, method);
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
+
+	let bench_name = format!("{}/{}", name, fast_call);
 	let mut group = crit.benchmark_group(request.group_name(&bench_name));
 	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
@@ -297,12 +303,58 @@ fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
-							client.request::<String>(method, None).await.unwrap();
+							client.request::<String>(fast_call, None).await.unwrap();
 						})
 					});
 					join_all(tasks).await;
 				},
 			)
+		});
+	}
+	group.finish();
+}
+
+/// Bench `round_trip` with different header sizes.
+fn http_custom_headers_round_trip(
+	rt: &TokioRuntime,
+	crit: &mut Criterion,
+	url: &str,
+	name: &str,
+	request: RequestType,
+) {
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
+
+	for header_size in [0, KIB, 5 * KIB, 25 * KIB, 100 * KIB] {
+		let mut headers = HeaderMap::new();
+		if header_size != 0 {
+			headers.insert("key", "A".repeat(header_size).parse().unwrap());
+		}
+
+		let client = Arc::new(http_client(url, headers));
+		let bench_name = format!("{}/{}kb", name, header_size / KIB);
+
+		crit.bench_function(&request.group_name(&bench_name), |b| {
+			b.to_async(rt).iter(|| async {
+				black_box(client.request::<String>(fast_call, None).await.unwrap());
+			})
+		});
+	}
+}
+
+/// Bench WS handshake with different header sizes.
+fn ws_custom_headers_handshake(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
+	let mut group = crit.benchmark_group(request.group_name(name));
+	for header_size in [0, KIB, 2 * KIB, 4 * KIB] {
+		group.bench_function(format!("{}kb", header_size / KIB), |b| {
+			b.to_async(rt).iter(|| async move {
+				let mut headers = HeaderMap::new();
+				if header_size != 0 {
+					headers.insert("key", "A".repeat(header_size).parse().unwrap());
+				}
+
+				ws_handshake(url, headers).await;
+			})
 		});
 	}
 	group.finish();
