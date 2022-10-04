@@ -23,7 +23,7 @@ jobs:
       - name: Set bench file
         id: step_one
         run: |
-          echo "bench_file=$(date "+%d-%m-%Y")/output.txt" >> $GITHUB_ENV
+          echo "bench_file=bench/$(date "+%d-%m-%Y")/output.txt" >> $GITHUB_ENV
 
       - name: Store benchmark result
         uses: rhysd/github-action-benchmark@v1
