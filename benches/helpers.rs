@@ -1,8 +1,12 @@
 use std::time::Duration;
 
-use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
-use jsonrpsee::http_client::{HeaderMap, HttpClient, HttpClientBuilder};
-use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use jsonrpsee_v0_15::client_transport::ws::{Uri, WsTransportClientBuilder};
+use jsonrpsee_v0_15::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee_v0_15::ws_client::{WsClient, WsClientBuilder};
+
+pub use jsonrpsee_v0_15::core::client::{ClientT, SubscriptionClientT};
+pub use jsonrpsee_v0_15::http_client::HeaderMap;
+pub use jsonrpsee_v0_15::rpc_params;
 
 pub(crate) const SYNC_FAST_CALL: &str = "fast_call";
 pub(crate) const ASYNC_FAST_CALL: &str = "fast_call_async";
