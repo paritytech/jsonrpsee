@@ -1,12 +1,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::helpers::{ws_handshake, KIB};
 use criterion::*;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
-use helpers::{http_client, ws_client, ClientT, HeaderMap, SubscriptionClientT, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
-use jsonrpsee::types::{Id, ParamsSer, RequestSer};
+use helpers::{
+	http_client, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT, KIB, SUB_METHOD_NAME,
+	UNSUB_METHOD_NAME,
+};
+use jsonrpsee::types::{Id, RequestSer};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -103,6 +105,8 @@ fn v2_serialize(req: RequestSer<'_>) -> String {
 }
 
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
+	use jsonrpsee::types::ParamsSer;
+
 	crit.bench_function("jsonrpsee_types_v2_array_ref", |b| {
 		b.iter(|| {
 			let params = &[1_u64.into(), 2_u32.into()];
@@ -266,18 +270,20 @@ fn batch_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	for method in request.methods() {
-		let bench_name = format!("{}/{}", name, method);
-		let mut group = crit.benchmark_group(request.group_name(&bench_name));
-		for batch_size in [2, 5, 10, 50, 100usize].iter() {
-			let batch = vec![(method, None); *batch_size];
-			group.throughput(Throughput::Elements(*batch_size as u64));
-			group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
-				b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
-			});
-		}
-		group.finish();
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
+
+	let bench_name = format!("{}/{}", name, fast_call);
+	let mut group = crit.benchmark_group(request.group_name(&bench_name));
+	for batch_size in [2, 5, 10, 50, 100usize].iter() {
+		let batch = vec![(fast_call, None); *batch_size];
+
+		group.throughput(Throughput::Elements(*batch_size as u64));
+		group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
+			b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
+		});
 	}
+	group.finish();
 }
 
 fn ws_concurrent_conn_calls(
@@ -366,8 +372,8 @@ fn ws_concurrent_conn_subs(
 								let fut = client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).then(
 									|sub| async move {
 										let mut s = sub.unwrap();
-										let res = s.next().await.unwrap().unwrap();
-										res
+
+										s.next().await.unwrap().unwrap()
 									},
 								);
 
@@ -425,7 +431,8 @@ fn http_custom_headers_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	let method_name = request.methods()[0];
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
 
 	for header_size in [0, KIB, 5 * KIB, 25 * KIB, 100 * KIB] {
 		let mut headers = HeaderMap::new();
@@ -438,7 +445,7 @@ fn http_custom_headers_round_trip(
 
 		crit.bench_function(&request.group_name(&bench_name), |b| {
 			b.to_async(rt).iter(|| async {
-				black_box(client.request::<String>(method_name, None).await.unwrap());
+				black_box(client.request::<String>(fast_call, None).await.unwrap());
 			})
 		});
 	}
