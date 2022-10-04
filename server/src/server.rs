@@ -33,7 +33,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, FutureDriver, ServerHandle, StopHandle};
-use crate::logger::Logger;
+use crate::logger::{Logger, TransportProtocol};
 use crate::transport::{http, ws};
 
 use futures_util::future::FutureExt;
@@ -315,7 +315,7 @@ impl<B, L> Builder<B, L> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_server::logger::{Logger, HttpRequest, MethodKind, Params};
+	/// use jsonrpsee_server::logger::{Logger, HttpRequest, MethodKind, Params, TransportProtocol};
 	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -324,28 +324,28 @@ impl<B, L> Builder<B, L> {
 	/// impl Logger for MyLogger {
 	///     type Instant = Instant;
 	///
-	///     fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest) {
-	///          println!("[MyLogger::on_call] remote_addr: {:?}, headers: {:?}", remote_addr, request);
+	///     fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest, transport: TransportProtocol) {
+	///          println!("[MyLogger::on_call] remote_addr: {:?}, headers: {:?}, transport: {}", remote_addr, request, transport);
 	///     }
 	///
-	///     fn on_request(&self) -> Self::Instant {
+	///     fn on_request(&self, transport: TransportProtocol) -> Self::Instant {
 	///          Instant::now()
 	///     }
 	///
-	///     fn on_call(&self, method_name: &str, params: Params, kind: MethodKind) {
-	///          println!("[MyLogger::on_call] method: '{}' params: {:?}, kind: {:?}", method_name, params, kind);
+	///     fn on_call(&self, method_name: &str, params: Params, kind: MethodKind, transport: TransportProtocol) {
+	///          println!("[MyLogger::on_call] method: '{}' params: {:?}, kind: {:?}, transport: {}", method_name, params, kind, transport);
 	///     }
 	///
-	///     fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant) {
-	///          println!("[MyLogger::on_result] '{}', worked? {}, time elapsed {:?}", method_name, success, started_at.elapsed());
+	///     fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant, transport: TransportProtocol) {
+	///          println!("[MyLogger::on_result] '{}', worked? {}, time elapsed {:?}, transport: {}", method_name, success, started_at.elapsed(), transport);
 	///     }
 	///
-	///     fn on_response(&self, result: &str, started_at: Self::Instant) {
-	///          println!("[MyLogger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+	///     fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {
+	///          println!("[MyLogger::on_response] result: {}, time elapsed {:?}, transport: {}", result, started_at.elapsed(), transport);
 	///     }
 	///
-	///     fn on_disconnect(&self, remote_addr: SocketAddr) {
-	///          println!("[MyLogger::on_disconnect] remote_addr: {:?}", remote_addr);
+	///     fn on_disconnect(&self, remote_addr: SocketAddr, transport: TransportProtocol) {
+	///          println!("[MyLogger::on_disconnect] remote_addr: {:?}, transport: {}", remote_addr, transport);
 	///     }
 	/// }
 	///
@@ -615,7 +615,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					self.inner.logger.on_connect(self.inner.remote_addr, &request);
+					self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::WebSocket);
 					let data = self.inner.clone();
 
 					tokio::spawn(async move {
@@ -655,7 +655,10 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 				batch_requests_supported: self.inner.batch_requests_supported,
 				logger: self.inner.logger.clone(),
 				conn: self.inner.conn.clone(),
+				remote_addr: self.inner.remote_addr,
 			};
+
+			self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::Http);
 
 			Box::pin(http::handle_request(request, data).map(Ok))
 		}

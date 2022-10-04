@@ -507,15 +507,11 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 		}
 		// Batch response.
 		else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(raw) {
-			if let Err(e) = process_batch_response(manager, batch) {
-				return Err(e);
-			}
+			process_batch_response(manager, batch)?;
 		}
 		// Error response
 		else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(raw) {
-			if let Err(e) = process_error_response(manager, err) {
-				return Err(e);
-			}
+			process_error_response(manager, err)?;
 		}
 		// Unparsable response
 		else {
