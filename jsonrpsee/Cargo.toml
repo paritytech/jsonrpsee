@@ -34,7 +34,7 @@ macros = ["jsonrpsee-proc-macros", "jsonrpsee-types", "tracing"]
 
 client = ["http-client", "ws-client", "wasm-client", "client-ws-transport", "client-web-transport", "async-client", "client-core"]
 client-core = ["jsonrpsee-core/client"]
-server = ["jsonrpsee-server", "server-core"]
+server = ["jsonrpsee-server", "server-core", "jsonrpsee-types"]
 server-core = ["jsonrpsee-core/server"]
 full = ["client", "server", "macros"]
 
