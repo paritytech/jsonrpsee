@@ -9,9 +9,10 @@ jobs:
     name: Benchmarks gitlab
     runs-on: ubuntu-latest
     steps:
-
       - name: Checkout Sources
         uses: actions/checkout@v3.0.2
+        with:
+          ref: "gh-pages"
 
       - name: Install Rust nightly toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -28,12 +29,11 @@ jobs:
       - name: Store benchmark result
         uses: rhysd/github-action-benchmark@v1
         with:
-          tool: 'cargo'
+          tool: "cargo"
           output-file-path: "${{ env.bench_file }}"
           benchmark-data-dir-path: "bench/dev2"
           fail-on-alert: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-alert: true
-          alert-comment-cc-users: '@niklasad1'
+          alert-comment-cc-users: "@niklasad1"
           auto-push: true
-
