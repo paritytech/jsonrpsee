@@ -29,7 +29,7 @@ jobs:
       - name: Copy bench results
         id: step_one
         run: |
-          cp bench/$(date "+%d-%m-%Y")/output.txt output.txt
+          cp bench/gitlab/output.txt output.txt
 
       - name: Switch branch
         id: step_two
