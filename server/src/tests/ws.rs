@@ -494,7 +494,6 @@ async fn can_register_modules() {
 	assert_eq!(mod1.method_names().count(), 2);
 }
 
-
 #[tokio::test]
 async fn unsubscribe_twice_should_indicate_error() {
 	init_logger();
