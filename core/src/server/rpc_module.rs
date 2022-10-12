@@ -853,10 +853,9 @@ impl SubscriptionSink {
 	}
 
 	/// Attempt to accept the subscription and respond the subscription method call.
-	/// The subscription ID is returned on success.
 	///
 	/// Fails if the connection was closed, or if called multiple times.
-	pub fn accept(&mut self) -> Result<RpcSubscriptionId<'static>, SubscriptionAcceptRejectError> {
+	pub fn accept(&mut self) -> Result<(), SubscriptionAcceptRejectError> {
 		let (id, subscribe_call) = self.id.take().ok_or(SubscriptionAcceptRejectError::AlreadyCalled)?;
 
 		let response = MethodResponse::response(id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
@@ -868,10 +867,21 @@ impl SubscriptionSink {
 			let (tx, rx) = watch::channel(());
 			self.subscribers.lock().insert(self.uniq_sub.clone(), (self.inner.clone(), tx));
 			self.unsubscribe = Some(rx);
-			let sub_id = self.uniq_sub.sub_id.clone();
-			Ok(sub_id)
+			Ok(())
 		} else {
 			Err(SubscriptionAcceptRejectError::RemotePeerAborted)
+		}
+	}
+
+	/// Return the subscription ID if the the subscription was accepted.
+	///
+	/// [`SubscriptionSink::accept`] should be called prior to this method.
+	pub fn subscription_id(&self) -> Option<RpcSubscriptionId<'static>> {
+		if self.id.is_some() {
+			// Subscription was not accepted.
+			None
+		} else {
+			Some(self.uniq_sub.sub_id.clone())
 		}
 	}
 
