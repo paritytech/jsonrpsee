@@ -548,7 +548,9 @@ async fn custom_subscription_id_works() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
-			sink.accept()?;
+			let sub_id = sink.accept()?;
+			let _expected_sub = SubscriptionId::Str("0xdeadbeef".into());
+			assert!(matches!(sub_id, _expected_sub));
 
 			tokio::spawn(async move {
 				loop {
