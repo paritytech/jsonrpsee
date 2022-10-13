@@ -873,6 +873,18 @@ impl SubscriptionSink {
 		}
 	}
 
+	/// Return the subscription ID if the the subscription was accepted.
+	///
+	/// [`SubscriptionSink::accept`] should be called prior to this method.
+	pub fn subscription_id(&self) -> Option<RpcSubscriptionId<'static>> {
+		if self.id.is_some() {
+			// Subscription was not accepted.
+			None
+		} else {
+			Some(self.uniq_sub.sub_id.clone())
+		}
+	}
+
 	/// Send a message back to subscribers.
 	///
 	/// Returns
