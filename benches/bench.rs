@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::helpers::{ws_handshake, KIB};
 use criterion::*;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
-use helpers::{http_client, ws_client, ClientT, HeaderMap, SubscriptionClientT, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
+use helpers::fixed_client::{http_client, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT};
+use helpers::{KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::types::{Id, RequestSer};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;

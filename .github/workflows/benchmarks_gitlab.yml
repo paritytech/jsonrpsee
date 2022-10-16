@@ -2,7 +2,7 @@ name: Benchmarks gitlab
 
 on:
   schedule:
-    - cron: "0 18 * * *"
+    - cron: "0 5 * * *"
 
 jobs:
   bench:
