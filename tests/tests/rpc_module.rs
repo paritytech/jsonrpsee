@@ -416,7 +416,7 @@ async fn accepted_twice_subscription_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 			let res = sink.accept();
-			assert!(matches!(res, Ok(())));
+			assert!(matches!(res, Ok(_)));
 
 			let res = sink.accept();
 			assert!(matches!(res, Err(_)));

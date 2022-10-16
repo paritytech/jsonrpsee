@@ -873,6 +873,18 @@ impl SubscriptionSink {
 		}
 	}
 
+	/// Return the subscription ID if the the subscription was accepted.
+	///
+	/// [`SubscriptionSink::accept`] should be called prior to this method.
+	pub fn subscription_id(&self) -> Option<RpcSubscriptionId<'static>> {
+		if self.id.is_some() {
+			// Subscription was not accepted.
+			None
+		} else {
+			Some(self.uniq_sub.sub_id.clone())
+		}
+	}
+
 	/// Send a message back to subscribers.
 	///
 	/// Returns
@@ -886,13 +898,7 @@ impl SubscriptionSink {
 			return Ok(false);
 		}
 
-		// Only possible to trigger when the connection is dropped.
-		if self.is_closed() {
-			return Ok(false);
-		}
-
-		let msg = self.build_message(result)?;
-		Ok(self.inner.send_raw(msg).is_ok())
+		self.send_without_accept(result)
 	}
 
 	/// Reads data from the `stream` and sends back data on the subscription
@@ -976,7 +982,7 @@ impl SubscriptionSink {
 			match futures_util::future::select(stream_item, closed_fut).await {
 				// The app sent us a value to send back to the subscribers
 				Either::Left((Ok(Some(result)), next_closed_fut)) => {
-					match self.send(&result) {
+					match self.send_without_accept(&result) {
 						Ok(true) => (),
 						Ok(false) => {
 							break SubscriptionClosed::RemotePeerAborted;
@@ -1032,6 +1038,21 @@ impl SubscriptionSink {
 	/// Returns whether the subscription is closed.
 	pub fn is_closed(&self) -> bool {
 		self.inner.is_closed() || self.close_notify.is_none() || !self.is_active_subscription()
+	}
+
+	/// Send a message back to subscribers.
+	///
+	/// This is similar to the [`SubscriptionSink::send`], but it does not try to accept
+	/// the subscription prior to sending.
+	#[inline]
+	fn send_without_accept<T: Serialize>(&mut self, result: &T) -> Result<bool, serde_json::Error> {
+		// Only possible to trigger when the connection is dropped.
+		if self.is_closed() {
+			return Ok(false);
+		}
+
+		let msg = self.build_message(result)?;
+		Ok(self.inner.send_raw(msg).is_ok())
 	}
 
 	fn is_active_subscription(&self) -> bool {

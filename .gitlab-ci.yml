@@ -155,9 +155,10 @@ publish-ghpages:
     - git fetch origin gh-pages
     # Push result to github
     - git checkout gh-pages
-    - mkdir bench/$(date +%d-%m-%Y) || echo "Directory exists"
-    - cp artifacts/output.txt bench/$(date +%d-%m-%Y)/
-    - git add bench/$(date +%d-%m-%Y)/output.txt
+    - mkdir -p bench/gitlab || echo "Directory exists"
+    - rm -f bench/gitlab/output.txt || echo "No output.txt"
+    - cp artifacts/output.txt bench/gitlab/
+    - git add bench/gitlab/output.txt
     - git commit -m "Add output.txt with benchmark results for ${CI_COMMIT_REF_NAME}"
     - git push origin gh-pages
   allow_failure:                   true
