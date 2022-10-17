@@ -126,7 +126,7 @@ benchmarks:
 check_bench:
   stage:                           check_benchmark
   variables:
-    PROMETHEUS_URL:                "http://vm-longterm.parity-build.parity.io"
+    PROMETHEUS_URL:                "https://thanos.parity-mgmt.parity.io"
     TRESHOLD:                      20
     CI_IMAGE:                      "paritytech/benchmarks:latest"
   <<:                              *kubernetes-env
