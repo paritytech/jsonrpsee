@@ -11,18 +11,21 @@ then
   RESULT_FILE="output.txt"
 fi
 
-cat $RESULT_FILE | grep test > $CURRENT_DIR/output_redacted.txt
+grep test "${RESULT_FILE}" > "${CURRENT_DIR}"/output_redacted.txt
 
 INPUT="output_redacted.txt"
 
 while IFS= read -r line
 do
-  BENCH_NAME=$(echo $line | cut -f 2 -d ' ')
-  BENCH_RESULT=$(echo $line | cut -f 5 -d ' ')
+  BENCH_NAME=$(echo "${line}" | cut -f 2 -d ' ')
+  BENCH_RESULT=$(echo "${line}" | cut -f 5 -d ' ')
   # send metric with common results
-  curl -d 'parity_benchmark_common_result_ns{project="'${CI_PROJECT_NAME}'",benchmark="'$BENCH_NAME'"} '$BENCH_RESULT'' \
-    -X POST 'http://vm-longterm.parity-build.parity.io/api/v1/import/prometheus'
+  echo 'parity_benchmark_common_result_ns{project="'${CI_PROJECT_NAME}'",benchmark="'${BENCH_NAME}'"} '${BENCH_RESULT}'' \
+    | curl --data-binary @- "https://pushgateway.parity-build.parity.io/metrics/job/${BENCH_NAME}"
+
   # send metric with detailed results
-  curl -d 'parity_benchmark_specific_result_ns{project="'${CI_PROJECT_NAME}'",benchmark="'$BENCH_NAME'",commit="'${CI_COMMIT_SHORT_SHA}'",cirunner="'${RUNNER_NAME}'"} '$BENCH_RESULT'' \
-    -X POST 'http://vm-longterm.parity-build.parity.io/api/v1/import/prometheus'
-done < "$INPUT"
+  echo 'parity_benchmark_specific_result_ns{project="'${CI_PROJECT_NAME}'",benchmark="'${BENCH_NAME}'",commit="'${CI_COMMIT_SHORT_SHA}'",cirunner="'${RUNNER_NAME}'"} '${BENCH_RESULT}'' \
+    | curl --data-binary @- "https://pushgateway.parity-build.parity.io/metrics/job/${BENCH_NAME}"
+
+
+done < "${INPUT}"
