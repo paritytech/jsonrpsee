@@ -34,7 +34,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.0.0
+        uses: Swatinem/rust-cache@v2.0.1
 
       - name: Cargo fmt
         uses: actions-rs/cargo@v1.0.3
@@ -86,7 +86,7 @@ jobs:
           version: 0.5
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.0.0
+        uses: Swatinem/rust-cache@v2.0.1
 
       - name: Cargo check all targets and features
         run: cargo hack check --workspace --each-feature --all-targets
@@ -106,7 +106,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.0.0
+        uses: Swatinem/rust-cache@v2.0.1
 
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
@@ -129,7 +129,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.0.0
+        uses: Swatinem/rust-cache@v2.0.1
 
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
@@ -152,7 +152,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.0.0
+        uses: Swatinem/rust-cache@v2.0.1
 
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
