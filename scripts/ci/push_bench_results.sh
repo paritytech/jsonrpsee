@@ -23,12 +23,12 @@ do
   # send metric with common results
   echo 'parity_benchmark_common_result_ns{project="'${CI_PROJECT_NAME}'",benchmark="'${BENCH_NAME}'"} '${BENCH_RESULT}''
   echo 'parity_benchmark_common_result_ns{project="'${CI_PROJECT_NAME}'",benchmark="'${BENCH_NAME}'"} '${BENCH_RESULT}'' \
-    | curl --data-binary @- "https://pushgateway.parity-build.parity.io/metrics/job/${BENCH_NAME}"
+    | curl --silent --data-binary @- "https://pushgateway.parity-build.parity.io/metrics/job/${BENCH_NAME}"
 
   # send metric with detailed results
   echo 'parity_benchmark_specific_result_ns{project="'${CI_PROJECT_NAME}'",benchmark="'${BENCH_NAME}'",commit="'${CI_COMMIT_SHORT_SHA}'",cirunner="'${RUNNER_NAME}'"} '${BENCH_RESULT}''
   echo 'parity_benchmark_specific_result_ns{project="'${CI_PROJECT_NAME}'",benchmark="'${BENCH_NAME}'",commit="'${CI_COMMIT_SHORT_SHA}'",cirunner="'${RUNNER_NAME}'"} '${BENCH_RESULT}'' \
-    | curl --data-binary @- "https://pushgateway.parity-build.parity.io/metrics/job/${BENCH_NAME}"
+    | curl --silent --data-binary @- "https://pushgateway.parity-build.parity.io/metrics/job/${BENCH_NAME}"
 
 
 done < "${INPUT}"
