@@ -29,10 +29,10 @@ use std::time::Duration;
 
 use futures::stream::StreamExt;
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::http_client::HttpClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 
@@ -58,13 +58,11 @@ fn main() {
 			drop(sub);
 		}
 
-
 		// run http client.
 		{
 			let client = HttpClientBuilder::default().build(&format!("http://{}", addr)).unwrap();
 			run_requests(&client).await;
 		}
-
 
 		handle.stop().unwrap();
 		handle.stopped().await
