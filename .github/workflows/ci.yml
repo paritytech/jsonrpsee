@@ -108,11 +108,25 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.0.1
 
+      - name: Install Valgrind
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y valgrind
+
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
         with:
           command: test
           args: --workspace
+
+      - name: Cargo build valgrind
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: build
+          args: -p jsonrpsee-integration-tests
+
+      - name: Run valgrind test
+        run: valgrind --error-exitcode=1 --leak-check=full --show-leak-kinds=all ./target/debug/valgrind-test
 
   tests_macos:
     name: Run tests macos

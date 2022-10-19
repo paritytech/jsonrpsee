@@ -7,6 +7,15 @@ edition = "2021"
 license = "MIT"
 publish = false
 
+[[bin]]
+name = "valgrind-test"
+
+[dependencies]
+jsonrpsee = { path = "../jsonrpsee", features = ["ws-client", "http-client", "server"] }
+futures = { version = "0.3.14", default-features = false, features = ["std"] }
+tokio = { version = "1.16", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+
 [dev-dependencies]
 beef = { version = "0.5.1", features = ["impl_serde"] }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
