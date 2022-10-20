@@ -131,7 +131,7 @@ benchmarks-v14-ci5:
     MEASUREMENT_TIME:              10
     SLOW_MEASUREMENT_TIME:         60
     GIT_STRATEGY:                  none
-    TAG: "v.0.14.0"
+    BRANCH: "v0.14.0-bench"
   tags:
     - ci5
 
