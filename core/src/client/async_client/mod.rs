@@ -338,7 +338,7 @@ impl ClientT for Client {
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<R>, Error>
 	where
-		R: DeserializeOwned + Default + Clone,
+		R: DeserializeOwned,
 	{
 		let batch = batch.build();
 		let guard = self.id_manager.next_request_ids(batch.len())?;

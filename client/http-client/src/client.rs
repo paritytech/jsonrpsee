@@ -36,7 +36,7 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::BatchResponse;
+use jsonrpsee_types::{BatchResponse, ErrorObject};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
@@ -233,7 +233,7 @@ impl ClientT for HttpClient {
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<R>, Error>
 	where
-		R: DeserializeOwned + Default + Clone,
+		R: DeserializeOwned,
 	{
 		let batch = batch.build();
 		let guard = self.id_manager.next_request_ids(batch.len())?;
@@ -262,8 +262,14 @@ impl ClientT for HttpClient {
 		// a better error message if `R` couldn't be decoded.
 		let rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
-		// NOTE: `R::default` is placeholder and will be replaced in loop below.
-		let mut responses: Vec<_> = std::iter::once(Ok(R::default())).cycle().take(rps.len()).collect();
+		// NOTE: `ErrorObject` is placeholder and will be replaced in the loop below.
+		let mut responses: Vec<_> = Vec::with_capacity(ordered_requests.len());
+
+		// TODO(niklasad1): best I could come up with without having the clone + default bounds.
+		for _ in 0..ordered_requests.len() {
+			responses.push(Err(ErrorObject::borrowed(0, &"", None)));
+		}
+
 		for rp in rps {
 			match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
 				Ok(r) => {
