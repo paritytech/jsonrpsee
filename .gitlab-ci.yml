@@ -152,7 +152,7 @@ benchmarks-v14-autoscale:
     MEASUREMENT_TIME:              10
     SLOW_MEASUREMENT_TIME:         60
     GIT_STRATEGY:                  none
-    TAG: "v.0.14.0"
+    TAG: "v0.14.0-bench"
   tags:
     - autoscale
 
@@ -162,7 +162,7 @@ benchmarks-v15-autoscale:
     MEASUREMENT_TIME:              10
     SLOW_MEASUREMENT_TIME:         60
     GIT_STRATEGY:                  none
-    TAG: "v.0.15.0"
+    TAG: "v0.15.1-bench"
   tags:
     - autoscale
 
