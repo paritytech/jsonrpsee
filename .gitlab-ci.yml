@@ -1,175 +1,228 @@
 default:
-  interruptible:                   true
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-
-stages:
-  - lint
-  - test
-  - benchmark
-  - check_benchmark
-  - publish
-
-variables:                         &default-vars
-  GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       100
-  CARGO_INCREMENTAL:               0
-  CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
-  CI_IMAGE:                        "paritytech/ci-linux:production"
-
-.common-refs:                      &common-refs
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_COMMIT_REF_NAME == "main"
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-
-# run nightly by schedule
-.schedule-refs:                    &schedule-refs
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-
-.rust-info-script:                 &rust-info-script
-  - rustup show
-  - cargo --version
-  - rustup +nightly show
-  - cargo +nightly --version
-  - bash --version
-  - sccache -s
-
-.docker-env:                       &docker-env
-  image:                           "${CI_IMAGE}"
-  before_script:
-    - *rust-info-script
-    - sccache -s
-  tags:
-    - linux-docker
-
-.kubernetes-env:                   &kubernetes-env
-  image:                           "${CI_IMAGE}"
-  tags:
-    - kubernetes-parity-build
-
-.collect-artifacts:                &collect-artifacts
-  artifacts:
-    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
-    when:                          on_success
-    expire_in:                     28 days
-    paths:
-      - ./artifacts/
-    reports:
-      dotenv: runner.env
-#### stage:                        lint
-
-fmt:
-  stage:                           lint
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - cargo fmt --all -- --check
-
-clippy:
-  stage:                           lint
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - cargo clippy --all-targets
-
-check-rustdoc-links:
-  stage:                           lint
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --workspace --no-deps --document-private-items
-
-#### stage:                       test
-
-check-code:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - cargo install cargo-hack
-    - cargo hack check --workspace --each-feature
-
-test:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - cargo test
-
-benchmarks:
-  stage:                           benchmark
-  <<:                              *docker-env
-  <<:                              *collect-artifacts
-  <<:                              *schedule-refs
-  timeout:                         3h
-  variables:
-    MEASUREMENT_TIME:              10
-    SLOW_MEASUREMENT_TIME:         60
-  script:
-    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
-    - mkdir artifacts
-    - cp output.txt artifacts/
-    - echo ${CI_RUNNER_DESCRIPTION}
-    - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
-  tags:
-    - ci5
-
-check_bench:
-  stage:                           check_benchmark
-  variables:
-    PROMETHEUS_URL:                "https://thanos.parity-mgmt.parity.io"
-    TRESHOLD:                      20
-    CI_IMAGE:                      "paritytech/benchmarks:latest"
-  <<:                              *kubernetes-env
-  <<:                              *schedule-refs
-  script:
-    - check_bench_result artifacts/output.txt
-
-publish-ghpages:
-  stage:                           publish
-  variables:
-    CI_IMAGE:                      "paritytech/tools:latest"
-  <<:                              *kubernetes-env
-  <<:                              *schedule-refs
-  script:
-    # setup ssh
-    - eval $(ssh-agent)
-    - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
-    - mkdir ~/.ssh && touch ~/.ssh/known_hosts
-    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-    # Set git config
-    - rm -rf .git/config
-    - git config user.email "devops-team@parity.io"
-    - git config user.name "${GITHUB_USER}"
-    - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
-    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-    - git fetch origin gh-pages
-    # Push result to github
-    - git checkout gh-pages
-    - mkdir -p bench/gitlab || echo "Directory exists"
-    - rm -f bench/gitlab/output.txt || echo "No output.txt"
-    - cp artifacts/output.txt bench/gitlab/
-    - git add bench/gitlab/output.txt
-    - git commit -m "Add output.txt with benchmark results for ${CI_COMMIT_REF_NAME}"
-    - git push origin gh-pages
-  allow_failure:                   true
-
-publish-bench:
-  stage:                           publish
-  variables:
-    CI_IMAGE:                      "paritytech/tools:latest"
-  <<:                              *kubernetes-env
-  <<:                              *schedule-refs
-  script:
-    - echo $RUNNER_NAME
-    - ./scripts/ci/push_bench_results.sh artifacts/output.txt
-
+    interruptible:                   true
+    retry:
+      max: 2
+      when:
+        - runner_system_failure
+        - unknown_failure
+        - api_failure
+  
+  stages:
+    - lint
+    - test
+    - benchmark
+    - check_benchmark
+    - publish
+  
+  variables:                         &default-vars
+    GIT_STRATEGY:                    fetch
+    GIT_DEPTH:                       100
+    CARGO_INCREMENTAL:               0
+    CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
+    CI_IMAGE:                        "paritytech/ci-linux:production"
+  
+  .common-refs:                      &common-refs
+    rules:
+      - if: $CI_PIPELINE_SOURCE == "web"
+      - if: $CI_COMMIT_REF_NAME == "main"
+      - if: $CI_COMMIT_REF_NAME == "master"
+      - if: $CI_PIPELINE_SOURCE == "schedule"
+        when: never
+      - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  
+  # run nightly by schedule
+  .schedule-refs:                    &schedule-refs
+    rules:
+      - if: $CI_PIPELINE_SOURCE == "schedule"
+  
+  .rust-info-script:                 &rust-info-script
+    - rustup show
+    - cargo --version
+    - rustup +nightly show
+    - cargo +nightly --version
+    - bash --version
+  
+  .docker-env:                       &docker-env
+    image:                           "${CI_IMAGE}"
+    before_script:
+      - *rust-info-script
+    tags:
+      - linux-docker
+  
+  .kubernetes-env:                   &kubernetes-env
+    image:                           "${CI_IMAGE}"
+    tags:
+      - kubernetes-parity-build
+  
+  .collect-artifacts:                &collect-artifacts
+    artifacts:
+      name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+      when:                          on_success
+      expire_in:                     28 days
+      paths:
+        - ./artifacts/
+      reports:
+        dotenv: runner.env
+  #### stage:                        lint
+  
+  # fmt:
+  #   stage:                           lint
+  #   <<:                              *docker-env
+  #   <<:                              *common-refs
+  #   script:
+  #     - cargo fmt --all -- --check
+  
+  # clippy:
+  #   stage:                           lint
+  #   <<:                              *docker-env
+  #   <<:                              *common-refs
+  #   script:
+  #     - cargo clippy --all-targets
+  
+  # check-rustdoc-links:
+  #   stage:                           lint
+  #   <<:                              *docker-env
+  #   <<:                              *common-refs
+  #   script:
+  #     - RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --workspace --no-deps --document-private-items
+  
+  # #### stage:                       test
+  
+  # check-code:
+  #   stage:                           test
+  #   <<:                              *docker-env
+  #   <<:                              *common-refs
+  #   script:
+  #     - cargo install cargo-hack
+  #     - cargo hack check --workspace --each-feature
+  
+  # test:
+  #   stage:                           test
+  #   <<:                              *docker-env
+  #   <<:                              *common-refs
+  #   script:
+  #     - cargo test
+  
+  .benchmarks: &benchmarks
+    stage:                           benchmark
+    <<:                              *docker-env
+    <<:                              *collect-artifacts
+    <<:                              *common-refs
+    timeout:                         3h
+    variables:
+      MEASUREMENT_TIME:              10
+      SLOW_MEASUREMENT_TIME:         60
+      GIT_STRATEGY:                  none
+    script:
+      - export FILENAME="output-${TAG}${CI_RUNNER_DESCRIPTION}.txt"
+      - git pull https://github.com/paritytech/jsonrpsee
+      - cd jsonrpsee
+      - git fetch --all --tags
+      - git checkout ${TAG}
+      - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee ${FILENAME}
+      - mkdir -p artifacts
+      - cp ${FILENAME} artifacts/
+      - echo ${CI_RUNNER_DESCRIPTION}
+      - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
+  
+  benchmarks-v14-ci5:
+    <<: *benchmarks
+    variables:
+      MEASUREMENT_TIME:              10
+      SLOW_MEASUREMENT_TIME:         60
+      GIT_STRATEGY:                  none
+      TAG: "v.0.14.0"
+    tags:
+      - ci5
+  
+  benchmarks-v15-ci5:
+    <<: *benchmarks
+    variables:
+      MEASUREMENT_TIME:              10
+      SLOW_MEASUREMENT_TIME:         60
+      GIT_STRATEGY:                  none
+      TAG: "v.0.15.0"
+    tags:
+      - ci5
+  
+  
+  benchmarks-v14-autoscale:
+    <<: *benchmarks
+    variables:
+      MEASUREMENT_TIME:              10
+      SLOW_MEASUREMENT_TIME:         60
+      GIT_STRATEGY:                  none
+      TAG: "v.0.14.0"
+    tags:
+      - autoscale
+  
+  benchmarks-v15-autoscale:
+    <<: *benchmarks
+    variables:
+      MEASUREMENT_TIME:              10
+      SLOW_MEASUREMENT_TIME:         60
+      GIT_STRATEGY:                  none
+      TAG: "v.0.15.0"
+    tags:
+      - autoscale
+  
+  .check_bench:
+    stage:                           check_benchmark
+    variables:
+      PROMETHEUS_URL:                "https://thanos.parity-mgmt.parity.io"
+      TRESHOLD:                      20
+      CI_IMAGE:                      "paritytech/benchmarks:latest"
+    <<:                              *kubernetes-env
+    <<:                              *schedule-refs
+    script:
+      - check_bench_result artifacts/output.txt
+  
+  publish-ghpages:
+    stage:                           publish
+    variables:
+      CI_IMAGE:                      "paritytech/tools:latest"
+    <<:                              *kubernetes-env
+    <<:                              *common-refs
+    needs:
+      - job:                         benchmarks-v14-ci5
+        artifacts:                   true
+      - job:                         benchmarks-v15-ci5
+        artifacts:                   true
+      - job:                         benchmarks-v14-autoscale
+        artifacts:                   true
+      - job:                         benchmarks-v15-autoscale
+        artifacts:                   true
+    script:
+      # setup ssh
+      - eval $(ssh-agent)
+      - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
+      - mkdir ~/.ssh && touch ~/.ssh/known_hosts
+      - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+      # Set git config
+      - rm -rf .git/config
+      - git config user.email "devops-team@parity.io"
+      - git config user.name "${GITHUB_USER}"
+      - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
+      - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+      - git fetch origin gh-pages
+      # Push result to github
+      - git checkout gh-pages
+      - mkdir -p bench/gitlab || echo "Directory exists"
+      # - rm -f bench/gitlab/output.txt || echo "No output.txt"
+      - cp artifacts/*.txt bench/gitlab/
+      - git add bench/
+      - git commit -m "Add output.txt with benchmark results for v14 and v15"
+      - git push origin gh-pages
+    allow_failure:                   true
+  
+  .publish-bench:
+    stage:                           publish
+    variables:
+      CI_IMAGE:                      "paritytech/tools:latest"
+    <<:                              *kubernetes-env
+    <<:                              *schedule-refs
+    script:
+      - echo $RUNNER_NAME
+      - ./scripts/ci/push_bench_results.sh artifacts/output.txt
+  
+  
