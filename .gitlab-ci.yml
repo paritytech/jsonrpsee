@@ -115,7 +115,7 @@ variables:                         &default-vars
     GIT_STRATEGY:                  none
   script:
     - export FILENAME="output-${TAG}${CI_RUNNER_DESCRIPTION}.txt"
-    - git pull https://github.com/paritytech/jsonrpsee
+    - git clone https://github.com/paritytech/jsonrpsee.git
     - cd jsonrpsee
     - git fetch --all --tags
     - git checkout ${TAG}
