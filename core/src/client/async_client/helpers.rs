@@ -26,6 +26,8 @@
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::{RequestMessage, TransportSenderT};
+use crate::params::ArrayParams;
+use crate::traits::ToRpcParams;
 use crate::Error;
 
 use futures_channel::mpsc;
@@ -36,21 +38,34 @@ use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
 use serde_json::Value as JsonValue;
-use crate::params::ArrayParams;
-use crate::traits::ToRpcParams;
+use std::iter::IntoIterator;
 
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
-pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<JsonValue>>) -> Result<(), Error> {
-	let mut digest = Vec::with_capacity(rps.len());
-	let mut ordered_responses = vec![JsonValue::Null; rps.len()];
-	let mut rps_unordered: Vec<_> = Vec::with_capacity(rps.len());
+pub(crate) fn process_batch_response<'a>(
+	manager: &mut RequestManager,
+	rps: impl IntoIterator<Item = Result<Response<'a, JsonValue>, ErrorResponse<'a>>>,
+	len: usize,
+) -> Result<(), Error> {
+	let mut digest = Vec::with_capacity(len);
+	let mut ordered_responses = vec![Ok(JsonValue::Null); len];
+	let mut rps_unordered: Vec<_> = Vec::with_capacity(len);
 
 	for rp in rps {
-		let id = rp.id.into_owned();
+		let (id, res) = match rp {
+			Ok(rp) => {
+				let id = rp.id.into_owned();
+				(id, Ok(rp.result))
+			}
+			Err(err) => {
+				let id = err.id().clone().into_owned();
+				let err = err.error_object().clone().into_owned();
+				(id, Err(err))
+			}
+		};
 		digest.push(id.clone());
-		rps_unordered.push((id, rp.result));
+		rps_unordered.push((id, res));
 	}
 
 	digest.sort_unstable();

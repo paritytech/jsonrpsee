@@ -32,17 +32,17 @@ use std::sync::Arc;
 use std::task;
 
 use crate::error::Error;
+use crate::params::BatchRequestBuilder;
+use crate::traits::ToRpcParams;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{Id, SubscriptionId};
+use jsonrpsee_types::{BatchResponse, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
-use crate::params::BatchRequestBuilder;
-use crate::traits::ToRpcParams;
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
@@ -78,7 +78,7 @@ pub trait ClientT {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone;
 }
@@ -269,7 +269,7 @@ pub struct BatchMessage {
 	/// Request IDs.
 	pub ids: Vec<Id<'static>>,
 	/// One-shot channel over which we send back the result of this request.
-	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
+	pub send_back: oneshot::Sender<Result<BatchResponse<JsonValue>, Error>>,
 }
 
 /// Request message.

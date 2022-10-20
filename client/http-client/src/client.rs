@@ -36,6 +36,7 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
+use jsonrpsee_types::BatchResponse;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
@@ -230,7 +231,7 @@ impl ClientT for HttpClient {
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -259,21 +260,34 @@ impl ClientT for HttpClient {
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
-		let rps: Vec<Response<&JsonRawValue>> =
-			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
-				Ok(e) => Error::Call(CallError::Custom(e.error_object().clone().into_owned())),
-				Err(e) => Error::ParseError(e),
-			})?;
+		let rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
 		// NOTE: `R::default` is placeholder and will be replaced in loop below.
-		let mut responses = vec![R::default(); ordered_requests.len()];
+		let mut responses: Vec<_> = std::iter::once(Ok(R::default())).cycle().take(rps.len()).collect();
 		for rp in rps {
-			let pos = match request_set.get(&rp.id) {
-				Some(pos) => *pos,
-				None => return Err(Error::InvalidRequestId),
-			};
-			let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
-			responses[pos] = result;
+			match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
+				Ok(r) => {
+					let pos = match request_set.get(&r.id) {
+						Some(pos) => *pos,
+						None => return Err(Error::InvalidRequestId),
+					};
+					responses[pos] = Ok(r.result);
+				}
+				Err(err) => {
+					match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
+						Ok(err) => {
+							let pos = match request_set.get(err.id()) {
+								Some(pos) => *pos,
+								None => return Err(Error::InvalidRequestId),
+							};
+							responses[pos] = Err(err.error_object().clone().into_owned());
+						}
+						Err(_) => {
+							return Err(err);
+						}
+					};
+				}
+			}
 		}
 
 		Ok(responses)
