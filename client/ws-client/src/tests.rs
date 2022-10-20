@@ -31,7 +31,7 @@ use crate::WsClientBuilder;
 use jsonrpsee_core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee_core::client::{IdKind, Subscription};
 use jsonrpsee_core::params::BatchRequestBuilder;
-use jsonrpsee_core::{rpc_params, Error};
+use jsonrpsee_core::{rpc_params, DeserializeOwned, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -269,6 +269,33 @@ async fn batch_request_with_failed_call_works() {
 }
 
 #[tokio::test]
+async fn batch_request_with_untagged_enum_works() {
+	use serde::Deserialize;
+
+	#[derive(Deserialize, Clone, Debug, PartialEq)]
+	#[serde(untagged)]
+	enum Custom {
+		Text(String),
+		Number(u8),
+	}
+
+	impl Default for Custom {
+		fn default() -> Self {
+			Self::Number(0)
+		}
+	}
+
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("text", rpc_params![]).unwrap();
+	batch_request.insert("binary", rpc_params![0_u64, 1, 2]).unwrap();
+	let server_response =
+		r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":13,"id":1}]"#.to_string();
+	let response =
+		run_batch_request_with_response::<Custom>(batch_request, server_response).with_default_timeout().await.unwrap();
+	assert_eq!(response, vec![Ok(Custom::Text("hello".to_string())), Ok(Custom::Number(13))]);
+}
+
+#[tokio::test]
 async fn is_connected_works() {
 	tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -294,7 +321,10 @@ async fn is_connected_works() {
 	assert!(!client.is_connected())
 }
 
-async fn run_batch_request_with_response(batch: BatchRequestBuilder<'_>, response: String) -> BatchResponse<String> {
+async fn run_batch_request_with_response<T: Default + Clone + DeserializeOwned>(
+	batch: BatchRequestBuilder<'_>,
+	response: String,
+) -> BatchResponse<T> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
 		.with_default_timeout()
 		.await

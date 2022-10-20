@@ -29,8 +29,8 @@ use crate::types::error::{ErrorCode, ErrorObject};
 use crate::HttpClientBuilder;
 use jsonrpsee_core::client::{ClientT, IdKind};
 use jsonrpsee_core::params::BatchRequestBuilder;
-use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::Error;
+use jsonrpsee_core::{rpc_params, DeserializeOwned};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -167,6 +167,33 @@ async fn batch_request_with_failed_call_works() {
 }
 
 #[tokio::test]
+async fn batch_request_with_untagged_enum_works() {
+	use serde::Deserialize;
+
+	#[derive(Deserialize, Clone, Debug, PartialEq)]
+	#[serde(untagged)]
+	enum Custom {
+		Text(String),
+		Number(u8),
+	}
+
+	impl Default for Custom {
+		fn default() -> Self {
+			Self::Number(0)
+		}
+	}
+
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("text", rpc_params![]).unwrap();
+	batch_request.insert("binary", rpc_params![0_u64, 1, 2]).unwrap();
+	let server_response =
+		r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":13,"id":1}]"#.to_string();
+	let response =
+		run_batch_request_with_response::<Custom>(batch_request, server_response).with_default_timeout().await.unwrap();
+	assert_eq!(response, vec![Ok(Custom::Text("hello".to_string())), Ok(Custom::Number(13))]);
+}
+
+#[tokio::test]
 async fn batch_request_out_of_order_response() {
 	let mut batch_request = BatchRequestBuilder::new();
 	batch_request.insert("say_hello", rpc_params![]).unwrap();
@@ -178,7 +205,10 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec![Ok("hello".to_string()), Ok("goodbye".to_string()), Ok("here's your swag".to_string())]);
 }
 
-async fn run_batch_request_with_response(batch: BatchRequestBuilder<'_>, response: String) -> BatchResponse<String> {
+async fn run_batch_request_with_response<T: Clone + Default + DeserializeOwned>(
+	batch: BatchRequestBuilder<'_>,
+	response: String,
+) -> BatchResponse<T> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
