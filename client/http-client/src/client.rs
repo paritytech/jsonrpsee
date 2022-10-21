@@ -264,10 +264,9 @@ impl ClientT for HttpClient {
 		// a better error message if `R` couldn't be decoded.
 		let rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
+		// TODO(niklasad1): best I could come up with without having the clone + default bounds.
 		// NOTE: `ErrorObject` is placeholder and will be replaced in the loop below.
 		let mut responses: Vec<_> = Vec::with_capacity(ordered_requests.len());
-
-		// TODO(niklasad1): best I could come up with without having the clone + default bounds.
 		for _ in 0..ordered_requests.len() {
 			responses.push(Err(ErrorObject::borrowed(0, &"", None)));
 		}
