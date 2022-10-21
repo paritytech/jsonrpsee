@@ -71,8 +71,6 @@ type RequestId = Id<'static>;
 #[derive(Debug)]
 /// Batch state.
 pub(crate) struct BatchState {
-	/// Order that the request was performed in.
-	pub(crate) order: FxHashMap<RequestId, usize>,
 	/// Oneshot send back.
 	pub(crate) send_back: PendingBatchOneshot,
 }
@@ -120,16 +118,11 @@ impl RequestManager {
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
 	pub(crate) fn insert_pending_batch(
 		&mut self,
-		mut batch: Vec<RequestId>,
+		batch: Vec<RequestId>,
 		send_back: PendingBatchOneshot,
 	) -> Result<(), PendingBatchOneshot> {
-		let mut order = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
-		for (idx, batch_id) in batch.iter().enumerate() {
-			order.insert(batch_id.clone(), idx);
-		}
-		batch.sort_unstable();
 		if let Entry::Vacant(v) = self.batches.entry(batch) {
-			v.insert(BatchState { order, send_back });
+			v.insert(BatchState { send_back });
 			Ok(())
 		} else {
 			Err(send_back)

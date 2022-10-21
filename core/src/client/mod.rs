@@ -83,7 +83,7 @@ pub trait ClientT {
 	/// Returns `Error` if any of the requests in batch fails.
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponseResult<R>, Error>
 	where
-		R: DeserializeOwned;
+		R: DeserializeOwned + Send;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.

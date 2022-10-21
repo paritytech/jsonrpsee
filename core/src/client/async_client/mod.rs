@@ -341,10 +341,11 @@ impl ClientT for Client {
 	{
 		let batch = batch.build();
 		let guard = self.id_manager.next_request_ids(batch.len())?;
-		let batch_ids: Vec<Id> = guard.inner();
+		let batch_ids = guard.inner();
+
 		let mut batches = Vec::with_capacity(batch.len());
-		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(RequestSer::new(&batch_ids[idx], method, params));
+		for (id, (method, params)) in batch.into_iter().enumerate() {
+			batches.push(RequestSer::new(&batch_ids[id], method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -532,9 +533,8 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 			Some(b'[') => {
 				// Batch response.
 				if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(raw) {
-					let batch_len = batch.len();
 					let batch = batch.into_iter().map(Ok);
-					process_batch_response(manager, batch, batch_len)?;
+					process_batch_response(manager, batch)?;
 				} else if let Ok(raw_responses) = serde_json::from_slice::<Vec<&JsonRawValue>>(raw) {
 					let mut batch = Vec::new();
 
@@ -548,9 +548,7 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 						}
 					}
 
-					let batch_len = batch.len();
-
-					process_batch_response(manager, batch, batch_len)?;
+					process_batch_response(manager, batch)?;
 				} else {
 					return Err(unparse_error(raw));
 				}

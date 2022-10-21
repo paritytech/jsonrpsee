@@ -320,7 +320,7 @@ async fn is_connected_works() {
 	assert!(!client.is_connected())
 }
 
-async fn run_batch_request_with_response<T: Default + Clone + DeserializeOwned>(
+async fn run_batch_request_with_response<T: Send + DeserializeOwned>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> BatchResponseResult<T> {

@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,7 +40,6 @@ use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::ErrorObject;
-use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 
@@ -235,21 +235,19 @@ impl ClientT for HttpClient {
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponseResult<R>, Error>
 	where
-		R: DeserializeOwned,
+		R: DeserializeOwned + Send,
 	{
 		let batch = batch.build();
 		let guard = self.id_manager.next_request_ids(batch.len())?;
 		let ids: Vec<Id> = guard.inner();
+		let mut responses = BTreeMap::new();
 
 		let mut batch_request = Vec::with_capacity(batch.len());
-		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
-		let mut ordered_requests = Vec::with_capacity(batch.len());
-		let mut request_set = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
-		for (pos, (method, params)) in batch.into_iter().enumerate() {
-			batch_request.push(RequestSer::new(&ids[pos], method, params));
-			ordered_requests.push(&ids[pos]);
-			request_set.insert(&ids[pos], pos);
+		for (id, (method, params)) in batch.into_iter().enumerate() {
+			let id = &ids[id];
+			batch_request.push(RequestSer::new(id, method, params));
+			responses.insert(id.clone(), Err(ErrorObject::borrowed(0, &"", None)));
 		}
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
@@ -264,40 +262,27 @@ impl ClientT for HttpClient {
 		// a better error message if `R` couldn't be decoded.
 		let rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
-		// TODO(niklasad1): best I could come up with without having the clone + default bounds.
-		// NOTE: `ErrorObject` is placeholder and will be replaced in the loop below.
-		let mut responses: Vec<_> = Vec::with_capacity(ordered_requests.len());
-		for _ in 0..ordered_requests.len() {
-			responses.push(Err(ErrorObject::borrowed(0, &"", None)));
-		}
-
 		for rp in rps {
-			match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
-				Ok(r) => {
-					let pos = match request_set.get(&r.id) {
-						Some(pos) => *pos,
-						None => return Err(Error::InvalidRequestId),
-					};
-					responses[pos] = Ok(r.result);
-				}
-				Err(err) => {
-					match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
-						Ok(err) => {
-							let pos = match request_set.get(err.id()) {
-								Some(pos) => *pos,
-								None => return Err(Error::InvalidRequestId),
-							};
-							responses[pos] = Err(err.error_object().clone().into_owned());
-						}
-						Err(_) => {
-							return Err(err);
-						}
-					};
-				}
+			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
+				Ok(r) => (r.id.into_owned(), Ok(r.result)),
+				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
+					Ok(err) => {
+						let id = err.id().clone().into_owned();
+						let err = err.error_object().clone().into_owned();
+						(id, Err(err))
+					}
+					Err(_) => {
+						return Err(err);
+					}
+				},
+			};
+
+			if responses.insert(id, res).is_none() {
+				return Err(Error::InvalidRequestId);
 			}
 		}
 
-		Ok(responses)
+		Ok(responses.into_values().collect())
 	}
 }
 

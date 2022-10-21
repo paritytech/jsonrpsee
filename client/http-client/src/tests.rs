@@ -204,7 +204,7 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec![Ok("hello".to_string()), Ok("goodbye".to_string()), Ok("here's your swag".to_string())]);
 }
 
-async fn run_batch_request_with_response<T: Clone + Default + DeserializeOwned>(
+async fn run_batch_request_with_response<T: Send + DeserializeOwned>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> BatchResponseResult<T> {

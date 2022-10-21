@@ -38,6 +38,7 @@ use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
 use serde_json::Value as JsonValue;
+use std::collections::BTreeMap;
 use std::iter::IntoIterator;
 
 /// Attempts to process a batch response.
@@ -46,11 +47,8 @@ use std::iter::IntoIterator;
 pub(crate) fn process_batch_response<'a>(
 	manager: &mut RequestManager,
 	rps: impl IntoIterator<Item = Result<Response<'a, JsonValue>, ErrorResponse<'a>>>,
-	len: usize,
 ) -> Result<(), Error> {
-	let mut digest = Vec::with_capacity(len);
-	let mut ordered_responses = vec![Ok(JsonValue::Null); len];
-	let mut rps_unordered: Vec<_> = Vec::with_capacity(len);
+	let mut responses = BTreeMap::new();
 
 	for rp in rps {
 		let (id, res) = match rp {
@@ -64,11 +62,18 @@ pub(crate) fn process_batch_response<'a>(
 				(id, Err(err))
 			}
 		};
-		digest.push(id.clone());
-		rps_unordered.push((id, res));
+
+		responses.insert(id, res);
 	}
 
-	digest.sort_unstable();
+	let mut ordered_responses = Vec::with_capacity(responses.len());
+	let mut digest = Vec::with_capacity(responses.len());
+
+	for (id, response) in responses {
+		ordered_responses.push(response);
+		digest.push(id);
+	}
+
 	let batch_state = match manager.complete_pending_batch(digest) {
 		Some(state) => state,
 		None => {
@@ -77,11 +82,6 @@ pub(crate) fn process_batch_response<'a>(
 		}
 	};
 
-	for (id, rp) in rps_unordered {
-		let pos =
-			batch_state.order.get(&id).copied().expect("All request IDs valid checked by RequestManager above; qed");
-		ordered_responses[pos] = rp;
-	}
 	let _ = batch_state.send_back.send(Ok(ordered_responses));
 	Ok(())
 }
