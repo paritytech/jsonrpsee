@@ -42,7 +42,7 @@ jobs:
       - name: Copy bench results
         id: step_one
         run: |
-          cp bench/release/output-v0.15.1-benchbenchmark.txt output.txt
+          cp bench/release/output-v0.15.1-ci5-1.txt output.txt
       - name: Switch branch
         id: step_two
         run: |
