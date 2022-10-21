@@ -38,7 +38,7 @@ use helpers::{
 	server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
-use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{BatchResponseResult, ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::{Error, JsonValue};
@@ -671,7 +671,7 @@ async fn ws_batch_works() {
 	batch.insert("say_hello", rpc_params![]).unwrap();
 	batch.insert("slow_hello", rpc_params![]).unwrap();
 
-	let responses: jsonrpsee::types::BatchResponse<String> = client.batch_request(batch).await.unwrap();
+	let responses: BatchResponseResult<String> = client.batch_request(batch).await.unwrap();
 	assert_eq!(responses, vec![Ok("hello".to_string()), Ok("hello".to_string())]);
 }
 

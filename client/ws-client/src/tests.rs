@@ -28,7 +28,7 @@
 use crate::types::error::{ErrorCode, ErrorObject};
 
 use crate::WsClientBuilder;
-use jsonrpsee_core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee_core::client::{BatchResponseResult, ClientT, SubscriptionClientT};
 use jsonrpsee_core::client::{IdKind, Subscription};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::{rpc_params, DeserializeOwned, Error};
@@ -36,7 +36,6 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
-use jsonrpsee_types::BatchResponse;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]
@@ -324,7 +323,7 @@ async fn is_connected_works() {
 async fn run_batch_request_with_response<T: Default + Clone + DeserializeOwned>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
-) -> BatchResponse<T> {
+) -> BatchResponseResult<T> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
 		.with_default_timeout()
 		.await

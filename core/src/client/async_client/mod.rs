@@ -4,8 +4,8 @@ mod helpers;
 mod manager;
 
 use crate::client::{
-	async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, ReceivedMessage,
-	RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind,
+	async_client::helpers::process_subscription_close_response, BatchMessage, BatchResponseResult, ClientT,
+	ReceivedMessage, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind,
 	SubscriptionMessage, TransportReceiverT, TransportSenderT,
 };
 use crate::error::Error;
@@ -19,7 +19,6 @@ use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
-use jsonrpsee_types::BatchResponse;
 use manager::RequestManager;
 
 use async_lock::Mutex;
@@ -336,7 +335,7 @@ impl ClientT for Client {
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponseResult<R>, Error>
 	where
 		R: DeserializeOwned,
 	{
@@ -525,9 +524,7 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 				}
 				// Error response
 				else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(raw) {
-					if let Err(e) = process_error_response(manager, err) {
-						return Err(e);
-					}
+					process_error_response(manager, err)?;
 				} else {
 					return Err(unparse_error(raw));
 				}
@@ -537,9 +534,7 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 				if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(raw) {
 					let batch_len = batch.len();
 					let batch = batch.into_iter().map(Ok);
-					if let Err(e) = process_batch_response(manager, batch, batch_len) {
-						return Err(e);
-					}
+					process_batch_response(manager, batch, batch_len)?;
 				} else if let Ok(raw_responses) = serde_json::from_slice::<Vec<&JsonRawValue>>(raw) {
 					let mut batch = Vec::new();
 
@@ -555,9 +550,7 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 
 					let batch_len = batch.len();
 
-					if let Err(e) = process_batch_response(manager, batch, batch_len) {
-						return Err(e);
-					}
+					process_batch_response(manager, batch, batch_len)?;
 				} else {
 					return Err(unparse_error(raw));
 				}

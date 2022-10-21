@@ -49,6 +49,3 @@ pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
 
 /// Empty server `RpcParams` type to use while registering modules.
 pub type EmptyServerParams = Vec<()>;
-
-/// Batch response type alias.
-pub type BatchResponse<R> = Vec<Result<R, ErrorObject<'static>>>;

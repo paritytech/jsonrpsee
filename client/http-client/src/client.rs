@@ -31,12 +31,14 @@ use crate::transport::HttpTransportClient;
 use crate::types::{ErrorResponse, Id, NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::http::HeaderMap;
-use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
+use jsonrpsee_core::client::{
+	BatchResponseResult, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
+};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::{BatchResponse, ErrorObject};
+use jsonrpsee_types::ErrorObject;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tracing::instrument;
@@ -231,7 +233,7 @@ impl ClientT for HttpClient {
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponseResult<R>, Error>
 	where
 		R: DeserializeOwned,
 	{

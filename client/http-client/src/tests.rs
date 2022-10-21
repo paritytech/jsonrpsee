@@ -27,7 +27,7 @@
 use crate::types::error::{ErrorCode, ErrorObject};
 
 use crate::HttpClientBuilder;
-use jsonrpsee_core::client::{ClientT, IdKind};
+use jsonrpsee_core::client::{BatchResponseResult, ClientT, IdKind};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::Error;
 use jsonrpsee_core::{rpc_params, DeserializeOwned};
@@ -35,7 +35,6 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
-use jsonrpsee_types::BatchResponse;
 
 #[tokio::test]
 async fn method_call_works() {
@@ -208,7 +207,7 @@ async fn batch_request_out_of_order_response() {
 async fn run_batch_request_with_response<T: Clone + Default + DeserializeOwned>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
-) -> BatchResponse<T> {
+) -> BatchResponseResult<T> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
