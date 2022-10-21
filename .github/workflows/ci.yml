@@ -10,7 +10,7 @@ on:
       - 'README.md'
   pull_request:
     branches:
-      - master
+      - v*
 
 env:
   CARGO_TERM_COLOR: always
@@ -18,42 +18,16 @@ env:
   SUBSTRATE_URL: https://releases.parity.io/substrate/x86_64-debian:stretch/latest/substrate/substrate
 
 jobs:
-  check-style:
-    name: Check style
+  bench:
+    name: Benchmarks gitlab
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v3.0.2
-
-      - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1.0.7
+      - name: Checkout Sources
+        uses: actions/checkout@v3.1.0
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: clippy, rustfmt
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v1.4.0
-
-      - name: Cargo fmt
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: fmt
-          args: --all -- --check
-
-      - name: Cargo clippy
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: clippy
-          args: --all-targets
-
-  check-docs:
-    name: Check rustdoc
-    runs-on: ubuntu-latest
-    steps:
-
-      - uses: actions/checkout@v3.0.2
+          fetch-depth: 0
+          ref: "gh-pages"
 
       - name: Install Rust nightly toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -62,124 +36,25 @@ jobs:
           toolchain: nightly
           override: true
 
-      - name: Check rustdoc
-        run: RUSTDOCFLAGS="--cfg docsrs --deny rustdoc::broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items --all-features
-
-  check-code:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-
-      - uses: actions/checkout@v3.0.2
-
-      - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1.0.7
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Install cargo-hack
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-hack
-          version: 0.5
-
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v1.4.0
+        uses: Swatinem/rust-cache@v2.0.1
 
-      - name: Cargo check all targets and features
-        run: cargo hack check --workspace --each-feature --all-targets
-
-  tests_ubuntu:
-    name: Run tests Ubuntu
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v3.0.2
-
-      - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1.0.7
+      - name: Copy bench results
+        id: step_one
+        run: |
+          cp bench/release/output-v0.15.1-benchbenchmark.txt output.txt
+      - name: Switch branch
+        id: step_two
+        run: |
+          git checkout v0.15.1-bench
+      - name: Store benchmark result
+        uses: rhysd/github-action-benchmark@v1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v1.4.0
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
-          args: --workspace
-
-  tests_macos:
-    name: Run tests macos
-    runs-on: macos-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v3.0.2
-
-      - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1.0.7
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v1.4.0
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
-          args: --workspace
-
-  tests_windows:
-    name: Run tests Windows
-    runs-on: windows-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v3.0.2
-
-      - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1.0.7
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v1.4.0
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
-          args: --workspace
-
-  wasm_tests:
-    name: Test wasm
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3.0.2
-
-    - name: Install
-      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-    - name: Download Substrate
-      run: |
-        curl $SUBSTRATE_URL --output substrate --location
-        chmod +x substrate
-        mkdir -p ~/.local/bin
-        mv substrate ~/.local/bin
-    - name: Run WASM tests
-      run: |
-        substrate --dev --tmp > /dev/null 2>&1 &
-        wasm-pack test --headless --firefox
-        wasm-pack test --headless --chrome
-        pkill substrate
-      working-directory: wasm-tests
+          tool: "cargo"
+          output-file-path: "output.txt"
+          benchmark-data-dir-path: "bench/release"
+          fail-on-alert: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-alert: true
+          alert-comment-cc-users: '@niklasad1'
+          auto-push: true
