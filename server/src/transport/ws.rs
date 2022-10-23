@@ -9,7 +9,7 @@ use crate::server::{MethodResult, ServiceData};
 use futures_channel::mpsc;
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::{Future, FutureExt, StreamExt, TryStreamExt};
+use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
@@ -18,12 +18,12 @@ use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::Error;
+use jsonrpsee_core::{Error, JsonRawValue};
 use jsonrpsee_types::error::{
 	reject_too_big_request, reject_too_many_subscriptions, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
 	BATCHES_NOT_SUPPORTED_MSG,
 };
-use jsonrpsee_types::{ErrorObject, Id, Params, Request};
+use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 use tokio_stream::wrappers::IntervalStream;
@@ -106,37 +106,44 @@ where
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
 #[instrument(name = "batch", skip(b), level = "TRACE")]
-pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> BatchResponse {
+pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<BatchResponse> {
 	let Batch { data, call } = b;
 
-	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
-		return if !batch.is_empty() {
-			let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
-			let batch_stream = futures_util::stream::iter(batch);
+	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
+		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
+		let mut got_notif = false;
 
-			let max_response_size = call.max_response_body_size;
-
-			let batch_response = batch_stream
-				.try_fold(
-					BatchResponseBuilder::new_with_limit(max_response_size as usize),
-					|batch_response, (req, call)| async move {
-						let response = execute_call(req, call).await;
-						batch_response.append(response.as_inner())
-					},
-				)
-				.await;
-
-			match batch_response {
-				Ok(batch) => batch.finish(),
-				Err(batch_err) => batch_err,
+		for val in batch {
+			if let Ok(req) = serde_json::from_str::<Request>(val.get()) {
+				let response = execute_call(req, call.clone()).await;
+				if let Err(batch_err) = batch_response.append(response.as_inner()) {
+					return Some(batch_err);
+				}
+			} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(val.get()) {
+				// notifications should not be answered.
+				got_notif = true;
+			} else {
+				// valid JSON but could be not parsable as `InvalidRequest`
+				let id = match serde_json::from_str::<InvalidRequest>(val.get()) {
+					Ok(err) => err.id,
+					Err(_) => Id::Null,
+				};
+				if let Err(batch_err) =
+					batch_response.append(&MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)))
+				{
+					return Some(batch_err);
+				}
 			}
-		} else {
-			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
-		};
-	}
+		}
 
-	let (id, code) = prepare_error(&data);
-	BatchResponse::error(id, ErrorObject::from(code))
+		if got_notif && batch_response.is_empty() {
+			None
+		} else {
+			Some(batch_response.finish())
+		}
+	} else {
+		Some(BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError)))
+	}
 }
 
 pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
@@ -416,9 +423,11 @@ pub(crate) async fn background_task<L: Logger>(
 					})
 					.await;
 
-					tx_log_from_str(&response.result, max_log_length);
-					logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-					let _ = sink.send_raw(response.result);
+					if let Some(response) = response {
+						tx_log_from_str(&response.result, max_log_length);
+						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
+						let _ = sink.send_raw(response.result);
+					}
 				};
 
 				method_executors.add(Box::pin(fut));

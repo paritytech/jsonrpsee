@@ -100,7 +100,7 @@ pub fn invalid_request(id: Id) -> String {
 pub fn invalid_batch(ids: Vec<Id>) -> String {
 	use std::fmt::Write;
 	let mut result = String::new();
-	result.push_str("[");
+	result.push('[');
 	for (i, id) in ids.iter().enumerate() {
 		write!(
 			result,
@@ -110,7 +110,7 @@ pub fn invalid_batch(ids: Vec<Id>) -> String {
 		)
 		.unwrap();
 	}
-	result.push_str("]");
+	result.push(']');
 	result
 }
 
