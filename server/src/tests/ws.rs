@@ -490,8 +490,7 @@ async fn can_register_modules() {
 
 	assert_eq!(mod1.method_names().count(), 2);
 	let err = mod1.merge(mod2).unwrap_err();
-	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
-	assert!(matches!(err, _expected_err));
+	assert!(matches!(err, Error::MethodAlreadyRegistered(err) if err == "bla"));
 	assert_eq!(mod1.method_names().count(), 2);
 }
 
@@ -548,7 +547,14 @@ async fn custom_subscription_id_works() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
+			// There is no subscription ID prior to calling accept.
+			let sub_id = sink.subscription_id();
+			assert!(sub_id.is_none());
+
 			sink.accept()?;
+
+			let sub_id = sink.subscription_id();
+			assert!(matches!(sub_id, Some(SubscriptionId::Str(id)) if id == "0xdeadbeef"));
 
 			tokio::spawn(async move {
 				loop {

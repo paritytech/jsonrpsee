@@ -2,7 +2,7 @@ name: Benchmarks gitlab
 
 on:
   schedule:
-    - cron: "0 18 * * *"
+    - cron: "0 5 * * *"
 
 jobs:
   bench:
@@ -11,7 +11,10 @@ jobs:
     steps:
 
       - name: Checkout Sources
-        uses: actions/checkout@v3.0.2
+        uses: actions/checkout@v3.1.0
+        with:
+          fetch-depth: 0
+          ref: "gh-pages"
 
       - name: Install Rust nightly toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -20,20 +23,27 @@ jobs:
           toolchain: nightly
           override: true
 
-      - name: Set bench file
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.0.1
+
+      - name: Copy bench results
         id: step_one
         run: |
-          echo "bench_file=bench/$(date "+%d-%m-%Y")/output.txt" >> $GITHUB_ENV
+          cp bench/gitlab/output.txt output.txt
+
+      - name: Switch branch
+        id: step_two
+        run: |
+          git checkout master
 
       - name: Store benchmark result
         uses: rhysd/github-action-benchmark@v1
         with:
-          tool: 'cargo'
-          output-file-path: "${{ env.bench_file }}"
+          tool: "cargo"
+          output-file-path: "output.txt"
           benchmark-data-dir-path: "bench/dev2"
           fail-on-alert: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-alert: true
           alert-comment-cc-users: '@niklasad1'
           auto-push: true
-

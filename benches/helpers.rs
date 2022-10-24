@@ -1,9 +1,5 @@
 use std::time::Duration;
 
-use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
-use jsonrpsee::http_client::{HeaderMap, HttpClient, HttpClientBuilder};
-use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-
 pub(crate) const SYNC_FAST_CALL: &str = "fast_call";
 pub(crate) const ASYNC_FAST_CALL: &str = "fast_call_async";
 pub(crate) const SYNC_MEM_CALL: &str = "memory_intense";
@@ -190,25 +186,40 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module
 }
 
-pub(crate) fn http_client(url: &str, headers: HeaderMap) -> HttpClient {
-	HttpClientBuilder::default()
-		.max_request_body_size(u32::MAX)
-		.max_concurrent_requests(1024 * 1024)
-		.set_headers(headers)
-		.build(url)
-		.unwrap()
-}
+pub mod fixed_client {
+	use jsonrpsee_v0_15::client_transport::ws::{Uri, WsTransportClientBuilder};
+	use jsonrpsee_v0_15::http_client::{HttpClient, HttpClientBuilder};
+	use jsonrpsee_v0_15::ws_client::{WsClient, WsClientBuilder};
 
-pub(crate) async fn ws_client(url: &str) -> WsClient {
-	WsClientBuilder::default()
-		.max_request_body_size(u32::MAX)
-		.max_concurrent_requests(1024 * 1024)
-		.build(url)
-		.await
-		.unwrap()
-}
+	pub use jsonrpsee_v0_15::core::client::{ClientT, SubscriptionClientT};
+	pub use jsonrpsee_v0_15::http_client::HeaderMap;
+	pub use jsonrpsee_v0_15::rpc_params;
 
-pub(crate) async fn ws_handshake(url: &str, headers: HeaderMap) {
-	let uri: Uri = url.parse().unwrap();
-	WsTransportClientBuilder::default().max_request_body_size(u32::MAX).set_headers(headers).build(uri).await.unwrap();
+	pub(crate) fn http_client(url: &str, headers: HeaderMap) -> HttpClient {
+		HttpClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.max_concurrent_requests(1024 * 1024)
+			.set_headers(headers)
+			.build(url)
+			.unwrap()
+	}
+
+	pub(crate) async fn ws_client(url: &str) -> WsClient {
+		WsClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.max_concurrent_requests(1024 * 1024)
+			.build(url)
+			.await
+			.unwrap()
+	}
+
+	pub(crate) async fn ws_handshake(url: &str, headers: HeaderMap) {
+		let uri: Uri = url.parse().unwrap();
+		WsTransportClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.set_headers(headers)
+			.build(uri)
+			.await
+			.unwrap();
+	}
 }
