@@ -9,6 +9,7 @@ use crate::server::{MethodResult, ServiceData};
 use futures_channel::mpsc;
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
+use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
@@ -110,15 +111,16 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 	let Batch { data, call } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
-		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 		let mut got_notif = false;
+		let mut pending_calls = FuturesOrdered::new();
+		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 
 		for val in batch {
 			if let Ok(req) = serde_json::from_str::<Request>(val.get()) {
-				let response = execute_call(req, call.clone()).await;
-				if let Err(batch_err) = batch_response.append(response.as_inner()) {
-					return Some(batch_err);
-				}
+				let call = call.clone();
+				let fut = async move { execute_call(req, call.clone()).await.into_inner() };
+
+				pending_calls.push_back(fut.boxed());
 			} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(val.get()) {
 				// notifications should not be answered.
 				got_notif = true;
@@ -128,11 +130,16 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 					Ok(err) => err.id,
 					Err(_) => Id::Null,
 				};
-				if let Err(batch_err) =
-					batch_response.append(&MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)))
-				{
-					return Some(batch_err);
-				}
+
+				pending_calls.push_back(
+					async { MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)) }.boxed(),
+				);
+			}
+		}
+
+		while let Some(response) = pending_calls.next().await {
+			if let Err(too_large) = batch_response.append(&response) {
+				return Some(too_large);
 			}
 		}
 

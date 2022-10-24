@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use crate::logger::{self, Logger, TransportProtocol};
 
+use futures_util::future::FutureExt;
+use futures_util::stream::{FuturesOrdered, StreamExt};
 use http::Method;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers::read_body;
@@ -157,15 +159,13 @@ where
 	let Batch { data, call } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
-		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 		let mut got_notif = false;
+		let mut pending_calls = FuturesOrdered::new();
+		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 
 		for val in batch {
 			if let Ok(req) = serde_json::from_str::<Request>(val.get()) {
-				let response = execute_call(req, call.clone()).await;
-				if let Err(e) = batch_response.append(&response) {
-					return e;
-				}
+				pending_calls.push_back(execute_call(req, call.clone()).boxed());
 			} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(val.get()) {
 				// notifications should not be answered.
 				got_notif = true;
@@ -175,11 +175,16 @@ where
 					Ok(err) => err.id,
 					Err(_) => Id::Null,
 				};
-				if let Err(err) =
-					batch_response.append(&MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)))
-				{
-					return err;
-				}
+
+				pending_calls.push_back(
+					async { MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)) }.boxed(),
+				);
+			}
+		}
+
+		while let Some(response) = pending_calls.next().await {
+			if let Err(too_large) = batch_response.append(&response) {
+				return too_large;
 			}
 		}
 
