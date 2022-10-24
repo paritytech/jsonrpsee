@@ -112,30 +112,30 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
 		let mut got_notif = false;
-		let mut pending_calls = FuturesOrdered::new();
 		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 
-		for val in batch {
-			if let Ok(req) = serde_json::from_str::<Request>(val.get()) {
-				let call = call.clone();
-				let fut = async move { execute_call(req, call.clone()).await.into_inner() };
+		let mut pending_calls: FuturesOrdered<_> = batch
+			.into_iter()
+			.filter_map(|v| {
+				if let Ok(req) = serde_json::from_str::<Request>(v.get()) {
+					Some(Either::Right(async { execute_call(req, call.clone()).await.into_inner() }))
+				} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(v.get()) {
+					// notifications should not be answered.
+					got_notif = true;
+					None
+				} else {
+					// valid JSON but could be not parsable as `InvalidRequest`
+					let id = match serde_json::from_str::<InvalidRequest>(v.get()) {
+						Ok(err) => err.id,
+						Err(_) => Id::Null,
+					};
 
-				pending_calls.push_back(fut.boxed());
-			} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(val.get()) {
-				// notifications should not be answered.
-				got_notif = true;
-			} else {
-				// valid JSON but could be not parsable as `InvalidRequest`
-				let id = match serde_json::from_str::<InvalidRequest>(val.get()) {
-					Ok(err) => err.id,
-					Err(_) => Id::Null,
-				};
-
-				pending_calls.push_back(
-					async { MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)) }.boxed(),
-				);
-			}
-		}
+					Some(Either::Left(async {
+						MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest))
+					}))
+				}
+			})
+			.collect();
 
 		while let Some(response) = pending_calls.next().await {
 			if let Err(too_large) = batch_response.append(&response) {
