@@ -19,6 +19,7 @@ use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
+use jsonrpsee_types::error::CallError;
 use manager::RequestManager;
 
 use async_lock::Mutex;
@@ -334,8 +335,64 @@ impl ClientT for Client {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
+	where
+		R: DeserializeOwned + Send,
+	{
+		let batch = batch.build();
+		let guard = self.id_manager.next_request_ids(batch.len())?;
+		let batch_ids = guard.inner();
+
+		let mut batches = Vec::with_capacity(batch.len());
+		for (id, (method, params)) in batch.into_iter().enumerate() {
+			batches.push(RequestSer::new(&batch_ids[id], method, params));
+		}
+
+		let (send_back_tx, send_back_rx) = oneshot::channel();
+
+		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
+
+		tx_log_from_str(&raw, self.max_log_length);
+
+		if self
+			.to_back
+			.clone()
+			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
+			.await
+			.is_err()
+		{
+			return Err(self.read_error_from_backend().await);
+		}
+
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+		let json_values = match res {
+			Ok(Ok(v)) => v,
+			Ok(Err(err)) => return Err(err),
+			Err(_) => return Err(self.read_error_from_backend().await),
+		};
+
+		rx_log_from_json(&json_values, self.max_log_length);
+
+		let mut values = Vec::with_capacity(json_values.len());
+		for json_val in json_values {
+			match json_val {
+				Ok(val) => {
+					let val = serde_json::from_value(val).map_err(Error::ParseError)?;
+					values.push(val);
+				}
+				Err(err) => {
+					return Err(Error::Call(CallError::Custom(err)));
+				}
+			}
+		}
+		Ok(values)
+	}
+
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponseResult<R>, Error>
+	async fn batch_request_success_or_error<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> Result<BatchResponseResult<R>, Error>
 	where
 		R: DeserializeOwned,
 	{

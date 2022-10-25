@@ -30,7 +30,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
-use jsonrpsee::core::error::SubscriptionClosed;
+use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -199,6 +199,8 @@ pub async fn server() -> SocketAddr {
 			Ok("hello")
 		})
 		.unwrap();
+
+	module.register_async_method("err", |_, _| async { Err::<(), _>(Error::Custom("err".to_string())) }).unwrap();
 
 	let addr = server.local_addr().unwrap();
 

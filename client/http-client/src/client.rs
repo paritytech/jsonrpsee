@@ -233,7 +233,70 @@ impl ClientT for HttpClient {
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponseResult<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
+	where
+		R: DeserializeOwned + Send,
+	{
+		let batch = batch.build();
+		let guard = self.id_manager.next_request_ids(batch.len())?;
+		let ids: Vec<Id> = guard.inner();
+		let mut responses = BTreeMap::new();
+
+		let mut batch_request = Vec::with_capacity(batch.len());
+
+		for (id, (method, params)) in batch.into_iter().enumerate() {
+			let id = &ids[id];
+			batch_request.push(RequestSer::new(id, method, params));
+			responses.insert(id.clone(), None);
+		}
+
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+
+		let body = match tokio::time::timeout(self.request_timeout, fut).await {
+			Ok(Ok(body)) => body,
+			Err(_e) => return Err(Error::RequestTimeout),
+			Ok(Err(e)) => return Err(Error::Transport(e.into())),
+		};
+
+		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
+		// a better error message if `R` couldn't be decoded.
+		let rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+
+		for rp in rps {
+			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
+				Ok(r) => (r.id.into_owned(), r.result),
+				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
+					Ok(err) => {
+						let err = err.error_object().clone().into_owned();
+						return Err(Error::Call(CallError::Custom(err)));
+					}
+					Err(_) => {
+						return Err(err);
+					}
+				},
+			};
+
+			if responses.insert(id, Some(res)).is_none() {
+				return Err(Error::InvalidRequestId);
+			}
+		}
+
+		let mut res = Vec::with_capacity(responses.len());
+		for response in responses.into_values() {
+			match response {
+				Some(r) => res.push(r),
+				None => return Err(Error::InvalidRequestId),
+			}
+		}
+
+		Ok(res)
+	}
+
+	#[instrument(name = "batch", skip(self, batch), level = "trace")]
+	async fn batch_request_success_or_error<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> Result<BatchResponseResult<R>, Error>
 	where
 		R: DeserializeOwned + Send,
 	{

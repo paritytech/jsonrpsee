@@ -44,7 +44,7 @@ use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::types::error::ErrorObject;
+use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -671,8 +671,44 @@ async fn ws_batch_works() {
 	batch.insert("say_hello", rpc_params![]).unwrap();
 	batch.insert("slow_hello", rpc_params![]).unwrap();
 
-	let responses: BatchResponseResult<String> = client.batch_request(batch).await.unwrap();
-	assert_eq!(responses, vec![Ok("hello".to_string()), Ok("hello".to_string())]);
+	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
+	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
+
+	let mut batch = BatchRequestBuilder::new();
+	batch.insert("say_hello", rpc_params![]).unwrap();
+	batch.insert("err", rpc_params![]).unwrap();
+
+	let responses: BatchResponseResult<String> = client.batch_request_success_or_error(batch).await.unwrap();
+	assert_eq!(
+		responses,
+		vec![Ok("hello".to_string()), Err(ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None))]
+	);
+}
+
+#[tokio::test]
+async fn http_batch_works() {
+	init_logger();
+
+	let server_addr = server().await;
+	let server_url = format!("http://{}", server_addr);
+	let client = HttpClientBuilder::default().build(&server_url).unwrap();
+
+	let mut batch = BatchRequestBuilder::new();
+	batch.insert("say_hello", rpc_params![]).unwrap();
+	batch.insert("slow_hello", rpc_params![]).unwrap();
+
+	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
+	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
+
+	let mut batch = BatchRequestBuilder::new();
+	batch.insert("say_hello", rpc_params![]).unwrap();
+	batch.insert("err", rpc_params![]).unwrap();
+
+	let responses: BatchResponseResult<String> = client.batch_request_success_or_error(batch).await.unwrap();
+	assert_eq!(
+		responses,
+		vec![Ok("hello".to_string()), Err(ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None))]
+	);
 }
 
 #[tokio::test]
