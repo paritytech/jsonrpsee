@@ -36,45 +36,25 @@ use futures_util::future::{self, Either};
 
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
-use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
+use jsonrpsee_types::{
+	ErrorObject, ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse,
+};
 use serde_json::Value as JsonValue;
-use std::collections::BTreeMap;
-use std::iter::IntoIterator;
+use std::ops::Range;
 
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
 pub(crate) fn process_batch_response<'a>(
 	manager: &mut RequestManager,
-	rps: impl IntoIterator<Item = Result<Response<'a, JsonValue>, ErrorResponse<'a>>>,
+	rps: Vec<Result<(JsonValue, u64), (ErrorResponse<'a>, u64)>>,
+	range: Range<u64>,
 ) -> Result<(), Error> {
-	let mut responses = BTreeMap::new();
+	let mut responses = Vec::with_capacity(rps.len());
 
-	for rp in rps {
-		let (id, res) = match rp {
-			Ok(rp) => {
-				let id = rp.id.into_owned();
-				(id, Ok(rp.result))
-			}
-			Err(err) => {
-				let id = err.id().clone().into_owned();
-				let err = err.error_object().clone().into_owned();
-				(id, Err(err))
-			}
-		};
+	let start_idx = range.start;
 
-		responses.insert(id, res);
-	}
-
-	let mut ordered_responses = Vec::with_capacity(responses.len());
-	let mut digest = Vec::with_capacity(responses.len());
-
-	for (id, response) in responses {
-		ordered_responses.push(response);
-		digest.push(id);
-	}
-
-	let batch_state = match manager.complete_pending_batch(digest) {
+	let batch_state = match manager.complete_pending_batch(range.clone()) {
 		Some(state) => state,
 		None => {
 			tracing::warn!("Received unknown batch response");
@@ -82,7 +62,25 @@ pub(crate) fn process_batch_response<'a>(
 		}
 	};
 
-	let _ = batch_state.send_back.send(Ok(ordered_responses));
+	for _ in range {
+		responses.push(Err(ErrorObject::borrowed(0, &"", None)));
+	}
+
+	for rp in rps {
+		match rp {
+			Ok((rp, id)) => {
+				let pos = id - start_idx;
+				responses[pos as usize] = Ok(rp);
+			}
+			Err((err, id)) => {
+				let err = err.error_object().clone().into_owned();
+				let pos = id - start_idx;
+				responses[pos as usize] = Err(err);
+			}
+		};
+	}
+
+	let _ = batch_state.send_back.send(Ok(responses));
 	Ok(())
 }
 
@@ -242,7 +240,7 @@ pub(crate) fn build_unsubscribe_message(
 	params.insert(sub_id).ok()?;
 	let params = params.to_rpc_params().ok()?;
 
-	let raw = serde_json::to_string(&RequestSer::new(&unsub_req_id, &unsub, params)).ok()?;
+	let raw = serde_json::to_string(&RequestSer::owned(unsub_req_id.clone(), unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 

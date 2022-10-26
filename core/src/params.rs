@@ -240,7 +240,11 @@ impl<'a> BatchRequestBuilder<'a> {
 	}
 
 	/// Finish the building process and return a valid batch parameter.
-	pub fn build(self) -> Vec<(&'a str, Option<Box<RawValue>>)> {
-		self.0
+	pub fn build(self) -> Result<Vec<(&'a str, Option<Box<RawValue>>)>, Error> {
+		if self.0.is_empty() {
+			Err(Error::EmptyBatchRequest)
+		} else {
+			Ok(self.0)
+		}
 	}
 }

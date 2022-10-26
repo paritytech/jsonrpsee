@@ -26,6 +26,7 @@
 
 //! Shared utilities for `jsonrpsee` clients.
 
+use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -85,7 +86,7 @@ pub trait ClientT {
 	/// Returns `Error` if any of the requests in batch fails.
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
-		R: DeserializeOwned + Send;
+		R: DeserializeOwned;
 
 	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
 	///
@@ -103,7 +104,7 @@ pub trait ClientT {
 		batch: BatchRequestBuilder<'a>,
 	) -> Result<BatchResponseResult<R>, Error>
 	where
-		R: DeserializeOwned + Send;
+		R: DeserializeOwned;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
@@ -290,7 +291,7 @@ pub struct BatchMessage {
 	/// Serialized batch request.
 	pub raw: String,
 	/// Request IDs.
-	pub ids: Vec<Id<'static>>,
+	pub ids: Range<u64>,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: oneshot::Sender<Result<BatchResponseResult<JsonValue>, Error>>,
 }
@@ -439,20 +440,24 @@ impl RequestIdManager {
 	pub fn next_request_id(&self) -> Result<RequestIdGuard<Id<'static>>, Error> {
 		let rc = self.get_slot()?;
 		let id = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+
 		Ok(RequestIdGuard { _rc: rc, id })
 	}
 
-	/// Attempts to get the `n` number next IDs that only counts as one request.
+	/// Attempts to get fetch two ids (used for subscriptions) but only
+	/// occupy one slot in the request guard.
 	///
 	/// Fails if request limit has been exceeded.
-	pub fn next_request_ids(&self, len: usize) -> Result<RequestIdGuard<Vec<Id<'static>>>, Error> {
+	pub fn next_request_two_ids(&self) -> Result<RequestIdGuard<(Id<'static>, Id<'static>)>, Error> {
 		let rc = self.get_slot()?;
-		let mut ids = Vec::with_capacity(len);
-		for _ in 0..len {
-			let id = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
-			ids.push(id);
-		}
-		Ok(RequestIdGuard { _rc: rc, id: ids })
+		let id1 = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+		let id2 = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+		Ok(RequestIdGuard { _rc: rc, id: (id1, id2) })
+	}
+
+	/// Get a handle to the `IdKind`.
+	pub fn as_id_kind(&self) -> IdKind {
+		self.id_kind
 	}
 }
 
@@ -491,12 +496,23 @@ pub enum IdKind {
 }
 
 impl IdKind {
-	fn into_id(self, id: u64) -> Id<'static> {
+	/// Generate an `Id` from number.
+	pub fn into_id(self, id: u64) -> Id<'static> {
 		match self {
 			IdKind::Number => Id::Number(id),
 			IdKind::String => Id::Str(format!("{}", id).into()),
 		}
 	}
+}
+
+/// Generate a range of IDs to be used in a batch request.
+pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<Range<u64>, Error> {
+	let id_start = guard.inner().try_parse_inner_as_number().unwrap();
+	let id_end = id_start
+		.checked_add(len)
+		.ok_or_else(|| Error::Custom("BatchID range is wrapped; restart client or try again later".to_string()))?;
+
+	Ok(id_start..id_end)
 }
 
 #[cfg(test)]
@@ -509,7 +525,7 @@ mod tests {
 		let _first = manager.next_request_id().unwrap();
 
 		{
-			let _second = manager.next_request_ids(13).unwrap();
+			let _second = manager.next_request_two_ids().unwrap();
 			assert!(manager.next_request_id().is_err());
 			// second dropped here.
 		}

@@ -132,6 +132,9 @@ pub enum Error {
 	/// Not implemented for HTTP clients.
 	#[error("Not implemented")]
 	HttpNotImplemented,
+	/// Empty batch request.
+	#[error("Empty batch request is not allowed")]
+	EmptyBatchRequest,
 }
 
 impl Error {

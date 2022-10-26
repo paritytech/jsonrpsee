@@ -13,6 +13,7 @@ use crate::params::BatchRequestBuilder;
 use crate::tracing::{rx_log_from_json, tx_log_from_str};
 use crate::traits::ToRpcParams;
 use crate::JsonRawValue;
+use std::borrow::Cow as StdCow;
 
 use core::time::Duration;
 use helpers::{
@@ -20,6 +21,7 @@ use helpers::{
 	process_single_response, process_subscription_response, stop_subscription,
 };
 use jsonrpsee_types::error::CallError;
+use jsonrpsee_types::TwoPointZero;
 use manager::RequestManager;
 
 use async_lock::Mutex;
@@ -31,13 +33,13 @@ use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::{
-	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, RequestSer, Response,
+	response::SubscriptionError, ErrorResponse, Notification, NotificationSer, RequestSer, Response,
 	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 
-use super::{FrontToBack, IdKind, RequestIdManager};
+use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
 /// Wrapper over a [`oneshot::Receiver`](futures_channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -285,7 +287,7 @@ impl ClientT for Client {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_manager.next_request_id()?;
 		let params = params.to_rpc_params()?;
-		let notif = NotificationSer::new(method, params);
+		let notif = NotificationSer::borrowed(&method, params.as_deref());
 
 		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
 		tx_log_from_str(&raw, self.max_log_length);
@@ -311,7 +313,8 @@ impl ClientT for Client {
 		let id = guard.inner();
 
 		let params = params.to_rpc_params()?;
-		let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
+		let raw =
+			serde_json::to_string(&RequestSer::borrowed(&id, &method, params.as_deref())).map_err(Error::ParseError)?;
 		tx_log_from_str(&raw, self.max_log_length);
 
 		if self
@@ -337,15 +340,21 @@ impl ClientT for Client {
 
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
-		R: DeserializeOwned + Send,
+		R: DeserializeOwned,
 	{
-		let batch = batch.build();
-		let guard = self.id_manager.next_request_ids(batch.len())?;
-		let batch_ids = guard.inner();
+		let batch = batch.build()?;
+		let guard = self.id_manager.next_request_id()?;
+		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
 
 		let mut batches = Vec::with_capacity(batch.len());
-		for (id, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(RequestSer::new(&batch_ids[id], method, params));
+		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+			let id = self.id_manager.as_id_kind().into_id(id);
+			batches.push(RequestSer {
+				jsonrpc: TwoPointZero,
+				id,
+				method: method.into(),
+				params: params.map(StdCow::Owned),
+			});
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -357,7 +366,7 @@ impl ClientT for Client {
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
@@ -396,13 +405,19 @@ impl ClientT for Client {
 	where
 		R: DeserializeOwned,
 	{
-		let batch = batch.build();
-		let guard = self.id_manager.next_request_ids(batch.len())?;
-		let batch_ids = guard.inner();
+		let batch = batch.build()?;
+		let guard = self.id_manager.next_request_id()?;
+		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
 
 		let mut batches = Vec::with_capacity(batch.len());
-		for (id, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(RequestSer::new(&batch_ids[id], method, params));
+		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+			let id = self.id_manager.as_id_kind().into_id(id);
+			batches.push(RequestSer {
+				jsonrpc: TwoPointZero,
+				id,
+				method: method.into(),
+				params: params.map(StdCow::Owned),
+			});
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -414,7 +429,7 @@ impl ClientT for Client {
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
@@ -467,12 +482,12 @@ impl SubscriptionClientT for Client {
 			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
 		}
 
-		let guard = self.id_manager.next_request_ids(2)?;
-		let mut ids: Vec<Id> = guard.inner();
+		let guard = self.id_manager.next_request_two_ids()?;
+		let (id_sub, id_unsub) = guard.inner();
 		let params = params.to_rpc_params()?;
 
-		let id = ids[0].clone();
-		let raw = serde_json::to_string(&RequestSer::new(&id, subscribe_method, params)).map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&RequestSer::borrowed(&id_sub, &subscribe_method, params.as_deref()))
+			.map_err(Error::ParseError)?;
 
 		tx_log_from_str(&raw, self.max_log_length);
 
@@ -482,8 +497,8 @@ impl SubscriptionClientT for Client {
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				raw,
-				subscribe_id: ids.swap_remove(0),
-				unsubscribe_id: ids.swap_remove(0),
+				subscribe_id: id_sub,
+				unsubscribe_id: id_unsub.clone(),
 				unsubscribe_method: unsubscribe_method.to_owned(),
 				send_back: send_back_tx,
 			}))
@@ -499,7 +514,7 @@ impl SubscriptionClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		rx_log_from_json(&Response::new(&sub_id, id), self.max_log_length);
+		rx_log_from_json(&Response::new(&sub_id, id_unsub), self.max_log_length);
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
@@ -589,23 +604,42 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 			}
 			Some(b'[') => {
 				// Batch response.
-				if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(raw) {
-					let batch = batch.into_iter().map(Ok);
-					process_batch_response(manager, batch)?;
-				} else if let Ok(raw_responses) = serde_json::from_slice::<Vec<&JsonRawValue>>(raw) {
-					let mut batch = Vec::new();
+				if let Ok(raw_responses) = serde_json::from_slice::<Vec<&JsonRawValue>>(raw) {
+					let mut batch = Vec::with_capacity(raw_responses.len());
+
+					let mut range = None;
 
 					for r in raw_responses {
-						if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
-							batch.push(Ok(response));
+						let id = if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
+							let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+							batch.push(Ok((response.result, id)));
+							id
 						} else if let Ok(err) = serde_json::from_str::<ErrorResponse>(r.get()) {
-							batch.push(Err(err));
+							let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+							batch.push(Err((err, id)));
+							id
 						} else {
 							return Err(unparse_error(raw));
+						};
+
+						let r = range.get_or_insert(id..id);
+
+						if id < r.start {
+							r.start = id;
+						}
+
+						if id > r.end {
+							r.end = id;
 						}
 					}
 
-					process_batch_response(manager, batch)?;
+					if let Some(mut range) = range {
+						// the range is exclusive so need to add one.
+						range.end += 1;
+						process_batch_response(manager, batch, range)?;
+					} else {
+						return Err(Error::Custom("Empty batch response is not allowed".to_string()));
+					}
 				} else {
 					return Err(unparse_error(raw));
 				}

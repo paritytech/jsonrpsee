@@ -38,6 +38,12 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
 use serde_json::Value as JsonValue;
 
+fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
+}
+
 #[tokio::test]
 async fn method_call_works() {
 	let result = run_request_with_response(ok_response("hello".into(), Id::Num(0)))
@@ -241,6 +247,8 @@ async fn batch_request_works() {
 
 #[tokio::test]
 async fn batch_request_out_of_order_response() {
+	init_logger();
+
 	let mut batch_request = BatchRequestBuilder::new();
 	batch_request.insert("say_hello", rpc_params![]).unwrap();
 	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
@@ -323,10 +331,7 @@ async fn batch_request_with_failed_call_gives_proper_error() {
 
 #[tokio::test]
 async fn is_connected_works() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+	init_logger();
 
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
