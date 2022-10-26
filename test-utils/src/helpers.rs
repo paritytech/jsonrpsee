@@ -97,6 +97,23 @@ pub fn invalid_request(id: Id) -> String {
 	)
 }
 
+pub fn invalid_batch(ids: Vec<Id>) -> String {
+	use std::fmt::Write;
+	let mut result = String::new();
+	result.push('[');
+	for (i, id) in ids.iter().enumerate() {
+		write!(
+			result,
+			r#"{{"jsonrpc":"2.0","error":{{"code":-32600,"message":"Invalid request"}},"id":{}}}{}"#,
+			serde_json::to_string(&id).unwrap(),
+			if i + 1 == ids.len() { "" } else { "," }
+		)
+		.unwrap();
+	}
+	result.push(']');
+	result
+}
+
 pub fn invalid_params(id: Id) -> String {
 	format!(
 		r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid params"}},"id":{}}}"#,

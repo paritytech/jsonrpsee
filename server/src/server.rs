@@ -531,6 +531,13 @@ impl MethodResult {
 			Self::SendAndLogger(r) => r,
 		}
 	}
+
+	pub(crate) fn into_inner(self) -> MethodResponse {
+		match self {
+			Self::JustLogger(r) => r,
+			Self::SendAndLogger(r) => r,
+		}
+	}
 }
 
 /// Data required by the server to handle requests.

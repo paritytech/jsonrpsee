@@ -229,7 +229,7 @@ async fn batched_notifications() {
 }
 
 #[tokio::test]
-async fn invalid_batched_method_calls() {
+async fn invalid_batch_calls() {
 	init_logger();
 
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
@@ -245,15 +245,13 @@ async fn invalid_batched_method_calls() {
 	let req = r#"[123]"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	// Note: according to the spec the `id` should be `null` here, not 123.
-	assert_eq!(response.body, invalid_request(Id::Num(123)));
+	assert_eq!(response.body, invalid_batch(vec![Id::Null]));
 
 	// batch with invalid request
 	let req = r#"[1, 2, 3]"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	// Note: according to the spec this should return an array of three `Invalid Request`s
-	assert_eq!(response.body, parse_error(Id::Null));
+	assert_eq!(response.body, invalid_batch(vec![Id::Null, Id::Null, Id::Null]));
 
 	// invalid JSON in batch
 	let req = r#"[
@@ -263,6 +261,25 @@ async fn invalid_batched_method_calls() {
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn batch_with_mixed_calls() {
+	init_logger();
+
+	let (addr, _handle) = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+	// mixed notifications, method calls and valid json should be valid.
+	let req = r#"[
+			{"jsonrpc": "2.0", "method": "add", "params": [1,2,4], "id": "1"},
+			{"jsonrpc": "2.0", "method": "add", "params": [7]},
+			{"foo": "boo"},
+			{"jsonrpc": "2.0", "method": "foo.get", "params": {"name": "myself"}, "id": "5"}
+		]"#;
+	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":"5"}]"#;
+	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, res);
 }
 
 #[tokio::test]

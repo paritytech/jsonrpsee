@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use crate::logger::{self, Logger, TransportProtocol};
 
-use futures_util::TryStreamExt;
+use futures_util::future::Either;
+use futures_util::stream::{FuturesOrdered, StreamExt};
 use http::Method;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers::read_body;
@@ -14,7 +15,7 @@ use jsonrpsee_core::server::{resource_limiting::Resources, rpc_module::Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::JsonRawValue;
 use jsonrpsee_types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
-use jsonrpsee_types::{ErrorObject, Id, Notification, Params, Request};
+use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use tokio::sync::OwnedSemaphorePermit;
 use tracing::instrument;
 
@@ -157,41 +158,47 @@ where
 {
 	let Batch { data, call } = b;
 
-	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
-		let max_response_size = call.max_response_body_size;
-		let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
+	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
+		let mut got_notif = false;
+		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 
-		let batch_stream = futures_util::stream::iter(batch);
+		let mut pending_calls: FuturesOrdered<_> = batch
+			.into_iter()
+			.filter_map(|v| {
+				if let Ok(req) = serde_json::from_str::<Request>(v.get()) {
+					Some(Either::Right(execute_call(req, call.clone())))
+				} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(v.get()) {
+					// notifications should not be answered.
+					got_notif = true;
+					None
+				} else {
+					// valid JSON but could be not parsable as `InvalidRequest`
+					let id = match serde_json::from_str::<InvalidRequest>(v.get()) {
+						Ok(err) => err.id,
+						Err(_) => Id::Null,
+					};
 
-		let batch_response = batch_stream
-			.try_fold(
-				BatchResponseBuilder::new_with_limit(max_response_size as usize),
-				|batch_response, (req, call)| async move {
-					let response = execute_call(req, call).await;
-					batch_response.append(&response)
-				},
-			)
-			.await;
+					Some(Either::Left(async {
+						MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest))
+					}))
+				}
+			})
+			.collect();
 
-		return match batch_response {
-			Ok(batch) => batch.finish(),
-			Err(batch_err) => batch_err,
-		};
-	}
+		while let Some(response) = pending_calls.next().await {
+			if let Err(too_large) = batch_response.append(&response) {
+				return too_large;
+			}
+		}
 
-	if let Ok(batch) = serde_json::from_slice::<Vec<Notif>>(&data) {
-		return if !batch.is_empty() {
-			BatchResponse { result: "".to_string(), success: true }
+		if got_notif && batch_response.is_empty() {
+			BatchResponse { result: String::new(), success: true }
 		} else {
-			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
-		};
+			batch_response.finish()
+		}
+	} else {
+		BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError))
 	}
-
-	// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
-	// Array with at least one value, the response from the Server MUST be a single
-	// Response object." – The Spec.
-	let (id, code) = prepare_error(&data);
-	BatchResponse::error(id, ErrorObject::from(code))
 }
 
 pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResponse {
