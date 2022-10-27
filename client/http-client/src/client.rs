@@ -33,14 +33,14 @@ use crate::types::{ErrorResponse, NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponseResult, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription,
+	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription,
 	SubscriptionClientT,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::{ErrorObject, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, Id, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 
@@ -235,7 +235,7 @@ impl ClientT for HttpClient {
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
 		R: DeserializeOwned,
 	{
@@ -262,107 +262,29 @@ impl ClientT for HttpClient {
 			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
-		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
-		// a better error message if `R` couldn't be decoded.
-		let rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+		let json_rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
-		let mut responses = Vec::with_capacity(rps.len());
-		for _ in 0..rps.len() {
-			responses.push(None);
+		let mut responses = Vec::with_capacity(json_rps.len());
+		let mut successful_calls = 0;
+		let mut failed_calls = 0;
+
+		for _ in 0..json_rps.len() {
+			let err_obj = ErrorObject::borrowed(0, &"", None);
+			responses.push(Err(ErrorResponse::borrowed(err_obj, Id::Null)));
 		}
 
-		for rp in rps {
+		for rp in json_rps {
 			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
 				Ok(r) => {
 					let id = r.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-					(id, r.result)
-				}
-				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
-					Ok(err) => {
-						let err = err.error_object().clone().into_owned();
-						return Err(Error::Call(CallError::Custom(err)));
-					}
-					Err(_) => {
-						return Err(err);
-					}
-				},
-			};
-
-			let maybe_elem = id
-				.checked_sub(id_range.start)
-				.and_then(|p| p.try_into().ok())
-				.and_then(|p: usize| responses.get_mut(p));
-
-			if let Some(elem) = maybe_elem {
-				*elem = Some(res);
-			} else {
-				return Err(Error::InvalidRequestId);
-			}
-		}
-
-		let mut res = Vec::with_capacity(responses.len());
-		for response in responses {
-			match response {
-				Some(r) => res.push(r),
-				None => return Err(Error::InvalidRequestId),
-			}
-		}
-
-		Ok(res)
-	}
-
-	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request_success_or_error<'a, R>(
-		&self,
-		batch: BatchRequestBuilder<'a>,
-	) -> Result<BatchResponseResult<R>, Error>
-	where
-		R: DeserializeOwned,
-	{
-		let batch = batch.build()?;
-		let guard = self.id_manager.next_request_id()?;
-		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
-
-		let mut batch_request = Vec::with_capacity(batch.len());
-		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.as_id_kind().into_id(id);
-			batch_request.push(RequestSer {
-				jsonrpc: TwoPointZero,
-				id,
-				method: method.into(),
-				params: params.map(StdCow::Owned),
-			});
-		}
-
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
-
-		let body = match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(body)) => body,
-			Err(_e) => return Err(Error::RequestTimeout),
-			Ok(Err(e)) => return Err(Error::Transport(e.into())),
-		};
-
-		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
-		// a better error message if `R` couldn't be decoded.
-		let rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-
-		let mut responses = Vec::with_capacity(rps.len());
-
-		for _ in 0..rps.len() {
-			responses.push(Err(ErrorObject::borrowed(0, &"", None)));
-		}
-
-		for rp in rps {
-			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
-				Ok(r) => {
-					let id = r.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-					(id, Ok(r.result))
+					successful_calls += 1;
+					(id, Ok(r.into_owned()))
 				}
 				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
 					Ok(err) => {
 						let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-						let err = err.error_object().clone().into_owned();
-						(id, Err(err))
+						failed_calls += 1;
+						(id, Err(err.into_owned()))
 					}
 					Err(_) => {
 						return Err(err);
@@ -382,7 +304,7 @@ impl ClientT for HttpClient {
 			}
 		}
 
-		Ok(responses)
+		Ok(BatchResponse::new(successful_calls, responses, failed_calls))
 	}
 }
 

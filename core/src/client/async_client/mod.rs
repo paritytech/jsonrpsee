@@ -3,9 +3,10 @@
 mod helpers;
 mod manager;
 
+use crate::client::async_client::helpers::InnerBatchResponse;
 use crate::client::{
-	async_client::helpers::process_subscription_close_response, BatchMessage, BatchResponseResult, ClientT,
-	ReceivedMessage, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind,
+	async_client::helpers::process_subscription_close_response, BatchMessage, BatchResponse, ClientT, ReceivedMessage,
+	RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind,
 	SubscriptionMessage, TransportReceiverT, TransportSenderT,
 };
 use crate::error::Error;
@@ -338,7 +339,7 @@ impl ClientT for Client {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
 		R: DeserializeOwned,
 	{
@@ -382,82 +383,25 @@ impl ClientT for Client {
 
 		rx_log_from_json(&json_values, self.max_log_length);
 
-		let mut values = Vec::with_capacity(json_values.len());
+		let mut responses = Vec::with_capacity(json_values.len());
+		let mut successful_calls = 0;
+		let mut failed_calls = 0;
+
 		for json_val in json_values {
 			match json_val {
 				Ok(val) => {
-					let val = serde_json::from_value(val).map_err(Error::ParseError)?;
-					values.push(val);
+					let result: R = serde_json::from_value(val.result).map_err(Error::ParseError)?;
+					let val = Response { jsonrpc: TwoPointZero, result, id: val.id };
+					responses.push(Ok(val));
+					successful_calls += 1;
 				}
 				Err(err) => {
-					return Err(Error::Call(CallError::Custom(err)));
+					responses.push(Err(err));
+					failed_calls += 1;
 				}
 			}
 		}
-		Ok(values)
-	}
-
-	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request_success_or_error<'a, R>(
-		&self,
-		batch: BatchRequestBuilder<'a>,
-	) -> Result<BatchResponseResult<R>, Error>
-	where
-		R: DeserializeOwned,
-	{
-		let batch = batch.build()?;
-		let guard = self.id_manager.next_request_id()?;
-		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
-
-		let mut batches = Vec::with_capacity(batch.len());
-		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.as_id_kind().into_id(id);
-			batches.push(RequestSer {
-				jsonrpc: TwoPointZero,
-				id,
-				method: method.into(),
-				params: params.map(StdCow::Owned),
-			});
-		}
-
-		let (send_back_tx, send_back_rx) = oneshot::channel();
-
-		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
-
-		tx_log_from_str(&raw, self.max_log_length);
-
-		if self
-			.to_back
-			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx }))
-			.await
-			.is_err()
-		{
-			return Err(self.read_error_from_backend().await);
-		}
-
-		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-		let json_values = match res {
-			Ok(Ok(v)) => v,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
-		};
-
-		rx_log_from_json(&json_values, self.max_log_length);
-
-		let mut values = Vec::with_capacity(json_values.len());
-		for json_val in json_values {
-			match json_val {
-				Ok(val) => {
-					let val = serde_json::from_value(val).map_err(Error::ParseError)?;
-					values.push(Ok(val));
-				}
-				Err(err) => {
-					values.push(Err(err));
-				}
-			}
-		}
-		Ok(values)
+		Ok(BatchResponse { successful_calls, failed_calls, responses })
 	}
 }
 
@@ -612,11 +556,11 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 					for r in raw_responses {
 						let id = if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
 							let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(Ok((response.result, id)));
+							batch.push(InnerBatchResponse { id, result: Ok(response.into_owned()) });
 							id
 						} else if let Ok(err) = serde_json::from_str::<ErrorResponse>(r.get()) {
 							let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(Err((err, id)));
+							batch.push(InnerBatchResponse { id, result: Err(err.into_owned()) });
 							id
 						} else {
 							return Err(unparse_error(raw));

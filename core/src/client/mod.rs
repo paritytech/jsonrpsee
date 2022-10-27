@@ -41,7 +41,7 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
+use jsonrpsee_types::{ErrorObject, ErrorResponse, Id, Response, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
@@ -84,25 +84,7 @@ pub trait ClientT {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
-	where
-		R: DeserializeOwned;
-
-	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
-	///
-	/// Similar to [`ClientT::batch_request`] but returns all results in the batch regardless whether
-	/// the response was a JSON-RPC response object or JSON-RPC error.
-	///
-	/// This is more low-level and you have to store the original batch request in the same order to determine
-	/// which call were successful or failed.
-	///
-	/// Returns `Ok` if all requests in the batch were answered and could be determined as a valid
-	/// JSON-RPC response object or JSON-RPC error object.
-	/// Returns `Err` if the entire batch failed.
-	async fn batch_request_success_or_error<'a, R>(
-		&self,
-		batch: BatchRequestBuilder<'a>,
-	) -> Result<BatchResponseResult<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
 		R: DeserializeOwned;
 }
@@ -293,7 +275,7 @@ pub struct BatchMessage {
 	/// Request IDs.
 	pub ids: Range<u64>,
 	/// One-shot channel over which we send back the result of this request.
-	pub send_back: oneshot::Sender<Result<BatchResponseResult<JsonValue>, Error>>,
+	pub send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>,
 }
 
 /// Request message.
@@ -513,6 +495,72 @@ pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<R
 		.ok_or_else(|| Error::Custom("BatchID range is wrapped; restart client or try again later".to_string()))?;
 
 	Ok(id_start..id_end)
+}
+
+/// Represent a single entry in a batch response.
+pub type BatchEntry<'a, R> = Result<Response<'a, R>, ErrorResponse<'a>>;
+
+/// Batch response.
+#[derive(Debug)]
+pub struct BatchResponse<'a, R> {
+	successful_calls: usize,
+	failed_calls: usize,
+	responses: Vec<BatchEntry<'a, R>>,
+}
+
+impl<'a, R> BatchResponse<'a, R> {
+	pub fn new(successful_calls: usize, responses: Vec<BatchEntry<'a, R>>, failed_calls: usize) -> Self {
+		Self { successful_calls, responses, failed_calls }
+	}
+
+	pub fn len(&self) -> usize {
+		self.responses.len()
+	}
+
+	pub fn num_successful_calls(&self) -> usize {
+		self.responses.len()
+	}
+
+	pub fn num_failed_calls(&self) -> usize {
+		self.responses.len()
+	}
+
+	pub fn success_iter(&self) -> impl Iterator<Item = &Response<R>> {
+		self.responses.iter().filter_map(|r| r.as_ref().ok())
+	}
+
+	pub fn success_into_iter(self) -> impl Iterator<Item = Response<'a, R>> {
+		self.responses.into_iter().filter_map(|r| r.ok())
+	}
+
+	pub fn failed_iter(&self) -> impl Iterator<Item = &ErrorResponse> {
+		self.responses.iter().filter_map(|r| match r {
+			Ok(_) => None,
+			Err(err) => Some(err),
+		})
+	}
+
+	pub fn failed_into_iter(self) -> impl Iterator<Item = Response<'a, R>> {
+		self.responses.into_iter().filter_map(|r| r.ok())
+	}
+}
+
+impl<'a, R> IntoIterator for BatchResponse<'a, R> {
+	type Item = BatchEntry<'a, R>;
+	type IntoIter = std::vec::IntoIter<Self::Item>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.responses.into_iter()
+	}
+}
+
+impl<'a, R> IntoIterator for &'a BatchResponse<'a, R> {
+	type Item = &'a BatchEntry<'a, R>;
+	type IntoIter = std::slice::Iter<'a, BatchEntry<'a, R>>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.responses.iter()
+	}
 }
 
 #[cfg(test)]

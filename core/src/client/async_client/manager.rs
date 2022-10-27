@@ -37,10 +37,9 @@ use std::{
 	ops::Range,
 };
 
-use crate::client::BatchResponseResult;
-use crate::Error;
+use crate::{client::BatchEntry, Error};
 use futures_channel::{mpsc, oneshot};
-use jsonrpsee_types::{Id, SubscriptionId};
+use jsonrpsee_types::{ErrorResponse, Id, Response, SubscriptionId};
 use rustc_hash::FxHashMap;
 use serde_json::value::Value as JsonValue;
 
@@ -65,7 +64,7 @@ pub(crate) enum RequestStatus {
 }
 
 type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
-type PendingBatchOneshot = oneshot::Sender<Result<BatchResponseResult<JsonValue>, Error>>;
+type PendingBatchOneshot = oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>;
 type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>;
 type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;

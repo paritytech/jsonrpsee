@@ -270,7 +270,7 @@ async fn batch_request_with_failed_call_works() {
 	batch_request.insert("get_swag", rpc_params![]).unwrap();
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
 	let response =
-		run_batch_request_success_or_error(batch_request, server_response).with_default_timeout().await.unwrap();
+		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap();
 	assert_eq!(
 		response,
 		vec![
@@ -373,19 +373,6 @@ async fn run_request_with_response(response: String) -> Result<String, Error> {
 	let uri = format!("ws://{}", server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap()
-}
-
-async fn run_batch_request_success_or_error<T: Send + DeserializeOwned>(
-	batch: BatchRequestBuilder<'_>,
-	response: String,
-) -> BatchResponseResult<T> {
-	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
-		.with_default_timeout()
-		.await
-		.unwrap();
-	let uri = format!("ws://{}", server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).await.unwrap();
-	client.batch_request_success_or_error(batch).with_default_timeout().await.unwrap().unwrap()
 }
 
 fn assert_error_response(err: Error, exp: ErrorObjectOwned) {

@@ -49,6 +49,11 @@ impl<'a, T> Response<'a, T> {
 	pub fn new(result: T, id: Id<'a>) -> Response<'a, T> {
 		Response { jsonrpc: TwoPointZero, result, id }
 	}
+
+	/// Create an owned [`Response`].
+	pub fn into_owned(self) -> Response<'static, T> {
+		Response { jsonrpc: self.jsonrpc, result: self.result, id: self.id.into_owned() }
+	}
 }
 
 impl<'a, T: Serialize> fmt::Display for Response<'a, T> {

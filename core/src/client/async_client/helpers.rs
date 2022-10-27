@@ -42,12 +42,18 @@ use jsonrpsee_types::{
 use serde_json::Value as JsonValue;
 use std::ops::Range;
 
+#[derive(Debug)]
+pub(crate) struct InnerBatchResponse {
+	pub(crate) id: u64,
+	pub(crate) result: Result<Response<'static, JsonValue>, ErrorResponse<'static>>,
+}
+
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
 pub(crate) fn process_batch_response<'a>(
 	manager: &mut RequestManager,
-	rps: Vec<Result<(JsonValue, u64), (ErrorResponse<'a>, u64)>>,
+	rps: Vec<InnerBatchResponse>,
 	range: Range<u64>,
 ) -> Result<(), Error> {
 	let mut responses = Vec::with_capacity(rps.len());
@@ -63,21 +69,13 @@ pub(crate) fn process_batch_response<'a>(
 	};
 
 	for _ in range {
-		responses.push(Err(ErrorObject::borrowed(0, &"", None)));
+		let err_obj = ErrorObject::borrowed(0, &"", None);
+		responses.push(Err(ErrorResponse::borrowed(err_obj, Id::Null)));
 	}
 
 	for rp in rps {
-		match rp {
-			Ok((rp, id)) => {
-				let pos = id - start_idx;
-				responses[pos as usize] = Ok(rp);
-			}
-			Err((err, id)) => {
-				let err = err.error_object().clone().into_owned();
-				let pos = id - start_idx;
-				responses[pos as usize] = Err(err);
-			}
-		};
+		let pos = rp.id - start_idx;
+		responses[pos as usize] = rp.result;
 	}
 
 	let _ = batch_state.send_back.send(Ok(responses));
