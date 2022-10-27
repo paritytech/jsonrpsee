@@ -32,26 +32,26 @@ use futures_channel::mpsc;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
 
-use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::response::SubscriptionError;
-use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
-use serde_json::Value as JsonValue;
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
+use jsonrpsee_types::error::CallError;
+use jsonrpsee_types::response::SubscriptionError;
+use jsonrpsee_types::{
+	ErrorObject, ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse,
+};
+use serde_json::Value as JsonValue;
+
+pub(crate) struct BatchResponse {
+	pub(crate) id: Id<'static>,
+	pub(crate) result: Result<JsonValue, ErrorObject<'static>>,
+}
 
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
-pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<JsonValue>>) -> Result<(), Error> {
-	let mut digest = Vec::with_capacity(rps.len());
-	let mut ordered_responses = vec![JsonValue::Null; rps.len()];
-	let mut rps_unordered: Vec<_> = Vec::with_capacity(rps.len());
-
-	for rp in rps {
-		let id = rp.id.into_owned();
-		digest.push(id.clone());
-		rps_unordered.push((id, rp.result));
-	}
+pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<BatchResponse>) -> Result<(), Error> {
+	let mut ordered_responses = vec![Err(ErrorObject::borrowed(0, &"", None)); rps.len()];
+	let mut digest: Vec<_> = rps.iter().map(|r| r.id.clone().into_owned()).collect();
 
 	digest.sort_unstable();
 	let batch_state = match manager.complete_pending_batch(digest) {
@@ -62,10 +62,10 @@ pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<Resp
 		}
 	};
 
-	for (id, rp) in rps_unordered {
+	for rp in rps {
 		let pos =
-			batch_state.order.get(&id).copied().expect("All request IDs valid checked by RequestManager above; qed");
-		ordered_responses[pos] = rp;
+			batch_state.order.get(&rp.id).copied().expect("All request IDs valid checked by RequestManager above; qed");
+		ordered_responses[pos] = rp.result;
 	}
 	let _ = batch_state.send_back.send(Ok(ordered_responses));
 	Ok(())

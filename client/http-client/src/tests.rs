@@ -158,6 +158,24 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
+#[tokio::test]
+async fn batch_request_with_failed_call_gives_proper_error() {
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("say_hello", rpc_params![]).unwrap();
+	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
+	batch_request.insert("get_swag", rpc_params![]).unwrap();
+	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}, {"jsonrpc":"2.0","error":{"code":-32602,"message":"foo"},"id":2}]"#.to_string();
+	let err = run_batch_request_with_response(batch_request, server_response)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
+	let exp = ErrorObject::from(ErrorCode::MethodNotFound);
+	assert!(matches!(err,
+		Error::Call(CallError::Custom(err)) if err == exp
+	));
+}
+
 async fn run_batch_request_with_response(
 	batch: BatchRequestBuilder<'_>,
 	response: String,

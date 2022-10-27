@@ -3,6 +3,7 @@
 mod helpers;
 mod manager;
 
+use crate::client::async_client::helpers::BatchResponse;
 use crate::client::{
 	async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, ReceivedMessage,
 	RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind,
@@ -15,11 +16,13 @@ use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
+use jsonrpsee_types::error::CallError;
 use manager::RequestManager;
 
 use crate::error::Error;
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
+use crate::JsonRawValue;
 use async_lock::Mutex;
 use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
@@ -371,7 +374,16 @@ impl ClientT for Client {
 
 		rx_log_from_json(&json_values, self.max_log_length);
 
-		json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect()
+		let mut res = Vec::with_capacity(json_values.len());
+
+		for val in json_values {
+			let val = val
+				.map_err(|e| Error::Call(CallError::Custom(e)))
+				.and_then(|v| serde_json::from_value(v).map_err(Error::ParseError))?;
+			res.push(val);
+		}
+
+		Ok(res)
 	}
 }
 
@@ -481,49 +493,68 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 		sender: &mut S,
 		max_notifs_per_subscription: usize,
 	) -> Result<(), Error> {
-		// Single response to a request.
-		if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
-			match process_single_response(manager, single, max_notifs_per_subscription) {
-				Ok(Some(unsub)) => {
-					stop_subscription(sender, manager, unsub).await;
+		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
+
+		match first_non_whitespace {
+			Some(b'{') => {
+				// Single response to a request.
+				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
+					match process_single_response(manager, single, max_notifs_per_subscription) {
+						Ok(Some(unsub)) => {
+							stop_subscription(sender, manager, unsub).await;
+						}
+						Ok(None) => (),
+						Err(err) => return Err(err),
+					}
 				}
-				Ok(None) => (),
-				Err(err) => return Err(err),
+				// Subscription response.
+				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
+					if let Err(Some(unsub)) = process_subscription_response(manager, response) {
+						stop_subscription(sender, manager, unsub).await;
+					}
+				}
+				// Subscription error response.
+				else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
+					let _ = process_subscription_close_response(manager, response);
+				}
+				// Incoming Notification
+				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
+					let _ = process_notification(manager, notif);
+				}
+				// Error response
+				else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(raw) {
+					process_error_response(manager, err)?;
+				} else {
+					return Err(unparse_error(raw));
+				}
 			}
-		}
-		// Subscription response.
-		else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
-			if let Err(Some(unsub)) = process_subscription_response(manager, response) {
-				stop_subscription(sender, manager, unsub).await;
+			Some(b'[') => {
+				// Batch response.
+				if let Ok(raw_responses) = serde_json::from_slice::<Vec<&JsonRawValue>>(raw) {
+					let mut responses = Vec::with_capacity(raw_responses.len());
+
+					for r in raw_responses {
+						if let Ok(rp) = serde_json::from_str::<Response<_>>(r.get()) {
+							responses.push(BatchResponse { id: rp.id.into_owned(), result: Ok(rp.result) });
+						} else if let Ok(rp) = serde_json::from_str::<ErrorResponse>(r.get()) {
+							let err = rp.error_object().clone().into_owned();
+							let id = rp.id().clone().into_owned();
+							responses.push(BatchResponse { id, result: Err(err) });
+						} else {
+							return Err(unparse_error(raw));
+						};
+					}
+
+					process_batch_response(manager, responses)?
+				} else {
+					return Err(unparse_error(raw));
+				}
 			}
-		}
-		// Subscription error response.
-		else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
-			let _ = process_subscription_close_response(manager, response);
-		}
-		// Incoming Notification
-		else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
-			let _ = process_notification(manager, notif);
-		}
-		// Batch response.
-		else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(raw) {
-			process_batch_response(manager, batch)?;
-		}
-		// Error response
-		else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(raw) {
-			process_error_response(manager, err)?;
-		}
-		// Unparsable response
-		else {
-			let json = serde_json::from_slice::<serde_json::Value>(raw);
+			_ => {
+				return Err(unparse_error(raw));
+			}
+		};
 
-			let json_str = match json {
-				Ok(json) => serde_json::to_string(&json).expect("valid JSON; qed"),
-				Err(e) => e.to_string(),
-			};
-
-			return Err(Error::Custom(format!("Unparseable message: {}", json_str)));
-		}
 		Ok(())
 	}
 
@@ -714,4 +745,15 @@ async fn background_task<S, R>(
 	let _ = on_close.send(());
 	// Send close message to the server.
 	let _ = sender.close().await;
+}
+
+fn unparse_error(raw: &[u8]) -> Error {
+	let json = serde_json::from_slice::<serde_json::Value>(raw);
+
+	let json_str = match json {
+		Ok(json) => serde_json::to_string(&json).expect("valid JSON; qed"),
+		Err(e) => e.to_string(),
+	};
+
+	Error::Custom(format!("Unparseable message: {}", json_str))
 }

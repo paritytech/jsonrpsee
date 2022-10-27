@@ -259,21 +259,29 @@ impl ClientT for HttpClient {
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
-		let rps: Vec<Response<&JsonRawValue>> =
-			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
-				Ok(e) => Error::Call(CallError::Custom(e.error_object().clone().into_owned())),
-				Err(e) => Error::ParseError(e),
-			})?;
+		let rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
 		// NOTE: `R::default` is placeholder and will be replaced in loop below.
 		let mut responses = vec![R::default(); ordered_requests.len()];
 		for rp in rps {
-			let pos = match request_set.get(&rp.id) {
+			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
+				Ok(r) => (r.id, r.result),
+				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
+					Ok(err) => {
+						let err = err.error_object().clone().into_owned();
+						return Err(Error::Call(CallError::Custom(err)));
+					}
+					Err(_) => {
+						return Err(err);
+					}
+				},
+			};
+
+			let pos = match request_set.get(&id) {
 				Some(pos) => *pos,
 				None => return Err(Error::InvalidRequestId),
 			};
-			let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
-			responses[pos] = result;
+			responses[pos] = res;
 		}
 
 		Ok(responses)
