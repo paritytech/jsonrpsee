@@ -41,12 +41,9 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{ErrorObject, ErrorResponse, Id, Response, SubscriptionId};
+use jsonrpsee_types::{ErrorResponse, Id, Response, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
-
-/// Batch response result that contains both successful and failed JSON-RPC calls.
-pub type BatchResponseResult<R> = Vec<Result<R, ErrorObject<'static>>>;
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
@@ -509,30 +506,37 @@ pub struct BatchResponse<'a, R> {
 }
 
 impl<'a, R> BatchResponse<'a, R> {
+	/// Create a new [`BatchResponse`].
 	pub fn new(successful_calls: usize, responses: Vec<BatchEntry<'a, R>>, failed_calls: usize) -> Self {
 		Self { successful_calls, responses, failed_calls }
 	}
 
+	/// Get the length of the batch response.
 	pub fn len(&self) -> usize {
 		self.responses.len()
 	}
 
+	/// Get the number of successful calls in the batch.
 	pub fn num_successful_calls(&self) -> usize {
-		self.responses.len()
+		self.successful_calls
 	}
 
+	/// Get the number of failed calls in the batch.
 	pub fn num_failed_calls(&self) -> usize {
-		self.responses.len()
+		self.failed_calls
 	}
 
+	/// Get an iterator of the successful responses in the batch.
 	pub fn success_iter(&self) -> impl Iterator<Item = &Response<R>> {
 		self.responses.iter().filter_map(|r| r.as_ref().ok())
 	}
 
+	/// Get an owned iterator of the successful responses in the batch.
 	pub fn success_into_iter(self) -> impl Iterator<Item = Response<'a, R>> {
 		self.responses.into_iter().filter_map(|r| r.ok())
 	}
 
+	/// Get an iterator of the failed responses in the batch.
 	pub fn failed_iter(&self) -> impl Iterator<Item = &ErrorResponse> {
 		self.responses.iter().filter_map(|r| match r {
 			Ok(_) => None,
@@ -540,8 +544,12 @@ impl<'a, R> BatchResponse<'a, R> {
 		})
 	}
 
-	pub fn failed_into_iter(self) -> impl Iterator<Item = Response<'a, R>> {
-		self.responses.into_iter().filter_map(|r| r.ok())
+	/// Get an owned iterator of the failed responses in the batch.
+	pub fn failed_into_iter(self) -> impl Iterator<Item = ErrorResponse<'a>> {
+		self.responses.into_iter().filter_map(|r| match r {
+			Ok(_) => None,
+			Err(err) => Some(err),
+		})
 	}
 }
 

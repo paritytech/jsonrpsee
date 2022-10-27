@@ -21,7 +21,6 @@ use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
-use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::TwoPointZero;
 use manager::RequestManager;
 

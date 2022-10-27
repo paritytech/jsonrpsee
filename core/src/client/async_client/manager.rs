@@ -39,7 +39,7 @@ use std::{
 
 use crate::{client::BatchEntry, Error};
 use futures_channel::{mpsc, oneshot};
-use jsonrpsee_types::{ErrorResponse, Id, Response, SubscriptionId};
+use jsonrpsee_types::{Id, SubscriptionId};
 use rustc_hash::FxHashMap;
 use serde_json::value::Value as JsonValue;
 

@@ -38,13 +38,14 @@ use helpers::{
 	server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
-use jsonrpsee::core::client::{BatchResponseResult, ClientT, IdKind, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
+use jsonrpsee::types::{ErrorResponse, Id};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -671,17 +672,31 @@ async fn ws_batch_works() {
 	batch.insert("say_hello", rpc_params![]).unwrap();
 	batch.insert("slow_hello", rpc_params![]).unwrap();
 
-	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
+	let res = client.batch_request::<String>(batch).await.unwrap();
+	assert_eq!(res.len(), 2);
+	assert_eq!(res.num_successful_calls(), 2);
+	assert_eq!(res.num_failed_calls(), 0);
+	let responses: Vec<_> = res.success_into_iter().map(|r| r.result).collect();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 
 	let mut batch = BatchRequestBuilder::new();
 	batch.insert("say_hello", rpc_params![]).unwrap();
 	batch.insert("err", rpc_params![]).unwrap();
 
-	let responses: BatchResponseResult<String> = client.batch_request_success_or_error(batch).await.unwrap();
+	let res = client.batch_request::<String>(batch).await.unwrap();
+	assert_eq!(res.len(), 2);
+	assert_eq!(res.num_successful_calls(), 1);
+	assert_eq!(res.num_failed_calls(), 1);
+
+	let ok_responses: Vec<_> = res.success_iter().map(|r| &r.result).collect();
+	let err_responses: Vec<_> = res.failed_iter().collect();
+	assert_eq!(ok_responses, vec!["hello"]);
 	assert_eq!(
-		responses,
-		vec![Ok("hello".to_string()), Err(ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None))]
+		err_responses,
+		vec![&ErrorResponse::borrowed(
+			ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None),
+			Id::Number(2)
+		)]
 	);
 }
 
@@ -697,17 +712,31 @@ async fn http_batch_works() {
 	batch.insert("say_hello", rpc_params![]).unwrap();
 	batch.insert("slow_hello", rpc_params![]).unwrap();
 
-	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
+	let res = client.batch_request::<String>(batch).await.unwrap();
+	assert_eq!(res.len(), 2);
+	assert_eq!(res.num_successful_calls(), 2);
+	assert_eq!(res.num_failed_calls(), 0);
+	let responses: Vec<_> = res.success_into_iter().map(|r| r.result).collect();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 
 	let mut batch = BatchRequestBuilder::new();
 	batch.insert("say_hello", rpc_params![]).unwrap();
 	batch.insert("err", rpc_params![]).unwrap();
 
-	let responses: BatchResponseResult<String> = client.batch_request_success_or_error(batch).await.unwrap();
+	let res = client.batch_request::<String>(batch).await.unwrap();
+	assert_eq!(res.len(), 2);
+	assert_eq!(res.num_successful_calls(), 1);
+	assert_eq!(res.num_failed_calls(), 1);
+
+	let ok_responses: Vec<_> = res.success_iter().map(|r| &r.result).collect();
+	let err_responses: Vec<_> = res.failed_iter().collect();
+	assert_eq!(ok_responses, vec!["hello"]);
 	assert_eq!(
-		responses,
-		vec![Ok("hello".to_string()), Err(ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None))]
+		err_responses,
+		vec![&ErrorResponse::borrowed(
+			ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None),
+			Id::Number(2)
+		)]
 	);
 }
 
