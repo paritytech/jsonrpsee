@@ -76,11 +76,10 @@ pub trait ClientT {
 	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
 	///
 	/// The response to batch are returned in the same order as it was inserted in the batch.
-	/// It only returns the first error that it receives and if you want know all the errors
-	/// occurred use [`ClientT::batch_request_success_or_error`] instead.
 	///
-	/// Returns `Ok` if all requests in the batch were answered successfully.
-	/// Returns `Error` if any of the requests in batch fails.
+	///
+	/// Returns `Ok` if all requests in the batch were answered.
+	/// Returns `Error` if the network failed or any of the responses could be parsed a valid JSON-RPC response.
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
 		R: DeserializeOwned;
