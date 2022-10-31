@@ -375,3 +375,26 @@ async fn calls_with_bad_params() {
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: integer `2`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
 	);
 }
+
+#[tokio::test]
+async fn calls_with_object_params_works() {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let addr = server.local_addr().unwrap();
+	let server_url = format!("ws://{}", addr);
+	let _handle = server.start(RpcServerImpl.into_rpc()).unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// snake_case params
+	let mut params = ObjectParams::new();
+	params.insert("param_a", 0).unwrap();
+	params.insert("param_b", "0x0").unwrap();
+
+	assert_eq!(client.request::<u64, ObjectParams>("foo_foo", params).await.unwrap(), 42);
+
+	// camelCase params.
+	let mut params = ObjectParams::new();
+	params.insert("paramA", 0).unwrap();
+	params.insert("paramB", "0x0").unwrap();
+
+	assert_eq!(client.request::<u64, ObjectParams>("foo_foo", params).await.unwrap(), 42);
+}
