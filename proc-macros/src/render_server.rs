@@ -393,12 +393,12 @@ impl RpcDescription {
 				let mut alias_vals = String::new();
 				alias_vals.push_str(&format!(
 					r#"alias = "{}""#,
-					convert_case::Casing::to_case(&name.ident.to_string(), convert_case::Case::Snake)
+					heck::ToSnakeCase::to_snake_case(name.ident.to_string().as_str())
 				));
 				alias_vals.push(',');
 				alias_vals.push_str(&format!(
 					r#"alias = "{}""#,
-					convert_case::Casing::to_case(&name.ident.to_string(), convert_case::Case::Camel)
+					heck::ToLowerCamelCase::to_lower_camel_case(name.ident.to_string().as_str())
 				));
 
 				let mut punc_attr = Punctuated::new();
