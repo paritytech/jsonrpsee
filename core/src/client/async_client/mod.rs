@@ -389,9 +389,8 @@ impl ClientT for Client {
 		for json_val in json_values {
 			match json_val {
 				Ok(val) => {
-					let result: R = serde_json::from_value(val.result).map_err(Error::ParseError)?;
-					let val = Response { jsonrpc: TwoPointZero, result, id: val.id };
-					responses.push(Ok(val));
+					let result: R = serde_json::from_value(val).map_err(Error::ParseError)?;
+					responses.push(Ok(result));
 					successful_calls += 1;
 				}
 				Err(err) => {
@@ -555,11 +554,11 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 					for r in raw_responses {
 						let id = if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
 							let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(InnerBatchResponse { id, result: Ok(response.into_owned()) });
+							batch.push(InnerBatchResponse { id, result: Ok(response.result) });
 							id
 						} else if let Ok(err) = serde_json::from_str::<ErrorResponse>(r.get()) {
 							let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(InnerBatchResponse { id, result: Err(err.into_owned()) });
+							batch.push(InnerBatchResponse { id, result: Err(err.error_object().clone().into_owned()) });
 							id
 						} else {
 							return Err(unparse_error(raw));
@@ -581,7 +580,7 @@ async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>
 						range.end += 1;
 						process_batch_response(manager, batch, range)?;
 					} else {
-						return Err(Error::Custom("Empty batch response is not allowed".to_string()));
+						return Err(Error::EmptyBatchRequest);
 					}
 				} else {
 					return Err(unparse_error(raw));

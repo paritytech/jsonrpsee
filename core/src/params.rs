@@ -240,6 +240,7 @@ impl<'a> BatchRequestBuilder<'a> {
 	}
 
 	/// Finish the building process and return a valid batch parameter.
+	#[allow(clippy::type_complexity)]
 	pub fn build(self) -> Result<Vec<(&'a str, Option<Box<RawValue>>)>, Error> {
 		if self.0.is_empty() {
 			Err(Error::EmptyBatchRequest)

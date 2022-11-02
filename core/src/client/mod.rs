@@ -26,6 +26,7 @@
 
 //! Shared utilities for `jsonrpsee` clients.
 
+use std::fmt;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -41,7 +42,7 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{ErrorResponse, Id, Response, SubscriptionId};
+use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
@@ -82,7 +83,7 @@ pub trait ClientT {
 	/// Returns `Error` if the network failed or any of the responses could be parsed a valid JSON-RPC response.
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
-		R: DeserializeOwned;
+		R: DeserializeOwned + fmt::Debug + 'a;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
@@ -494,7 +495,7 @@ pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<R
 }
 
 /// Represent a single entry in a batch response.
-pub type BatchEntry<'a, R> = Result<Response<'a, R>, ErrorResponse<'a>>;
+pub type BatchEntry<'a, R> = Result<R, ErrorObject<'a>>;
 
 /// Batch response.
 #[derive(Debug)]
@@ -504,7 +505,7 @@ pub struct BatchResponse<'a, R> {
 	responses: Vec<BatchEntry<'a, R>>,
 }
 
-impl<'a, R> BatchResponse<'a, R> {
+impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
 	/// Create a new [`BatchResponse`].
 	pub fn new(successful_calls: usize, responses: Vec<BatchEntry<'a, R>>, failed_calls: usize) -> Self {
 		Self { successful_calls, responses, failed_calls }
@@ -513,6 +514,11 @@ impl<'a, R> BatchResponse<'a, R> {
 	/// Get the length of the batch response.
 	pub fn len(&self) -> usize {
 		self.responses.len()
+	}
+
+	/// Is empty.
+	pub fn is_empty(&self) -> bool {
+		self.responses.len() == 0
 	}
 
 	/// Get the number of successful calls in the batch.
@@ -525,30 +531,45 @@ impl<'a, R> BatchResponse<'a, R> {
 		self.failed_calls
 	}
 
-	/// Get an iterator of the successful responses in the batch.
-	pub fn success_iter(&self) -> impl Iterator<Item = &Response<R>> {
-		self.responses.iter().filter_map(|r| r.as_ref().ok())
+	/// Returns `Ok(iterator)` if all responses were successful
+	/// otherwise `Err(iterator)` is returned.
+	///
+	/// If you want get all responses if an error responses occurs use [`BatchResponse::into_iter`]
+	/// instead where it's possible to implement customized logic.
+	pub fn ok(
+		self,
+	) -> Result<impl Iterator<Item = R> + 'a + std::fmt::Debug, impl Iterator<Item = ErrorObject<'a>> + std::fmt::Debug>
+	{
+		if self.failed_calls > 0 {
+			Err(self.into_iter().filter_map(|r| match r {
+				Err(e) => Some(e),
+				_ => None,
+			}))
+		} else {
+			Ok(self.into_iter().filter_map(|r| r.ok()))
+		}
 	}
 
-	/// Get an owned iterator of the successful responses in the batch.
-	pub fn success_into_iter(self) -> impl Iterator<Item = Response<'a, R>> {
-		self.responses.into_iter().filter_map(|r| r.ok())
+	/// Similar to [`BatchResponse::ok`] but takes the responses by reference instead.
+	pub fn ok_as_ref(
+		&self,
+	) -> Result<impl Iterator<Item = &R> + std::fmt::Debug, impl Iterator<Item = &ErrorObject<'a>> + std::fmt::Debug> {
+		if self.failed_calls > 0 {
+			Err(self.responses.iter().filter_map(|r| match r {
+				Err(e) => Some(e),
+				_ => None,
+			}))
+		} else {
+			Ok(self.responses.iter().filter_map(|r| match r {
+				Ok(r) => Some(r),
+				_ => None,
+			}))
+		}
 	}
 
-	/// Get an iterator of the failed responses in the batch.
-	pub fn failed_iter(&self) -> impl Iterator<Item = &ErrorResponse> {
-		self.responses.iter().filter_map(|r| match r {
-			Ok(_) => None,
-			Err(err) => Some(err),
-		})
-	}
-
-	/// Get an owned iterator of the failed responses in the batch.
-	pub fn failed_into_iter(self) -> impl Iterator<Item = ErrorResponse<'a>> {
-		self.responses.into_iter().filter_map(|r| match r {
-			Ok(_) => None,
-			Err(err) => Some(err),
-		})
+	/// Returns an iterator over all responses.
+	pub fn iter(&self) -> impl Iterator<Item = &BatchEntry<'_, R>> {
+		self.responses.iter()
 	}
 }
 
@@ -558,15 +579,6 @@ impl<'a, R> IntoIterator for BatchResponse<'a, R> {
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.responses.into_iter()
-	}
-}
-
-impl<'a, R> IntoIterator for &'a BatchResponse<'a, R> {
-	type Item = &'a BatchEntry<'a, R>;
-	type IntoIter = std::slice::Iter<'a, BatchEntry<'a, R>>;
-
-	fn into_iter(self) -> Self::IntoIter {
-		self.responses.iter()
 	}
 }
 

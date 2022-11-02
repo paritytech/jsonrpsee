@@ -34,7 +34,7 @@ use jsonrpsee_core::{rpc_params, DeserializeOwned};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::error::{CallError, ErrorObjectOwned, ErrorResponse};
+use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
 
 fn init_logger() {
 	let _ = tracing_subscriber::FmtSubscriber::builder()
@@ -153,7 +153,7 @@ async fn batch_request_works() {
 		.unwrap()
 		.unwrap();
 	assert_eq!(batch_response.num_successful_calls(), 3);
-	let results: Vec<String> = batch_response.success_into_iter().map(|r| r.result).collect();
+	let results: Vec<String> = batch_response.ok().unwrap().collect();
 	assert_eq!(results, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
@@ -173,14 +173,17 @@ async fn batch_request_with_failed_call_works() {
 	assert_eq!(res.num_failed_calls(), 1);
 	assert_eq!(res.len(), 3);
 
-	let successful_calls: Vec<_> = res.success_iter().map(|r| &r.result).collect();
-	let failed_calls: Vec<_> = res.failed_iter().collect();
+	let successful_calls: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
+	let failed_calls: Vec<_> = res
+		.iter()
+		.filter_map(|r| match r {
+			Err(e) => Some(e),
+			_ => None,
+		})
+		.collect();
 
 	assert_eq!(successful_calls, vec!["hello", "here's your swag"]);
-	assert_eq!(
-		failed_calls,
-		vec![&ErrorResponse::borrowed(ErrorObject::from(ErrorCode::MethodNotFound), jsonrpsee_types::Id::Number(1))]
-	);
+	assert_eq!(failed_calls, vec![&ErrorObject::from(ErrorCode::MethodNotFound)]);
 }
 
 #[tokio::test]
@@ -195,9 +198,8 @@ async fn batch_request_with_failed_call_gives_proper_error() {
 		.await
 		.unwrap()
 		.unwrap();
-	let first_err = res.failed_iter().next().unwrap();
-	let exp = ErrorResponse::borrowed(ErrorObject::from(ErrorCode::MethodNotFound), jsonrpsee_types::Id::Number(1));
-	assert_eq!(first_err, &exp);
+	let err: Vec<_> = res.ok().unwrap_err().collect();
+	assert_eq!(err, vec![ErrorObject::from(ErrorCode::MethodNotFound), ErrorObject::borrowed(-32602, &"foo", None)]);
 }
 
 #[tokio::test]
@@ -231,7 +233,7 @@ async fn batch_request_with_untagged_enum_works() {
 	assert_eq!(res.num_successful_calls(), 2);
 	assert_eq!(res.num_failed_calls(), 0);
 	assert_eq!(res.len(), 2);
-	let response: Vec<_> = res.success_into_iter().map(|r| r.result).collect();
+	let response: Vec<_> = res.ok().unwrap().collect();
 
 	assert_eq!(response, vec![Custom::Text("hello".to_string()), Custom::Number(13)]);
 }
@@ -251,12 +253,12 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(res.num_successful_calls(), 3);
 	assert_eq!(res.num_failed_calls(), 0);
 	assert_eq!(res.len(), 3);
-	let response: Vec<_> = res.success_into_iter().map(|r| r.result).collect();
+	let response: Vec<_> = res.ok().unwrap().collect();
 
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
-async fn run_batch_request_with_response<T: Send + DeserializeOwned>(
+async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + 'static>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> Result<BatchResponse<T>, Error> {

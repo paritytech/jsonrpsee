@@ -45,13 +45,13 @@ use std::ops::Range;
 #[derive(Debug)]
 pub(crate) struct InnerBatchResponse {
 	pub(crate) id: u64,
-	pub(crate) result: Result<Response<'static, JsonValue>, ErrorResponse<'static>>,
+	pub(crate) result: Result<JsonValue, ErrorObject<'static>>,
 }
 
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
-pub(crate) fn process_batch_response<'a>(
+pub(crate) fn process_batch_response(
 	manager: &mut RequestManager,
 	rps: Vec<InnerBatchResponse>,
 	range: Range<u64>,
@@ -70,7 +70,7 @@ pub(crate) fn process_batch_response<'a>(
 
 	for _ in range {
 		let err_obj = ErrorObject::borrowed(0, &"", None);
-		responses.push(Err(ErrorResponse::borrowed(err_obj, Id::Null)));
+		responses.push(Err(err_obj));
 	}
 
 	for rp in rps {

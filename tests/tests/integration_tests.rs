@@ -45,7 +45,6 @@ use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
-use jsonrpsee::types::{ErrorResponse, Id};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -676,7 +675,7 @@ async fn ws_batch_works() {
 	assert_eq!(res.len(), 2);
 	assert_eq!(res.num_successful_calls(), 2);
 	assert_eq!(res.num_failed_calls(), 0);
-	let responses: Vec<_> = res.success_into_iter().map(|r| r.result).collect();
+	let responses: Vec<_> = res.ok().unwrap().collect();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 
 	let mut batch = BatchRequestBuilder::new();
@@ -688,16 +687,16 @@ async fn ws_batch_works() {
 	assert_eq!(res.num_successful_calls(), 1);
 	assert_eq!(res.num_failed_calls(), 1);
 
-	let ok_responses: Vec<_> = res.success_iter().map(|r| &r.result).collect();
-	let err_responses: Vec<_> = res.failed_iter().collect();
+	let ok_responses: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
+	let err_responses: Vec<_> = res
+		.iter()
+		.filter_map(|r| match r {
+			Err(e) => Some(e),
+			_ => None,
+		})
+		.collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(
-		err_responses,
-		vec![&ErrorResponse::borrowed(
-			ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None),
-			Id::Number(2)
-		)]
-	);
+	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None)]);
 }
 
 #[tokio::test]
@@ -716,7 +715,7 @@ async fn http_batch_works() {
 	assert_eq!(res.len(), 2);
 	assert_eq!(res.num_successful_calls(), 2);
 	assert_eq!(res.num_failed_calls(), 0);
-	let responses: Vec<_> = res.success_into_iter().map(|r| r.result).collect();
+	let responses: Vec<_> = res.ok().unwrap().collect();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 
 	let mut batch = BatchRequestBuilder::new();
@@ -728,16 +727,16 @@ async fn http_batch_works() {
 	assert_eq!(res.num_successful_calls(), 1);
 	assert_eq!(res.num_failed_calls(), 1);
 
-	let ok_responses: Vec<_> = res.success_iter().map(|r| &r.result).collect();
-	let err_responses: Vec<_> = res.failed_iter().collect();
+	let ok_responses: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
+	let err_responses: Vec<_> = res
+		.iter()
+		.filter_map(|r| match r {
+			Err(e) => Some(e),
+			_ => None,
+		})
+		.collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(
-		err_responses,
-		vec![&ErrorResponse::borrowed(
-			ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None),
-			Id::Number(2)
-		)]
-	);
+	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None)]);
 }
 
 #[tokio::test]

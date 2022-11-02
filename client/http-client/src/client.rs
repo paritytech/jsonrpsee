@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::borrow::Cow as StdCow;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -40,7 +41,7 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::{ErrorObject, Id, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 
@@ -237,7 +238,7 @@ impl ClientT for HttpClient {
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
-		R: DeserializeOwned,
+		R: DeserializeOwned + fmt::Debug + 'a,
 	{
 		let batch = batch.build()?;
 		let guard = self.id_manager.next_request_id()?;
@@ -269,8 +270,7 @@ impl ClientT for HttpClient {
 		let mut failed_calls = 0;
 
 		for _ in 0..json_rps.len() {
-			let err_obj = ErrorObject::borrowed(0, &"", None);
-			responses.push(Err(ErrorResponse::borrowed(err_obj, Id::Null)));
+			responses.push(Err(ErrorObject::borrowed(0, &"", None)));
 		}
 
 		for rp in json_rps {
@@ -278,13 +278,13 @@ impl ClientT for HttpClient {
 				Ok(r) => {
 					let id = r.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
 					successful_calls += 1;
-					(id, Ok(r.into_owned()))
+					(id, Ok(r.result))
 				}
 				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
 					Ok(err) => {
 						let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
 						failed_calls += 1;
-						(id, Err(err.into_owned()))
+						(id, Err(err.error_object().clone().into_owned()))
 					}
 					Err(_) => {
 						return Err(err);
