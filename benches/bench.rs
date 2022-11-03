@@ -44,11 +44,11 @@ criterion_group!(
 	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time_slow());
 	targets = SyncBencher::http_benches_slow, SyncBencher::websocket_benches_slow
 );
-/*criterion_group!(
+criterion_group!(
 	name = async_benches;
 	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
 	targets = AsyncBencher::http_benches, AsyncBencher::websocket_benches
-);*/
+);
 criterion_group!(
 	name = async_benches_mid;
 	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_mid());
@@ -69,7 +69,7 @@ criterion_main!(
 	sync_benches,
 	sync_benches_mid,
 	sync_benches_slow,
-	//async_benches,
+	async_benches,
 	async_benches_mid,
 	async_slow_benches,
 	subscriptions
@@ -111,7 +111,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 		b.iter(|| {
 			let params = serde_json::value::RawValue::from_string("[1, 2]".to_string()).unwrap();
 
-			let request = RequestSer::borrowed(&Id::Number(0), &"say_hello", Some(&params));
+			let request = RequestSer::new(&Id::Number(0), "say_hello", Some(params));
 			v2_serialize(request);
 		})
 	});
@@ -124,7 +124,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 			builder.insert(1u64).unwrap();
 			builder.insert(2u32).unwrap();
 			let params = builder.to_rpc_params().expect("Valid params");
-			let request = RequestSer::borrowed(&Id::Number(0), &"say_hello", params.as_deref());
+			let request = RequestSer::new(&Id::Number(0), "say_hello", params);
 			v2_serialize(request);
 		})
 	});
@@ -134,7 +134,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 		b.iter(|| {
 			let params = serde_json::value::RawValue::from_string(r#"{"key": 1}"#.to_string()).unwrap();
 
-			let request = RequestSer::borrowed(&Id::Number(0), &"say_hello", Some(&params));
+			let request = RequestSer::new(&Id::Number(0), "say_hello", Some(params));
 			v2_serialize(request);
 		})
 	});
@@ -146,7 +146,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 			let mut builder = ObjectParams::new();
 			builder.insert("key", 1u32).unwrap();
 			let params = builder.to_rpc_params().expect("Valid params");
-			let request = RequestSer::borrowed(&Id::Number(0), &"say_hello", params.as_deref());
+			let request = RequestSer::new(&Id::Number(0), "say_hello", params);
 			v2_serialize(request);
 		})
 	});
@@ -163,9 +163,6 @@ trait RequestBencher {
 		http_concurrent_conn_calls(&rt, crit, &url, "http_concurrent_conn_calls", Self::REQUEST_TYPE, &[2, 4, 8]);
 		round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "http_batch_requests", Self::REQUEST_TYPE);
-
-		let c = Arc::new(master::http_client(&url));
-		master::batch_round_trip(&rt, crit, c, "http_batch_requests_new", Self::REQUEST_TYPE);
 	}
 
 	fn http_benches_mid(crit: &mut Criterion) {
@@ -195,9 +192,6 @@ trait RequestBencher {
 		ws_concurrent_conn_calls(&rt, crit, &url, "ws_concurrent_conn_calls", Self::REQUEST_TYPE, &[2, 4, 8]);
 		round_trip(&rt, crit, client.clone(), "ws_round_trip", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "ws_batch_requests", Self::REQUEST_TYPE);
-
-		let c = Arc::new(rt.block_on(master::ws_client(&url)));
-		master::batch_round_trip(&rt, crit, c, "ws_batch_requests_new", Self::REQUEST_TYPE);
 	}
 
 	fn websocket_benches_mid(crit: &mut Criterion) {
@@ -308,7 +302,7 @@ fn batch_round_trip(
 
 	let bench_name = format!("{}/{}", name, fast_call);
 	let mut group = crit.benchmark_group(request.group_name(&bench_name));
-	for batch_size in [100, 10_000, 100_000].iter() {
+	for batch_size in [2, 5, 10, 50, 100usize].iter() {
 		let batch = vec![(fast_call, None); *batch_size];
 
 		group.throughput(Throughput::Elements(*batch_size as u64));
@@ -500,56 +494,4 @@ fn ws_custom_headers_handshake(rt: &TokioRuntime, crit: &mut Criterion, url: &st
 		});
 	}
 	group.finish();
-}
-
-pub(crate) mod master {
-	use super::{Arc, BenchmarkId, Criterion, RequestType, Throughput, TokioRuntime};
-	use jsonrpsee::core::client::*;
-	use jsonrpsee::core::params::ArrayParams;
-	use jsonrpsee::core::params::BatchRequestBuilder;
-	use jsonrpsee::http_client::*;
-	use jsonrpsee::ws_client::*;
-
-	pub(crate) async fn ws_client(url: &str) -> WsClient {
-		WsClientBuilder::default()
-			.max_request_body_size(u32::MAX)
-			.max_concurrent_requests(1024 * 1024)
-			.build(url)
-			.await
-			.unwrap()
-	}
-
-	pub(crate) fn http_client(url: &str) -> HttpClient {
-		HttpClientBuilder::default()
-			.max_request_body_size(u32::MAX)
-			.max_concurrent_requests(1024 * 1024)
-			.build(url)
-			.unwrap()
-	}
-
-	pub(crate) fn batch_round_trip(
-		rt: &TokioRuntime,
-		crit: &mut Criterion,
-		client: Arc<impl ClientT>,
-		name: &str,
-		request: RequestType,
-	) {
-		let fast_call = request.methods()[0];
-		assert!(fast_call.starts_with("fast_call"));
-
-		let bench_name = format!("{}/{}", name, fast_call);
-		let mut group = crit.benchmark_group(request.group_name(&bench_name));
-		for batch_size in [100, 10_000, 100_000].iter() {
-			let mut batch = BatchRequestBuilder::new();
-			for _ in 0..*batch_size {
-				batch.insert(fast_call, ArrayParams::new()).unwrap();
-			}
-
-			group.throughput(Throughput::Elements(*batch_size as u64));
-			group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
-				b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
-			});
-		}
-		group.finish();
-	}
 }

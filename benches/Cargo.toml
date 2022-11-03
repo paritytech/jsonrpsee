@@ -12,7 +12,7 @@ pprof = { version = "0.10", features = ["flamegraph", "criterion"] }
 criterion = { version = "0.3", features = ["async_tokio", "html_reports"] }
 futures-channel = "0.3.15"
 futures-util = "0.3.15"
-jsonrpsee = { path = "../jsonrpsee", features = ["server", "client"] }
+jsonrpsee = { path = "../jsonrpsee", features = ["server"] }
 jsonrpsee_v0_15 = { package = "jsonrpsee", version = "=0.15.1", features = ["http-client", "ws-client", "client-ws-transport"] }
 jsonrpc-ws-server = { version = "18.0.0", optional = true }
 jsonrpc-http-server = { version = "18.0.0", optional = true }
