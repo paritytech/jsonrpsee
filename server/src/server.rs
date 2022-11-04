@@ -176,13 +176,12 @@ where
 					let service = self.service_builder.service(tower_service);
 
 					let max_conns = self.cfg.max_connections as usize;
-					let curr_conns = max_conns - connection_guard.available_connections();
 
 					connections.add(Box::pin(try_accept_connection(
 						socket,
 						service,
 						stop_handle.clone(),
-						curr_conns,
+						connection_guard.clone(),
 						max_conns,
 						remote_addr,
 						id,
@@ -729,12 +728,12 @@ where
 }
 
 // Attempts to accept a new connection
-#[instrument(name = "connection", skip(socket, service, stop_handle, curr_conns, max_conns), level = "INFO")]
+#[instrument(name = "connection", skip(socket, service, stop_handle, connection_guard, max_conns), level = "INFO")]
 async fn try_accept_connection<S, Bd>(
 	socket: TcpStream,
 	service: S,
 	mut stop_handle: StopHandle,
-	curr_conns: usize,
+	connection_guard: ConnectionGuard,
 	max_conns: usize,
 	remote_addr: SocketAddr,
 	conn_id: u32,
@@ -753,7 +752,10 @@ async fn try_accept_connection<S, Bd>(
 	tokio::select! {
 		res = &mut conn => {
 			match res {
-				Ok(_) => tracing::info!("Accepting new connection {}/{}", curr_conns, max_conns),
+				Ok(_) => {
+					let curr_conns = max_conns - connection_guard.available_connections();
+					tracing::info!("Accepting new connection {}/{}", curr_conns, max_conns)
+				}
 				Err(e) => tracing::warn!("Connection failed: {:?}", e),
 			}
 		}
