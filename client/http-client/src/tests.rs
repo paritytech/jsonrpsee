@@ -153,7 +153,7 @@ async fn batch_request_works() {
 		.unwrap()
 		.unwrap();
 	assert_eq!(batch_response.num_successful_calls(), 3);
-	let results: Vec<String> = batch_response.ok().unwrap().collect();
+	let results: Vec<String> = batch_response.into_ok().unwrap().collect();
 	assert_eq!(results, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
@@ -198,7 +198,7 @@ async fn batch_request_with_failed_call_gives_proper_error() {
 		.await
 		.unwrap()
 		.unwrap();
-	let err: Vec<_> = res.ok().unwrap_err().collect();
+	let err: Vec<_> = res.into_ok().unwrap_err().collect();
 	assert_eq!(err, vec![ErrorObject::from(ErrorCode::MethodNotFound), ErrorObject::borrowed(-32602, &"foo", None)]);
 }
 
@@ -233,7 +233,7 @@ async fn batch_request_with_untagged_enum_works() {
 	assert_eq!(res.num_successful_calls(), 2);
 	assert_eq!(res.num_failed_calls(), 0);
 	assert_eq!(res.len(), 2);
-	let response: Vec<_> = res.ok().unwrap().collect();
+	let response: Vec<_> = res.into_ok().unwrap().collect();
 
 	assert_eq!(response, vec![Custom::Text("hello".to_string()), Custom::Number(13)]);
 }
@@ -253,7 +253,7 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(res.num_successful_calls(), 3);
 	assert_eq!(res.num_failed_calls(), 0);
 	assert_eq!(res.len(), 3);
-	let response: Vec<_> = res.ok().unwrap().collect();
+	let response: Vec<_> = res.into_ok().unwrap().collect();
 
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }

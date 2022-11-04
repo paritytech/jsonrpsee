@@ -536,7 +536,7 @@ impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
 	///
 	/// If you want get all responses if an error responses occurs use [`BatchResponse::into_iter`]
 	/// instead where it's possible to implement customized logic.
-	pub fn ok(
+	pub fn into_ok(
 		self,
 	) -> Result<impl Iterator<Item = R> + 'a + std::fmt::Debug, impl Iterator<Item = ErrorObject<'a>> + std::fmt::Debug>
 	{
@@ -551,7 +551,7 @@ impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
 	}
 
 	/// Similar to [`BatchResponse::ok`] but takes the responses by reference instead.
-	pub fn ok_as_ref(
+	pub fn ok(
 		&self,
 	) -> Result<impl Iterator<Item = &R> + std::fmt::Debug, impl Iterator<Item = &ErrorObject<'a>> + std::fmt::Debug> {
 		if self.failed_calls > 0 {

@@ -675,7 +675,7 @@ async fn ws_batch_works() {
 	assert_eq!(res.len(), 2);
 	assert_eq!(res.num_successful_calls(), 2);
 	assert_eq!(res.num_failed_calls(), 0);
-	let responses: Vec<_> = res.ok().unwrap().collect();
+	let responses: Vec<_> = res.into_ok().unwrap().collect();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 
 	let mut batch = BatchRequestBuilder::new();
@@ -715,7 +715,7 @@ async fn http_batch_works() {
 	assert_eq!(res.len(), 2);
 	assert_eq!(res.num_successful_calls(), 2);
 	assert_eq!(res.num_failed_calls(), 0);
-	let responses: Vec<_> = res.ok().unwrap().collect();
+	let responses: Vec<_> = res.into_ok().unwrap().collect();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 
 	let mut batch = BatchRequestBuilder::new();
