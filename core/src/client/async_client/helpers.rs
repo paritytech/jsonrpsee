@@ -74,8 +74,14 @@ pub(crate) fn process_batch_response(
 	}
 
 	for rp in rps {
-		let pos = rp.id - start_idx;
-		responses[pos as usize] = rp.result;
+		let maybe_elem =
+			rp.id.checked_sub(start_idx).and_then(|p| p.try_into().ok()).and_then(|p: usize| responses.get_mut(p));
+
+		if let Some(elem) = maybe_elem {
+			*elem = rp.result;
+		} else {
+			return Err(Error::InvalidRequestId);
+		}
 	}
 
 	let _ = batch_state.send_back.send(Ok(responses));

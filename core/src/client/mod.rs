@@ -486,10 +486,10 @@ impl IdKind {
 
 /// Generate a range of IDs to be used in a batch request.
 pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<Range<u64>, Error> {
-	let id_start = guard.inner().try_parse_inner_as_number().unwrap();
+	let id_start = guard.inner().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
 	let id_end = id_start
 		.checked_add(len)
-		.ok_or_else(|| Error::Custom("BatchID range is wrapped; restart client or try again later".to_string()))?;
+		.ok_or_else(|| Error::Custom("BatchID range wrapped; restart the client or try again later".to_string()))?;
 
 	Ok(id_start..id_end)
 }
@@ -541,29 +541,20 @@ impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
 	) -> Result<impl Iterator<Item = R> + 'a + std::fmt::Debug, impl Iterator<Item = ErrorObject<'a>> + std::fmt::Debug>
 	{
 		if self.failed_calls > 0 {
-			Err(self.into_iter().filter_map(|r| match r {
-				Err(e) => Some(e),
-				_ => None,
-			}))
+			Err(self.into_iter().filter_map(|err| err.err()))
 		} else {
 			Ok(self.into_iter().filter_map(|r| r.ok()))
 		}
 	}
 
-	/// Similar to [`BatchResponse::ok`] but takes the responses by reference instead.
+	/// Similar to [`BatchResponse::into_ok`] but takes the responses by reference instead.
 	pub fn ok(
 		&self,
 	) -> Result<impl Iterator<Item = &R> + std::fmt::Debug, impl Iterator<Item = &ErrorObject<'a>> + std::fmt::Debug> {
 		if self.failed_calls > 0 {
-			Err(self.responses.iter().filter_map(|r| match r {
-				Err(e) => Some(e),
-				_ => None,
-			}))
+			Err(self.responses.iter().filter_map(|err| err.as_ref().err()))
 		} else {
-			Ok(self.responses.iter().filter_map(|r| match r {
-				Ok(r) => Some(r),
-				_ => None,
-			}))
+			Ok(self.responses.iter().filter_map(|r| r.as_ref().ok()))
 		}
 	}
 
