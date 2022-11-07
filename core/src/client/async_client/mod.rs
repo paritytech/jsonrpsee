@@ -496,7 +496,7 @@ impl SubscriptionClientT for Client {
 /// Handle backend messages.
 ///
 /// Returns an error if the main background loop should be terminated.
-async fn handle_backend_messages<'a, S: TransportSenderT, R: TransportReceiverT>(
+async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
 	manager: &mut RequestManager,
 	sender: &mut S,
