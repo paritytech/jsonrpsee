@@ -27,6 +27,8 @@
 //! Types to handle JSON-RPC requests according to the [spec](https://www.jsonrpc.org/specification#request-object).
 //! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
 
+use std::borrow::Cow as StdCow;
+
 use crate::params::{Id, TwoPointZero};
 use beef::Cow;
 use serde::{Deserialize, Serialize};
@@ -89,20 +91,29 @@ pub struct RequestSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Request ID
-	pub id: &'a Id<'a>,
+	pub id: Id<'a>,
 	/// Name of the method to be invoked.
-	// NOTE: as this type only implements serialize
-	// `#[serde(borrow)]` and `Cow<'a, str>` is not needed.
-	pub method: &'a str,
+	// NOTE: as this type only implements serialize `#[serde(borrow)]` is not needed.
+	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub params: Option<Box<RawValue>>,
+	pub params: Option<StdCow<'a, RawValue>>,
 }
 
 impl<'a> RequestSer<'a> {
-	/// Create a new serializable JSON-RPC request.
-	pub fn new(id: &'a Id<'a>, method: &'a str, params: Option<Box<RawValue>>) -> Self {
-		Self { jsonrpc: TwoPointZero, id, method, params }
+	/// Create a borrowed serializable JSON-RPC method call.
+	pub fn borrowed(id: &'a Id<'a>, method: &'a impl AsRef<str>, params: Option<&'a RawValue>) -> Self {
+		Self {
+			jsonrpc: TwoPointZero,
+			id: id.clone(),
+			method: method.as_ref().into(),
+			params: params.map(StdCow::Borrowed),
+		}
+	}
+
+	/// Create a owned serializable JSON-RPC method call.
+	pub fn owned(id: Id<'a>, method: impl Into<String>, params: Option<Box<RawValue>>) -> Self {
+		Self { jsonrpc: TwoPointZero, id, method: method.into().into(), params: params.map(StdCow::Owned) }
 	}
 }
 
@@ -112,24 +123,28 @@ pub struct NotificationSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
-	// NOTE: as this type only implements serialize
-	// `#[serde(borrow)]` and `Cow<'a, str>` is not needed.
-	pub method: &'a str,
+	// NOTE: as this type only implements serialize `#[serde(borrow)]` is not needed.
+	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub params: Option<Box<RawValue>>,
+	pub params: Option<StdCow<'a, RawValue>>,
 }
 
 impl<'a> NotificationSer<'a> {
-	/// Create a new serializable JSON-RPC request.
-	pub fn new(method: &'a str, params: Option<Box<RawValue>>) -> Self {
-		Self { jsonrpc: TwoPointZero, method, params }
+	/// Create a borrowed serializable JSON-RPC notification.
+	pub fn borrowed(method: &'a impl AsRef<str>, params: Option<&'a RawValue>) -> Self {
+		Self { jsonrpc: TwoPointZero, method: method.as_ref().into(), params: params.map(StdCow::Borrowed) }
+	}
+
+	/// Create an owned serializable JSON-RPC notification.
+	pub fn owned(method: impl Into<String>, params: Option<Box<RawValue>>) -> Self {
+		Self { jsonrpc: TwoPointZero, method: method.into().into(), params: params.map(StdCow::Owned) }
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use super::{Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, TwoPointZero};
+	use super::{Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, StdCow, TwoPointZero};
 	use serde_json::value::RawValue;
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
@@ -210,23 +225,28 @@ mod test {
 
 		let test_vector: &[(&'static str, Option<_>, Option<_>, &'static str)] = &[
 			// With all fields set.
-			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#, Some(&id), params.clone(), method),
+			(
+				r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#,
+				Some(id.clone()),
+				params.clone(),
+				method,
+			),
 			// Escaped method name.
-			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(&id), None, "\"m"),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(id.clone()), None, "\"m"),
 			// Without ID field.
 			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, params, method),
 			// Without params field
-			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(&id), None, method),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(id), None, method),
 			// Without params and ID.
 			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, None, method),
 		];
 
-		for (ser, id, params, method) in test_vector.iter().cloned() {
+		for (ser, id, params, method) in test_vector.into_iter().cloned() {
 			let request = serde_json::to_string(&RequestSer {
 				jsonrpc: TwoPointZero,
-				method,
-				id: id.unwrap_or(&Id::Null),
-				params,
+				method: method.into(),
+				id: id.unwrap_or(Id::Null),
+				params: params.map(StdCow::Owned),
 			})
 			.unwrap();
 
@@ -238,7 +258,7 @@ mod test {
 	fn serialize_notif() {
 		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","params":["hello"]}"#;
 		let params = Some(RawValue::from_string(r#"["hello"]"#.into()).unwrap());
-		let req = NotificationSer::new("say_hello", params);
+		let req = NotificationSer::owned("say_hello", params);
 		let ser = serde_json::to_string(&req).unwrap();
 		assert_eq!(exp, ser);
 	}
@@ -246,7 +266,7 @@ mod test {
 	#[test]
 	fn serialize_notif_escaped_method_name() {
 		let exp = r#"{"jsonrpc":"2.0","method":"\"method\""}"#;
-		let req = NotificationSer::new("\"method\"", None);
+		let req = NotificationSer::owned("\"method\"", None);
 		let ser = serde_json::to_string(&req).unwrap();
 		assert_eq!(exp, ser);
 	}

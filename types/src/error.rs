@@ -79,7 +79,6 @@ impl<'a> fmt::Display for ErrorResponse<'a> {
 		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
 	}
 }
-
 /// The return type of the subscription's method for the rpc server implementation.
 ///
 /// **Note**: The error does not contain any data and is discarded on drop.

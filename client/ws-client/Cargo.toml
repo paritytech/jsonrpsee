@@ -20,6 +20,7 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 jsonrpsee-test-utils = { path = "../../test-utils" }
 tokio = { version = "1.16", features = ["macros"] }
 serde_json = "1"
+serde = "1"
 
 [features]
 tls = ["jsonrpsee-client-transport/tls"]

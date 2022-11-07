@@ -111,7 +111,7 @@ where
 
 			// Adjust the body to reflect the method call.
 			let body = Body::from(
-				serde_json::to_string(&RequestSer::new(&Id::Number(0), &self.method, None))
+				serde_json::to_string(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
 					.expect("Valid request; qed"),
 			);
 			req = req.map(|_| body);

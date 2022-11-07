@@ -26,23 +26,25 @@
 
 //! Shared utilities for `jsonrpsee` clients.
 
+use std::fmt;
+use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
 use crate::error::Error;
+use crate::params::BatchRequestBuilder;
+use crate::traits::ToRpcParams;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{Id, SubscriptionId};
+use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
-use crate::params::BatchRequestBuilder;
-use crate::traits::ToRpcParams;
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
@@ -76,11 +78,12 @@ pub trait ClientT {
 	///
 	/// The response to batch are returned in the same order as it was inserted in the batch.
 	///
-	/// Returns `Ok` if all requests in the batch were answered successfully.
-	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
+	///
+	/// Returns `Ok` if all requests in the batch were answered.
+	/// Returns `Error` if the network failed or any of the responses could be parsed a valid JSON-RPC response.
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
-		R: DeserializeOwned + Default + Clone;
+		R: DeserializeOwned + fmt::Debug + 'a;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
@@ -267,9 +270,9 @@ pub struct BatchMessage {
 	/// Serialized batch request.
 	pub raw: String,
 	/// Request IDs.
-	pub ids: Vec<Id<'static>>,
+	pub ids: Range<u64>,
 	/// One-shot channel over which we send back the result of this request.
-	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
+	pub send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>,
 }
 
 /// Request message.
@@ -416,20 +419,24 @@ impl RequestIdManager {
 	pub fn next_request_id(&self) -> Result<RequestIdGuard<Id<'static>>, Error> {
 		let rc = self.get_slot()?;
 		let id = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+
 		Ok(RequestIdGuard { _rc: rc, id })
 	}
 
-	/// Attempts to get the `n` number next IDs that only counts as one request.
+	/// Attempts to get fetch two ids (used for subscriptions) but only
+	/// occupy one slot in the request guard.
 	///
 	/// Fails if request limit has been exceeded.
-	pub fn next_request_ids(&self, len: usize) -> Result<RequestIdGuard<Vec<Id<'static>>>, Error> {
+	pub fn next_request_two_ids(&self) -> Result<RequestIdGuard<(Id<'static>, Id<'static>)>, Error> {
 		let rc = self.get_slot()?;
-		let mut ids = Vec::with_capacity(len);
-		for _ in 0..len {
-			let id = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
-			ids.push(id);
-		}
-		Ok(RequestIdGuard { _rc: rc, id: ids })
+		let id1 = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+		let id2 = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+		Ok(RequestIdGuard { _rc: rc, id: (id1, id2) })
+	}
+
+	/// Get a handle to the `IdKind`.
+	pub fn as_id_kind(&self) -> IdKind {
+		self.id_kind
 	}
 }
 
@@ -468,11 +475,101 @@ pub enum IdKind {
 }
 
 impl IdKind {
-	fn into_id(self, id: u64) -> Id<'static> {
+	/// Generate an `Id` from number.
+	pub fn into_id(self, id: u64) -> Id<'static> {
 		match self {
 			IdKind::Number => Id::Number(id),
 			IdKind::String => Id::Str(format!("{}", id).into()),
 		}
+	}
+}
+
+/// Generate a range of IDs to be used in a batch request.
+pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<Range<u64>, Error> {
+	let id_start = guard.inner().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+	let id_end = id_start
+		.checked_add(len)
+		.ok_or_else(|| Error::Custom("BatchID range wrapped; restart the client or try again later".to_string()))?;
+
+	Ok(id_start..id_end)
+}
+
+/// Represent a single entry in a batch response.
+pub type BatchEntry<'a, R> = Result<R, ErrorObject<'a>>;
+
+/// Batch response.
+#[derive(Debug)]
+pub struct BatchResponse<'a, R> {
+	successful_calls: usize,
+	failed_calls: usize,
+	responses: Vec<BatchEntry<'a, R>>,
+}
+
+impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
+	/// Create a new [`BatchResponse`].
+	pub fn new(successful_calls: usize, responses: Vec<BatchEntry<'a, R>>, failed_calls: usize) -> Self {
+		Self { successful_calls, responses, failed_calls }
+	}
+
+	/// Get the length of the batch response.
+	pub fn len(&self) -> usize {
+		self.responses.len()
+	}
+
+	/// Is empty.
+	pub fn is_empty(&self) -> bool {
+		self.responses.len() == 0
+	}
+
+	/// Get the number of successful calls in the batch.
+	pub fn num_successful_calls(&self) -> usize {
+		self.successful_calls
+	}
+
+	/// Get the number of failed calls in the batch.
+	pub fn num_failed_calls(&self) -> usize {
+		self.failed_calls
+	}
+
+	/// Returns `Ok(iterator)` if all responses were successful
+	/// otherwise `Err(iterator)` is returned.
+	///
+	/// If you want get all responses if an error responses occurs use [`BatchResponse::into_iter`]
+	/// instead where it's possible to implement customized logic.
+	pub fn into_ok(
+		self,
+	) -> Result<impl Iterator<Item = R> + 'a + std::fmt::Debug, impl Iterator<Item = ErrorObject<'a>> + std::fmt::Debug>
+	{
+		if self.failed_calls > 0 {
+			Err(self.into_iter().filter_map(|err| err.err()))
+		} else {
+			Ok(self.into_iter().filter_map(|r| r.ok()))
+		}
+	}
+
+	/// Similar to [`BatchResponse::into_ok`] but takes the responses by reference instead.
+	pub fn ok(
+		&self,
+	) -> Result<impl Iterator<Item = &R> + std::fmt::Debug, impl Iterator<Item = &ErrorObject<'a>> + std::fmt::Debug> {
+		if self.failed_calls > 0 {
+			Err(self.responses.iter().filter_map(|err| err.as_ref().err()))
+		} else {
+			Ok(self.responses.iter().filter_map(|r| r.as_ref().ok()))
+		}
+	}
+
+	/// Returns an iterator over all responses.
+	pub fn iter(&self) -> impl Iterator<Item = &BatchEntry<'_, R>> {
+		self.responses.iter()
+	}
+}
+
+impl<'a, R> IntoIterator for BatchResponse<'a, R> {
+	type Item = BatchEntry<'a, R>;
+	type IntoIter = std::vec::IntoIter<Self::Item>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.responses.into_iter()
 	}
 }
 
@@ -486,7 +583,7 @@ mod tests {
 		let _first = manager.next_request_id().unwrap();
 
 		{
-			let _second = manager.next_request_ids(13).unwrap();
+			let _second = manager.next_request_two_ids().unwrap();
 			assert!(manager.next_request_id().is_err());
 			// second dropped here.
 		}

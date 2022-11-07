@@ -26,6 +26,8 @@
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::{RequestMessage, TransportSenderT};
+use crate::params::ArrayParams;
+use crate::traits::ToRpcParams;
 use crate::Error;
 
 use futures_channel::mpsc;
@@ -34,27 +36,31 @@ use futures_util::future::{self, Either};
 
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
-use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
+use jsonrpsee_types::{
+	ErrorObject, ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse,
+};
 use serde_json::Value as JsonValue;
-use crate::params::ArrayParams;
-use crate::traits::ToRpcParams;
+use std::ops::Range;
+
+#[derive(Debug)]
+pub(crate) struct InnerBatchResponse {
+	pub(crate) id: u64,
+	pub(crate) result: Result<JsonValue, ErrorObject<'static>>,
+}
 
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
-pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<JsonValue>>) -> Result<(), Error> {
-	let mut digest = Vec::with_capacity(rps.len());
-	let mut ordered_responses = vec![JsonValue::Null; rps.len()];
-	let mut rps_unordered: Vec<_> = Vec::with_capacity(rps.len());
+pub(crate) fn process_batch_response(
+	manager: &mut RequestManager,
+	rps: Vec<InnerBatchResponse>,
+	range: Range<u64>,
+) -> Result<(), Error> {
+	let mut responses = Vec::with_capacity(rps.len());
 
-	for rp in rps {
-		let id = rp.id.into_owned();
-		digest.push(id.clone());
-		rps_unordered.push((id, rp.result));
-	}
+	let start_idx = range.start;
 
-	digest.sort_unstable();
-	let batch_state = match manager.complete_pending_batch(digest) {
+	let batch_state = match manager.complete_pending_batch(range.clone()) {
 		Some(state) => state,
 		None => {
 			tracing::warn!("Received unknown batch response");
@@ -62,12 +68,23 @@ pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<Resp
 		}
 	};
 
-	for (id, rp) in rps_unordered {
-		let pos =
-			batch_state.order.get(&id).copied().expect("All request IDs valid checked by RequestManager above; qed");
-		ordered_responses[pos] = rp;
+	for _ in range {
+		let err_obj = ErrorObject::borrowed(0, &"", None);
+		responses.push(Err(err_obj));
 	}
-	let _ = batch_state.send_back.send(Ok(ordered_responses));
+
+	for rp in rps {
+		let maybe_elem =
+			rp.id.checked_sub(start_idx).and_then(|p| p.try_into().ok()).and_then(|p: usize| responses.get_mut(p));
+
+		if let Some(elem) = maybe_elem {
+			*elem = rp.result;
+		} else {
+			return Err(Error::InvalidRequestId);
+		}
+	}
+
+	let _ = batch_state.send_back.send(Ok(responses));
 	Ok(())
 }
 
@@ -227,7 +244,7 @@ pub(crate) fn build_unsubscribe_message(
 	params.insert(sub_id).ok()?;
 	let params = params.to_rpc_params().ok()?;
 
-	let raw = serde_json::to_string(&RequestSer::new(&unsub_req_id, &unsub, params)).ok()?;
+	let raw = serde_json::to_string(&RequestSer::owned(unsub_req_id.clone(), unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 
