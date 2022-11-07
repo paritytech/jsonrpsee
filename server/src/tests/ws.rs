@@ -604,3 +604,52 @@ async fn disabled_batches() {
 	server_handle.stop().unwrap();
 	server_handle.stopped().await;
 }
+
+#[tokio::test]
+async fn invalid_batch_calls() {
+	init_logger();
+
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	// batch with no requests
+	let req = r#"[]"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, invalid_request(Id::Null));
+
+	// batch with invalid request
+	let req = r#"[123]"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, invalid_batch(vec![Id::Null]));
+
+	// batch with invalid request
+	let req = r#"[1, 2, 3]"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, invalid_batch(vec![Id::Null, Id::Null, Id::Null]));
+
+	// invalid JSON in batch
+	let req = r#"[
+		{"jsonrpc": "2.0", "method": "sum", "params": [1,2,4], "id": "1"},
+		{"jsonrpc": "2.0", "method"
+	  ]"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn batch_with_mixed_calls() {
+	init_logger();
+
+	let addr = server().with_default_timeout().await.unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	// mixed notifications, method calls and valid json should be valid.
+	let req = r#"[
+			{"jsonrpc": "2.0", "method": "add", "params": [1,2,4], "id": "1"},
+			{"jsonrpc": "2.0", "method": "add", "params": [7]},
+			{"foo": "boo"},
+			{"jsonrpc": "2.0", "method": "foo.get", "params": {"name": "myself"}, "id": "5"}
+		]"#;
+	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":"5"}]"#;
+	let response = client.send_request_text(req.to_string()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, res);
+}

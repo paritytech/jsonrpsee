@@ -281,7 +281,7 @@ impl BatchResponseBuilder {
 	///
 	/// Fails if the max limit is exceeded and returns to error response to
 	/// return early in order to not process method call responses which are thrown away anyway.
-	pub fn append(mut self, response: &MethodResponse) -> Result<Self, BatchResponse> {
+	pub fn append(&mut self, response: &MethodResponse) -> Result<(), BatchResponse> {
 		// `,` will occupy one extra byte for each entry
 		// on the last item the `,` is replaced by `]`.
 		let len = response.result.len() + self.result.len() + 1;
@@ -291,8 +291,13 @@ impl BatchResponseBuilder {
 		} else {
 			self.result.push_str(&response.result);
 			self.result.push(',');
-			Ok(self)
+			Ok(())
 		}
+	}
+
+	/// Check if the batch is empty.
+	pub fn is_empty(&self) -> bool {
+		self.result.len() <= 1
 	}
 
 	/// Finish the batch response
@@ -366,7 +371,9 @@ mod tests {
 		assert_eq!(method.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]`.
-		let batch = BatchResponseBuilder::new_with_limit(39).append(&method).unwrap().finish();
+		let mut builder = BatchResponseBuilder::new_with_limit(39);
+		builder.append(&method).unwrap();
+		let batch = builder.finish();
 
 		assert!(batch.success);
 		assert_eq!(batch.result, r#"[{"jsonrpc":"2.0","result":"a","id":1}]"#.to_string())
@@ -380,7 +387,10 @@ mod tests {
 		// Recall a batch appends two bytes for the `[]` and one byte for `,` to append a method call.
 		// so it should be 2 + (37 * n) + (n-1)
 		let limit = 2 + (37 * 2) + 1;
-		let batch = BatchResponseBuilder::new_with_limit(limit).append(&m1).unwrap().append(&m1).unwrap().finish();
+		let mut builder = BatchResponseBuilder::new_with_limit(limit);
+		builder.append(&m1).unwrap();
+		builder.append(&m1).unwrap();
+		let batch = builder.finish();
 
 		assert!(batch.success);
 		assert_eq!(
