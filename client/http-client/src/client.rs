@@ -24,19 +24,24 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::borrow::Cow as StdCow;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::HttpTransportClient;
-use crate::types::{ErrorResponse, Id, NotificationSer, RequestSer, Response};
+use crate::types::{ErrorResponse, NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::http::HeaderMap;
-use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
+use jsonrpsee_core::client::{
+	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription,
+	SubscriptionClientT,
+};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use rustc_hash::FxHashMap;
+use jsonrpsee_types::{ErrorObject, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tracing::instrument;
 
@@ -173,7 +178,8 @@ impl ClientT for HttpClient {
 		Params: ToRpcParams + Send,
 	{
 		let params = params.to_rpc_params()?;
-		let notif = serde_json::to_string(&NotificationSer::new(method, params)).map_err(Error::ParseError)?;
+		let notif =
+			serde_json::to_string(&NotificationSer::borrowed(&method, params.as_deref())).map_err(Error::ParseError)?;
 
 		let fut = self.transport.send(notif);
 
@@ -196,7 +202,7 @@ impl ClientT for HttpClient {
 		let id = guard.inner();
 		let params = params.to_rpc_params()?;
 
-		let request = RequestSer::new(&id, method, params);
+		let request = RequestSer::borrowed(&id, &method, params.as_deref());
 		let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
 
 		let fut = self.transport.send_and_read_body(raw);
@@ -230,23 +236,23 @@ impl ClientT for HttpClient {
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
-		R: DeserializeOwned + Default + Clone,
+		R: DeserializeOwned + fmt::Debug + 'a,
 	{
-		let batch = batch.build();
-		let guard = self.id_manager.next_request_ids(batch.len())?;
-		let ids: Vec<Id> = guard.inner();
+		let batch = batch.build()?;
+		let guard = self.id_manager.next_request_id()?;
+		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
 
 		let mut batch_request = Vec::with_capacity(batch.len());
-		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
-		let mut ordered_requests = Vec::with_capacity(batch.len());
-		let mut request_set = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
-
-		for (pos, (method, params)) in batch.into_iter().enumerate() {
-			batch_request.push(RequestSer::new(&ids[pos], method, params));
-			ordered_requests.push(&ids[pos]);
-			request_set.insert(&ids[pos], pos);
+		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+			let id = self.id_manager.as_id_kind().into_id(id);
+			batch_request.push(RequestSer {
+				jsonrpc: TwoPointZero,
+				id,
+				method: method.into(),
+				params: params.map(StdCow::Owned),
+			});
 		}
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
@@ -257,26 +263,48 @@ impl ClientT for HttpClient {
 			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
-		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
-		// a better error message if `R` couldn't be decoded.
-		let rps: Vec<Response<&JsonRawValue>> =
-			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
-				Ok(e) => Error::Call(CallError::Custom(e.error_object().clone().into_owned())),
-				Err(e) => Error::ParseError(e),
-			})?;
+		let json_rps: Vec<&JsonRawValue> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
-		// NOTE: `R::default` is placeholder and will be replaced in loop below.
-		let mut responses = vec![R::default(); ordered_requests.len()];
-		for rp in rps {
-			let pos = match request_set.get(&rp.id) {
-				Some(pos) => *pos,
-				None => return Err(Error::InvalidRequestId),
-			};
-			let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
-			responses[pos] = result;
+		let mut responses = Vec::with_capacity(json_rps.len());
+		let mut successful_calls = 0;
+		let mut failed_calls = 0;
+
+		for _ in 0..json_rps.len() {
+			responses.push(Err(ErrorObject::borrowed(0, &"", None)));
 		}
 
-		Ok(responses)
+		for rp in json_rps {
+			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
+				Ok(r) => {
+					let id = r.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+					successful_calls += 1;
+					(id, Ok(r.result))
+				}
+				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
+					Ok(err) => {
+						let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+						failed_calls += 1;
+						(id, Err(err.error_object().clone().into_owned()))
+					}
+					Err(_) => {
+						return Err(err);
+					}
+				},
+			};
+
+			let maybe_elem = id
+				.checked_sub(id_range.start)
+				.and_then(|p| p.try_into().ok())
+				.and_then(|p: usize| responses.get_mut(p));
+
+			if let Some(elem) = maybe_elem {
+				*elem = res;
+			} else {
+				return Err(Error::InvalidRequestId);
+			}
+		}
+
+		Ok(BatchResponse::new(successful_calls, responses, failed_calls))
 	}
 }
 

@@ -28,15 +28,21 @@
 use crate::types::error::{ErrorCode, ErrorObject};
 
 use crate::WsClientBuilder;
-use jsonrpsee_core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee_core::client::{BatchResponse, ClientT, SubscriptionClientT};
 use jsonrpsee_core::client::{IdKind, Subscription};
 use jsonrpsee_core::params::BatchRequestBuilder;
-use jsonrpsee_core::{rpc_params, Error};
+use jsonrpsee_core::{rpc_params, DeserializeOwned, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
 use serde_json::Value as JsonValue;
+
+fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
+}
 
 #[tokio::test]
 async fn method_call_works() {
@@ -231,9 +237,14 @@ async fn batch_request_works() {
 	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
 	batch_request.insert("get_swag", rpc_params![]).unwrap();
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
-	let response =
-		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
+	let batch_response = run_batch_request_with_response::<String>(batch_request, server_response)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(batch_response.num_successful_calls(), 3);
+	let results: Vec<String> = batch_response.into_ok().unwrap().collect();
+	assert_eq!(results, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
 #[tokio::test]
@@ -243,17 +254,102 @@ async fn batch_request_out_of_order_response() {
 	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
 	batch_request.insert("get_swag", rpc_params![]).unwrap();
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
-	let response =
-		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
+	let res = run_batch_request_with_response::<String>(batch_request, server_response)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(res.num_successful_calls(), 3);
+	assert_eq!(res.num_failed_calls(), 0);
+	assert_eq!(res.len(), 3);
+	let response: Vec<_> = res.into_ok().unwrap().collect();
+
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
 #[tokio::test]
+async fn batch_request_with_failed_call_works() {
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("say_hello", rpc_params![]).unwrap();
+	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
+	batch_request.insert("get_swag", rpc_params![]).unwrap();
+	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
+	let res = run_batch_request_with_response::<String>(batch_request, server_response)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(res.num_successful_calls(), 2);
+	assert_eq!(res.num_failed_calls(), 1);
+	assert_eq!(res.len(), 3);
+
+	let successful_calls: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
+	let failed_calls: Vec<_> = res
+		.iter()
+		.filter_map(|r| match r {
+			Err(e) => Some(e),
+			_ => None,
+		})
+		.collect();
+
+	assert_eq!(successful_calls, vec!["hello", "here's your swag"]);
+	assert_eq!(failed_calls, vec![&ErrorObject::from(ErrorCode::MethodNotFound)]);
+}
+
+#[tokio::test]
+async fn batch_request_with_untagged_enum_works() {
+	use serde::Deserialize;
+
+	#[derive(Deserialize, Clone, Debug, PartialEq)]
+	#[serde(untagged)]
+	enum Custom {
+		Text(String),
+		Number(u8),
+	}
+
+	impl Default for Custom {
+		fn default() -> Self {
+			Self::Number(0)
+		}
+	}
+
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("text", rpc_params![]).unwrap();
+	batch_request.insert("binary", rpc_params![0_u64, 1, 2]).unwrap();
+	let server_response =
+		r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":13,"id":1}]"#.to_string();
+	let res = run_batch_request_with_response::<Custom>(batch_request, server_response)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(res.num_successful_calls(), 2);
+	assert_eq!(res.num_failed_calls(), 0);
+	assert_eq!(res.len(), 2);
+	let response: Vec<_> = res.into_ok().unwrap().collect();
+
+	assert_eq!(response, vec![Custom::Text("hello".to_string()), Custom::Number(13)]);
+}
+
+#[tokio::test]
+async fn batch_request_with_failed_call_gives_proper_error() {
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("say_hello", rpc_params![]).unwrap();
+	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
+	batch_request.insert("get_swag", rpc_params![]).unwrap();
+	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}, {"jsonrpc":"2.0","error":{"code":-32602,"message":"foo"},"id":2}]"#.to_string();
+	let res = run_batch_request_with_response::<String>(batch_request, server_response)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let err: Vec<_> = res.into_ok().unwrap_err().collect();
+	assert_eq!(err, vec![ErrorObject::from(ErrorCode::MethodNotFound), ErrorObject::borrowed(-32602, &"foo", None)]);
+}
+
+#[tokio::test]
 async fn is_connected_works() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+	init_logger();
 
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
@@ -274,10 +370,10 @@ async fn is_connected_works() {
 	assert!(!client.is_connected())
 }
 
-async fn run_batch_request_with_response(
+async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + 'static>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
-) -> Result<Vec<String>, Error> {
+) -> Result<BatchResponse<T>, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
 		.with_default_timeout()
 		.await

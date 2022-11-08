@@ -49,7 +49,7 @@ fn truncate_at_char_boundary(s: &str, max: usize) -> &str {
 		return s;
 	}
 
-	match s.char_indices().nth(max as usize) {
+	match s.char_indices().nth(max) {
 		None => s,
 		Some((idx, _)) => &s[..idx],
 	}

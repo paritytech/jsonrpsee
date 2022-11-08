@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashSet;
+use std::str::FromStr;
 
 use super::RpcDescription;
 use crate::attributes::Resource;
@@ -32,7 +33,7 @@ use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::{parse_quote, ReturnType, Token};
+use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType, Token};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -387,8 +388,36 @@ impl RpcDescription {
 
 			let serde = self.jrps_server_item(quote! { core::__reexports::serde });
 			let serde_crate = serde.to_string();
+
 			let fields = params.iter().zip(generics.clone()).map(|((name, _), ty)| {
-				quote! { #name: #ty, }
+				let mut alias_vals = String::new();
+				alias_vals.push_str(&format!(
+					r#"alias = "{}""#,
+					heck::ToSnakeCase::to_snake_case(name.ident.to_string().as_str())
+				));
+				alias_vals.push(',');
+				alias_vals.push_str(&format!(
+					r#"alias = "{}""#,
+					heck::ToLowerCamelCase::to_lower_camel_case(name.ident.to_string().as_str())
+				));
+
+				let mut punc_attr = Punctuated::new();
+
+				punc_attr
+					.push_value(PathSegment { ident: quote::format_ident!("serde"), arguments: Default::default() });
+
+				let serde_alias = Attribute {
+					pound_token: token::Pound::default(),
+					style: AttrStyle::Outer,
+					bracket_token: Default::default(),
+					path: Path { leading_colon: None, segments: punc_attr },
+					tokens: TokenStream2::from_str(&format!("({})", alias_vals.as_str())).unwrap(),
+				};
+
+				quote! {
+					#serde_alias
+					#name: #ty,
+				}
 			});
 			let destruct = params.iter().map(|(name, _)| quote! { parsed.#name });
 			let types = params.iter().map(|(_, ty)| ty);

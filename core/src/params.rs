@@ -240,7 +240,26 @@ impl<'a> BatchRequestBuilder<'a> {
 	}
 
 	/// Finish the building process and return a valid batch parameter.
-	pub fn build(self) -> Vec<(&'a str, Option<Box<RawValue>>)> {
-		self.0
+	#[allow(clippy::type_complexity)]
+	pub fn build(self) -> Result<Vec<(&'a str, Option<Box<RawValue>>)>, Error> {
+		if self.0.is_empty() {
+			Err(Error::EmptyBatchRequest)
+		} else {
+			Ok(self.0)
+		}
+	}
+
+	/// Get an iterator over the batch request.
+	pub fn iter(&self) -> impl Iterator<Item = (&'a str, Option<&RawValue>)> {
+		self.0.iter().map(|(method, params)| (*method, params.as_deref()))
+	}
+}
+
+impl<'a> IntoIterator for BatchRequestBuilder<'a> {
+	type Item = (&'a str, Option<Box<RawValue>>);
+	type IntoIter = std::vec::IntoIter<Self::Item>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
 	}
 }
