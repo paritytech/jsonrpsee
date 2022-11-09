@@ -4,6 +4,76 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.16.0] - 2022-11-09
+
+v0.16.0 is a breaking release and the major changes are:
+
+- The server now support WS and HTTP on the same socket and the `jsonrpsee-http-server` and `jsonrpsee-ws-server` crates are moved to the `jsonrpsee-server` crate instead. 
+- The client batch request API is improved such as the errors and valid responses can be iterated over.
+- The server has `tower middleware` support.
+- The server now adds a tracing span for each connection to distinguish logs per connection.
+- CORS has been moved to `tower middleware`.
+
+### [Fixed]
+
+- server: read accepted conns properly ([#929](https://github.com/paritytech/jsonrpsee/pull/#929))
+- server: proper handling of batch errors and mixed calls ([#917](https://github.com/paritytech/jsonrpsee/pull/#917))
+- jsonrpsee: add `types` to server feature ([#891](https://github.com/paritytech/jsonrpsee/pull/#891))
+- http client: more user-friendly error messages when decoding fails ([#853](https://github.com/paritytech/jsonrpsee/pull/#853))
+- http_server: handle http2 requests host filtering correctly ([#866](https://github.com/paritytech/jsonrpsee/pull/#866))
+- server: `RpcModule::call` decode response correctly ([#839](https://github.com/paritytech/jsonrpsee/pull/#839))
+
+### [Added]
+
+- proc macro: support camelCase & snake_case for object params ([#921](https://github.com/paritytech/jsonrpsee/pull/#921))
+- server: add connection span ([#922](https://github.com/paritytech/jsonrpsee/pull/#922))
+- server: Expose the subscription ID ([#900](https://github.com/paritytech/jsonrpsee/pull/#900))
+- jsonrpsee wrapper crate: add feature async_wasm_client ([#893](https://github.com/paritytech/jsonrpsee/pull/#893))
+- server: add `transport protocol details` to the logger trait ([#886](https://github.com/paritytech/jsonrpsee/pull/#886))
+- middleware: Implement proxy URI paths to RPC methods ([#859](https://github.com/paritytech/jsonrpsee/pull/#859))
+- client: Implement `notify_on_disconnect` ([#837](https://github.com/paritytech/jsonrpsee/pull/#837))
+- Add `bytes_len()` to Params ([#848](https://github.com/paritytech/jsonrpsee/pull/#848))
+- Benchmarks for different HTTP header sizes ([#824](https://github.com/paritytech/jsonrpsee/pull/#824))
+
+### [Changed]
+
+- replace `WS and HTTP servers` with a server that supports both `WS and HTTP` ([#863](https://github.com/paritytech/jsonrpsee/pull/#863))
+- Optimize serialization for client parameters ([#864](https://github.com/paritytech/jsonrpsee/pull/#864))
+- Uniform log messages ([#855](https://github.com/paritytech/jsonrpsee/pull/#855))
+- Move CORS logic to tower middleware CorsLayer ([#851](https://github.com/paritytech/jsonrpsee/pull/#851))
+- server: add log for the http request ([#854](https://github.com/paritytech/jsonrpsee/pull/#854))
+- server: add `tower` support ([#831](https://github.com/paritytech/jsonrpsee/pull/#831))
+- jsonrpsee: less deps when defining RPC API. ([#849](https://github.com/paritytech/jsonrpsee/pull/#849))
+- server: rename `Middleware` to `Logger` ([#845](https://github.com/paritytech/jsonrpsee/pull/#845))
+- client: adjust TransportSenderT ([#852](https://github.com/paritytech/jsonrpsee/pull/#852))
+- chore(deps): update pprof requirement from 0.10 to 0.11 ([#924](https://github.com/paritytech/jsonrpsee/pull/#924))
+- chore(deps): bump Swatinem/rust-cache from 2.0.2 to 2.1.0 ([#930](https://github.com/paritytech/jsonrpsee/pull/#930))
+- client: improve batch request API ([#910](https://github.com/paritytech/jsonrpsee/pull/#910))
+- chore(deps): tokio ^1.16 ([#926](https://github.com/paritytech/jsonrpsee/pull/#926))
+- chore(deps): bump Swatinem/rust-cache from 2.0.1 to 2.0.2 ([#923](https://github.com/paritytech/jsonrpsee/pull/#923))
+- ci: make less noise in the gitlab job output ([#906](https://github.com/paritytech/jsonrpsee/pull/#906))
+- ci: use awk to parse text columns instead of cut ([#905](https://github.com/paritytech/jsonrpsee/pull/#905))
+- chore(deps): bump Swatinem/rust-cache from 2.0.0 to 2.0.1 ([#903](https://github.com/paritytech/jsonrpsee/pull/#903))
+- ci: push to promethues-pushgateway and some small fixes ([#904](https://github.com/paritytech/jsonrpsee/pull/#904))
+- server: Optimize sending for `SubscriptionSink::pipe_from_stream` ([#901](https://github.com/paritytech/jsonrpsee/pull/#901))
+- update readme ([#899](https://github.com/paritytech/jsonrpsee/pull/#899))
+- ci: benchmarks Change output.txt file path in gitlab ci ([#898](https://github.com/paritytech/jsonrpsee/pull/#898))
+- ci: fix gha gitlab bench again ([#897](https://github.com/paritytech/jsonrpsee/pull/#897))
+- chore(deps): bump actions/checkout from 3.0.2 to 3.1.0 ([#892](https://github.com/paritytech/jsonrpsee/pull/#892))
+- ci: fix path in bench ([#894](https://github.com/paritytech/jsonrpsee/pull/#894))
+- ci: gitlab benches: show results on github pages ([#889](https://github.com/paritytech/jsonrpsee/pull/#889))
+- ws-client: downgrade connection log to debug ([#865](https://github.com/paritytech/jsonrpsee/pull/#865))
+- ci: tokio-console support for benches ([#881](https://github.com/paritytech/jsonrpsee/pull/#881))
+- use tracing instrument macro ([#846](https://github.com/paritytech/jsonrpsee/pull/#846))
+- ci: run benches against fixed client version ([#890](https://github.com/paritytech/jsonrpsee/pull/#890))
+- ci: Additional variables for benchmarks execution ([#884](https://github.com/paritytech/jsonrpsee/pull/#884))
+- ci: relax `default measurement time`, split `benches` and run `fast call` only on batches ([#885](https://github.com/paritytech/jsonrpsee/pull/#885))
+- ci: more stable benches ([#883](https://github.com/paritytech/jsonrpsee/pull/#883))
+- Fix clippy ([#861](https://github.com/paritytech/jsonrpsee/pull/#861))
+- proc-macros/tests: Update test to latest rustc v1.67 ([#931](https://github.com/paritytech/jsonrpsee/pull/#931))
+- Fix clippy warnings ([#850](https://github.com/paritytech/jsonrpsee/pull/#850))
+- chore(deps): bump Swatinem/rust-cache from 1.4.0 to 2.0.0 ([#826](https://github.com/paritytech/jsonrpsee/pull/#826))
+
 ## [v0.15.1] - 2022-07-29
 
 This release fixes some incorrect tracing spans.
