@@ -5,7 +5,7 @@
 
 set -eu
 
-ORDER=(types proc-macros core client/http-client http-server client/transport client/ws-client client/wasm-client ws-server jsonrpsee)
+ORDER=(types proc-macros core client/http-client client/transport client/ws-client client/wasm-client server jsonrpsee)
 
 function read_toml () {
 	NAME=""
