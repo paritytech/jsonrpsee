@@ -24,7 +24,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.1.0
+        uses: Swatinem/rust-cache@v2.2.0
 
       - name: Copy bench results
         id: step_one
