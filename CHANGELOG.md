@@ -16,40 +16,40 @@ v0.16.0 is a breaking release and the major changes are:
 
 ### [Fixed]
 
-- server: read accepted conns properly ([#929](https://github.com/paritytech/jsonrpsee/pull/#929))
-- server: proper handling of batch errors and mixed calls ([#917](https://github.com/paritytech/jsonrpsee/pull/#917))
-- jsonrpsee: add `types` to server feature ([#891](https://github.com/paritytech/jsonrpsee/pull/#891))
-- http client: more user-friendly error messages when decoding fails ([#853](https://github.com/paritytech/jsonrpsee/pull/#853))
-- http_server: handle http2 requests host filtering correctly ([#866](https://github.com/paritytech/jsonrpsee/pull/#866))
-- server: `RpcModule::call` decode response correctly ([#839](https://github.com/paritytech/jsonrpsee/pull/#839))
+- server: read accepted conns properly ([#929](https://github.com/paritytech/jsonrpsee/pull/929))
+- server: proper handling of batch errors and mixed calls ([#917](https://github.com/paritytech/jsonrpsee/pull/917))
+- jsonrpsee: add `types` to server feature ([#891](https://github.com/paritytech/jsonrpsee/pull/891))
+- http client: more user-friendly error messages when decoding fails ([#853](https://github.com/paritytech/jsonrpsee/pull/853))
+- http_server: handle http2 requests host filtering correctly ([#866](https://github.com/paritytech/jsonrpsee/pull/866))
+- server: `RpcModule::call` decode response correctly ([#839](https://github.com/paritytech/jsonrpsee/pull/839))
 
 ### [Added]
 
-- proc macro: support camelCase & snake_case for object params ([#921](https://github.com/paritytech/jsonrpsee/pull/#921))
-- server: add connection span ([#922](https://github.com/paritytech/jsonrpsee/pull/#922))
-- server: Expose the subscription ID ([#900](https://github.com/paritytech/jsonrpsee/pull/#900))
-- jsonrpsee wrapper crate: add feature async_wasm_client ([#893](https://github.com/paritytech/jsonrpsee/pull/#893))
-- server: add `transport protocol details` to the logger trait ([#886](https://github.com/paritytech/jsonrpsee/pull/#886))
-- middleware: Implement proxy URI paths to RPC methods ([#859](https://github.com/paritytech/jsonrpsee/pull/#859))
-- client: Implement `notify_on_disconnect` ([#837](https://github.com/paritytech/jsonrpsee/pull/#837))
-- Add `bytes_len()` to Params ([#848](https://github.com/paritytech/jsonrpsee/pull/#848))
-- Benchmarks for different HTTP header sizes ([#824](https://github.com/paritytech/jsonrpsee/pull/#824))
+- proc macro: support camelCase & snake_case for object params ([#921](https://github.com/paritytech/jsonrpsee/pull/921))
+- server: add connection span ([#922](https://github.com/paritytech/jsonrpsee/pull/922))
+- server: Expose the subscription ID ([#900](https://github.com/paritytech/jsonrpsee/pull/900))
+- jsonrpsee wrapper crate: add feature async_wasm_client ([#893](https://github.com/paritytech/jsonrpsee/pull/893))
+- server: add `transport protocol details` to the logger trait ([#886](https://github.com/paritytech/jsonrpsee/pull/886))
+- middleware: Implement proxy URI paths to RPC methods ([#859](https://github.com/paritytech/jsonrpsee/pull/859))
+- client: Implement `notify_on_disconnect` ([#837](https://github.com/paritytech/jsonrpsee/pull/837))
+- Add `bytes_len()` to Params ([#848](https://github.com/paritytech/jsonrpsee/pull/848))
+- Benchmarks for different HTTP header sizes ([#824](https://github.com/paritytech/jsonrpsee/pull/824))
 
 ### [Changed]
 
-- replace `WS and HTTP servers` with a server that supports both `WS and HTTP` ([#863](https://github.com/paritytech/jsonrpsee/pull/#863))
-- Optimize serialization for client parameters ([#864](https://github.com/paritytech/jsonrpsee/pull/#864))
-- Uniform log messages ([#855](https://github.com/paritytech/jsonrpsee/pull/#855))
-- Move CORS logic to tower middleware CorsLayer ([#851](https://github.com/paritytech/jsonrpsee/pull/#851))
-- server: add log for the http request ([#854](https://github.com/paritytech/jsonrpsee/pull/#854))
-- server: add `tower` support ([#831](https://github.com/paritytech/jsonrpsee/pull/#831))
-- jsonrpsee: less deps when defining RPC API. ([#849](https://github.com/paritytech/jsonrpsee/pull/#849))
-- server: rename `Middleware` to `Logger` ([#845](https://github.com/paritytech/jsonrpsee/pull/#845))
-- client: adjust TransportSenderT ([#852](https://github.com/paritytech/jsonrpsee/pull/#852))
-- client: improve batch request API ([#910](https://github.com/paritytech/jsonrpsee/pull/#910))
-- server: Optimize sending for `SubscriptionSink::pipe_from_stream` ([#901](https://github.com/paritytech/jsonrpsee/pull/#901))
-- ws-client: downgrade connection log to debug ([#865](https://github.com/paritytech/jsonrpsee/pull/#865))
-- use tracing instrument macro ([#846](https://github.com/paritytech/jsonrpsee/pull/#846))
+- replace `WS and HTTP servers` with a server that supports both `WS and HTTP` ([#863](https://github.com/paritytech/jsonrpsee/pull/863))
+- Optimize serialization for client parameters ([#864](https://github.com/paritytech/jsonrpsee/pull/864))
+- Uniform log messages ([#855](https://github.com/paritytech/jsonrpsee/pull/855))
+- Move CORS logic to tower middleware CorsLayer ([#851](https://github.com/paritytech/jsonrpsee/pull/851))
+- server: add log for the http request ([#854](https://github.com/paritytech/jsonrpsee/pull/854))
+- server: add `tower` support ([#831](https://github.com/paritytech/jsonrpsee/pull/831))
+- jsonrpsee: less deps when defining RPC API. ([#849](https://github.com/paritytech/jsonrpsee/pull/849))
+- server: rename `Middleware` to `Logger` ([#845](https://github.com/paritytech/jsonrpsee/pull/845))
+- client: adjust TransportSenderT ([#852](https://github.com/paritytech/jsonrpsee/pull/852))
+- client: improve batch request API ([#910](https://github.com/paritytech/jsonrpsee/pull/910))
+- server: Optimize sending for `SubscriptionSink::pipe_from_stream` ([#901](https://github.com/paritytech/jsonrpsee/pull/901))
+- ws-client: downgrade connection log to debug ([#865](https://github.com/paritytech/jsonrpsee/pull/865))
+- use tracing instrument macro ([#846](https://github.com/paritytech/jsonrpsee/pull/846))
 
 ## [v0.15.1] - 2022-07-29
 
