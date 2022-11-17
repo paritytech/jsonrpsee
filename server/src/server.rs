@@ -445,7 +445,6 @@ impl<B, L> Builder<B, L> {
 	/// Configure the server should only serve JSON-RPC WebSocket requests.
 	///
 	/// That implies that server just denies HTTP requests which isn't a WebSocket upgrade request
-	/// except if you have enabled middleware which are processed before this check occurs.
 	///
 	/// Default: both http and ws are enabled.
 	pub fn ws_only(mut self) -> Self {
