@@ -426,4 +426,9 @@ pub(crate) mod response {
 			TEXT,
 		)
 	}
+
+	/// Create a response for when the server denied the request.
+	pub(crate) fn denied() -> hyper::Response<hyper::Body> {
+		from_template(hyper::StatusCode::FORBIDDEN, "".to_owned(), TEXT)
+	}
 }
