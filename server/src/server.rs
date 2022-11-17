@@ -442,7 +442,7 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Configure the server should only serve JSON-RPC WebSocket requests.
+	/// Configure the server to only serve JSON-RPC WebSocket requests.
 	///
 	/// That implies that server just denies HTTP requests which isn't a WebSocket upgrade request
 	///
