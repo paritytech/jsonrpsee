@@ -4,6 +4,20 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.16.1] - 2022-11-18
+
+v0.16.1 is release that adds two new APIs to server `http_only` and `ws_only` to make it possible to allow only HTTP respectively WebSocket, both HTTP and WebSocket are still enabled by default.
+
+### [Fixed]
+
+- docs: remove outdated features ([#938](https://github.com/paritytech/jsonrpsee/pull/938))
+- docs: http client url typo in examples ([#940](https://github.com/paritytech/jsonrpsee/pull/940))
+- core: remove unused dependency `async-channel` ([#940](https://github.com/paritytech/jsonrpsee/pull/941))
+
+### [Added]
+
+- server: make it possible to enable ws/http only  ([#939](https://github.com/paritytech/jsonrpsee/pull/939))
+
 ## [v0.16.0] - 2022-11-09
 
 v0.16.0 is a breaking release and the major changes are:
