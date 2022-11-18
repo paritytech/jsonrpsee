@@ -155,6 +155,8 @@ where
 						conn_id: id,
 						logger: logger.clone(),
 						max_connections: self.cfg.max_connections,
+						enable_http: self.cfg.enable_http,
+						enable_ws: self.cfg.enable_ws,
 					};
 					process_connection(&self.service_builder, &connection_guard, data, socket, &mut connections);
 					id = id.wrapping_add(1);
@@ -193,6 +195,10 @@ struct Settings {
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	/// The interval at which `Ping` frames are submitted.
 	ping_interval: Duration,
+	/// Enable HTTP.
+	enable_http: bool,
+	/// Enable WS.
+	enable_ws: bool,
 }
 
 impl Default for Settings {
@@ -207,6 +213,8 @@ impl Default for Settings {
 			allow_hosts: AllowHosts::Any,
 			tokio_runtime: None,
 			ping_interval: Duration::from_secs(60),
+			enable_http: true,
+			enable_ws: true,
 		}
 	}
 }
@@ -425,6 +433,26 @@ impl<B, L> Builder<B, L> {
 		}
 	}
 
+	/// Configure the server to only serve JSON-RPC HTTP requests.
+	///
+	/// Default: both http and ws are enabled.
+	pub fn http_only(mut self) -> Self {
+		self.settings.enable_http = true;
+		self.settings.enable_ws = false;
+		self
+	}
+
+	/// Configure the server to only serve JSON-RPC WebSocket requests.
+	///
+	/// That implies that server just denies HTTP requests which isn't a WebSocket upgrade request
+	///
+	/// Default: both http and ws are enabled.
+	pub fn ws_only(mut self) -> Self {
+		self.settings.enable_http = false;
+		self.settings.enable_ws = true;
+		self
+	}
+
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	///
 	/// ```rust
@@ -547,6 +575,10 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) logger: L,
 	/// Handle to hold a `connection permit`.
 	pub(crate) conn: Arc<OwnedSemaphorePermit>,
+	/// Enable HTTP.
+	pub(crate) enable_http: bool,
+	/// Enable WS.
+	pub(crate) enable_ws: bool,
 }
 
 /// JsonRPSee service compatible with `tower`.
@@ -589,7 +621,9 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 			return async { Ok(http::response::host_not_allowed()) }.boxed();
 		}
 
-		if is_upgrade_request(&request) {
+		let is_upgrade_request = is_upgrade_request(&request);
+
+		if self.inner.enable_ws && is_upgrade_request {
 			let mut server = soketto::handshake::http::Server::new();
 
 			let response = match server.receive_request(&request) {
@@ -626,7 +660,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 			};
 
 			async { Ok(response) }.boxed()
-		} else {
+		} else if self.inner.enable_http && !is_upgrade_request {
 			// The request wasn't an upgrade request; let's treat it as a standard HTTP request:
 			let data = http::HandleRequest {
 				methods: self.inner.methods.clone(),
@@ -643,6 +677,8 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 			self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::Http);
 
 			Box::pin(http::handle_request(request, data).map(Ok))
+		} else {
+			Box::pin(async { http::response::denied() }.map(Ok))
 		}
 	}
 }
@@ -730,6 +766,10 @@ struct ProcessConnection<L> {
 	conn_id: u32,
 	/// Logger.
 	logger: L,
+	/// Allow JSON-RPC HTTP requests.
+	enable_http: bool,
+	/// Allow JSON-RPC WS request and WS upgrade requests.
+	enable_ws: bool,
 }
 
 #[instrument(name = "connection", skip_all, fields(remote_addr = %cfg.remote_addr, conn_id = %cfg.conn_id), level = "INFO")]
@@ -787,6 +827,8 @@ fn process_connection<'a, L: Logger, B, U>(
 			conn_id: cfg.conn_id,
 			logger: cfg.logger,
 			conn: Arc::new(conn),
+			enable_http: cfg.enable_http,
+			enable_ws: cfg.enable_ws,
 		},
 	};
 
