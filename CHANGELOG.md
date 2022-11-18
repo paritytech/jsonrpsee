@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog].
 
 ## [v0.16.1] - 2022-11-18
 
-v0.16.1 is release that adds two new APIs to server `http_only` and `ws_only` to make it possible to allow only HTTP respectively WebSocket, both HTTP and WebSocket are still enabled by default.
+v0.16.1 is release that adds two new APIs to server `http_only` and `ws_only` to make it possible to allow only HTTP respectively WebSocket.
+
+Both HTTP and WebSocket are still enabled by default.
 
 ### [Fixed]
 
