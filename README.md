@@ -6,7 +6,7 @@
 ![MIT](https://img.shields.io/crates/l/jsonrpsee.svg)
 [![CI](https://github.com/paritytech/jsonrpsee/actions/workflows/ci.yml/badge.svg)](https://github.com/paritytech/jsonrpsee/actions/workflows/ci.yml)
 [![Benchmarks](https://github.com/paritytech/jsonrpsee/actions/workflows/benchmarks.yml/badge.svg)](https://github.com/paritytech/jsonrpsee/actions/workflows/benchmarks.yml)
-[![dependency status](https://deps.rs/crate/jsonrpsee/0.16.0/status.svg)](https://deps.rs/crate/jsonrpsee/0.16.0)
+[![dependency status](https://deps.rs/crate/jsonrpsee/0.16.1/status.svg)](https://deps.rs/crate/jsonrpsee/0.16.1)
 
 JSON-RPC library designed for async/await in Rust.
 

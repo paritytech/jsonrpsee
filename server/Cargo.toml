@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-server"
-version = "0.16.0"
+version = "0.16.1"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "JSON-RPC server that supports HTTP and WebSocket transports"
 edition = "2021"
@@ -12,8 +12,8 @@ documentation = "https://docs.rs/jsonrpsee-server"
 [dependencies]
 futures-channel = "0.3.14"
 futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
-jsonrpsee-types = { path = "../types", version = "0.16.0" }
-jsonrpsee-core = { path = "../core", version = "0.16.0", features = ["server", "soketto", "http-helpers"] }
+jsonrpsee-types = { path = "../types", version = "0.16.1" }
+jsonrpsee-core = { path = "../core", version = "0.16.1", features = ["server", "soketto", "http-helpers"] }
 tracing = "0.1.34"
 serde = "1"
 serde_json = { version = "1", features = ["raw_value"] }
