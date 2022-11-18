@@ -62,7 +62,7 @@ use tracing::instrument;
 ///     // Build client
 ///     let client = HttpClientBuilder::default()
 ///          .set_headers(headers)
-///          .build("wss://localhost:443")
+///          .build("http://localhost")
 ///          .unwrap();
 ///
 ///     // use client....
