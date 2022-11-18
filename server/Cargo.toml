@@ -2,7 +2,7 @@
 name = "jsonrpsee-server"
 version = "0.16.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
-description = "JSON-RPC server that supports both HTTP and WebSocket transports"
+description = "JSON-RPC server that supports HTTP and WebSocket transports"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/paritytech/jsonrpsee"
