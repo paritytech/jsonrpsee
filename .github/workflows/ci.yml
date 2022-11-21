@@ -46,7 +46,7 @@ jobs:
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
+          args: --all-features --all-targets
 
   check-docs:
     name: Check rustdoc
@@ -167,20 +167,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3.1.0
 
-    - name: Install Rust stable toolchain
-      uses: actions-rs/toolchain@v1.0.7
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-
     - name: Install wasm-pack
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-    - name: Setup firefox
+    - name: Install firefox
       uses: browser-actions/setup-firefox@latest
 
-    - name: Setup chrome
+    - name: Install chrome
       uses: browser-actions/setup-chrome@latest
 
     - name: Download Substrate
