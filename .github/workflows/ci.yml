@@ -167,11 +167,21 @@ jobs:
     steps:
     - uses: actions/checkout@v3.1.0
 
+    - name: Install Rust stable toolchain
+      uses: actions-rs/toolchain@v1.0.7
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
     - name: Install wasm-pack
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-    - name: Install firefox
-      run: apt update && apt install firefox
+    - name: Setup firefox
+      uses: browser-actions/setup-firefox@latest
+
+    - name: Setup chrome
+      uses: browser-actions/setup-chrome@latest
 
     - name: Download Substrate
       run: |
@@ -179,11 +189,12 @@ jobs:
         chmod +x substrate
         mkdir -p ~/.local/bin
         mv substrate ~/.local/bin
+
     - name: Run WASM tests
       run: |
         substrate --dev --tmp > /dev/null 2>&1 &
         firefox --version
-        # wasm-pack test --headless --firefox
+        wasm-pack test --headless --firefox
         wasm-pack test --headless --chrome
         pkill substrate
       working-directory: wasm-tests
