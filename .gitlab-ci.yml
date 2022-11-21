@@ -19,7 +19,8 @@ variables:                         &default-vars
   GIT_DEPTH:                       100
   CARGO_INCREMENTAL:               0
   CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
-  CI_IMAGE:                        "paritytech/ci-linux:production"
+  # ci-linux with rust stable 1.65 and nightly 1.66 (2022-11-13)
+  CI_IMAGE:                        "paritytech/ci-linux@sha256:c9a26c7906a85c42d1cfde8333421fcf3c719f222733b1b2cc7d0c74b33c5e21"
 
 .common-refs:                      &common-refs
   rules:
