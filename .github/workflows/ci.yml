@@ -186,7 +186,6 @@ jobs:
     - name: Run WASM tests
       run: |
         substrate --dev --tmp > /dev/null 2>&1 &
-        firefox --version
         wasm-pack test --headless --firefox
         wasm-pack test --headless --chrome
         pkill substrate
