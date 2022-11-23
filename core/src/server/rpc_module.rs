@@ -577,13 +577,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		R: Serialize + Send + Sync + 'static,
 		Fut: Future<Output = Result<R, Error>> + Send,
-		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Copy + Send + Sync + 'static,
+		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::new_async(Arc::new(move |id, params, _, max_response_size, claimed| {
 				let ctx = ctx.clone();
+				let callback = callback.clone();
+
 				let future = async move {
 					let result = match callback(params, ctx).await {
 						Ok(res) => MethodResponse::response(id, res, max_response_size),
@@ -612,13 +614,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(Params, Arc<Context>) -> Result<R, Error> + Copy + Send + Sync + 'static,
+		F: Fn(Params, Arc<Context>) -> Result<R, Error> + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::new_async(Arc::new(move |id, params, _, max_response_size, claimed| {
 				let ctx = ctx.clone();
+				let callback = callback.clone();
 
 				tokio::task::spawn_blocking(move || {
 					let result = match callback(params, ctx) {
