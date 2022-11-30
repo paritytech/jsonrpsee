@@ -24,8 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
-
 //! # jsonrpsee-http-client
 //!
 //! `jsonrpsee-http-client` is [JSON RPC](https://www.jsonrpc.org/specification) HTTP client library that's is built for `async/await`.
@@ -33,6 +31,9 @@
 //! It is tightly-coupled to [`tokio`](https://docs.rs/tokio) because [`hyper`](https://docs.rs/hyper) is used as transport client,
 //! which is not compatible with other async runtimes such as
 //! [`async-std`](https://docs.rs/async-std/), [`smol`](https://docs.rs/smol) and similar.
+
+#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod client;
 

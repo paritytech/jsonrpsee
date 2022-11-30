@@ -33,7 +33,7 @@ use crate::traits::IdProvider;
 use jsonrpsee_types::SubscriptionId;
 
 /// Generates random integers as subscription ID.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct RandomIntegerIdProvider;
 
 impl IdProvider for RandomIntegerIdProvider {
@@ -44,7 +44,7 @@ impl IdProvider for RandomIntegerIdProvider {
 }
 
 /// Generates random strings of length `len` as subscription ID.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct RandomStringIdProvider {
 	len: usize,
 }
@@ -64,7 +64,7 @@ impl IdProvider for RandomStringIdProvider {
 }
 
 /// No-op implementation to be used for servers that don't support subscriptions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct NoopIdProvider;
 
 impl IdProvider for NoopIdProvider {

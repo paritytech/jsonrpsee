@@ -49,6 +49,7 @@
 //! - **`client-ws-transport-no-tls`** - Enables `ws` transport without TLS.
 //! - **`client-web-transport`** - Enables `websys` transport.
 
+#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 // Macros useful below, but not to be exposed outside of the crate.

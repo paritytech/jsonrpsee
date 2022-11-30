@@ -157,7 +157,7 @@ impl<'a> Params<'a> {
 /// params parsing (often) yields values of different types.
 ///
 /// Regards empty array `[]` as no parameters provided.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct ParamsSequence<'a>(&'a str);
 
 impl<'a> ParamsSequence<'a> {
