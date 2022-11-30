@@ -88,7 +88,7 @@ pub type SubscriptionResult = Result<(), SubscriptionEmptyError>;
 ///
 /// It contains no data, and neither is the error utilized. It provides an abstraction to make the
 /// API more ergonomic while handling errors that may occur during the subscription callback.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SubscriptionEmptyError;
 
 impl From<anyhow::Error> for SubscriptionEmptyError {
@@ -116,7 +116,7 @@ impl From<SubscriptionAcceptRejectError> for SubscriptionEmptyError {
 }
 
 /// The error returned while accepting or rejecting a subscription.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum SubscriptionAcceptRejectError {
 	/// The method was already called.
 	AlreadyCalled,

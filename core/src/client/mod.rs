@@ -163,7 +163,7 @@ pub trait TransportSenderT: MaybeSend + 'static {
 
 /// Message type received from the RPC server.
 /// It can either be plain text data, bytes, or `Pong` messages.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ReceivedMessage {
 	/// Incoming packet contains plain `String` data.
 	Text(String),
@@ -498,7 +498,7 @@ pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<R
 pub type BatchEntry<'a, R> = Result<R, ErrorObject<'a>>;
 
 /// Batch response.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BatchResponse<'a, R> {
 	successful_calls: usize,
 	failed_calls: usize,

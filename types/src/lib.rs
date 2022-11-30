@@ -24,9 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Shared types in `jsonrpsee` for clients, servers and utilities.
+//! JSON-RPC specific types.
 
-#![warn(missing_docs, missing_debug_implementations)]
+#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate alloc;
 

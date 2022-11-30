@@ -46,7 +46,7 @@ use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 ///    (&mut writer).write("hello".as_bytes()).unwrap();
 ///    assert_eq!(std::str::from_utf8(&writer.into_bytes()).unwrap(), "hello");
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BoundedWriter {
 	max_len: usize,
 	buf: Vec<u8>,
@@ -214,7 +214,7 @@ impl BoundedSubscriptions {
 }
 
 /// Represent the response to method call.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
 	pub result: String,
@@ -260,7 +260,7 @@ impl MethodResponse {
 }
 
 /// Builder to build a `BatchResponse`.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct BatchResponseBuilder {
 	/// Serialized JSON-RPC response,
 	result: String,
@@ -313,7 +313,7 @@ impl BatchResponseBuilder {
 }
 
 /// Response to a batch request.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BatchResponse {
 	/// Formatted JSON-RPC response.
 	pub result: String,

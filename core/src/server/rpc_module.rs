@@ -98,7 +98,7 @@ pub struct ConnState<'a> {
 }
 
 /// Outcome of a successful terminated subscription.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum InnerSubscriptionResult {
 	/// The subscription stream was executed successfully.
 	Success,

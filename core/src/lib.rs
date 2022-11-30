@@ -26,7 +26,7 @@
 
 //! Shared utilities for `jsonrpsee`.
 
-#![warn(missing_docs, missing_debug_implementations, unreachable_pub)]
+#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 // Macros useful internally within this crate, but not to be exposed outside of it.

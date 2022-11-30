@@ -50,7 +50,7 @@ enum Kind {
 	Subscription((RequestId, SubscriptionSink, UnsubscribeMethod)),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Indicates the status of a given request/response.
 pub(crate) enum RequestStatus {
 	/// The method call is waiting for a response,

@@ -24,8 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
-
 //! # jsonrpsee-ws-client
 //!
 //! `jsonrpsee-ws-client` is a [JSON RPC](https://www.jsonrpc.org/specification) WebSocket client library that's is built for `async/await`.
@@ -33,6 +31,9 @@
 //! ## Async runtime support
 //!
 //! This library uses `tokio` as the runtime and does not support other runtimes.
+
+#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(test)]
 mod tests;

@@ -72,7 +72,7 @@ impl ErrorFromBack {
 }
 
 /// Builder for [`Client`].
-#[derive(Clone, Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct ClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,

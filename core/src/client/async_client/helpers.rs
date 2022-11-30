@@ -42,7 +42,7 @@ use jsonrpsee_types::{
 use serde_json::Value as JsonValue;
 use std::ops::Range;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct InnerBatchResponse {
 	pub(crate) id: u64,
 	pub(crate) result: Result<JsonValue, ErrorObject<'static>>,

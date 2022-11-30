@@ -585,7 +585,7 @@ pub(crate) struct ServiceData<L: Logger> {
 ///
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TowerService<L: Logger> {
 	inner: ServiceData<L>,
 }
