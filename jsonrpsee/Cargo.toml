@@ -1,7 +1,7 @@
 [package]
 name = "jsonrpsee"
 description = "JSON-RPC crate"
-version = "0.16.1"
+version = "0.16.2"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
 edition = "2021"
@@ -12,14 +12,14 @@ documentation = "https://docs.rs/jsonrpsee"
 [dependencies]
 # No support for namespaced features yet so workspace dependencies are prefixed with `jsonrpsee-`.
 # See https://github.com/rust-lang/cargo/issues/5565 for more details.
-jsonrpsee-http-client = { path = "../client/http-client", version = "0.16.1", optional = true }
-jsonrpsee-ws-client = { path = "../client/ws-client", version = "0.16.1", optional = true }
-jsonrpsee-wasm-client = { path = "../client/wasm-client", version = "0.16.1", optional = true }
-jsonrpsee-client-transport = { path = "../client/transport", version = "0.16.1", optional = true }
-jsonrpsee-server = { path = "../server", version = "0.16.1", optional = true }
-jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.16.1", optional = true }
-jsonrpsee-core = { path = "../core", version = "0.16.1", optional = true }
-jsonrpsee-types = { path = "../types", version = "0.16.1", optional = true }
+jsonrpsee-http-client = { path = "../client/http-client", version = "0.16.2", optional = true }
+jsonrpsee-ws-client = { path = "../client/ws-client", version = "0.16.2", optional = true }
+jsonrpsee-wasm-client = { path = "../client/wasm-client", version = "0.16.2", optional = true }
+jsonrpsee-client-transport = { path = "../client/transport", version = "0.16.2", optional = true }
+jsonrpsee-server = { path = "../server", version = "0.16.2", optional = true }
+jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.16.2", optional = true }
+jsonrpsee-core = { path = "../core", version = "0.16.2", optional = true }
+jsonrpsee-types = { path = "../types", version = "0.16.2", optional = true }
 tracing = { version = "0.1.34", optional = true }
 
 [features]

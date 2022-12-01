@@ -4,6 +4,20 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.16.2] - 2022-12-01
+
+This release adds `Clone` and `Copy` implementations and improves the performance of WASM tests.
+
+### [Fixed]
+
+- fix(rpc module): make async closures Clone  ([#948](https://github.com/paritytech/jsonrpsee/pull/948))
+- fix(ci): wasm tests  ([#946](https://github.com/paritytech/jsonrpsee/pull/946))
+
+### [Added]
+
+- add missing `Clone` and `Copy` impls  ([#951](https://github.com/paritytech/jsonrpsee/pull/951))
+- TowerService should be clone-able for handling concurrent request  ([#950](https://github.com/paritytech/jsonrpsee/pull/950))
+
 ## [v0.16.1] - 2022-11-18
 
 v0.16.1 is release that adds two new APIs to server `http_only` and `ws_only` to make it possible to allow only HTTP respectively WebSocket.
