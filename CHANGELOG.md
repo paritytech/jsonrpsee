@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.16.2] - 2022-12-01
 
-This release adds `Clone` and `Copy` implementations and improves the performance of WASM tests.
+This release adds `Clone` and `Copy` implementations.
 
 ### [Fixed]
 
