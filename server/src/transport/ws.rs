@@ -289,13 +289,14 @@ pub(crate) async fn background_task<L: Logger>(
 		conn_id,
 		logger,
 		remote_addr,
+		buffer_capacity,
 		conn,
 		..
 	} = svc;
 
-	let (tx, rx) = mpsc::unbounded::<String>();
+	let (tx, rx) = mpsc::channel::<String>(buffer_capacity as usize);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
+	let mut sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval));
@@ -339,7 +340,13 @@ pub(crate) async fn background_task<L: Logger>(
 							current,
 							maximum
 						);
-						sink.send_error(Id::Null, reject_too_big_request(max_request_body_size));
+						if let Err(e) = sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)) {
+							if e.is_full() {
+								return Err(Error::Custom("Server buffer capacity exceeded".to_string()));
+							} else {
+								return Ok(());
+							}
+						}
 						continue;
 					}
 
@@ -361,7 +368,7 @@ pub(crate) async fn background_task<L: Logger>(
 		match first_non_whitespace {
 			Some(b'{') => {
 				let data = std::mem::take(&mut data);
-				let sink = sink.clone();
+				let mut sink = sink.clone();
 				let resources = &resources;
 				let methods = &methods;
 				let bounded_subscriptions = bounded_subscriptions.clone();
@@ -387,7 +394,8 @@ pub(crate) async fn background_task<L: Logger>(
 						}
 						MethodResult::SendAndLogger(r) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-							let _ = sink.send_raw(r.result);
+							// TODO: close conn?!.
+							if let Err(e) = sink.send_raw(r.result) {}
 						}
 					};
 				}
@@ -401,14 +409,20 @@ pub(crate) async fn background_task<L: Logger>(
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 				);
 				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-				let _ = sink.send_raw(response.result);
+				if let Err(e) = sink.send_raw(response.result) {
+					if e.is_full() {
+						return Err(Error::Custom("Connection buffer limit exceeded".to_string()));
+					} else {
+						return Ok(());
+					}
+				}
 			}
 			Some(b'[') => {
 				// Make sure the following variables are not moved into async closure below.
 				let resources = &resources;
 				let methods = &methods;
 				let bounded_subscriptions = bounded_subscriptions.clone();
-				let sink = sink.clone();
+				let mut sink = sink.clone();
 				let id_provider = id_provider.clone();
 				let data = std::mem::take(&mut data);
 
@@ -440,7 +454,13 @@ pub(crate) async fn background_task<L: Logger>(
 				method_executors.add(Box::pin(fut));
 			}
 			_ => {
-				sink.send_error(Id::Null, ErrorCode::ParseError.into());
+				if let Err(e) = sink.send_error(Id::Null, ErrorCode::ParseError.into()) {
+					if e.is_full() {
+						return Err(Error::Custom("Server buffer capacity exceeded".to_string()));
+					} else {
+						return Ok(());
+					}
+				}
 			}
 		}
 	};
@@ -463,7 +483,7 @@ pub(crate) async fn background_task<L: Logger>(
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
 async fn send_task(
-	mut rx: mpsc::UnboundedReceiver<String>,
+	mut rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
 	mut stop_handle: StopHandle,
 	ping_interval: Duration,

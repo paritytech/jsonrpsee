@@ -157,6 +157,7 @@ where
 						max_connections: self.cfg.max_connections,
 						enable_http: self.cfg.enable_http,
 						enable_ws: self.cfg.enable_ws,
+						buffer_capacity: self.cfg.buffer_capacity,
 					};
 					process_connection(&self.service_builder, &connection_guard, data, socket, &mut connections);
 					id = id.wrapping_add(1);
@@ -199,6 +200,8 @@ struct Settings {
 	enable_http: bool,
 	/// Enable WS.
 	enable_ws: bool,
+	/// Number of messages that server is allowed `buffer` until backpressure kicks in.
+	buffer_capacity: u32,
 }
 
 impl Default for Settings {
@@ -215,6 +218,7 @@ impl Default for Settings {
 			ping_interval: Duration::from_secs(60),
 			enable_http: true,
 			enable_ws: true,
+			buffer_capacity: 1024,
 		}
 	}
 }
@@ -453,6 +457,14 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
+	/// Configure the max number of messages that can be buffered
+	///
+	/// If this limit is exceeded the message can be dropped or the connection could be closed.
+	pub fn set_buffer_size(mut self, c: u32) -> Self {
+		self.settings.buffer_capacity = c;
+		self
+	}
+
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	///
 	/// ```rust
@@ -579,6 +591,8 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) enable_http: bool,
 	/// Enable WS.
 	pub(crate) enable_ws: bool,
+	/// Bounded channel capacity.
+	pub(crate) buffer_capacity: u32,
 }
 
 /// JsonRPSee service compatible with `tower`.
@@ -770,6 +784,8 @@ struct ProcessConnection<L> {
 	enable_http: bool,
 	/// Allow JSON-RPC WS request and WS upgrade requests.
 	enable_ws: bool,
+	/// ...
+	buffer_capacity: u32,
 }
 
 #[instrument(name = "connection", skip_all, fields(remote_addr = %cfg.remote_addr, conn_id = %cfg.conn_id), level = "INFO")]
@@ -829,6 +845,7 @@ fn process_connection<'a, L: Logger, B, U>(
 			conn: Arc::new(conn),
 			enable_http: cfg.enable_http,
 			enable_ws: cfg.enable_ws,
+			buffer_capacity: cfg.buffer_capacity,
 		},
 	};
 

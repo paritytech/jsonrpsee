@@ -29,7 +29,7 @@ use std::sync::Arc;
 
 use crate::tracing::tx_log_from_str;
 use crate::Error;
-use futures_channel::mpsc;
+use futures_channel::mpsc::{self, TrySendError};
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
@@ -84,7 +84,7 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 #[derive(Clone, Debug)]
 pub struct MethodSink {
 	/// Channel sender.
-	tx: mpsc::UnboundedSender<String>,
+	tx: mpsc::Sender<String>,
 	/// Max response size in bytes for a executed call.
 	max_response_size: u32,
 	/// Max log length.
@@ -93,12 +93,12 @@ pub struct MethodSink {
 
 impl MethodSink {
 	/// Create a new `MethodSink` with unlimited response size.
-	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {
+	pub fn new(tx: mpsc::Sender<String>) -> Self {
 		MethodSink { tx, max_response_size: u32::MAX, max_log_length: u32::MAX }
 	}
 
 	/// Create a new `MethodSink` with a limited response size.
-	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32, max_log_length: u32) -> Self {
+	pub fn new_with_limit(tx: mpsc::Sender<String>, max_response_size: u32, max_log_length: u32) -> Self {
 		MethodSink { tx, max_response_size, max_log_length }
 	}
 
@@ -108,40 +108,28 @@ impl MethodSink {
 	}
 
 	/// Send a JSON-RPC error to the client
-	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
-		let json = match serde_json::to_string(&ErrorResponse::borrowed(error, id)) {
-			Ok(json) => json,
-			Err(err) => {
-				tracing::error!("Error serializing response: {:?}", err);
-
-				return false;
-			}
-		};
+	pub fn send_error(&mut self, id: Id, error: ErrorObject) -> Result<(), TrySendError<String>> {
+		let json = serde_json::to_string(&ErrorResponse::borrowed(error, id)).expect("valid JSON; qed");
 
 		tx_log_from_str(&json, self.max_log_length);
 
-		if let Err(err) = self.send_raw(json) {
-			tracing::warn!("Error sending response {:?}", err);
-			false
-		} else {
-			true
-		}
+		self.send_raw(json)
 	}
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client.
-	pub fn send_call_error(&self, id: Id, err: Error) -> bool {
+	pub fn send_call_error(&mut self, id: Id, err: Error) -> Result<(), TrySendError<String>> {
 		self.send_error(id, err.into())
 	}
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
-	pub fn send_raw(&self, json: String) -> Result<(), mpsc::TrySendError<String>> {
+	pub fn send_raw(&mut self, json: String) -> Result<(), TrySendError<String>> {
 		tx_log_from_str(&json, self.max_log_length);
-		self.tx.unbounded_send(json)
+		self.tx.try_send(json)
 	}
 
 	/// Close the channel for any further messages.
-	pub fn close(&self) {
+	pub fn close(&mut self) {
 		self.tx.close_channel();
 	}
 

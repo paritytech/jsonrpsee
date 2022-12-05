@@ -83,9 +83,9 @@ pub type MaxResponseSize = usize;
 /// Raw response from an RPC
 /// A 3-tuple containing:
 ///   - Call result as a `String`,
-///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
+///   - a [`mpsc::Receiver<String>`] to receive future subscription results
 ///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
-pub type RawRpcResponse = (MethodResponse, mpsc::UnboundedReceiver<String>, SubscriptionPermit);
+pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, SubscriptionPermit);
 
 /// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
@@ -404,10 +404,7 @@ impl Methods {
 	///     );
 	/// }
 	/// ```
-	pub async fn raw_json_request(
-		&self,
-		request: &str,
-	) -> Result<(MethodResponse, mpsc::UnboundedReceiver<String>), Error> {
+	pub async fn raw_json_request(&self, request: &str) -> Result<(MethodResponse, mpsc::Receiver<String>), Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx, _) = self.inner_call(req).await;
@@ -416,7 +413,7 @@ impl Methods {
 
 	/// Execute a callback.
 	async fn inner_call(&self, req: Request<'_>) -> RawRpcResponse {
-		let (tx_sink, mut rx_sink) = mpsc::unbounded();
+		let (tx_sink, mut rx_sink) = mpsc::channel(u32::MAX as usize / 2);
 		let sink = MethodSink::new(tx_sink);
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
@@ -750,7 +747,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					// TODO: register as failed in !result.
 					MethodResponse::response(id, result, max_response_size)
 				})),
 			);
@@ -1065,7 +1061,11 @@ impl SubscriptionSink {
 		}
 	}
 
-	fn answer_subscription(&self, response: MethodResponse, subscribe_call: oneshot::Sender<MethodResponse>) -> bool {
+	fn answer_subscription(
+		&mut self,
+		response: MethodResponse,
+		subscribe_call: oneshot::Sender<MethodResponse>,
+	) -> bool {
 		let ws_send = self.inner.send_raw(response.result.clone()).is_ok();
 		let logger_call = subscribe_call.send(response).is_ok();
 
@@ -1110,7 +1110,7 @@ impl SubscriptionSink {
 	///
 	pub fn close(self, err: impl Into<ErrorObjectOwned>) -> bool {
 		if self.is_active_subscription() {
-			if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			if let Some((mut sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
 				tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 
 				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
@@ -1140,7 +1140,7 @@ impl Drop for SubscriptionSink {
 #[derive(Debug)]
 pub struct Subscription {
 	close_notify: Option<SubscriptionPermit>,
-	rx: mpsc::UnboundedReceiver<String>,
+	rx: mpsc::Receiver<String>,
 	sub_id: RpcSubscriptionId<'static>,
 }
 
