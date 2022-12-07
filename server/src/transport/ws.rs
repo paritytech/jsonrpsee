@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -12,21 +13,19 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::server::helpers::{
-	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
-};
+use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
-use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
+use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods, SendError};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
 use jsonrpsee_types::error::{
-	reject_too_big_request, reject_too_many_subscriptions, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
-	BATCHES_NOT_SUPPORTED_MSG,
+	reject_too_big_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
 };
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
+use tokio::sync::Notify;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::Compat;
 use tracing::instrument;
@@ -58,7 +57,6 @@ pub(crate) struct Batch<'a, L: Logger> {
 #[derive(Debug, Clone)]
 pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) conn_id: usize,
-	pub(crate) bounded_subscriptions: BoundedSubscriptions,
 	pub(crate) id_provider: &'a dyn IdProvider,
 	pub(crate) methods: &'a Methods,
 	pub(crate) max_response_body_size: u32,
@@ -67,6 +65,7 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) sink: &'a MethodSink,
 	pub(crate) logger: &'a L,
 	pub(crate) request_start: L::Instant,
+	pub(crate) close_notify: Arc<Notify>,
 }
 
 /// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
@@ -179,11 +178,11 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 		max_response_body_size,
 		max_log_length,
 		conn_id,
-		bounded_subscriptions,
 		id_provider,
 		sink,
 		logger,
 		request_start,
+		close_notify,
 	} = call;
 
 	rx_log_from_json(&req, call.max_log_length);
@@ -236,15 +235,9 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 				match method.claim(name, resources) {
 					Ok(guard) => {
-						if let Some(cn) = bounded_subscriptions.acquire() {
-							let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
-							let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
-							MethodResult::JustLogger(response)
-						} else {
-							let response =
-								MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
-							MethodResult::SendAndLogger(response)
-						}
+						let conn_state = ConnState { conn_id, close_notify, id_provider };
+						let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
+						MethodResult::JustLogger(response)
 					}
 					Err(err) => {
 						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
@@ -285,7 +278,6 @@ pub(crate) async fn background_task<L: Logger>(
 		stop_handle,
 		id_provider,
 		ping_interval,
-		max_subscriptions_per_connection,
 		conn_id,
 		logger,
 		remote_addr,
@@ -295,8 +287,8 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(buffer_capacity as usize);
-	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 	let mut sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
+	let close_notify = Arc::new(Notify::new());
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval));
@@ -341,10 +333,11 @@ pub(crate) async fn background_task<L: Logger>(
 							maximum
 						);
 						if let Err(e) = sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)) {
-							if e.is_full() {
-								return Err(Error::Custom("Server buffer capacity exceeded".to_string()));
-							} else {
-								return Ok(());
+							match e {
+								SendError::Full => {
+									return Err(Error::Custom("Server buffer capacity exceeded".to_string()))
+								}
+								SendError::Disconnected => return Ok(()),
 							}
 						}
 						continue;
@@ -371,8 +364,8 @@ pub(crate) async fn background_task<L: Logger>(
 				let mut sink = sink.clone();
 				let resources = &resources;
 				let methods = &methods;
-				let bounded_subscriptions = bounded_subscriptions.clone();
 				let id_provider = &*id_provider;
+				let close_notify = close_notify.clone();
 
 				let fut = async move {
 					let call = CallData {
@@ -381,11 +374,11 @@ pub(crate) async fn background_task<L: Logger>(
 						max_response_body_size,
 						max_log_length,
 						methods,
-						bounded_subscriptions,
 						sink: &sink,
 						id_provider,
 						logger,
 						request_start,
+						close_notify: close_notify.clone(),
 					};
 
 					match process_single_request(data, call).await {
@@ -395,7 +388,7 @@ pub(crate) async fn background_task<L: Logger>(
 						MethodResult::SendAndLogger(r) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 							// TODO: close conn?!.
-							if let Err(e) = sink.send_raw(r.result) {}
+							if let Err(_) = sink.send_raw(r.result) {}
 						}
 					};
 				}
@@ -410,10 +403,9 @@ pub(crate) async fn background_task<L: Logger>(
 				);
 				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
 				if let Err(e) = sink.send_raw(response.result) {
-					if e.is_full() {
-						return Err(Error::Custom("Connection buffer limit exceeded".to_string()));
-					} else {
-						return Ok(());
+					match e {
+						SendError::Full => return Err(Error::Custom("Server buffer capacity exceeded".to_string())),
+						SendError::Disconnected => return Ok(()),
 					}
 				}
 			}
@@ -421,10 +413,10 @@ pub(crate) async fn background_task<L: Logger>(
 				// Make sure the following variables are not moved into async closure below.
 				let resources = &resources;
 				let methods = &methods;
-				let bounded_subscriptions = bounded_subscriptions.clone();
 				let mut sink = sink.clone();
 				let id_provider = id_provider.clone();
 				let data = std::mem::take(&mut data);
+				let close_notify = close_notify.clone();
 
 				let fut = async move {
 					let response = process_batch_request(Batch {
@@ -435,11 +427,11 @@ pub(crate) async fn background_task<L: Logger>(
 							max_response_body_size,
 							max_log_length,
 							methods,
-							bounded_subscriptions,
 							sink: &sink,
 							id_provider: &*id_provider,
 							logger,
 							request_start,
+							close_notify,
 						},
 					})
 					.await;
@@ -455,10 +447,9 @@ pub(crate) async fn background_task<L: Logger>(
 			}
 			_ => {
 				if let Err(e) = sink.send_error(Id::Null, ErrorCode::ParseError.into()) {
-					if e.is_full() {
-						return Err(Error::Custom("Server buffer capacity exceeded".to_string()));
-					} else {
-						return Ok(());
+					match e {
+						SendError::Full => return Err(Error::Custom("Server buffer capacity exceeded".to_string())),
+						SendError::Disconnected => return Ok(()),
 					}
 				}
 			}
@@ -474,7 +465,7 @@ pub(crate) async fn background_task<L: Logger>(
 
 	// Notify all listeners and close down associated tasks.
 	sink.close();
-	bounded_subscriptions.close();
+	close_notify.notify_waiters();
 
 	drop(conn);
 

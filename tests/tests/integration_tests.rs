@@ -41,6 +41,7 @@ use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
+use jsonrpsee::core::server::rpc_module::{SendError, SubscriptionSinkError};
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -439,8 +440,12 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			sink.accept().unwrap();
 			tokio::spawn(async move {
 				let close_err = loop {
-					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
-						break ErrorObject::borrowed(0, &"Subscription terminated successfully", None);
+					match sink.send(&1_usize) {
+						Ok(_) => (),
+						Err(SubscriptionSinkError::Send(SendError::Disconnected)) => {
+							break ErrorObject::borrowed(0, &"Subscription terminated successfully", None)
+						}
+						Err(e) => panic!("Unexpected error: {:?}", e),
 					}
 					tokio::time::sleep(Duration::from_millis(100)).await;
 				};

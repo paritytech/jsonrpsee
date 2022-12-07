@@ -276,9 +276,13 @@ async fn close_test_subscribing_without_server() {
 					tracing::debug!("[test] Sink is open, sleeping");
 					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 				}
-				// Get the close reason.
-				if !sink.send(&"lo").expect("str serializable; qed") {
-					sink.close(SubscriptionClosed::RemotePeerAborted);
+
+				match sink.send(&"lo") {
+					Ok(_) => panic!("The sink should be closed"),
+					Err(SubscriptionSinkError::Send(SendError::Disconnected)) => {
+						sink.close(SubscriptionClosed::RemotePeerAborted);
+					}
+					Err(other) => panic!("Unexpected error: {:?}", other),
 				}
 			});
 			Ok(())

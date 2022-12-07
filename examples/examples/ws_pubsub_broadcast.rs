@@ -80,6 +80,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					sink.close(SubscriptionClosed::Success);
 				}
 				SubscriptionClosed::RemotePeerAborted => (),
+				SubscriptionClosed::Full => (),
 				SubscriptionClosed::Failed(err) => {
 					sink.close(err);
 				}

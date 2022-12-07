@@ -172,6 +172,8 @@ pub enum SubscriptionClosed {
 	RemotePeerAborted,
 	/// The subscription was completed successfully by the server.
 	Success,
+	/// The subscription was dropped because the message capacity buffer was exceeded.
+	Full,
 	/// The subscription failed during execution by the server.
 	Failed(ErrorObject<'static>),
 }
@@ -182,6 +184,11 @@ impl From<SubscriptionClosed> for ErrorObjectOwned {
 			SubscriptionClosed::RemotePeerAborted => {
 				ErrorObject::owned(SUBSCRIPTION_CLOSED, "Subscription was closed by the remote peer", None::<()>)
 			}
+			SubscriptionClosed::Full => ErrorObject::owned(
+				SUBSCRIPTION_CLOSED,
+				"Subscription was closed because the bounded buffer capacity was exceeded",
+				None::<()>,
+			),
 			SubscriptionClosed::Success => ErrorObject::owned(
 				SUBSCRIPTION_CLOSED,
 				"Subscription was completed by the server successfully",

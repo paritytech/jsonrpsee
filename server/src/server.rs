@@ -129,7 +129,6 @@ where
 		let logger = self.logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
 		let id_provider = self.id_provider;
-		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 
 		let mut id: u32 = 0;
 		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
@@ -151,7 +150,6 @@ where
 						id_provider: id_provider.clone(),
 						ping_interval: self.cfg.ping_interval,
 						stop_handle: stop_handle.clone(),
-						max_subscriptions_per_connection,
 						conn_id: id,
 						logger: logger.clone(),
 						max_connections: self.cfg.max_connections,
@@ -287,7 +285,7 @@ impl<B, L> Builder<B, L> {
 	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
 	/// registered resources on this server instance would exceed 8.
 	///
-	/// See the module documentation for [`resurce_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
+	/// See the module documentation for [`resource_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
 	/// for details.
 	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
 		self.resources.register(label, capacity, default)?;
@@ -579,8 +577,6 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) ping_interval: Duration,
 	/// Stop handle.
 	pub(crate) stop_handle: StopHandle,
-	/// Max subscriptions per connection.
-	pub(crate) max_subscriptions_per_connection: u32,
 	/// Connection ID
 	pub(crate) conn_id: u32,
 	/// Logger.
@@ -772,8 +768,6 @@ struct ProcessConnection<L> {
 	ping_interval: Duration,
 	/// Stop handle.
 	stop_handle: StopHandle,
-	/// Max subscriptions per connection.
-	max_subscriptions_per_connection: u32,
 	/// Max connections,
 	max_connections: u32,
 	/// Connection ID
@@ -839,7 +833,6 @@ fn process_connection<'a, L: Logger, B, U>(
 			id_provider: cfg.id_provider,
 			ping_interval: cfg.ping_interval,
 			stop_handle: cfg.stop_handle.clone(),
-			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
 			conn_id: cfg.conn_id,
 			logger: cfg.logger,
 			conn: Arc::new(conn),

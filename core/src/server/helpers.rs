@@ -25,15 +25,15 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::io;
-use std::sync::Arc;
 
 use crate::tracing::tx_log_from_str;
 use crate::Error;
-use futures_channel::mpsc::{self, TrySendError};
+use futures_channel::mpsc;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
-use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
+
+use super::rpc_module::SendError;
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -108,7 +108,7 @@ impl MethodSink {
 	}
 
 	/// Send a JSON-RPC error to the client
-	pub fn send_error(&mut self, id: Id, error: ErrorObject) -> Result<(), TrySendError<String>> {
+	pub fn send_error(&mut self, id: Id, error: ErrorObject) -> Result<(), SendError> {
 		let json = serde_json::to_string(&ErrorResponse::borrowed(error, id)).expect("valid JSON; qed");
 
 		tx_log_from_str(&json, self.max_log_length);
@@ -117,15 +117,15 @@ impl MethodSink {
 	}
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client.
-	pub fn send_call_error(&mut self, id: Id, err: Error) -> Result<(), TrySendError<String>> {
+	pub fn send_call_error(&mut self, id: Id, err: Error) -> Result<(), SendError> {
 		self.send_error(id, err.into())
 	}
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
-	pub fn send_raw(&mut self, json: String) -> Result<(), TrySendError<String>> {
+	pub fn send_raw(&mut self, json: String) -> Result<(), SendError> {
 		tx_log_from_str(&json, self.max_log_length);
-		self.tx.try_send(json)
+		self.tx.try_send(json).map_err(Into::into)
 	}
 
 	/// Close the channel for any further messages.
@@ -145,59 +145,6 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	match serde_json::from_slice::<InvalidRequest>(data) {
 		Ok(InvalidRequest { id }) => (id, ErrorCode::InvalidRequest),
 		Err(_) => (Id::Null, ErrorCode::ParseError),
-	}
-}
-
-/// A permitted subscription.
-#[derive(Debug)]
-pub struct SubscriptionPermit {
-	_permit: OwnedSemaphorePermit,
-	resource: Arc<Notify>,
-}
-
-impl SubscriptionPermit {
-	/// Get the handle to [`tokio::sync::Notify`].
-	pub fn handle(&self) -> Arc<Notify> {
-		self.resource.clone()
-	}
-}
-
-/// Wrapper over [`tokio::sync::Notify`] with bounds check.
-#[derive(Debug, Clone)]
-pub struct BoundedSubscriptions {
-	resource: Arc<Notify>,
-	guard: Arc<Semaphore>,
-	max: u32,
-}
-
-impl BoundedSubscriptions {
-	/// Create a new bounded subscription.
-	pub fn new(max_subscriptions: u32) -> Self {
-		Self {
-			resource: Arc::new(Notify::new()),
-			guard: Arc::new(Semaphore::new(max_subscriptions as usize)),
-			max: max_subscriptions,
-		}
-	}
-
-	/// Attempts to acquire a subscription slot.
-	///
-	/// Fails if `max_subscriptions` have been exceeded.
-	pub fn acquire(&self) -> Option<SubscriptionPermit> {
-		Arc::clone(&self.guard)
-			.try_acquire_owned()
-			.ok()
-			.map(|p| SubscriptionPermit { _permit: p, resource: self.resource.clone() })
-	}
-
-	/// Get the maximum number of permitted subscriptions.
-	pub const fn max(&self) -> u32 {
-		self.max
-	}
-
-	/// Close all subscriptions.
-	pub fn close(&self) {
-		self.resource.notify_waiters();
 	}
 }
 
@@ -319,7 +266,6 @@ impl BatchResponse {
 
 #[cfg(test)]
 mod tests {
-	use crate::server::helpers::BoundedSubscriptions;
 
 	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, Response};
 
@@ -337,20 +283,6 @@ mod tests {
 		let mut writer = BoundedWriter::new(100);
 		// NOTE: `"` is part of the serialization so 101 characters.
 		assert!(serde_json::to_writer(&mut writer, &"x".repeat(99)).is_err());
-	}
-
-	#[test]
-	fn bounded_subscriptions_work() {
-		let subs = BoundedSubscriptions::new(5);
-		let mut handles = Vec::new();
-
-		for _ in 0..5 {
-			handles.push(subs.acquire().unwrap());
-		}
-
-		assert!(subs.acquire().is_none());
-		handles.swap_remove(0);
-		assert!(subs.acquire().is_some());
 	}
 
 	#[test]
