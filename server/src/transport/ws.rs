@@ -14,7 +14,6 @@ use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse, MethodSink};
-use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods, SendError};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
@@ -61,7 +60,6 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) methods: &'a Methods,
 	pub(crate) max_response_body_size: u32,
 	pub(crate) max_log_length: u32,
-	pub(crate) resources: &'a Resources,
 	pub(crate) sink: &'a MethodSink,
 	pub(crate) logger: &'a L,
 	pub(crate) request_start: L::Instant,
@@ -173,7 +171,6 @@ pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, c
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
 pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> MethodResult {
 	let CallData {
-		resources,
 		methods,
 		max_response_body_size,
 		max_log_length,
@@ -200,51 +197,23 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let r = (callback)(id, params, max_response_body_size as usize);
-						drop(guard);
-						MethodResult::SendAndLogger(r)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
-				}
+				MethodResult::SendAndLogger((callback)(id, params, max_response_body_size as usize))
 			}
 			MethodKind::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let id = id.into_owned();
-						let params = params.into_owned();
 
-						let response =
-							(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
-						MethodResult::SendAndLogger(response)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
-				}
+				let id = id.into_owned();
+				let params = params.into_owned();
+
+				let response = (callback)(id, params, conn_id, max_response_body_size as usize).await;
+				MethodResult::SendAndLogger(response)
 			}
 			MethodKind::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let conn_state = ConnState { conn_id, close_notify, id_provider };
-						let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
-						MethodResult::JustLogger(response)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
-				}
+
+				let conn_state = ConnState { conn_id, close_notify, id_provider };
+				let response = callback(id.clone(), params, sink.clone(), conn_state).await;
+				MethodResult::JustLogger(response)
 			}
 			MethodKind::Unsubscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription, TransportProtocol::WebSocket);
@@ -270,7 +239,6 @@ pub(crate) async fn background_task<L: Logger>(
 ) -> Result<(), Error> {
 	let ServiceData {
 		methods,
-		resources,
 		max_request_body_size,
 		max_response_body_size,
 		max_log_length,
@@ -362,7 +330,6 @@ pub(crate) async fn background_task<L: Logger>(
 			Some(b'{') => {
 				let data = std::mem::take(&mut data);
 				let mut sink = sink.clone();
-				let resources = &resources;
 				let methods = &methods;
 				let id_provider = &*id_provider;
 				let close_notify = close_notify.clone();
@@ -370,7 +337,6 @@ pub(crate) async fn background_task<L: Logger>(
 				let fut = async move {
 					let call = CallData {
 						conn_id: conn_id as usize,
-						resources,
 						max_response_body_size,
 						max_log_length,
 						methods,
@@ -411,7 +377,6 @@ pub(crate) async fn background_task<L: Logger>(
 			}
 			Some(b'[') => {
 				// Make sure the following variables are not moved into async closure below.
-				let resources = &resources;
 				let methods = &methods;
 				let mut sink = sink.clone();
 				let id_provider = id_provider.clone();
@@ -423,7 +388,6 @@ pub(crate) async fn background_task<L: Logger>(
 						data,
 						call: CallData {
 							conn_id: conn_id as usize,
-							resources,
 							max_response_body_size,
 							max_log_length,
 							methods,

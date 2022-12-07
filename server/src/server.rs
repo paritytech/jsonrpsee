@@ -44,7 +44,6 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
 use jsonrpsee_core::server::helpers::MethodResponse;
 use jsonrpsee_core::server::host_filtering::AllowHosts;
-use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
@@ -64,7 +63,6 @@ const MAX_CONNECTIONS: u32 = 100;
 pub struct Server<B = Identity, L = ()> {
 	listener: TcpListener,
 	cfg: Settings,
-	resources: Resources,
 	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 	service_builder: tower::ServiceBuilder<B>,
@@ -76,7 +74,6 @@ impl<L> std::fmt::Debug for Server<L> {
 			.field("listener", &self.listener)
 			.field("cfg", &self.cfg)
 			.field("id_provider", &self.id_provider)
-			.field("resources", &self.resources)
 			.finish()
 	}
 }
@@ -107,7 +104,7 @@ where
 	///
 	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
-		let methods = methods.into().initialize_resources(&self.resources)?;
+		let methods = methods.into();
 		let (stop_tx, stop_rx) = watch::channel(());
 
 		let stop_handle = StopHandle::new(stop_rx);
@@ -125,7 +122,6 @@ where
 		let max_response_body_size = self.cfg.max_response_body_size;
 		let max_log_length = self.cfg.max_log_length;
 		let allow_hosts = self.cfg.allow_hosts;
-		let resources = self.resources;
 		let logger = self.logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
 		let id_provider = self.id_provider;
@@ -142,7 +138,6 @@ where
 						remote_addr,
 						methods: methods.clone(),
 						allow_hosts: allow_hosts.clone(),
-						resources: resources.clone(),
 						max_request_body_size,
 						max_response_body_size,
 						max_log_length,
@@ -180,8 +175,6 @@ struct Settings {
 	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u32,
-	/// Maximum number of subscriptions per connection.
-	max_subscriptions_per_connection: u32,
 	/// Max length for logging for requests and responses
 	///
 	/// Logs bigger than this limit will be truncated.
@@ -208,7 +201,6 @@ impl Default for Settings {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			max_log_length: 4096,
-			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
 			batch_requests_supported: true,
 			allow_hosts: AllowHosts::Any,
@@ -225,7 +217,6 @@ impl Default for Settings {
 #[derive(Debug)]
 pub struct Builder<B = Identity, L = ()> {
 	settings: Settings,
-	resources: Resources,
 	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 	service_builder: tower::ServiceBuilder<B>,
@@ -235,7 +226,6 @@ impl Default for Builder {
 	fn default() -> Self {
 		Builder {
 			settings: Settings::default(),
-			resources: Resources::default(),
 			logger: (),
 			id_provider: Arc::new(RandomIntegerIdProvider),
 			service_builder: tower::ServiceBuilder::new(),
@@ -274,22 +264,6 @@ impl<B, L> Builder<B, L> {
 	pub fn batch_requests_supported(mut self, supported: bool) -> Self {
 		self.settings.batch_requests_supported = supported;
 		self
-	}
-
-	/// Set the maximum number of connections allowed. Default is 1024.
-	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
-		self.settings.max_subscriptions_per_connection = max;
-		self
-	}
-
-	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
-	/// registered resources on this server instance would exceed 8.
-	///
-	/// See the module documentation for [`resource_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
-	/// for details.
-	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
-		self.resources.register(label, capacity, default)?;
-		Ok(self)
 	}
 
 	/// Add a logger to the builder [`Logger`](../jsonrpsee_core/logger/trait.Logger.html).
@@ -336,7 +310,6 @@ impl<B, L> Builder<B, L> {
 	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<B, T> {
 		Builder {
 			settings: self.settings,
-			resources: self.resources,
 			logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
@@ -426,13 +399,7 @@ impl<B, L> Builder<B, L> {
 	/// }
 	/// ```
 	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> Builder<T, L> {
-		Builder {
-			settings: self.settings,
-			resources: self.resources,
-			logger: self.logger,
-			id_provider: self.id_provider,
-			service_builder,
-		}
+		Builder { settings: self.settings, logger: self.logger, id_provider: self.id_provider, service_builder }
 	}
 
 	/// Configure the server to only serve JSON-RPC HTTP requests.
@@ -485,7 +452,6 @@ impl<B, L> Builder<B, L> {
 		Ok(Server {
 			listener,
 			cfg: self.settings,
-			resources: self.resources,
 			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
@@ -521,7 +487,6 @@ impl<B, L> Builder<B, L> {
 		Ok(Server {
 			listener,
 			cfg: self.settings,
-			resources: self.resources,
 			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
@@ -559,8 +524,6 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) methods: Methods,
 	/// Access control.
 	pub(crate) allow_hosts: AllowHosts,
-	/// Tracker for currently used resources on the server.
-	pub(crate) resources: Resources,
 	/// Max request body size.
 	pub(crate) max_request_body_size: u32,
 	/// Max response body size.
@@ -674,7 +637,6 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 			// The request wasn't an upgrade request; let's treat it as a standard HTTP request:
 			let data = http::HandleRequest {
 				methods: self.inner.methods.clone(),
-				resources: self.inner.resources.clone(),
 				max_request_body_size: self.inner.max_request_body_size,
 				max_response_body_size: self.inner.max_response_body_size,
 				max_log_length: self.inner.max_log_length,
@@ -750,8 +712,6 @@ struct ProcessConnection<L> {
 	methods: Methods,
 	/// Access control.
 	allow_hosts: AllowHosts,
-	/// Tracker for currently used resources on the server.
-	resources: Resources,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Max response body size.
@@ -825,7 +785,6 @@ fn process_connection<'a, L: Logger, B, U>(
 			remote_addr: cfg.remote_addr,
 			methods: cfg.methods,
 			allow_hosts: cfg.allow_hosts,
-			resources: cfg.resources,
 			max_request_body_size: cfg.max_request_body_size,
 			max_response_body_size: cfg.max_response_body_size,
 			max_log_length: cfg.max_log_length,

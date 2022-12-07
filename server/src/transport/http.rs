@@ -11,7 +11,7 @@ use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse};
 use jsonrpsee_core::server::rpc_module::MethodKind;
-use jsonrpsee_core::server::{resource_limiting::Resources, rpc_module::Methods};
+use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::JsonRawValue;
 use jsonrpsee_types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
@@ -51,7 +51,6 @@ pub(crate) struct ProcessValidatedRequest<'a, L: Logger> {
 	pub(crate) request: hyper::Request<hyper::Body>,
 	pub(crate) logger: &'a L,
 	pub(crate) methods: Methods,
-	pub(crate) resources: Resources,
 	pub(crate) max_request_body_size: u32,
 	pub(crate) max_response_body_size: u32,
 	pub(crate) max_log_length: u32,
@@ -67,7 +66,6 @@ pub(crate) async fn process_validated_request<L: Logger>(
 		request,
 		logger,
 		methods,
-		resources,
 		max_request_body_size,
 		max_response_body_size,
 		max_log_length,
@@ -89,15 +87,8 @@ pub(crate) async fn process_validated_request<L: Logger>(
 
 	// Single request or notification
 	if is_single {
-		let call = CallData {
-			conn_id: 0,
-			logger,
-			methods: &methods,
-			max_response_body_size,
-			max_log_length,
-			resources: &resources,
-			request_start,
-		};
+		let call =
+			CallData { conn_id: 0, logger, methods: &methods, max_response_body_size, max_log_length, request_start };
 		let response = process_single_request(body, call).await;
 		logger.on_response(&response.result, request_start, TransportProtocol::Http);
 		response::ok_response(response.result)
@@ -121,7 +112,6 @@ pub(crate) async fn process_validated_request<L: Logger>(
 				methods: &methods,
 				max_response_body_size,
 				max_log_length,
-				resources: &resources,
 				request_start,
 			},
 		})
@@ -144,7 +134,6 @@ pub(crate) struct CallData<'a, L: Logger> {
 	methods: &'a Methods,
 	max_response_body_size: u32,
 	max_log_length: u32,
-	resources: &'a Resources,
 	request_start: L::Instant,
 }
 
@@ -221,7 +210,7 @@ pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(
 }
 
 pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_, L>) -> MethodResponse {
-	let CallData { resources, methods, logger, max_response_body_size, max_log_length, conn_id, request_start } = call;
+	let CallData { methods, logger, max_response_body_size, max_log_length, conn_id, request_start } = call;
 
 	rx_log_from_json(&req, call.max_log_length);
 
@@ -237,33 +226,15 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::Http);
-
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let r = (callback)(id, params, max_response_body_size as usize);
-						drop(guard);
-						r
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
-					}
-				}
+				(callback)(id, params, max_response_body_size as usize)
 			}
 			MethodKind::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::Http);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let id = id.into_owned();
-						let params = params.into_owned();
 
-						(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
-					}
-				}
+				let id = id.into_owned();
+				let params = params.into_owned();
+
+				(callback)(id, params, conn_id, max_response_body_size as usize).await
 			}
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::Http);
@@ -288,7 +259,6 @@ fn execute_notification(notif: Notif, max_log_length: u32) -> MethodResponse {
 
 pub(crate) struct HandleRequest<L: Logger> {
 	pub(crate) methods: Methods,
-	pub(crate) resources: Resources,
 	pub(crate) max_request_body_size: u32,
 	pub(crate) max_response_body_size: u32,
 	pub(crate) max_log_length: u32,
@@ -304,7 +274,6 @@ pub(crate) async fn handle_request<L: Logger>(
 ) -> hyper::Response<hyper::Body> {
 	let HandleRequest {
 		methods,
-		resources,
 		max_request_body_size,
 		max_response_body_size,
 		max_log_length,
@@ -322,7 +291,6 @@ pub(crate) async fn handle_request<L: Logger>(
 			process_validated_request(ProcessValidatedRequest {
 				request,
 				methods,
-				resources,
 				max_request_body_size,
 				max_response_body_size,
 				max_log_length,
