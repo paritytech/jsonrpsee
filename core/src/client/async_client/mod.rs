@@ -135,6 +135,7 @@ impl ClientBuilder {
 		self.max_log_length = max;
 		self
 	}
+
 	/// Set the interval at which pings frames are submitted (disabled by default).
 	///
 	/// Periodically submitting pings at a defined interval has mainly two benefits:
