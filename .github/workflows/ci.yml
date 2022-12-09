@@ -189,4 +189,4 @@ jobs:
         wasm-pack test --headless --firefox
         wasm-pack test --headless --chrome
         pkill substrate
-      working-directory: wasm-tests
+      working-directory: tests/wasm-tests
