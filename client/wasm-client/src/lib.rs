@@ -37,7 +37,7 @@ use std::time::Duration;
 
 use jsonrpsee_client_transport::web;
 use jsonrpsee_core::client::{ClientBuilder, IdKind};
-use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::Error;
 
 /// Builder for [`Client`].
 ///
@@ -59,34 +59,28 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 /// }
 ///
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct WasmClientBuilder {
-	max_request_body_size: u32,
-	request_timeout: Duration,
+	id_kind: IdKind,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
-	id_kind: IdKind,
+	max_log_length: u32,
+	request_timeout: Duration,
 }
 
 impl Default for WasmClientBuilder {
 	fn default() -> Self {
 		Self {
-			max_request_body_size: TEN_MB_SIZE_BYTES,
-			request_timeout: Duration::from_secs(60),
+			id_kind: IdKind::Number,
+			max_log_length: 4096,
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
-			id_kind: IdKind::Number,
+			request_timeout: Duration::from_secs(60),
 		}
 	}
 }
 
 impl WasmClientBuilder {
-	/// Max request body size.
-	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.max_request_body_size = size;
-		self
-	}
-
 	/// See documentation [`ClientBuilder::request_timeout`] (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
@@ -111,11 +105,26 @@ impl WasmClientBuilder {
 		self
 	}
 
+	/// Set maximum length for logging calls and responses.
+	///
+	/// Logs bigger than this limit will be truncated.
+	pub fn set_max_logging_length(mut self, max: u32) -> Self {
+		self.max_log_length = max;
+		self
+	}
+
 	/// Build the client with specified URL to connect to.
 	pub async fn build(self, url: impl AsRef<str>) -> Result<Client, Error> {
+		let Self { max_log_length, id_kind, request_timeout, max_concurrent_requests, max_notifs_per_subscription } =
+			self;
 		let (sender, receiver) = web::connect(url).await.map_err(|e| Error::Transport(e.into()))?;
 
-		let builder = ClientBuilder::default();
+		let builder = ClientBuilder::default()
+			.set_max_logging_length(max_log_length)
+			.request_timeout(request_timeout)
+			.id_format(id_kind)
+			.max_notifs_per_subscription(max_notifs_per_subscription)
+			.max_concurrent_requests(max_concurrent_requests);
 
 		Ok(builder.build_with_wasm(sender, receiver))
 	}

@@ -453,6 +453,14 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
+	/// Set maximum length for logging calls and responses.
+	///
+	/// Logs bigger than this limit will be truncated.
+	pub fn set_max_logging_length(mut self, max: u32) -> Self {
+		self.settings.max_log_length = max;
+		self
+	}
+
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	///
 	/// ```rust
