@@ -269,6 +269,11 @@ pub(crate) async fn background_task<L: Logger>(
 	let result = loop {
 		data.clear();
 
+		// We close down the sink if any message transmission fails and close down the connection.
+		if sink.is_closed() {
+			return Err(Error::Custom("Connection buffer limit exceeded".to_string()));
+		}
+
 		{
 			// Need the extra scope to drop this pinned future and reclaim access to `data`
 			let receive = async {
@@ -353,8 +358,9 @@ pub(crate) async fn background_task<L: Logger>(
 						}
 						MethodResult::SendAndLogger(r) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-							// TODO: close conn?!.
-							if let Err(_) = sink.send_raw(r.result) {}
+							if sink.send_raw(r.result).is_err() {
+								sink.close();
+							}
 						}
 					};
 				}
@@ -403,7 +409,9 @@ pub(crate) async fn background_task<L: Logger>(
 					if let Some(response) = response {
 						tx_log_from_str(&response.result, max_log_length);
 						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-						let _ = sink.send_raw(response.result);
+						if sink.send_raw(response.result).is_err() {
+							sink.close();
+						}
 					}
 				};
 
