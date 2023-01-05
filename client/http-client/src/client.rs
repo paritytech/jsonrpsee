@@ -129,18 +129,23 @@ impl HttpClientBuilder {
 
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
-		let transport = HttpTransportClient::new(
-			target,
-			self.max_request_body_size,
-			self.certificate_store,
-			self.max_log_length,
-			self.headers,
-		)
-		.map_err(|e| Error::Transport(e.into()))?;
+		let Self {
+			max_request_body_size,
+			max_concurrent_requests,
+			request_timeout,
+			certificate_store,
+			id_kind,
+			headers,
+			max_log_length,
+		} = self;
+
+		let transport =
+			HttpTransportClient::new(target, max_request_body_size, certificate_store, max_log_length, headers)
+				.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
-			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests, self.id_kind)),
-			request_timeout: self.request_timeout,
+			id_manager: Arc::new(RequestIdManager::new(max_concurrent_requests, id_kind)),
+			request_timeout,
 		})
 	}
 }

@@ -47,6 +47,8 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 - [parity bridges common](https://github.com/paritytech/parity-bridges-common)
 - [remote externalities](https://github.com/paritytech/substrate/tree/master/utils/frame/remote-externalities)
 - [substrate](https://github.com/paritytech/substrate)
+- [subwasm](https://github.com/chevdor/subwasm)
+- [substrate-api-client](https://github.com/scs/substrate-api-client)
 
 ## Benchmarks
 

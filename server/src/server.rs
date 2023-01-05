@@ -427,6 +427,13 @@ impl<B, L> Builder<B, L> {
 	/// If this limit is exceeded the connection will be closed.
 	pub fn set_buffer_size(mut self, c: u32) -> Self {
 		self.settings.buffer_capacity = c;
+	}
+
+	/// Set maximum length for logging calls and responses.
+	///
+	/// Logs bigger than this limit will be truncated.
+	pub fn set_max_logging_length(mut self, max: u32) -> Self {
+		self.settings.max_log_length = max;
 		self
 	}
 

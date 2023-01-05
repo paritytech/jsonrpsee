@@ -1,18 +1,18 @@
 [workspace]
 members = [
-	"examples",
 	"benches",
-	"server",
-	"test-utils",
-	"jsonrpsee",
-	"tests",
-	"types",
-	"core",
-	"client/ws-client",
 	"client/http-client",
 	"client/transport",
 	"client/wasm-client",
+	"client/ws-client",
+	"core",
+	"examples",
+	"jsonrpsee",
 	"proc-macros",
-	"wasm-tests",
+	"server",
+	"test-utils",
+	"tests",
+	"tests/wasm-tests",
+	"types",
 ]
 resolver = "2"

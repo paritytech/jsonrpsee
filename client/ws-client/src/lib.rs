@@ -85,6 +85,7 @@ pub struct WsClientBuilder {
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
 	id_kind: IdKind,
+	max_log_length: u32,
 }
 
 impl Default for WsClientBuilder {
@@ -100,6 +101,7 @@ impl Default for WsClientBuilder {
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,
 			id_kind: IdKind::Number,
+			max_log_length: 4096,
 		}
 	}
 }
@@ -165,6 +167,14 @@ impl WsClientBuilder {
 		self
 	}
 
+	/// Set maximum length for logging calls and responses.
+	///
+	/// Logs bigger than this limit will be truncated.
+	pub fn set_max_logging_length(mut self, max: u32) -> Self {
+		self.max_log_length = max;
+		self
+	}
+
 	/// Build the client with specified URL to connect to.
 	/// You must provide the port number in the URL.
 	///
@@ -172,24 +182,39 @@ impl WsClientBuilder {
 	///
 	/// Panics if being called outside of `tokio` runtime context.
 	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
+		let Self {
+			certificate_store,
+			max_concurrent_requests,
+			max_request_body_size,
+			request_timeout,
+			connection_timeout,
+			ping_interval,
+			headers,
+			max_redirections,
+			max_notifs_per_subscription,
+			id_kind,
+			max_log_length,
+		} = self;
+
 		let transport_builder = WsTransportClientBuilder {
-			certificate_store: self.certificate_store,
-			connection_timeout: self.connection_timeout,
-			headers: self.headers,
-			max_request_body_size: self.max_request_body_size,
-			max_redirections: self.max_redirections,
+			certificate_store,
+			connection_timeout,
+			headers,
+			max_request_body_size,
+			max_redirections,
 		};
 
 		let uri: Uri = url.as_ref().parse().map_err(|e: InvalidUri| Error::Transport(e.into()))?;
 		let (sender, receiver) = transport_builder.build(uri).await.map_err(|e| Error::Transport(e.into()))?;
 
 		let mut client = ClientBuilder::default()
-			.max_notifs_per_subscription(self.max_notifs_per_subscription)
-			.request_timeout(self.request_timeout)
-			.max_concurrent_requests(self.max_concurrent_requests)
-			.id_format(self.id_kind);
+			.max_notifs_per_subscription(max_notifs_per_subscription)
+			.request_timeout(request_timeout)
+			.max_concurrent_requests(max_concurrent_requests)
+			.id_format(id_kind)
+			.set_max_logging_length(max_log_length);
 
-		if let Some(interval) = self.ping_interval {
+		if let Some(interval) = ping_interval {
 			client = client.ping_interval(interval);
 		}
 
