@@ -26,14 +26,13 @@
 
 use std::io;
 
+use crate::server::rpc_module::SendError;
 use crate::tracing::tx_log_from_str;
 use crate::Error;
-use futures_channel::mpsc;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
-
-use super::rpc_module::SendError;
+use tokio::sync::mpsc;
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -84,7 +83,7 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 #[derive(Clone, Debug)]
 pub struct MethodSink {
 	/// Channel sender.
-	tx: mpsc::Sender<String>,
+	pub tx: mpsc::Sender<String>,
 	/// Max response size in bytes for a executed call.
 	max_response_size: u32,
 	/// Max log length.
@@ -111,8 +110,6 @@ impl MethodSink {
 	pub fn send_error(&mut self, id: Id, error: ErrorObject) -> Result<(), SendError> {
 		let json = serde_json::to_string(&ErrorResponse::borrowed(error, id)).expect("valid JSON; qed");
 
-		tx_log_from_str(&json, self.max_log_length);
-
 		self.send_raw(json)
 	}
 
@@ -126,11 +123,6 @@ impl MethodSink {
 	pub fn send_raw(&mut self, json: String) -> Result<(), SendError> {
 		tx_log_from_str(&json, self.max_log_length);
 		self.tx.try_send(json).map_err(Into::into)
-	}
-
-	/// Close the channel for any further messages.
-	pub fn close(&mut self) {
-		self.tx.close_channel();
 	}
 
 	/// Get the maximum number of permitted subscriptions.

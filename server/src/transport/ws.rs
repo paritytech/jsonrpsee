@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -7,7 +8,6 @@ use crate::future::{FutureDriver, StopHandle};
 use crate::logger::{self, Logger, TransportProtocol};
 use crate::server::{MethodResult, ServiceData};
 
-use futures_channel::mpsc;
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::FuturesOrdered;
@@ -24,8 +24,8 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
-use tokio::sync::Notify;
-use tokio_stream::wrappers::IntervalStream;
+use tokio::sync::{mpsc, Notify};
+use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::Compat;
 use tracing::instrument;
 
@@ -257,6 +257,7 @@ pub(crate) async fn background_task<L: Logger>(
 	let (tx, rx) = mpsc::channel::<String>(buffer_capacity as usize);
 	let mut sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let close_notify = Arc::new(Notify::new());
+	let buf_exceeded = Arc::new(AtomicBool::new(false));
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval));
@@ -269,9 +270,9 @@ pub(crate) async fn background_task<L: Logger>(
 	let result = loop {
 		data.clear();
 
-		// We close down the sink if any message transmission fails and close down the connection.
-		if sink.is_closed() {
-			return Err(Error::Custom("Connection buffer limit exceeded".to_string()));
+		// We close down the server is the connection buffer of messages has been exceeded.
+		if buf_exceeded.load(Ordering::Relaxed) {
+			break Err(Error::ConnectionBufferExceeded);
 		}
 
 		{
@@ -307,10 +308,8 @@ pub(crate) async fn background_task<L: Logger>(
 						);
 						if let Err(e) = sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)) {
 							match e {
-								SendError::Full => {
-									return Err(Error::Custom("Server buffer capacity exceeded".to_string()))
-								}
-								SendError::Disconnected => return Ok(()),
+								SendError::Full => break Err(Error::ConnectionBufferExceeded),
+								SendError::Disconnected => break Ok(()),
 							}
 						}
 						continue;
@@ -338,6 +337,7 @@ pub(crate) async fn background_task<L: Logger>(
 				let methods = &methods;
 				let id_provider = &*id_provider;
 				let close_notify = close_notify.clone();
+				let buf_exceeded = buf_exceeded.clone();
 
 				let fut = async move {
 					let call = CallData {
@@ -358,8 +358,8 @@ pub(crate) async fn background_task<L: Logger>(
 						}
 						MethodResult::SendAndLogger(r) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-							if sink.send_raw(r.result).is_err() {
-								sink.close();
+							if let Err(SendError::Full) = sink.send_raw(r.result) {
+								buf_exceeded.store(true, Ordering::Relaxed);
 							}
 						}
 					};
@@ -376,8 +376,8 @@ pub(crate) async fn background_task<L: Logger>(
 				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
 				if let Err(e) = sink.send_raw(response.result) {
 					match e {
-						SendError::Full => return Err(Error::Custom("Server buffer capacity exceeded".to_string())),
-						SendError::Disconnected => return Ok(()),
+						SendError::Full => break Err(Error::ConnectionBufferExceeded),
+						SendError::Disconnected => break Ok(()),
 					}
 				}
 			}
@@ -388,6 +388,7 @@ pub(crate) async fn background_task<L: Logger>(
 				let id_provider = id_provider.clone();
 				let data = std::mem::take(&mut data);
 				let close_notify = close_notify.clone();
+				let buf_exceeded = buf_exceeded.clone();
 
 				let fut = async move {
 					let response = process_batch_request(Batch {
@@ -409,8 +410,8 @@ pub(crate) async fn background_task<L: Logger>(
 					if let Some(response) = response {
 						tx_log_from_str(&response.result, max_log_length);
 						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-						if sink.send_raw(response.result).is_err() {
-							sink.close();
+						if let Err(SendError::Full) = sink.send_raw(response.result) {
+							buf_exceeded.store(true, Ordering::Relaxed);
 						}
 					}
 				};
@@ -420,8 +421,8 @@ pub(crate) async fn background_task<L: Logger>(
 			_ => {
 				if let Err(e) = sink.send_error(Id::Null, ErrorCode::ParseError.into()) {
 					match e {
-						SendError::Full => return Err(Error::Custom("Server buffer capacity exceeded".to_string())),
-						SendError::Disconnected => return Ok(()),
+						SendError::Full => break Err(Error::ConnectionBufferExceeded),
+						SendError::Disconnected => break Ok(()),
 					}
 				}
 			}
@@ -436,9 +437,7 @@ pub(crate) async fn background_task<L: Logger>(
 	method_executors.await;
 
 	// Notify all listeners and close down associated tasks.
-	sink.close();
 	close_notify.notify_waiters();
-
 	drop(conn);
 
 	result
@@ -446,20 +445,20 @@ pub(crate) async fn background_task<L: Logger>(
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
 async fn send_task(
-	mut rx: mpsc::Receiver<String>,
+	rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
 	mut stop_handle: StopHandle,
 	ping_interval: Duration,
 ) {
-	// Received messages from the WebSocket.
-	let mut rx_item = rx.next();
-
 	// Interval to send out continuously `pings`.
 	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
 	let stopped = stop_handle.shutdown();
+	let rx = ReceiverStream::new(rx);
 
-	tokio::pin!(ping_interval, stopped);
+	tokio::pin!(ping_interval, stopped, rx);
 
+	// Received messages from the WebSocket.
+	let mut rx_item = rx.next();
 	let next_ping = ping_interval.next();
 	let mut futs = future::select(next_ping, stopped);
 
@@ -470,6 +469,7 @@ async fn send_task(
 			// Received message.
 			Either::Left((Some(response), not_ready)) => {
 				// If websocket message send fail then terminate the connection.
+				tracing::info!("send message: {:?}", response);
 				if let Err(err) = send_message(&mut ws_sender, response).await {
 					tracing::error!("WS transport error: send failed: {}", err);
 					break;

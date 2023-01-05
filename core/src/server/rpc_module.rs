@@ -34,8 +34,7 @@ use crate::error::{Error, SubscriptionClosed};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::traits::{IdProvider, ToRpcParams};
-use futures_channel::mpsc::TrySendError;
-use futures_channel::{mpsc, oneshot};
+use futures_channel::oneshot;
 use futures_util::future::Either;
 use futures_util::pin_mut;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, TryStreamExt};
@@ -48,10 +47,11 @@ use jsonrpsee_types::{
 	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
 	SubscriptionResponse, SubscriptionResult,
 };
+use mpsc::error::TrySendError;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::{watch, Notify};
+use tokio::sync::{mpsc, watch, Notify};
 
 use super::helpers::MethodResponse;
 
@@ -366,7 +366,7 @@ impl Methods {
 				// not read once this is used for subscriptions.
 				//
 				// The same information is part of `res` above.
-				let _ = rx_sink.next().await.expect("Every call must at least produce one response; qed");
+				let _ = rx_sink.recv().await.expect("Every call must at least produce one response; qed");
 
 				res
 			}
@@ -742,10 +742,9 @@ pub enum SendError {
 
 impl From<TrySendError<String>> for SendError {
 	fn from(err: TrySendError<String>) -> Self {
-		if err.is_full() {
-			Self::Full
-		} else {
-			Self::Disconnected
+		match err {
+			TrySendError::Closed(_) => Self::Disconnected,
+			TrySendError::Full(_) => Self::Full,
 		}
 	}
 }
@@ -788,7 +787,7 @@ impl SubscriptionSink {
 
 		let err = MethodResponse::error(id, err.into());
 
-		self.answer_subscription(err, subscribe_call)?;
+		self.answer_subscription(err, subscribe_call).unwrap();
 		Ok(())
 	}
 
@@ -801,7 +800,7 @@ impl SubscriptionSink {
 		let response = MethodResponse::response(id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
 
-		self.answer_subscription(response, subscribe_call)?;
+		self.answer_subscription(response, subscribe_call).unwrap();
 
 		if success {
 			let (tx, rx) = watch::channel(());
@@ -837,9 +836,11 @@ impl SubscriptionSink {
 		match self.accept() {
 			Ok(_) => (),
 			Err(SubscriptionAcceptRejectError::AlreadyCalled) => (),
-			Err(SubscriptionAcceptRejectError::Full) => return Err(SubscriptionSinkError::Send(SendError::Full)),
+			Err(SubscriptionAcceptRejectError::Full) => {
+				return Err(SubscriptionSinkError::Send(SendError::Full));
+			}
 			Err(SubscriptionAcceptRejectError::RemotePeerAborted) => {
-				return Err(SubscriptionSinkError::Send(SendError::Disconnected))
+				return Err(SubscriptionSinkError::Send(SendError::Disconnected));
 			}
 		};
 
@@ -1120,7 +1121,7 @@ impl Subscription {
 			tracing::debug!("[Subscription::next] Closed.");
 			return None;
 		}
-		let raw = self.rx.next().await?;
+		let raw = self.rx.recv().await?;
 
 		tracing::debug!("[Subscription::next]: rx {}", raw);
 		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
