@@ -121,8 +121,8 @@ pub enum Error {
 	#[error("Empty batch request is not allowed")]
 	EmptyBatchRequest,
 	/// Max buffer capacity exceeded.
-	#[error("Max connection buffer capacity exceeded.")]
-	ConnectionBufferExceeded,
+	#[error("Max buffer capacity exceeded")]
+	MaxBufferExceeded,
 }
 
 impl Error {

@@ -272,7 +272,7 @@ pub(crate) async fn background_task<L: Logger>(
 
 		// We close down the server is the connection buffer of messages has been exceeded.
 		if buf_exceeded.load(Ordering::Relaxed) {
-			break Err(Error::ConnectionBufferExceeded);
+			break Err(Error::MaxBufferExceeded);
 		}
 
 		{
@@ -308,7 +308,7 @@ pub(crate) async fn background_task<L: Logger>(
 						);
 						if let Err(e) = sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)) {
 							match e {
-								SendError::Full => break Err(Error::ConnectionBufferExceeded),
+								SendError::Full => break Err(Error::MaxBufferExceeded),
 								SendError::Disconnected => break Ok(()),
 							}
 						}
@@ -376,7 +376,7 @@ pub(crate) async fn background_task<L: Logger>(
 				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
 				if let Err(e) = sink.send_raw(response.result) {
 					match e {
-						SendError::Full => break Err(Error::ConnectionBufferExceeded),
+						SendError::Full => break Err(Error::MaxBufferExceeded),
 						SendError::Disconnected => break Ok(()),
 					}
 				}
@@ -421,7 +421,7 @@ pub(crate) async fn background_task<L: Logger>(
 			_ => {
 				if let Err(e) = sink.send_error(Id::Null, ErrorCode::ParseError.into()) {
 					match e {
-						SendError::Full => break Err(Error::ConnectionBufferExceeded),
+						SendError::Full => break Err(Error::MaxBufferExceeded),
 						SendError::Disconnected => break Ok(()),
 					}
 				}
