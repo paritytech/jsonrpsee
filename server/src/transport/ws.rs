@@ -1,5 +1,4 @@
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -14,7 +13,7 @@ use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse, MethodSink};
-use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods, SendError};
+use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -255,9 +254,8 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(buffer_capacity as usize);
-	let mut sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let close_notify = Arc::new(Notify::new());
-	let buf_exceeded = Arc::new(AtomicBool::new(false));
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval));
@@ -270,10 +268,16 @@ pub(crate) async fn background_task<L: Logger>(
 	let result = loop {
 		data.clear();
 
-		// We close down the server is the connection buffer of messages has been exceeded.
-		if buf_exceeded.load(Ordering::Relaxed) {
-			break Err(Error::MaxBufferExceeded);
-		}
+		// Wait until the is space in the bounded channel and
+		// don't poll the underlying socket until a spot has been reserved.
+		//
+		// This will force the client to read socket on the other side
+		// otherwise the socket will not be read again.
+		let sink_permit = match sink.reserve().await {
+			Ok(p) => p,
+			// reserve only fails if the channel is disconnected.
+			Err(_) => break Ok(()),
+		};
 
 		{
 			// Need the extra scope to drop this pinned future and reclaim access to `data`
@@ -306,12 +310,8 @@ pub(crate) async fn background_task<L: Logger>(
 							current,
 							maximum
 						);
-						if let Err(e) = sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)) {
-							match e {
-								SendError::Full => break Err(Error::MaxBufferExceeded),
-								SendError::Disconnected => break Ok(()),
-							}
-						}
+						sink_permit.send_error(Id::Null, reject_too_big_request(max_request_body_size));
+
 						continue;
 					}
 
@@ -333,11 +333,10 @@ pub(crate) async fn background_task<L: Logger>(
 		match first_non_whitespace {
 			Some(b'{') => {
 				let data = std::mem::take(&mut data);
-				let mut sink = sink.clone();
+				let sink = sink.clone();
 				let methods = &methods;
 				let id_provider = &*id_provider;
 				let close_notify = close_notify.clone();
-				let buf_exceeded = buf_exceeded.clone();
 
 				let fut = async move {
 					let call = CallData {
@@ -358,9 +357,7 @@ pub(crate) async fn background_task<L: Logger>(
 						}
 						MethodResult::SendAndLogger(r) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-							if let Err(SendError::Full) = sink.send_raw(r.result) {
-								buf_exceeded.store(true, Ordering::Relaxed);
-							}
+							sink_permit.send_raw(r.result);
 						}
 					};
 				}
@@ -374,21 +371,15 @@ pub(crate) async fn background_task<L: Logger>(
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 				);
 				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-				if let Err(e) = sink.send_raw(response.result) {
-					match e {
-						SendError::Full => break Err(Error::MaxBufferExceeded),
-						SendError::Disconnected => break Ok(()),
-					}
-				}
+				sink_permit.send_raw(response.result);
 			}
 			Some(b'[') => {
 				// Make sure the following variables are not moved into async closure below.
 				let methods = &methods;
-				let mut sink = sink.clone();
+				let sink = sink.clone();
 				let id_provider = id_provider.clone();
 				let data = std::mem::take(&mut data);
 				let close_notify = close_notify.clone();
-				let buf_exceeded = buf_exceeded.clone();
 
 				let fut = async move {
 					let response = process_batch_request(Batch {
@@ -410,21 +401,14 @@ pub(crate) async fn background_task<L: Logger>(
 					if let Some(response) = response {
 						tx_log_from_str(&response.result, max_log_length);
 						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-						if let Err(SendError::Full) = sink.send_raw(response.result) {
-							buf_exceeded.store(true, Ordering::Relaxed);
-						}
+						sink_permit.send_raw(response.result);
 					}
 				};
 
 				method_executors.add(Box::pin(fut));
 			}
 			_ => {
-				if let Err(e) = sink.send_error(Id::Null, ErrorCode::ParseError.into()) {
-					match e {
-						SendError::Full => break Err(Error::MaxBufferExceeded),
-						SendError::Disconnected => break Ok(()),
-					}
-				}
+				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
 			}
 		}
 	};
@@ -469,11 +453,11 @@ async fn send_task(
 			// Received message.
 			Either::Left((Some(response), not_ready)) => {
 				// If websocket message send fail then terminate the connection.
-				tracing::info!("send message: {:?}", response);
 				if let Err(err) = send_message(&mut ws_sender, response).await {
 					tracing::error!("WS transport error: send failed: {}", err);
 					break;
 				}
+
 				rx_item = rx.next();
 				futs = not_ready;
 			}

@@ -437,7 +437,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			sink.accept().unwrap();
 			tokio::spawn(async move {
 				let close_err = loop {
-					match sink.send(&1_usize) {
+					match sink.send(&1_usize).await {
 						Ok(_) => (),
 						Err(SubscriptionSinkError::Send(SendError::Disconnected)) => {
 							break ErrorObject::borrowed(0, &"Subscription terminated successfully", None)

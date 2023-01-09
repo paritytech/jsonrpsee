@@ -26,13 +26,14 @@
 
 use std::io;
 
-use crate::server::rpc_module::SendError;
 use crate::tracing::tx_log_from_str;
 use crate::Error;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
-use jsonrpsee_types::{Id, InvalidRequest, Response};
+use jsonrpsee_types::{ErrorObjectOwned, Id, InvalidRequest, Response};
 use serde::Serialize;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, Permit};
+
+use super::rpc_module::DisconnectError;
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -107,27 +108,63 @@ impl MethodSink {
 	}
 
 	/// Send a JSON-RPC error to the client
-	pub fn send_error(&mut self, id: Id, error: ErrorObject) -> Result<(), SendError> {
+	pub async fn send_error(&self, id: Id<'static>, error: ErrorObjectOwned) -> Result<(), DisconnectError<String>> {
+		let json = serde_json::to_string(&ErrorResponse::borrowed(error, id)).expect("valid JSON; qed");
+
+		self.send_raw(json).await
+	}
+
+	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client.
+	pub async fn send_call_error(&self, id: Id<'static>, err: Error) -> Result<(), DisconnectError<String>> {
+		self.send_error(id, err.into()).await
+	}
+
+	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
+	/// of the JSON being sent.
+	pub async fn send_raw(&self, json: String) -> Result<(), DisconnectError<String>> {
+		tx_log_from_str(&json, self.max_log_length);
+		self.tx.send(json).await
+	}
+
+	/// Get the max response size.
+	pub const fn max_response_size(&self) -> u32 {
+		self.max_response_size
+	}
+
+	/// Waits for channel capacity. Once capacity to send one message is available, it is reserved for the caller.
+	pub async fn reserve(&self) -> Result<MethodSinkPermit, DisconnectError<()>> {
+		match self.tx.reserve().await {
+			Ok(permit) => Ok(MethodSinkPermit { tx: permit, max_log_length: self.max_log_length }),
+			Err(e) => Err(e),
+		}
+	}
+}
+
+/// A method sink with reserved spot in the bounded queue.
+#[derive(Debug)]
+pub struct MethodSinkPermit<'a> {
+	tx: Permit<'a, String>,
+	max_log_length: u32,
+}
+
+impl<'a> MethodSinkPermit<'a> {
+	/// Send a JSON-RPC error to the client
+	pub fn send_error(self, id: Id, error: ErrorObject) {
 		let json = serde_json::to_string(&ErrorResponse::borrowed(error, id)).expect("valid JSON; qed");
 
 		self.send_raw(json)
 	}
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client.
-	pub fn send_call_error(&mut self, id: Id, err: Error) -> Result<(), SendError> {
+	pub fn send_call_error(self, id: Id, err: Error) {
 		self.send_error(id, err.into())
 	}
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
-	pub fn send_raw(&mut self, json: String) -> Result<(), SendError> {
+	pub fn send_raw(self, json: String) {
 		tx_log_from_str(&json, self.max_log_length);
-		self.tx.try_send(json).map_err(Into::into)
-	}
-
-	/// Get the maximum number of permitted subscriptions.
-	pub const fn max_response_size(&self) -> u32 {
-		self.max_response_size
+		self.tx.send(json)
 	}
 }
 

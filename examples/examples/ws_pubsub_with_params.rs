@@ -44,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
 		.expect("setting default subscriber failed");
 
 	let addr = run_server().await?;
-	let url = format!("ws://{}", addr);
+	/*let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 
@@ -56,14 +56,16 @@ async fn main() -> anyhow::Result<()> {
 	// Subscription with multiple parameters
 	let mut sub_params_two: Subscription<String> =
 		client.subscribe("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
-	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
+	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);*/
+
+	futures::future::pending::<()>().await;
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default().build("127.0.0.1:9944").await?;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {
@@ -74,9 +76,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				if let SubscriptionClosed::Failed(err) = sink.pipe_from_stream(stream).await {
-					sink.close(err);
-				}
+				let res = sink.pipe_from_stream(stream).await;
+				tracing::info!("subscription result: {:?}", res);
 			});
 			Ok(())
 		})
@@ -91,9 +92,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				if let SubscriptionClosed::Failed(err) = sink.pipe_from_stream(stream).await {
-					sink.close(err);
-				}
+				let res = sink.pipe_from_stream(stream).await;
+				tracing::info!("subscription result: {:?}", res);
 			});
 
 			Ok(())

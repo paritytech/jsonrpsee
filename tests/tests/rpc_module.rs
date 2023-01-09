@@ -235,12 +235,12 @@ async fn subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 			let mut stream_data = vec!['0', '1', '2'];
-			sink.accept()?;
 
 			tokio::spawn(async move {
+				sink.accept().await.unwrap();
 				while let Some(letter) = stream_data.pop() {
 					tracing::debug!("This is your friendly subscription sending data.");
-					let _ = sink.send(&letter);
+					let _ = sink.send(&letter).await.unwrap();
 					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 				}
 				let close = ErrorObject::borrowed(0, &"closed successfully", None);
@@ -267,19 +267,19 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
-			sink.accept()?;
-
 			tokio::spawn(async move {
+				sink.accept().await.unwrap();
+
 				// make sure to only send one item
-				sink.send(&"lo").unwrap();
+				sink.send(&"lo").await.unwrap();
 				while !sink.is_closed() {
 					tracing::debug!("[test] Sink is open, sleeping");
 					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 				}
 
-				match sink.send(&"lo") {
+				match sink.send(&"lo").await {
 					Ok(_) => panic!("The sink should be closed"),
-					Err(SubscriptionSinkError::Send(SendError::Disconnected)) => {
+					Err(SubscriptionSinkError::Disconnected) => {
 						sink.close(SubscriptionClosed::RemotePeerAborted);
 					}
 					Err(other) => panic!("Unexpected error: {:?}", other),

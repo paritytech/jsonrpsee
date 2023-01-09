@@ -46,7 +46,6 @@ use jsonrpsee_types::{
 	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
 	SubscriptionResponse, SubscriptionResult,
 };
-use mpsc::error::TrySendError;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
@@ -85,6 +84,9 @@ pub type CloseNotify = Arc<Notify>;
 ///   - a [`CloseNotify`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, CloseNotify);
 
+/// Disconnect error.
+pub type DisconnectError<T> = mpsc::error::SendError<T>;
+
 /// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
 	/// Connection ID
@@ -111,9 +113,9 @@ pub enum SubscriptionSinkError {
 	/// Something failed during the init of the subscription.
 	#[error("{0:?}")]
 	Subscribe(SubscriptionAcceptRejectError),
-	#[error("{0}")]
-	/// Something failed when sending a message via the subscription.
-	Send(#[from] SendError),
+	/// The connection is closed.
+	#[error("The connection is closed")]
+	Disconnected,
 	#[error("{0}")]
 	/// Something when trying to decode the message.
 	Serialize(#[from] serde_json::Error),
@@ -731,35 +733,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 /// Returns once the unsubscribe method has been called.
 type UnsubscribeCall = Option<watch::Receiver<()>>;
 
-/// Represents a send error over a bounded channel.
-#[derive(Debug, Copy, Clone, thiserror::Error)]
-pub enum SendError {
-	/// The channel was full.
-	#[error("The channel is full")]
-	Full,
-	/// The channel was disconnected.
-	#[error("The channel is disconnected")]
-	Disconnected,
-}
-
-impl From<TrySendError<String>> for SendError {
-	fn from(err: TrySendError<String>) -> Self {
-		match err {
-			TrySendError::Closed(_) => Self::Disconnected,
-			TrySendError::Full(_) => Self::Full,
-		}
-	}
-}
-
-impl From<SendError> for SubscriptionAcceptRejectError {
-	fn from(err: SendError) -> Self {
-		match err {
-			SendError::Disconnected => Self::RemotePeerAborted,
-			SendError::Full => Self::Full,
-		}
-	}
-}
-
 /// Represents a single subscription.
 #[derive(Debug)]
 pub struct SubscriptionSink {
@@ -784,25 +757,25 @@ pub struct SubscriptionSink {
 
 impl SubscriptionSink {
 	/// Reject the subscription call from [`ErrorObject`].
-	pub fn reject(&mut self, err: impl Into<ErrorObjectOwned>) -> Result<(), SubscriptionAcceptRejectError> {
+	pub async fn reject(&mut self, err: impl Into<ErrorObjectOwned>) -> Result<(), SubscriptionAcceptRejectError> {
 		let (id, subscribe_call) = self.id.take().ok_or(SubscriptionAcceptRejectError::AlreadyCalled)?;
 
 		let err = MethodResponse::error(id, err.into());
 
-		self.answer_subscription(err, subscribe_call).unwrap();
+		self.answer_subscription(err, subscribe_call).await.unwrap();
 		Ok(())
 	}
 
 	/// Attempt to accept the subscription and respond the subscription method call.
 	///
 	/// Fails if the connection was closed, or if called multiple times.
-	pub fn accept(&mut self) -> Result<(), SubscriptionAcceptRejectError> {
+	pub async fn accept(&mut self) -> Result<(), SubscriptionAcceptRejectError> {
 		let (id, subscribe_call) = self.id.take().ok_or(SubscriptionAcceptRejectError::AlreadyCalled)?;
 
 		let response = MethodResponse::response(id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
 
-		self.answer_subscription(response, subscribe_call).unwrap();
+		self.answer_subscription(response, subscribe_call).await?;
 
 		if success {
 			let (tx, rx) = watch::channel(());
@@ -834,19 +807,14 @@ impl SubscriptionSink {
 	/// - `Ok(false)` if the sink was closed (either because the subscription was closed or the connection was terminated),
 	/// or the subscription could not be accepted.
 	/// - `Err(err)` if the message could not be serialized.
-	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), SubscriptionSinkError> {
-		match self.accept() {
+	pub async fn send<T: Serialize>(&mut self, result: &T) -> Result<(), SubscriptionSinkError> {
+		match self.accept().await {
 			Ok(_) => (),
 			Err(SubscriptionAcceptRejectError::AlreadyCalled) => (),
-			Err(SubscriptionAcceptRejectError::Full) => {
-				return Err(SubscriptionSinkError::Send(SendError::Full));
-			}
-			Err(SubscriptionAcceptRejectError::RemotePeerAborted) => {
-				return Err(SubscriptionSinkError::Send(SendError::Disconnected));
-			}
+			Err(SubscriptionAcceptRejectError::RemotePeerAborted) => return Err(SubscriptionSinkError::Disconnected),
 		};
 
-		self.send_without_accept(result)
+		self.send_without_accept(result).await
 	}
 
 	/// Reads data from the `stream` and sends back data on the subscription
@@ -897,7 +865,7 @@ impl SubscriptionSink {
 		T: Serialize,
 		E: std::fmt::Display,
 	{
-		if let Err(SubscriptionAcceptRejectError::RemotePeerAborted) = self.accept() {
+		if let Err(SubscriptionAcceptRejectError::RemotePeerAborted) = self.accept().await {
 			return SubscriptionClosed::RemotePeerAborted;
 		}
 
@@ -927,13 +895,10 @@ impl SubscriptionSink {
 			match futures_util::future::select(stream_item, closed_fut).await {
 				// The app sent us a value to send back to the subscribers
 				Either::Left((Ok(Some(result)), next_closed_fut)) => {
-					match self.send_without_accept(&result) {
+					match self.send_without_accept(&result).await {
 						Ok(()) => (),
-						Err(SubscriptionSinkError::Send(SendError::Disconnected)) => {
+						Err(SubscriptionSinkError::Disconnected) => {
 							break SubscriptionClosed::RemotePeerAborted;
-						}
-						Err(SubscriptionSinkError::Send(SendError::Full)) => {
-							break SubscriptionClosed::Full;
 						}
 						Err(err) => {
 							let err = ErrorObject::owned(SUBSCRIPTION_CLOSED_WITH_ERROR, err.to_string(), None::<()>);
@@ -993,14 +958,14 @@ impl SubscriptionSink {
 	/// This is similar to the [`SubscriptionSink::send`], but it does not try to accept
 	/// the subscription prior to sending.
 	#[inline]
-	fn send_without_accept<T: Serialize>(&mut self, result: &T) -> Result<(), SubscriptionSinkError> {
+	async fn send_without_accept<T: Serialize>(&mut self, result: &T) -> Result<(), SubscriptionSinkError> {
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {
-			return Err(SubscriptionSinkError::Send(SendError::Disconnected));
+			return Err(SubscriptionSinkError::Disconnected);
 		}
 
 		let msg = self.build_message(result)?;
-		self.inner.send_raw(msg).map_err(SubscriptionSinkError::Send)
+		self.inner.send_raw(msg).await.map_err(|_| SubscriptionSinkError::Disconnected)
 	}
 
 	fn is_active_subscription(&self) -> bool {
@@ -1010,15 +975,16 @@ impl SubscriptionSink {
 		}
 	}
 
-	fn answer_subscription(
+	async fn answer_subscription(
 		&mut self,
 		response: MethodResponse,
 		subscribe_call: oneshot::Sender<MethodResponse>,
-	) -> Result<(), SendError> {
-		self.inner.send_raw(response.result.clone())?;
-		subscribe_call.send(response).map_err(|_| SendError::Disconnected)?;
-
-		Ok(())
+	) -> Result<(), SubscriptionAcceptRejectError> {
+		self.inner
+			.send_raw(response.result.clone())
+			.await
+			.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
+		subscribe_call.send(response).map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {
@@ -1057,13 +1023,13 @@ impl SubscriptionSink {
 	/// }
 	/// ```
 	///
-	pub fn close(self, err: impl Into<ErrorObjectOwned>) -> bool {
+	pub async fn close(self, err: impl Into<ErrorObjectOwned>) -> bool {
 		if self.is_active_subscription() {
-			if let Some((mut sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
 				tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 
 				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
-				return sink.send_raw(msg).is_ok();
+				return sink.send_raw(msg).await.is_ok();
 			}
 		}
 		false

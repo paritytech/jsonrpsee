@@ -40,19 +40,21 @@ async fn main() -> anyhow::Result<()> {
 	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
 	let addr = run_server().await?;
-	let url = format!("ws://{}", addr);
+	/*let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", rpc_params![]).await?;
-	tracing::info!("response: {:?}", response);
+	tracing::info!("response: {:?}", response);*/
+
+	futures::future::pending::<()>().await;
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default().set_buffer_size(2).build("127.0.0.1:9944").await?;
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("lo"))?;
+	module.register_method("say_hello", |_, _| Ok("a".repeat(1024)))?;
 	let addr = server.local_addr()?;
 	let handle = server.start(module)?;
 
