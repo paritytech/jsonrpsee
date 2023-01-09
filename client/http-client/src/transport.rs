@@ -237,7 +237,7 @@ mod tests {
 	#[test]
 	fn https_fails_without_tls_feature() {
 		let err =
-			HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
+			HttpTransportClient::new(80, "https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
 				.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
@@ -311,7 +311,7 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(client.max_request_size, eighty_bytes_limit);
-		assert_eq!(client.max_request_size, fifty_bytes_limit);
+		assert_eq!(client.max_response_size, fifty_bytes_limit);
 
 		let body = "a".repeat(81);
 		assert_eq!(body.len(), 81);
