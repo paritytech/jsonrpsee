@@ -45,7 +45,7 @@ pub struct HttpTransportClient {
 	client: HyperClient,
 	/// Configurable max request body size
 	max_request_size: u32,
-	/// Configurable max request body size
+	/// Configurable max response body size
 	max_response_size: u32,
 	/// Max length for logging for requests and responses
 	///
