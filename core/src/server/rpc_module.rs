@@ -34,7 +34,6 @@ use crate::error::{Error, SubscriptionClosed};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::traits::{IdProvider, ToRpcParams};
-use futures_channel::oneshot;
 use futures_util::future::Either;
 use futures_util::pin_mut;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, TryStreamExt};
@@ -51,7 +50,7 @@ use mpsc::error::TrySendError;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::{mpsc, watch, Notify};
+use tokio::sync::{mpsc, oneshot, watch, Notify};
 
 use super::helpers::MethodResponse;
 
@@ -60,7 +59,7 @@ use super::helpers::MethodResponse;
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> MethodResponse>;
-/// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
+/// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
@@ -76,19 +75,22 @@ pub type ConnectionId = usize;
 /// Max response size.
 pub type MaxResponseSize = usize;
 
+/// A future the returns when the connection has been closed.
+pub type CloseNotify = Arc<Notify>;
+
 /// Raw response from an RPC
 /// A 3-tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::Receiver<String>`] to receive future subscription results
-///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
-pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, Arc<Notify>);
+///   - a [`CloseNotify`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
+pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, CloseNotify);
 
 /// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
 	/// Connection ID
 	pub conn_id: ConnectionId,
 	/// Get notified when the connection to subscribers is closed.
-	pub close_notify: Arc<Notify>,
+	pub close_notify: CloseNotify,
 	/// ID provider.
 	pub id_provider: &'a dyn IdProvider,
 }
@@ -764,7 +766,7 @@ pub struct SubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
 	/// Get notified when subscribers leave so we can exit
-	close_notify: Arc<Notify>,
+	close_notify: CloseNotify,
 	/// MethodCallback.
 	method: &'static str,
 	/// Shared Mutex of subscriptions for this method.
@@ -1086,7 +1088,7 @@ impl Drop for SubscriptionSink {
 /// Wrapper struct that maintains a subscription "mainly" for testing.
 #[derive(Debug)]
 pub struct Subscription {
-	close_notify: Option<Arc<Notify>>,
+	close_notify: Option<CloseNotify>,
 	rx: mpsc::Receiver<String>,
 	sub_id: RpcSubscriptionId<'static>,
 }
