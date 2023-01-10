@@ -226,7 +226,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 
 	let r = response.as_inner();
 
-	tx_log_from_str(&r.result, max_log_length);
+	//tx_log_from_str(&r.result, max_log_length);
 	logger.on_result(name, r.success, request_start, TransportProtocol::WebSocket);
 	response
 }
@@ -434,6 +434,7 @@ async fn send_task(
 	mut stop_handle: StopHandle,
 	ping_interval: Duration,
 ) {
+	/*
 	// Interval to send out continuously `pings`.
 	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
 	let stopped = stop_handle.shutdown();
@@ -482,7 +483,10 @@ async fn send_task(
 				break;
 			}
 		}
-	}
+	}*/
+
+	// fake that no messages were read.
+	future::pending::<()>().await;
 
 	// Terminate connection and send close message.
 	let _ = ws_sender.close().await;

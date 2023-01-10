@@ -683,8 +683,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					// response to the subscription call.
 					let (tx, rx) = oneshot::channel();
 
+					let queue = Arc::new(crossbeam_queue::ArrayQueue::<String>::new(4));
+
 					let sink = SubscriptionSink {
-						inner: method_sink,
+						inner: method_sink.clone(),
+						queue: queue.clone(),
 						close_notify: conn.close_notify,
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
@@ -692,6 +695,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						id: Some((id.clone().into_owned(), tx)),
 						unsubscribe: None,
 					};
+
+					tokio::spawn(async move {
+						while let Ok(permit) = method_sink.reserve().await {
+							if let Some(val) = queue.pop() {
+								permit.send_raw(val);
+							}
+						}
+					});
 
 					// The callback returns a `SubscriptionResult` for better ergonomics and is not propagated further.
 					if callback(params, sink, ctx.clone()).is_err() {
@@ -738,6 +749,8 @@ type UnsubscribeCall = Option<watch::Receiver<()>>;
 pub struct SubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
+	/// Queue of messages that are waiting to be sent.
+	queue: Arc<crossbeam_queue::ArrayQueue<String>>,
 	/// Get notified when subscribers leave so we can exit
 	close_notify: CloseNotify,
 	/// MethodCallback.
@@ -762,7 +775,7 @@ impl SubscriptionSink {
 
 		let err = MethodResponse::error(id, err.into());
 
-		self.answer_subscription(err, subscribe_call).await.unwrap();
+		self.answer_subscription(err, subscribe_call).await?;
 		Ok(())
 	}
 
@@ -803,10 +816,8 @@ impl SubscriptionSink {
 	/// Send a message back to subscribers.
 	///
 	/// Returns
-	/// - `Ok(true)` if the message could be send.
-	/// - `Ok(false)` if the sink was closed (either because the subscription was closed or the connection was terminated),
-	/// or the subscription could not be accepted.
-	/// - `Err(err)` if the message could not be serialized.
+	/// - `Ok(())` if the message could be sent.
+	/// - `Err(err)` if an error occurred when trying to send the message.
 	pub async fn send<T: Serialize>(&mut self, result: &T) -> Result<(), SubscriptionSinkError> {
 		match self.accept().await {
 			Ok(_) => (),
@@ -814,7 +825,7 @@ impl SubscriptionSink {
 			Err(SubscriptionAcceptRejectError::RemotePeerAborted) => return Err(SubscriptionSinkError::Disconnected),
 		};
 
-		self.send_without_accept(result).await
+		self.send_without_accept(result)
 	}
 
 	/// Reads data from the `stream` and sends back data on the subscription
@@ -895,7 +906,7 @@ impl SubscriptionSink {
 			match futures_util::future::select(stream_item, closed_fut).await {
 				// The app sent us a value to send back to the subscribers
 				Either::Left((Ok(Some(result)), next_closed_fut)) => {
-					match self.send_without_accept(&result).await {
+					match self.send_without_accept(&result) {
 						Ok(()) => (),
 						Err(SubscriptionSinkError::Disconnected) => {
 							break SubscriptionClosed::RemotePeerAborted;
@@ -958,14 +969,18 @@ impl SubscriptionSink {
 	/// This is similar to the [`SubscriptionSink::send`], but it does not try to accept
 	/// the subscription prior to sending.
 	#[inline]
-	async fn send_without_accept<T: Serialize>(&mut self, result: &T) -> Result<(), SubscriptionSinkError> {
+	fn send_without_accept<T: Serialize>(&mut self, result: &T) -> Result<(), SubscriptionSinkError> {
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Err(SubscriptionSinkError::Disconnected);
 		}
 
 		let msg = self.build_message(result)?;
-		self.inner.send_raw(msg).await.map_err(|_| SubscriptionSinkError::Disconnected)
+		if let Some(rm) = self.queue.force_push(msg) {
+			tracing::debug!("Client can't keep up with subscription notifs; replaced old message: {:?}", rm);
+		}
+
+		Ok(())
 	}
 
 	fn is_active_subscription(&self) -> bool {
@@ -980,10 +995,8 @@ impl SubscriptionSink {
 		response: MethodResponse,
 		subscribe_call: oneshot::Sender<MethodResponse>,
 	) -> Result<(), SubscriptionAcceptRejectError> {
-		self.inner
-			.send_raw(response.result.clone())
-			.await
-			.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
+		let permit = self.inner.reserve().await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
+		permit.send_raw(response.result.clone());
 		subscribe_call.send(response).map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)
 	}
 
@@ -1023,16 +1036,24 @@ impl SubscriptionSink {
 	/// }
 	/// ```
 	///
-	pub async fn close(self, err: impl Into<ErrorObjectOwned>) -> bool {
+	pub fn close(self, err: impl Into<ErrorObjectOwned>) -> impl Future<Output = bool> {
 		if self.is_active_subscription() {
 			if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
 				tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 
 				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
-				return sink.send_raw(msg).await.is_ok();
+
+				return Either::Right(async move {
+					let permit = match sink.reserve().await {
+						Ok(permit) => permit,
+						Err(_) => return false,
+					};
+					permit.send_raw(msg);
+					true
+				});
 			}
 		}
-		false
+		Either::Left(futures_util::future::ready(false))
 	}
 }
 
@@ -1044,7 +1065,7 @@ impl Drop for SubscriptionSink {
 			// because that's how the previous PendingSubscription logic
 			// worked.
 			let err = MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidParams));
-			let _ = self.answer_subscription(err, subscribe_call);
+			let _ = self.answer_subscription(err, subscribe_call).now_or_never();
 		} else if self.is_active_subscription() {
 			self.subscribers.lock().remove(&self.uniq_sub);
 		}

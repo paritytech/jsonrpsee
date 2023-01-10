@@ -29,7 +29,7 @@ use std::io;
 use crate::tracing::tx_log_from_str;
 use crate::Error;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
-use jsonrpsee_types::{ErrorObjectOwned, Id, InvalidRequest, Response};
+use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Permit};
 
@@ -107,25 +107,6 @@ impl MethodSink {
 		self.tx.is_closed()
 	}
 
-	/// Send a JSON-RPC error to the client
-	pub async fn send_error(&self, id: Id<'static>, error: ErrorObjectOwned) -> Result<(), DisconnectError<String>> {
-		let json = serde_json::to_string(&ErrorResponse::borrowed(error, id)).expect("valid JSON; qed");
-
-		self.send_raw(json).await
-	}
-
-	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client.
-	pub async fn send_call_error(&self, id: Id<'static>, err: Error) -> Result<(), DisconnectError<String>> {
-		self.send_error(id, err.into()).await
-	}
-
-	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
-	/// of the JSON being sent.
-	pub async fn send_raw(&self, json: String) -> Result<(), DisconnectError<String>> {
-		tx_log_from_str(&json, self.max_log_length);
-		self.tx.send(json).await
-	}
-
 	/// Get the max response size.
 	pub const fn max_response_size(&self) -> u32 {
 		self.max_response_size
@@ -163,8 +144,8 @@ impl<'a> MethodSinkPermit<'a> {
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
 	pub fn send_raw(self, json: String) {
+		self.tx.send(json.clone());
 		tx_log_from_str(&json, self.max_log_length);
-		self.tx.send(json)
 	}
 }
 

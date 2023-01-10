@@ -31,6 +31,7 @@ wasm-bindgen-futures = { version = "0.4.19", optional = true }
 futures-timer = { version = "3", optional = true }
 globset = { version = "0.4", optional = true }
 http = { version = "0.2.7", optional = true }
+crossbeam-queue = { version = "0.3", optional = true }
 
 [features]
 default = []
@@ -44,6 +45,7 @@ server = [
 	"rand",
 	"tokio/rt",
 	"tokio/sync",
+	"crossbeam-queue",
 ]
 client = ["futures-util/sink", "futures-channel/sink"]
 async-client = [

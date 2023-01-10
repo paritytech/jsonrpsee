@@ -40,7 +40,7 @@ use helpers::{
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
-use jsonrpsee::core::server::rpc_module::{SendError, SubscriptionSinkError};
+use jsonrpsee::core::server::rpc_module::{DisconnectError, SubscriptionSinkError};
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
