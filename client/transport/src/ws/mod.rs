@@ -49,6 +49,7 @@ pub use soketto::handshake::client::Header;
 #[derive(Debug)]
 pub struct Sender {
 	inner: connection::Sender<BufReader<BufWriter<EitherStream>>>,
+	max_request_size: u32,
 }
 
 /// Receiving end of WebSocket transport.
@@ -66,8 +67,10 @@ pub struct WsTransportClientBuilder {
 	pub connection_timeout: Duration,
 	/// Custom headers to pass during the HTTP handshake.
 	pub headers: http::HeaderMap,
-	/// Max payload size
-	pub max_request_body_size: u32,
+	/// Max request payload size
+	pub max_request_size: u32,
+	/// Max response payload size
+	pub max_response_size: u32,
 	/// Max number of redirections.
 	pub max_redirections: usize,
 }
@@ -76,7 +79,8 @@ impl Default for WsTransportClientBuilder {
 	fn default() -> Self {
 		Self {
 			certificate_store: CertificateStore::Native,
-			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_request_size: TEN_MB_SIZE_BYTES,
+			max_response_size: TEN_MB_SIZE_BYTES,
 			connection_timeout: Duration::from_secs(10),
 			headers: http::HeaderMap::new(),
 			max_redirections: 5,
@@ -91,9 +95,15 @@ impl WsTransportClientBuilder {
 		self
 	}
 
-	/// Set max request body size (default is 10 MB).
-	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.max_request_body_size = size;
+	/// Set the maximum size of a request in bytes. Default is 10 MiB.
+	pub fn max_request_size(mut self, size: u32) -> Self {
+		self.max_request_size = size;
+		self
+	}
+
+	/// Set the maximum size of a response in bytes. Default is 10 MiB.
+	pub fn max_response_size(mut self, size: u32) -> Self {
+		self.max_response_size = size;
 		self
 	}
 
@@ -181,6 +191,9 @@ pub enum WsError {
 	/// Error in the WebSocket connection.
 	#[error("WebSocket connection error: {0}")]
 	Connection(#[source] soketto::connection::Error),
+	/// Message was too large.
+	#[error("The message was too large")]
+	MessageTooLarge,
 }
 
 #[async_trait]
@@ -190,6 +203,10 @@ impl TransportSenderT for Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	async fn send(&mut self, body: String) -> Result<(), Self::Error> {
+		if body.len() > self.max_request_size as usize {
+			return Err(WsError::MessageTooLarge);
+		}
+
 		tracing::trace!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
@@ -300,9 +317,12 @@ impl WsTransportClientBuilder {
 					Ok(ServerResponse::Accepted { .. }) => {
 						tracing::debug!("Connection established to target: {:?}", target);
 						let mut builder = client.into_builder();
-						builder.set_max_message_size(self.max_request_body_size as usize);
+						builder.set_max_message_size(self.max_response_size as usize);
 						let (sender, receiver) = builder.finish();
-						return Ok((Sender { inner: sender }, Receiver { inner: receiver }));
+						return Ok((
+							Sender { inner: sender, max_request_size: self.max_request_size },
+							Receiver { inner: receiver },
+						));
 					}
 
 					Ok(ServerResponse::Rejected { status_code }) => {

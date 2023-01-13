@@ -71,7 +71,8 @@ use tracing::instrument;
 /// ```
 #[derive(Debug)]
 pub struct HttpClientBuilder {
-	max_request_body_size: u32,
+	max_request_size: u32,
+	max_response_size: u32,
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
 	certificate_store: CertificateStore,
@@ -81,9 +82,15 @@ pub struct HttpClientBuilder {
 }
 
 impl HttpClientBuilder {
-	/// Sets the maximum size of a request body in bytes (default is 10 MiB).
-	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.max_request_body_size = size;
+	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
+	pub fn max_request_size(mut self, size: u32) -> Self {
+		self.max_request_size = size;
+		self
+	}
+
+	/// Set the maximum size of a response in bytes. Default is 10 MiB.
+	pub fn max_response_size(mut self, size: u32) -> Self {
+		self.max_response_size = size;
 		self
 	}
 
@@ -130,7 +137,8 @@ impl HttpClientBuilder {
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
 		let Self {
-			max_request_body_size,
+			max_request_size,
+			max_response_size,
 			max_concurrent_requests,
 			request_timeout,
 			certificate_store,
@@ -139,9 +147,15 @@ impl HttpClientBuilder {
 			max_log_length,
 		} = self;
 
-		let transport =
-			HttpTransportClient::new(target, max_request_body_size, certificate_store, max_log_length, headers)
-				.map_err(|e| Error::Transport(e.into()))?;
+		let transport = HttpTransportClient::new(
+			max_request_size,
+			target,
+			max_response_size,
+			certificate_store,
+			max_log_length,
+			headers,
+		)
+		.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
 			id_manager: Arc::new(RequestIdManager::new(max_concurrent_requests, id_kind)),
@@ -153,7 +167,8 @@ impl HttpClientBuilder {
 impl Default for HttpClientBuilder {
 	fn default() -> Self {
 		Self {
-			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_request_size: TEN_MB_SIZE_BYTES,
+			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
 			certificate_store: CertificateStore::Native,
