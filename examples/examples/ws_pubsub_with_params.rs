@@ -29,7 +29,6 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -73,11 +72,17 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
-			let stream = IntervalStream::new(interval).map(move |_| item);
+			let mut stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let res = sink.pipe_from_stream(stream).await;
-				tracing::info!("subscription result: {:?}", res);
+				sink.accept().await.unwrap();
+
+				while let Some(item) = stream.next().await {
+					let notif = sink.build_message(&item).unwrap();
+					if let Err(e) = sink.try_send(notif) {
+						tracing::info!("ignoring to send notif: {:?}", e);
+					}
+				}
 			});
 			Ok(())
 		})
@@ -89,11 +94,17 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let item = &LETTERS[one..two];
 
 			let interval = interval(Duration::from_millis(200));
-			let stream = IntervalStream::new(interval).map(move |_| item);
+			let mut stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let res = sink.pipe_from_stream(stream).await;
-				tracing::info!("subscription result: {:?}", res);
+				sink.accept().await.unwrap();
+
+				while let Some(item) = stream.next().await {
+					let notif = sink.build_message(&item).unwrap();
+					if let Err(e) = sink.try_send(notif) {
+						tracing::info!("ignoring to send notif: {:?}", e);
+					}
+				}
 			});
 
 			Ok(())

@@ -1,5 +1,4 @@
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -23,7 +22,7 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::Compat;
 use tracing::instrument;
@@ -62,7 +61,6 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) sink: &'a MethodSink,
 	pub(crate) logger: &'a L,
 	pub(crate) request_start: L::Instant,
-	pub(crate) close_notify: Arc<Notify>,
 }
 
 /// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
@@ -169,17 +167,8 @@ pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, c
 /// Returns `(MethodResponse, None)` on every call that isn't a subscription
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
 pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> MethodResult {
-	let CallData {
-		methods,
-		max_response_body_size,
-		max_log_length,
-		conn_id,
-		id_provider,
-		sink,
-		logger,
-		request_start,
-		close_notify,
-	} = call;
+	let CallData { methods, max_response_body_size, max_log_length, conn_id, id_provider, sink, logger, request_start } =
+		call;
 
 	rx_log_from_json(&req, call.max_log_length);
 
@@ -210,7 +199,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 			MethodKind::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 
-				let conn_state = ConnState { conn_id, close_notify, id_provider };
+				let conn_state = ConnState { conn_id, id_provider };
 				let response = callback(id.clone(), params, sink.clone(), conn_state).await;
 				MethodResult::JustLogger(response)
 			}
@@ -254,11 +243,11 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(buffer_capacity as usize);
+	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
-	let close_notify = Arc::new(Notify::new());
 
 	// Spawn another task that sends out the responses on the Websocket.
-	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval));
+	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval, conn_rx));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -336,7 +325,6 @@ pub(crate) async fn background_task<L: Logger>(
 				let sink = sink.clone();
 				let methods = &methods;
 				let id_provider = &*id_provider;
-				let close_notify = close_notify.clone();
 
 				let fut = async move {
 					let call = CallData {
@@ -348,7 +336,6 @@ pub(crate) async fn background_task<L: Logger>(
 						id_provider,
 						logger,
 						request_start,
-						close_notify: close_notify.clone(),
 					};
 
 					match process_single_request(data, call).await {
@@ -379,7 +366,6 @@ pub(crate) async fn background_task<L: Logger>(
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
 				let data = std::mem::take(&mut data);
-				let close_notify = close_notify.clone();
 
 				let fut = async move {
 					let response = process_batch_request(Batch {
@@ -393,7 +379,6 @@ pub(crate) async fn background_task<L: Logger>(
 							id_provider: &*id_provider,
 							logger,
 							request_start,
-							close_notify,
 						},
 					})
 					.await;
@@ -420,8 +405,7 @@ pub(crate) async fn background_task<L: Logger>(
 	// proper drop behaviour.
 	method_executors.await;
 
-	// Notify all listeners and close down associated tasks.
-	close_notify.notify_waiters();
+	let _ = conn_tx.send(());
 	drop(conn);
 
 	result
@@ -433,19 +417,22 @@ async fn send_task(
 	mut ws_sender: Sender,
 	mut stop_handle: StopHandle,
 	ping_interval: Duration,
+	conn_closed: oneshot::Receiver<()>,
 ) {
-	/*
+	// fake that no messages were read.
+	//future::pending::<()>().await;
+
 	// Interval to send out continuously `pings`.
 	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
 	let stopped = stop_handle.shutdown();
 	let rx = ReceiverStream::new(rx);
 
-	tokio::pin!(ping_interval, stopped, rx);
+	tokio::pin!(ping_interval, stopped, rx, conn_closed);
 
 	// Received messages from the WebSocket.
 	let mut rx_item = rx.next();
 	let next_ping = ping_interval.next();
-	let mut futs = future::select(next_ping, stopped);
+	let mut futs = future::select(next_ping, future::select(stopped, conn_closed));
 
 	loop {
 		// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
@@ -478,16 +465,14 @@ async fn send_task(
 				futs = future::select(ping_interval.next(), stop);
 			}
 
-			// Server is closed
-			Either::Right((Either::Right((_, _)), _)) => {
+			// Server is stopped or closed
+			Either::Right((Either::Right(_), _)) => {
 				break;
 			}
 		}
-	}*/
-
-	// fake that no messages were read.
-	future::pending::<()>().await;
+	}
 
 	// Terminate connection and send close message.
 	let _ = ws_sender.close().await;
+	rx.close();
 }

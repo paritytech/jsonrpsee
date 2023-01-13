@@ -33,7 +33,7 @@ use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Permit};
 
-use super::rpc_module::DisconnectError;
+use super::rpc_module::{DisconnectError, TrySendError};
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -107,9 +107,26 @@ impl MethodSink {
 		self.tx.is_closed()
 	}
 
+	/// Same as [`tokio::sync::mpsc::Sender::closed`].
+	pub async fn closed(&self) {
+		self.tx.closed().await
+	}
+
 	/// Get the max response size.
 	pub const fn max_response_size(&self) -> u32 {
 		self.max_response_size
+	}
+
+	/// Non-blocking send which fails if the channel is closed or full
+	///
+	/// Returns the message if the send fails such that either can be thrown away or re-sent later.
+	pub fn try_send(&mut self, msg: String) -> Result<(), TrySendError> {
+		self.tx.try_send(msg)
+	}
+
+	/// Async send which will wait until there is space in channel buffer or that the subscription is disconnected.
+	pub async fn send(&self, msg: String) -> Result<(), DisconnectError<String>> {
+		self.tx.send(msg).await
 	}
 
 	/// Waits for channel capacity. Once capacity to send one message is available, it is reserved for the caller.
