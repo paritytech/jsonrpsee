@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, client::Subscription, Error};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{ServerBuilder, SubscriptionSink};
+use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder};
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -64,10 +64,16 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 	// Note that the server's subscription method must return `SubscriptionResult`.
 	fn subscribe_storage(
 		&self,
-		mut sink: SubscriptionSink,
+		pending: PendingSubscriptionSink,
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> SubscriptionResult {
-		let _ = sink.send(&vec![[0; 32]]);
+		tokio::spawn(async move {
+			if let Ok(sink) = pending.accept().await {
+				let msg = sink.build_message(&1).unwrap();
+				sink.send(msg).await.unwrap();
+			}
+		});
+
 		Ok(())
 	}
 }

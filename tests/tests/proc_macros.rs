@@ -45,7 +45,7 @@ mod rpc_impl {
 	use jsonrpsee::core::{async_trait, RpcResult};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::SubscriptionResult;
-	use jsonrpsee::SubscriptionSink;
+	use jsonrpsee::PendingSubscriptionSink;
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
@@ -168,15 +168,24 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		fn sub(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-			let _ = sink.send(&"Response_A");
-			let _ = sink.send(&"Response_B");
+		fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+			tokio::spawn(async move {
+				let sink = pending.accept().await.unwrap();
+
+				//let _ = sink.send(&"Response_A").await;
+				//let _ = sink.send(&"Response_B");
+			});
+
 			Ok(())
 		}
 
-		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> SubscriptionResult {
-			let _ = sink.send(&val);
-			let _ = sink.send(&val);
+		fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
+			tokio::spawn(async move {
+				let sink = pending.accept().await.unwrap();
+
+				//let _ = sink.send(&"Response_A").await;
+				//let _ = sink.send(&"Response_B");
+			});
 			Ok(())
 		}
 	}
@@ -190,8 +199,13 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		fn sub(&self, mut sink: SubscriptionSink, _: String) -> SubscriptionResult {
-			let _ = sink.send(&"hello");
+		fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
+			tokio::spawn(async move {
+				let sink = pending.accept().await.unwrap();
+				let msg = sink.build_message(&"hello").unwrap();
+				let _ = sink.send(msg).await.unwrap();
+			});
+
 			Ok(())
 		}
 	}

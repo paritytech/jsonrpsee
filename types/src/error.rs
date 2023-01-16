@@ -122,6 +122,8 @@ pub enum SubscriptionAcceptRejectError {
 	AlreadyCalled,
 	/// The remote peer closed the connection or called the unsubscribe method.
 	RemotePeerAborted,
+	/// The subscription response message was too large.
+	MessageTooLarge,
 }
 
 /// Owned variant of [`ErrorObject`].

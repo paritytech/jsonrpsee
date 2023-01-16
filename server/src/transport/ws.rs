@@ -31,8 +31,11 @@ pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
-	sender.send_text_owned(response).await?;
-	sender.flush().await.map_err(Into::into)
+	sender.send_text_owned(response.clone()).await?;
+	sender.flush().await?;
+	tracing::trace!("sent msg: {}", response);
+
+	Ok(())
 }
 
 pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
@@ -215,7 +218,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 
 	let r = response.as_inner();
 
-	//tx_log_from_str(&r.result, max_log_length);
+	tx_log_from_str(&r.result, max_log_length);
 	logger.on_result(name, r.success, request_start, TransportProtocol::WebSocket);
 	response
 }

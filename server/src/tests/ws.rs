@@ -546,17 +546,12 @@ async fn custom_subscription_id_works() {
 	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
-			// There is no subscription ID prior to calling accept.
-			let sub_id = sink.subscription_id();
-			assert!(sub_id.is_none());
-
-			sink.accept()?;
-
-			let sub_id = sink.subscription_id();
-			assert!(matches!(sub_id, Some(SubscriptionId::Str(id)) if id == "0xdeadbeef"));
-
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
 			tokio::spawn(async move {
+				let sink = sink.accept().await.unwrap();
+
+				assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
+
 				loop {
 					let _ = &sink;
 					tokio::time::sleep(std::time::Duration::from_secs(30)).await;

@@ -35,7 +35,9 @@ use jsonrpsee::core::server::host_filtering::AllowHosts;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
-use jsonrpsee::RpcModule;
+use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::{PendingSubscriptionSink, RpcModule};
+use serde::Serialize;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
@@ -48,128 +50,76 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| &"hello from subscription");
 
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream).await;
+				pipe_from_stream(stream, pending).await;
 			});
 			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
+		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| {
 			let interval = interval(Duration::from_millis(100));
 			let stream = IntervalStream::new(interval).map(move |_| 1337_usize);
 
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream).await;
+				pipe_from_stream(stream, pending).await;
 			});
 			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription(
-			"subscribe_add_one",
-			"subscribe_add_one",
-			"unsubscribe_add_one",
-			|params, mut sink, _| {
-				let count = params.one::<usize>().map(|c| c.wrapping_add(1))?;
+		.register_subscription("subscribe_add_one", "subscribe_add_one", "unsubscribe_add_one", |params, pending, _| {
+			let params = params.into_owned();
+			tokio::spawn(async move {
+				let count = match params.one::<usize>().map(|c| c.wrapping_add(1)) {
+					Ok(count) => count,
+					Err(e) => {
+						let _ = pending.reject(ErrorObjectOwned::from(e)).await;
+						return;
+					}
+				};
 
 				let wrapping_counter = futures::stream::iter((count..).cycle());
 				let interval = interval(Duration::from_millis(100));
 				let stream = IntervalStream::new(interval).zip(wrapping_counter).map(move |(_, c)| c);
 
-				tokio::spawn(async move {
-					sink.pipe_from_stream(stream).await;
-				});
-				Ok(())
-			},
-		)
+				pipe_from_stream(stream, pending).await;
+			});
+			Ok(())
+		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
-			sink.accept().unwrap();
-
+		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| {
 			tokio::spawn(async move {
+				let sink = pending.accept().await.unwrap();
 				tokio::time::sleep(Duration::from_secs(1)).await;
 				let err = ErrorObject::owned(
 					SUBSCRIPTION_CLOSED_WITH_ERROR,
 					"Server closed the stream because it was lazy",
 					None::<()>,
 				);
-				sink.close(err);
+				sink.close(err).await;
 			});
 			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, mut sink, _| {
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
-
-				match sink.pipe_from_stream(stream).await {
-					SubscriptionClosed::Success => {
-						sink.close(SubscriptionClosed::Success);
-					}
-					_ => unreachable!(),
-				}
+				pipe_from_stream(stream, pending).await;
 			});
 			Ok(())
 		})
-		.unwrap();
-
-	module
-		.register_subscription("can_reuse_subscription", "n", "u_can_reuse_subscription", |_, mut sink, _| {
-			tokio::spawn(async move {
-				let stream1 = IntervalStream::new(interval(Duration::from_millis(50)))
-					.zip(futures::stream::iter(1..=5))
-					.map(|(_, c)| c);
-				let stream2 = IntervalStream::new(interval(Duration::from_millis(50)))
-					.zip(futures::stream::iter(6..=10))
-					.map(|(_, c)| c);
-
-				let result = sink.pipe_from_stream(stream1).await;
-				assert!(matches!(result, SubscriptionClosed::Success));
-
-				match sink.pipe_from_stream(stream2).await {
-					SubscriptionClosed::Success => {
-						sink.close(SubscriptionClosed::Success);
-					}
-					_ => unreachable!(),
-				}
-			});
-			Ok(())
-		})
-		.unwrap();
-
-	module
-		.register_subscription(
-			"subscribe_with_err_on_stream",
-			"n",
-			"unsubscribe_with_err_on_stream",
-			move |_, mut sink, _| {
-				let err: &'static str = "error on the stream";
-
-				// Create stream that produce an error which will cancel the subscription.
-				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
-				tokio::spawn(async move {
-					match sink.pipe_from_try_stream(stream).await {
-						SubscriptionClosed::Failed(e) => {
-							sink.close(e);
-						}
-						_ => unreachable!(),
-					}
-				});
-				Ok(())
-			},
-		)
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
@@ -220,12 +170,12 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, mut sink, mut tx| {
+		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, pending, mut tx| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_secs(60 * 60));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
-				sink.pipe_from_stream(stream).await;
+				pipe_from_stream(stream, pending).await;
 				let send_back = std::sync::Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
@@ -272,4 +222,36 @@ pub fn init_logger() {
 	let _ = tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init();
+}
+
+async fn pipe_from_stream<S, T>(mut stream: S, pending: PendingSubscriptionSink)
+where
+	S: StreamExt<Item = T> + Unpin,
+	T: Serialize,
+{
+	let sink = match pending.accept().await {
+		Ok(s) => s,
+		Err(_) => return,
+	};
+
+	loop {
+		tokio::select! {
+			maybe_item = stream.next() => {
+				let item = match maybe_item {
+					Some(item) => item,
+					None => {
+						let _ = sink.close(SubscriptionClosed::Success).await;
+						return;
+					}
+				};
+
+				let msg = sink.build_message(&item).unwrap();
+
+				if sink.send(msg).await.is_err() {
+					return;
+				}
+			},
+			_ = sink.closed() => return,
+		}
+	}
 }

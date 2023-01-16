@@ -21,6 +21,7 @@ jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.16.2", optional 
 jsonrpsee-core = { path = "../core", version = "0.16.2", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.16.2", optional = true }
 tracing = { version = "0.1.34", optional = true }
+tokio = { version = "1.16", features = ["net", "rt-multi-thread", "macros", "time"], optional = true }
 
 [features]
 client-ws-transport = ["jsonrpsee-client-transport/ws", "jsonrpsee-client-transport/tls"]
@@ -35,7 +36,7 @@ macros = ["jsonrpsee-proc-macros", "jsonrpsee-types", "tracing"]
 
 client = ["http-client", "ws-client", "wasm-client", "client-ws-transport", "client-web-transport", "async-client", "async-wasm-client", "client-core"]
 client-core = ["jsonrpsee-core/client"]
-server = ["jsonrpsee-server", "server-core", "jsonrpsee-types"]
+server = ["jsonrpsee-server", "server-core", "jsonrpsee-types", "tokio"]
 server-core = ["jsonrpsee-core/server"]
 full = ["client", "server", "macros"]
 
