@@ -115,7 +115,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					match sink.try_send(notif) {
 						Ok(_) => (),
 						Err(TrySendError::Closed(m)) => {
-							tracing::warn!("Subscription is closed; failed to send msg: {:}", m);
+							tracing::warn!("Subscription is closed; failed to send msg: {:?}", m);
 							return;
 						}
 						Err(TrySendError::Full(m)) => {

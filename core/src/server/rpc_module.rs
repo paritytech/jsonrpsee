@@ -77,11 +77,17 @@ pub type MaxResponseSize = usize;
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, MethodSink);
 
 /// TrySendError
-pub type TrySendError = mpsc::error::TrySendError<String>;
+#[derive(Debug)]
+pub enum TrySendError {
+	/// The channel is closed.
+	Closed(SubscriptionMessage),
+	/// The channel is full.
+	Full(SubscriptionMessage),
+}
 
 /// Disconnect error
 #[derive(Debug)]
-pub struct DisconnectError<T>(pub T);
+pub struct DisconnectError(pub SubscriptionMessage);
 
 /// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
@@ -100,9 +106,18 @@ pub enum InnerSubscriptionResult {
 	Aborted,
 }
 
-impl<T> From<mpsc::error::SendError<T>> for DisconnectError<T> {
-	fn from(e: mpsc::error::SendError<T>) -> Self {
-		DisconnectError(e.0)
+impl From<mpsc::error::SendError<String>> for DisconnectError {
+	fn from(e: mpsc::error::SendError<String>) -> Self {
+		DisconnectError(SubscriptionMessage(e.0))
+	}
+}
+
+impl From<mpsc::error::TrySendError<String>> for TrySendError {
+	fn from(e: mpsc::error::TrySendError<String>) -> Self {
+		match e {
+			mpsc::error::TrySendError::Closed(m) => Self::Closed(SubscriptionMessage(m)),
+			mpsc::error::TrySendError::Full(m) => Self::Full(SubscriptionMessage(m)),
+		}
 	}
 }
 
@@ -116,7 +131,7 @@ type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Recei
 
 /// Subscription message.
 #[derive(Debug, Clone)]
-pub struct SubscriptionMessage(String);
+pub struct SubscriptionMessage(pub(crate) String);
 
 /// Represent a unique subscription entry based on [`RpcSubscriptionId`] and [`ConnectionId`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -838,19 +853,17 @@ impl SubscriptionSink {
 
 	/// Send a message back to the subscribers asyncronously.
 	///
-	/// The JSON string must be JSON-RPC subscription notification and you can use `SubscribeSink::build_message`
-	/// to accomplish that.
 	///
 	/// Returns
 	/// - `Ok(())` if the message could be sent.
 	/// - `Err(err)` if the connection or subscription was closed.
-	pub async fn send(&self, msg: String) -> Result<(), DisconnectError<String>> {
+	pub async fn send(&self, msg: SubscriptionMessage) -> Result<(), DisconnectError> {
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Err(DisconnectError(msg));
 		}
 
-		self.inner.send(msg).await.map_err(Into::into)
+		self.inner.send(msg.0).await.map_err(Into::into)
 	}
 
 	/// Similar to `SubscriptionSink::try_send` but it encodes the message as
@@ -870,18 +883,16 @@ impl SubscriptionSink {
 	/// Attempts to immediately send out the message as JSON string to the subscribers but fails if the
 	/// channel is full, that the connection is closed or the subscription was not explicitly accepted.
 	///
-	/// The JSON string must be JSON-RPC subscription notification and you can use `SubscribeSink::build_message`
-	/// to accomplish that.
 	///
 	/// This differs from [`SubscriptionSink::send`] as it will until there is capacity
 	/// in the channel.
-	pub fn try_send(&mut self, msg: String) -> Result<(), TrySendError> {
+	pub fn try_send(&mut self, msg: SubscriptionMessage) -> Result<(), TrySendError> {
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Err(TrySendError::Closed(msg));
 		}
 
-		self.inner.try_send(msg).map_err(Into::into)
+		self.inner.try_send(msg.0).map_err(Into::into)
 	}
 
 	/// Similar to `SubscriptionSink::try_send` but it encodes the message as
@@ -913,20 +924,22 @@ impl SubscriptionSink {
 	}
 
 	/// ...
-	pub fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {
+	pub fn build_message<T: Serialize>(&self, result: &T) -> Result<SubscriptionMessage, serde_json::Error> {
 		serde_json::to_string(&SubscriptionResponse::new(
 			self.method.into(),
 			SubscriptionPayload { subscription: self.uniq_sub.sub_id.clone(), result },
 		))
+		.map(|json| SubscriptionMessage(json))
 		.map_err(Into::into)
 	}
 
 	/// ...
-	pub fn build_error_message<T: Serialize>(&self, error: &T) -> Result<String, serde_json::Error> {
+	pub fn build_error_message<T: Serialize>(&self, error: &T) -> Result<SubscriptionMessage, serde_json::Error> {
 		serde_json::to_string(&SubscriptionError::new(
 			self.method.into(),
 			SubscriptionPayloadError { subscription: self.uniq_sub.sub_id.clone(), error },
 		))
+		.map(|json| SubscriptionMessage(json))
 		.map_err(Into::into)
 	}
 
@@ -962,7 +975,7 @@ impl SubscriptionSink {
 						Ok(permit) => permit,
 						Err(_) => return,
 					};
-					permit.send_raw(msg);
+					permit.send_raw(msg.0);
 				});
 			}
 		}

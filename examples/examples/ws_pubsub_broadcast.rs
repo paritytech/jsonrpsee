@@ -28,14 +28,19 @@
 
 use std::net::SocketAddr;
 
+use anyhow::anyhow;
 use futures::future;
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
+use jsonrpsee::core::server::rpc_module::TrySendError;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::PendingSubscriptionSink;
 use tokio::sync::broadcast;
+use tokio::time::interval;
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::IntervalStream;
 
 const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 
@@ -63,7 +68,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
+	// let's configure the server only hold 5 messages in memory.
+	let server = ServerBuilder::default().set_buffer_size(5).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	let (tx, _rx) = broadcast::channel(16);
 	let tx2 = tx.clone();
@@ -72,23 +78,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	module
 		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
-			let mut rx = BroadcastStream::new(tx.clone().subscribe());
-
-			tokio::spawn(async move {
-				let mut sink = pending.accept().await.unwrap();
-				let closed = sink.closed();
-
-				tokio::select! {
-					Some(Ok(v)) = rx.next() => {
-						let msg = sink.build_message(&v).unwrap();
-						let _ = sink.try_send(msg);
-					}
-					_ = closed => {
-						return;
-					}
-					else => return,
-				};
-			});
+			let stream = BroadcastStream::new(tx.clone().subscribe());
+			tokio::spawn(pipe_from_stream_with_bounded_buffer(pending, stream));
 
 			Ok(())
 		})
@@ -103,10 +94,70 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	Ok(addr)
 }
 
+async fn pipe_from_stream_with_bounded_buffer(
+	pending: PendingSubscriptionSink,
+	mut stream: BroadcastStream<usize>,
+) -> anyhow::Result<()> {
+	let mut sink = pending.accept().await.map_err(|e| anyhow!("{:?}", e))?;
+	let mut bounded_buffer = bounded_vec_deque::BoundedVecDeque::new(10);
+
+	// This is not recommended approach it would be better to have a queue that returns a future once
+	// a element is ready to consumed in the bounded_buffer. This might waste CPU with the timeouts
+	// as it's no guarantee that buffer has elements.
+	let mut timeout = IntervalStream::new(interval(std::time::Duration::from_millis(100)));
+
+	loop {
+		tokio::select! {
+			// subscription was closed, no point of reading more messages from the stream.
+			_ = sink.closed() => {
+				return Ok(());
+			}
+			// stream yielded a new element, try to send it.
+			Some(Ok(v)) = stream.next() => {
+				let msg = sink.build_message(&v).expect("usize serialize is infalliable; qed");
+				match sink.try_send(msg) {
+					// message was sent successfully.
+					Ok(()) => (),
+					// the connection is closed.
+					Err(TrySendError::Closed(_msg_unset_dont_care)) => {
+						tracing::warn!("The connection closed; closing subscription");
+						return Ok(());
+					}
+					// the channel was full let's buffer the ten most recent messages.
+					Err(TrySendError::Full(unsent_msg)) => {
+						if let Some(msg) = bounded_buffer.push_back(unsent_msg) {
+							tracing::warn!("Dropping the oldest message: {:?}", msg);
+						}
+					}
+				};
+			}
+			// try to pop to oldest element for our bounded buffer and send it.
+			_ = timeout.next() => {
+				if let Some(msg) = bounded_buffer.pop_front() {
+					match sink.try_send(msg) {
+						// message was sent successfully.
+						Ok(()) => (),
+						// the connection is closed.
+						Err(TrySendError::Closed(_msg_unset_dont_care)) => {
+							tracing::warn!("The connection closed; closing subscription");
+							return Ok(());
+						}
+						// the channel was full, let's insert back the pop:ed element.
+						Err(TrySendError::Full(unsent_msg)) => {
+							bounded_buffer.push_front(unsent_msg).expect("pop:ed an element must be space in; qed");
+						}
+					};
+				}
+			}
+			else => return Ok(()),
+		}
+	}
+}
+
 // Naive example that broadcasts the produced values to all active subscribers.
 fn produce_items(tx: broadcast::Sender<usize>) {
 	for c in 1..=100 {
-		std::thread::sleep(std::time::Duration::from_secs(1));
+		std::thread::sleep(std::time::Duration::from_millis(1));
 
 		// This might fail if no receivers are alive, could occur if no subscriptions are active...
 		// Also be aware that this will succeed when at least one receiver is alive

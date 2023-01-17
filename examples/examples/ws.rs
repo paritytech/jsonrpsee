@@ -40,13 +40,11 @@ async fn main() -> anyhow::Result<()> {
 	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
 	let addr = run_server().await?;
-	/*let url = format!("ws://{}", addr);
+	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", rpc_params![]).await?;
-	tracing::info!("response: {:?}", response);*/
-
-	futures::future::pending::<()>().await;
+	tracing::info!("response: {:?}", response);
 
 	Ok(())
 }
