@@ -836,7 +836,10 @@ impl SubscriptionSink {
 		self.method
 	}
 
-	/// Send a message back to subscribers asyncronously.
+	/// Send a message back to the subscribers asyncronously.
+	///
+	/// The JSON string must be JSON-RPC subscription notification and you can use `SubscribeSink::build_message`
+	/// to accomplish that.
 	///
 	/// Returns
 	/// - `Ok(())` if the message could be sent.
@@ -850,10 +853,25 @@ impl SubscriptionSink {
 		self.inner.send(msg).await.map_err(Into::into)
 	}
 
-	/// Attempts to immediately send out the message to the subscribers but fails if the
+	/// Similar to `SubscriptionSink::try_send` but it encodes the message as
+	/// a JSON-RPC subscription notification.
+	/// The error could either be encode error or send error.
+	///
+	/// NOTE: if this fails you will get back the message as JSON string and if you want
+	/// to re-send then `SubscriptionSink::send` must be used.
+	//
+	// TODO(niklasad1): do we want this API?!. I don't but a bit more code to use the new APIs
+	// for users as the message needs to be serialized by the user of API.
+	pub async fn encode_and_send<T: Serialize>(&self, val: &T) -> Result<(), ()> {
+		let msg = self.build_message(val).map_err(|_| ())?;
+		self.send(msg).await.map_err(|_| ())
+	}
+
+	/// Attempts to immediately send out the message as JSON string to the subscribers but fails if the
 	/// channel is full, that the connection is closed or the subscription was not explicitly accepted.
 	///
-	/// This is useful if you want to replace to old messages and keep your own buffer.
+	/// The JSON string must be JSON-RPC subscription notification and you can use `SubscribeSink::build_message`
+	/// to accomplish that.
 	///
 	/// This differs from [`SubscriptionSink::send`] as it will until there is capacity
 	/// in the channel.
@@ -864,6 +882,20 @@ impl SubscriptionSink {
 		}
 
 		self.inner.try_send(msg).map_err(Into::into)
+	}
+
+	/// Similar to `SubscriptionSink::try_send` but it encodes the message as
+	/// a JSON-RPC subscription notification.
+	/// The error could either be encode error or send error.
+	//
+	/// NOTE: if this fails you will get back the message as JSON string and if you want
+	/// to re-send then `SubscriptionSink::send` must be used.
+	//
+	// TODO(niklasad1): do we want this API?!. I don't but a bit more code to use the new APIs
+	// for users as the message needs to be serialized by the user of API.
+	pub fn encode_and_try_send<T: Serialize>(&mut self, val: &T) -> Result<(), ()> {
+		let msg = self.build_message(val).map_err(|_| ())?;
+		self.try_send(msg).map_err(|_| ())
 	}
 
 	/// Returns whether the subscription is closed.
