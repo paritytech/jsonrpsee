@@ -236,6 +236,10 @@ where
 
 	loop {
 		tokio::select! {
+			// poll the sink first.
+			biased;
+			_ = sink.closed() => return,
+
 			maybe_item = stream.next() => {
 				let item = match maybe_item {
 					Some(item) => item,
@@ -251,7 +255,7 @@ where
 					return;
 				}
 			},
-			_ = sink.closed() => return,
+
 		}
 	}
 }

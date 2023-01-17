@@ -34,6 +34,7 @@ use crate::error::Error;
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::traits::{IdProvider, ToRpcParams};
+use futures_util::future::Either;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned, SubscriptionAcceptRejectError};
 use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
@@ -44,7 +45,7 @@ use jsonrpsee_types::{
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::{mpsc, oneshot, watch};
+use tokio::sync::{mpsc, oneshot};
 
 use super::helpers::{MethodResponse, MethodSinkPermit};
 
@@ -111,7 +112,7 @@ impl<'a> std::fmt::Debug for ConnState<'a> {
 	}
 }
 
-type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, watch::Sender<()>)>>>;
+type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Receiver<()>)>>>;
 
 /// Subscription message.
 #[derive(Debug, Clone)]
@@ -669,12 +670,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let (tx, rx) = oneshot::channel();
 
 					let sink = PendingSubscriptionSink {
-						inner: method_sink.clone(),
+						inner: method_sink,
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
 						uniq_sub,
-						id: (id.clone().into_owned(), tx),
-						unsubscribe: None,
+						id: id.clone().into_owned(),
+						subscribe: tx,
 					};
 
 					// The callback returns a `SubscriptionResult` for better ergonomics and is not propagated further.
@@ -714,13 +715,37 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 }
 
-/// Returns once the unsubscribe method has been called.
-type UnsubscribeCall = Option<watch::Receiver<()>>;
+/// Represents a subscription until it is unsubscribed.
+///
+// NOTE: The reason why we use `mpsc` here is because it allows `IsUnsubscribed::unsubscribed`
+// to be &self instead of &mut self.
+#[derive(Debug)]
+struct IsUnsubscribed(mpsc::Sender<()>);
+
+impl IsUnsubscribed {
+	/// Returns true if the unsubscribe method has been invoked or the subscription has been canceled.
+	///
+	/// This can be called multiple times as the element in the channel is never
+	/// removed.
+	fn is_unsubscribed(&self) -> bool {
+		self.0.is_closed()
+	}
+
+	/// Wrapper over [`tokio::sync::mpsc::Sender::closed`]
+	///
+	/// # Cancel safety
+	/// This method is cancel safe. Once the channel is closed,
+	/// it stays closed forever and all future calls to closed will return immediately.
+	async fn unsubscribed(&self) {
+		_ = self.0.closed().await;
+	}
+}
 
 /// Represents a single subscription that is waiting to be accepted or rejected.
 ///
 /// You must either call `accept` or `reject` otherwise this does nothing.
 #[derive(Debug)]
+#[must_use = "PendningSubscriptionSink does nothing unless `accept` or `reject` is called"]
 pub struct PendingSubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
@@ -732,53 +757,49 @@ pub struct PendingSubscriptionSink {
 	uniq_sub: SubscriptionKey,
 	/// ID of the `subscription call` (i.e. not the same as subscription id) which is used
 	/// to reply to subscription method call and must only be used once.
-	id: (Id<'static>, oneshot::Sender<MethodResponse>),
-	/// Having some value means the subscription was accepted.
-	unsubscribe: UnsubscribeCall,
+	id: Id<'static>,
+	/// Sender to answer the subscribe call.
+	subscribe: oneshot::Sender<MethodResponse>,
 }
 
 impl PendingSubscriptionSink {
 	/// Reject the subscription call with the error from [`ErrorObject`].
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) -> Result<(), SubscriptionAcceptRejectError> {
-		let (id, subscribe_call) = self.id;
-
-		let err = MethodResponse::error(id, err.into());
+		let err = MethodResponse::error(self.id, err.into());
 		let permit = self.inner.reserve().await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
 
-		Self::answer_subscription(permit, err, subscribe_call).await?;
+		Self::answer_subscription(permit, err, self.subscribe).await?;
 		Ok(())
 	}
 
 	/// Attempt to accept the subscription and respond the subscription method call.
 	///
 	/// Fails if the connection was closed or the message was too large.
-	pub async fn accept(mut self) -> Result<SubscriptionSink, SubscriptionAcceptRejectError> {
-		let (id, subscribe_call) = self.id;
-
-		let response = MethodResponse::response(id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
+	pub async fn accept(self) -> Result<SubscriptionSink, SubscriptionAcceptRejectError> {
+		let response =
+			MethodResponse::response(self.id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
 		let permit = self.inner.reserve().await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
 
-		Self::answer_subscription(permit, response, subscribe_call).await?;
+		Self::answer_subscription(permit, response, self.subscribe).await?;
 
 		if success {
-			let (tx, rx) = watch::channel(());
-			self.subscribers.lock().insert(self.uniq_sub.clone(), (self.inner.clone(), tx));
-			self.unsubscribe = Some(rx);
+			let (tx, rx) = mpsc::channel(1);
+			self.subscribers.lock().insert(self.uniq_sub.clone(), (self.inner.clone(), rx));
 			Ok(SubscriptionSink {
 				inner: self.inner,
 				method: self.method,
 				subscribers: self.subscribers,
 				uniq_sub: self.uniq_sub,
-				unsubscribe: self.unsubscribe,
+				unsubscribe: IsUnsubscribed(tx),
 			})
 		} else {
 			Err(SubscriptionAcceptRejectError::MessageTooLarge)
 		}
 	}
 
-	async fn answer_subscription<'a>(
-		permit: MethodSinkPermit<'a>,
+	async fn answer_subscription(
+		permit: MethodSinkPermit<'_>,
 		response: MethodResponse,
 		subscribe_call: oneshot::Sender<MethodResponse>,
 	) -> Result<(), SubscriptionAcceptRejectError> {
@@ -798,8 +819,8 @@ pub struct SubscriptionSink {
 	subscribers: Subscribers,
 	/// Unique subscription.
 	uniq_sub: SubscriptionKey,
-	/// Having some value means the subscription was accepted.
-	unsubscribe: UnsubscribeCall,
+	/// A future to that fires once the unsubscribe method has been called.
+	unsubscribe: IsUnsubscribed,
 }
 
 impl SubscriptionSink {
@@ -850,13 +871,13 @@ impl SubscriptionSink {
 		self.inner.is_closed() || !self.is_active_subscription()
 	}
 
-	/// See [`MethodSink::closed`] for documentation.
+	/// Completes when the subscription has been closed.
 	pub async fn closed(&self) {
-		if !self.is_active_subscription() {
-			return;
+		// Both are cancel-safe thus ok to use select here.
+		tokio::select! {
+			_ = self.inner.closed() => (),
+			_ = self.unsubscribe.unsubscribed() => (),
 		}
-
-		self.inner.closed().await
 	}
 
 	/// ...
@@ -904,24 +925,20 @@ impl SubscriptionSink {
 
 				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
 
-				return async move {
+				return Either::Right(async move {
 					let permit = match sink.reserve().await {
 						Ok(permit) => permit,
 						Err(_) => return,
 					};
 					permit.send_raw(msg);
-				}
-				.boxed();
+				});
 			}
 		}
-		futures_util::future::ready(()).boxed()
+		Either::Left(futures_util::future::ready(()))
 	}
 
 	fn is_active_subscription(&self) -> bool {
-		match self.unsubscribe.as_ref() {
-			Some(unsubscribe) => unsubscribe.has_changed().is_ok(),
-			_ => false,
-		}
+		!self.unsubscribe.is_unsubscribed()
 	}
 }
 

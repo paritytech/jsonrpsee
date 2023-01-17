@@ -172,8 +172,8 @@ mod rpc_impl {
 			tokio::spawn(async move {
 				let sink = pending.accept().await.unwrap();
 
-				//let _ = sink.send(&"Response_A").await;
-				//let _ = sink.send(&"Response_B");
+				let _ = sink.send(sink.build_message(&"Response_A").unwrap()).await;
+				let _ = sink.send(sink.build_message(&"Response_B").unwrap()).await;
 			});
 
 			Ok(())
@@ -182,9 +182,10 @@ mod rpc_impl {
 		fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
 			tokio::spawn(async move {
 				let sink = pending.accept().await.unwrap();
+				let msg = sink.build_message(&val).unwrap();
 
-				//let _ = sink.send(&"Response_A").await;
-				//let _ = sink.send(&"Response_B");
+				let _ = sink.send(msg.clone()).await;
+				let _ = sink.send(msg).await;
 			});
 			Ok(())
 		}

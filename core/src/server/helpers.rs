@@ -108,6 +108,10 @@ impl MethodSink {
 	}
 
 	/// Same as [`tokio::sync::mpsc::Sender::closed`].
+	///
+	/// # Cancel safety
+	/// This method is cancel safe. Once the channel is closed,
+	/// it stays closed forever and all future calls to closed will return immediately.
 	pub async fn closed(&self) {
 		self.tx.closed().await
 	}

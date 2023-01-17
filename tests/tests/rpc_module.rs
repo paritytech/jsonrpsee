@@ -396,22 +396,6 @@ async fn subscribe_unsubscribe_without_server() {
 }
 
 #[tokio::test]
-async fn empty_subscription_without_server() {
-	let mut module = RpcModule::new(());
-	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut _sink, _| {
-			// Sink was never accepted or rejected. Expected to return `InvalidParams`.
-			Ok(())
-		})
-		.unwrap();
-
-	let sub_err = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap_err();
-	assert!(
-		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("Invalid params") && e.code() == ErrorCode::InvalidParams.code())
-	);
-}
-
-#[tokio::test]
 async fn rejected_subscription_without_server() {
 	let mut module = RpcModule::new(());
 	module
