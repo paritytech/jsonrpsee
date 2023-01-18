@@ -79,6 +79,7 @@ pub struct HttpClientBuilder {
 	id_kind: IdKind,
 	max_log_length: u32,
 	headers: HeaderMap,
+	proxy: Option<String>,
 }
 
 impl HttpClientBuilder {
@@ -134,6 +135,14 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Set the HTTP(S) proxy that will proxy every HTTP request (default is none).
+	/// 
+	/// The proxy should be of the form <http[s]://host_or_ip:port> (without the brackets).
+	pub fn set_proxy(mut self, proxy: String) -> Self {
+		self.proxy = Some(proxy);
+		self
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
 		let Self {
@@ -145,6 +154,7 @@ impl HttpClientBuilder {
 			id_kind,
 			headers,
 			max_log_length,
+			proxy,
 		} = self;
 
 		let transport = HttpTransportClient::new(
@@ -154,6 +164,7 @@ impl HttpClientBuilder {
 			certificate_store,
 			max_log_length,
 			headers,
+			proxy
 		)
 		.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
@@ -175,6 +186,7 @@ impl Default for HttpClientBuilder {
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			headers: HeaderMap::new(),
+			proxy: None
 		}
 	}
 }

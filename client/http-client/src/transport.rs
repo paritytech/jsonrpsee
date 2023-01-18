@@ -9,6 +9,7 @@
 use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper::Uri;
+use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
@@ -24,6 +25,8 @@ enum HyperClient {
 	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>>),
 	/// Hyper client with http connector.
 	Http(Client<HttpConnector>),
+	/// Hyper client with proxy connector.
+	Proxy(Client<ProxyConnector<hyper_rustls::HttpsConnector<HttpConnector>>>),
 }
 
 impl HyperClient {
@@ -32,6 +35,7 @@ impl HyperClient {
 			Self::Http(client) => client.request(req),
 			#[cfg(feature = "tls")]
 			Self::Https(client) => client.request(req),
+			Self::Proxy(client) => client.request(req),
 		}
 	}
 }
@@ -64,6 +68,7 @@ impl HttpTransportClient {
 		cert_store: CertificateStore,
 		max_log_length: u32,
 		headers: HeaderMap,
+		proxy: Option<String>,
 	) -> Result<Self, Error> {
 		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.port_u16().is_none() {
@@ -87,7 +92,18 @@ impl HttpTransportClient {
 						.build(),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
-				HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector))
+				match proxy.clone() {
+					Some(pr) => {
+						let proxy_uri = pr.parse().unwrap();
+						let proxy_obj = Proxy::new(Intercept::All, proxy_uri);
+						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj).unwrap();
+						HyperClient::Proxy(Client::builder().build::<_, hyper::Body>(proxy_connector))
+					},
+					None => {
+						HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector))
+					}
+				}
+				
 			}
 			_ => {
 				#[cfg(feature = "tls")]
@@ -110,7 +126,7 @@ impl HttpTransportClient {
 			}
 		}
 
-		Ok(Self { target, client, max_request_size, max_response_size, max_log_length, headers: cached_headers })
+		Ok(Self { target, client, max_request_size, max_response_size, max_log_length, headers: cached_headers, })
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
