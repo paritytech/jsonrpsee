@@ -32,6 +32,7 @@ use std::time::Duration;
 use crate::transport::HttpTransportClient;
 use crate::types::{ErrorResponse, NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
+use hyper::Uri;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
 	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription,
@@ -79,7 +80,7 @@ pub struct HttpClientBuilder {
 	id_kind: IdKind,
 	max_log_length: u32,
 	headers: HeaderMap,
-	proxy: Option<String>,
+	proxy: Option<Uri>,
 }
 
 impl HttpClientBuilder {
@@ -137,10 +138,16 @@ impl HttpClientBuilder {
 
 	/// Set the HTTP(S) proxy that will proxy every HTTP request (default is none).
 	/// 
-	/// The proxy should be of the form <http[s]://host_or_ip:port> (without the brackets).
-	pub fn set_proxy(mut self, proxy: String) -> Self {
-		self.proxy = Some(proxy);
-		self
+	/// The proxy should be of the form <http://host_or_ip:port> (without the brackets).
+	pub fn set_proxy(mut self, proxy: String) -> Result<Self, Error> {
+		let result = proxy.parse().map_err(|_| Error::Transport(anyhow::Error::msg(format!("Invalid proxy URL: {}", proxy.to_string()))));
+		match result {
+			Ok(uri) => {
+				self.proxy = Some(uri);
+				Ok(self)
+			},
+			Err(e) => Err(e)
+		}
 	}
 
 	/// Build the HTTP client with target to connect to.

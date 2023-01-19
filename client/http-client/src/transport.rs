@@ -68,7 +68,7 @@ impl HttpTransportClient {
 		cert_store: CertificateStore,
 		max_log_length: u32,
 		headers: HeaderMap,
-		proxy: Option<String>,
+		proxy: Option<Uri>,
 	) -> Result<Self, Error> {
 		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.port_u16().is_none() {
@@ -92,11 +92,10 @@ impl HttpTransportClient {
 						.build(),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
-				match proxy.clone() {
+				match proxy {
 					Some(pr) => {
-						let proxy_uri = pr.parse().unwrap();
-						let proxy_obj = Proxy::new(Intercept::All, proxy_uri);
-						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj).unwrap();
+						let proxy_obj = Proxy::new(Intercept::All, pr.clone());
+						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj).map_err(|_| Error::Url(format!("Invalid URL: {}", pr.to_string())))?;
 						HyperClient::Proxy(Client::builder().build::<_, hyper::Body>(proxy_connector))
 					},
 					None => {
