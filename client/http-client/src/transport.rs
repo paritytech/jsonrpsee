@@ -9,7 +9,7 @@
 use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper::Uri;
-use hyper_proxy::{Proxy, ProxyConnector, Intercept};
+use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
@@ -95,14 +95,12 @@ impl HttpTransportClient {
 				match proxy {
 					Some(pr) => {
 						let proxy_obj = Proxy::new(Intercept::All, pr.clone());
-						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj).map_err(|_| Error::Url(format!("Invalid URL: {}", pr.to_string())))?;
+						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj)
+							.map_err(|_| Error::Url(format!("Invalid URL: {}", pr.to_string())))?;
 						HyperClient::Proxy(Client::builder().build::<_, hyper::Body>(proxy_connector))
-					},
-					None => {
-						HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector))
 					}
+					None => HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector)),
 				}
-				
 			}
 			_ => {
 				#[cfg(feature = "tls")]
@@ -125,7 +123,7 @@ impl HttpTransportClient {
 			}
 		}
 
-		Ok(Self { target, client, max_request_size, max_response_size, max_log_length, headers: cached_headers, })
+		Ok(Self { target, client, max_request_size, max_response_size, max_log_length, headers: cached_headers })
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
