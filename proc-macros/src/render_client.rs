@@ -28,7 +28,7 @@ use crate::helpers::generate_where_clause;
 use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{FnArg, Pat, PatIdent, PatType, TypeParam};
+use syn::{AngleBracketedGenericArguments, FnArg, GenericArgument, Pat, PatIdent, PatType, PathArguments, TypeParam};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -68,6 +68,36 @@ impl RpcDescription {
 		Ok(trait_impl)
 	}
 
+	fn patch_result_error(&self, ty: &syn::Type) -> syn::Type {
+		let mut path = match ty {
+			syn::Type::Path(path) => path.clone(),
+			_ => panic!("Client only supports bare or Result values: {:?}", ty),
+		};
+
+		let Some(first_segment) = path.path.segments.first_mut() else {
+			return syn::Type::Path(path);
+		};
+
+		if first_segment.ident != "Result" {
+			return syn::Type::Path(path);
+		}
+
+		let args = match first_segment.arguments {
+			PathArguments::AngleBracketed(AngleBracketedGenericArguments { ref mut args, .. }) => args,
+			_ => unreachable!("Unexpected Result structure"),
+		};
+
+		let error = args.last_mut().unwrap();
+		let error_type = match error {
+			GenericArgument::Type(error_type) => error_type,
+			_ => unreachable!("Unexpected Result structure"),
+		};
+
+		*error_type = syn::Type::Verbatim(self.jrps_client_item(quote! { core::Error }));
+
+		syn::Type::Path(path)
+	}
+
 	fn render_method(&self, method: &RpcMethod) -> Result<TokenStream2, syn::Error> {
 		// `jsonrpsee::Error`
 		let jrps_error = self.jrps_client_item(quote! { core::Error });
@@ -83,6 +113,7 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::core::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
+			let returns = self.patch_result_error(returns);
 			let returns = quote! { #returns };
 
 			(called_method, returns)
