@@ -11,7 +11,6 @@ use std::io;
 use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper::Uri;
-use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
@@ -28,7 +27,8 @@ enum HyperClient {
 	/// Hyper client with http connector.
 	Http(Client<HttpConnector>),
 	/// Hyper client with proxy connector.
-	Proxy(Client<ProxyConnector<hyper_rustls::HttpsConnector<HttpConnector>>>),
+	#[cfg(all(feature = "proxy", feature = "tls"))]
+	Proxy(Client<hyper_proxy::ProxyConnector<hyper_rustls::HttpsConnector<HttpConnector>>>),
 }
 
 impl HyperClient {
@@ -37,6 +37,7 @@ impl HyperClient {
 			Self::Http(client) => client.request(req),
 			#[cfg(feature = "tls")]
 			Self::Https(client) => client.request(req),
+			#[cfg(feature = "proxy")]
 			Self::Proxy(client) => client.request(req),
 		}
 	}
@@ -95,12 +96,15 @@ impl HttpTransportClient {
 					_ => return Err(Error::InvalidCertficateStore),
 				};
 				match proxy {
+					#[cfg(feature = "proxy")]
 					Some(pr) => {
-						let proxy_obj = Proxy::new(Intercept::All, pr);
-						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj).map_err(Error::from)?;
+						let proxy_obj = hyper_proxy::Proxy::new(hyper_proxy::Intercept::All, pr);
+						let proxy_connector =
+							hyper_proxy::ProxyConnector::from_proxy(connector, proxy_obj).map_err(Error::from)?;
 						HyperClient::Proxy(Client::builder().build::<_, hyper::Body>(proxy_connector))
 					}
-					None => HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector)),
+					// proxy can only be configured when the `proxy` feature is enabled.
+					_ => HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector)),
 				}
 			}
 			_ => {
@@ -268,9 +272,16 @@ mod tests {
 	#[cfg(not(feature = "tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
-		let err =
-			HttpTransportClient::new(80, "https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
-				.unwrap_err();
+		let err = HttpTransportClient::new(
+			80,
+			"https://localhost:9933",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			None,
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
