@@ -576,7 +576,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<MethodResourcesBuilder, Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		E: for<'a> Into<Error>,
+		E: Into<Error>,
 		Fut: Future<Output = Result<R, E>> + Send,
 		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
@@ -615,7 +615,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		E: for<'a> Into<Error>,
+		E: Into<Error>,
 		F: Fn(Params, Arc<Context>) -> Result<R, E> + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
