@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 use crate::attributes::ParamKind;
-use crate::helpers::generate_where_clause;
+use crate::helpers::{generate_where_clause, path_segment_mut};
 use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -68,28 +68,33 @@ impl RpcDescription {
 		Ok(trait_impl)
 	}
 
+	/// Alter the error varaint (`Err`) type of the [`Result`], or return the type as-is if it is not a [`Result`].
+	/// Intended for rewriting the retuirn type of RPC methods for clients, where the return type is defined
+	/// as a [`Result`] with a custom error. Clients can not actually benefit from custom errors right now, so
+	/// we just rewrtie the type to be the good old [`core::Error`].
 	fn patch_result_error(&self, ty: &syn::Type) -> syn::Type {
-		let mut path = match ty {
+		let mut type_path = match ty {
 			syn::Type::Path(path) => path.clone(),
 			_ => panic!("Client only supports bare or Result values: {:?}", ty),
 		};
 
-		let Some(first_segment) = path.path.segments.first_mut() else {
-			return syn::Type::Path(path);
+		let valids_paths = [&["Result"][..], &["std", "result", "Result"][..], &["core", "result", "Result"][..]];
+		let Some(result_segment) = path_segment_mut(&mut type_path.path, valids_paths) else {
+			return syn::Type::Path(type_path);
 		};
 
-		if first_segment.ident != "Result" {
-			return syn::Type::Path(path);
+		if result_segment.ident != "Result" {
+			return syn::Type::Path(type_path);
 		}
 
-		let args = match first_segment.arguments {
+		let args = match result_segment.arguments {
 			PathArguments::AngleBracketed(AngleBracketedGenericArguments { ref mut args, .. }) => args,
 			_ => unreachable!("Unexpected Result structure"),
 		};
 
 		if args.len() != 2 {
 			// Unexpected number of type arguments, just leave it as-is.
-			return syn::Type::Path(path);
+			return syn::Type::Path(type_path);
 		}
 
 		let error = args.last_mut().unwrap();
@@ -100,7 +105,7 @@ impl RpcDescription {
 
 		*error_type = syn::Type::Verbatim(self.jrps_client_item(quote! { core::Error }));
 
-		syn::Type::Path(path)
+		syn::Type::Path(type_path)
 	}
 
 	fn render_method(&self, method: &RpcMethod) -> Result<TokenStream2, syn::Error> {
