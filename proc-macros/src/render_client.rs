@@ -70,19 +70,19 @@ impl RpcDescription {
 	}
 
 	/// Verify and rewrite the return type (for methods).
-	fn return_result_type(&self, ty: &syn::Type) -> TokenStream2 {
+	fn return_result_type(&self, mut ty: syn::Type) -> TokenStream2 {
 		// We expect a valid type path.
-		let syn::Type::Path(type_path) = ty else  {
+		let syn::Type::Path(ref mut type_path) = ty else  {
 			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here. (1)"));
 		};
 
 		// The path (eg std::result::Result) should have a final segment like 'Result'.
-		let Some(type_name) = type_path.path.segments.last() else {
+		let Some(type_name) = type_path.path.segments.last_mut() else {
 			return quote_spanned!(ty.span() => compile_error!("Expecting this path to end in something like 'Result<Foo, Err>'"));
 		};
 
 		// Get the generic args eg the <T, E> in Result<T, E>.
-		let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &type_name.arguments else {
+		let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &mut type_name.arguments else {
 			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here, but got no generic args (eg no '<Foo,Err>')."));
 		};
 
@@ -92,11 +92,11 @@ impl RpcDescription {
 				return quote_spanned!(args.span() => compile_error!("Expecting two generic args here."));
 			}
 
-			// The first generic arg is our custom return type.
-			// Return a new Result with that custom type and jsonrpsee::core::Error:
-			let custom_return_type = args.first().unwrap();
-			let error_type = self.jrps_client_item(quote! { core::Error });
-			quote!(std::result::Result<#custom_return_type, #error_type>)
+			// Force the last argument to be `jsonrpsee::core::Error`:
+			let error_arg = args.last_mut().unwrap();
+			*error_arg = syn::GenericArgument::Type(syn::Type::Verbatim(self.jrps_client_item(quote! { core::Error })));
+
+			quote!(#ty)
 		} else if type_name.ident == "RpcResult" {
 			// RpcResult<T> (an alias we export) should have 1 generic arg.
 			if args.len() != 1 {
@@ -124,7 +124,7 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::core::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
-			let returns = self.return_result_type(returns);
+			let returns = self.return_result_type(returns.clone());
 			let returns = quote! { #returns };
 
 			(called_method, returns)
