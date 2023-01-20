@@ -231,18 +231,32 @@ mod tests {
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err =
-			HttpTransportClient::new(80, "ws://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new(), None)
-				.unwrap_err();
+		let err = HttpTransportClient::new(
+			80,
+			"ws://localhost:9933",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			None,
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[cfg(feature = "tls")]
 	#[test]
 	fn https_works() {
-		let client =
-			HttpTransportClient::new(80, "https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new(), None)
-				.unwrap();
+		let client = HttpTransportClient::new(
+			80,
+			"https://localhost:9933",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			None,
+		)
+		.unwrap();
 		assert_target(&client, "localhost", "https", "/", 9933, 80);
 	}
 
@@ -257,13 +271,27 @@ mod tests {
 
 	#[test]
 	fn faulty_port() {
-		let err =
-			HttpTransportClient::new(80, "http://localhost:-43", 80, CertificateStore::Native, 80, HeaderMap::new(), None)
-				.unwrap_err();
+		let err = HttpTransportClient::new(
+			80,
+			"http://localhost:-43",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			None,
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
-		let err =
-			HttpTransportClient::new(80, "http://localhost:-99999", 80, CertificateStore::Native, 80, HeaderMap::new(), None)
-				.unwrap_err();
+		let err = HttpTransportClient::new(
+			80,
+			"http://localhost:-99999",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			None,
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
