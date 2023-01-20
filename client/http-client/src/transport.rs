@@ -96,7 +96,7 @@ impl HttpTransportClient {
 					Some(pr) => {
 						let proxy_obj = Proxy::new(Intercept::All, pr.clone());
 						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj)
-							.map_err(|_| Error::Url(format!("Invalid URL: {}", pr.to_string())))?;
+							.map_err(|_| Error::Url(format!("Invalid URL: {}", pr)))?;
 						HyperClient::Proxy(Client::builder().build::<_, hyper::Body>(proxy_connector))
 					}
 					None => HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector)),
@@ -232,7 +232,7 @@ mod tests {
 	#[test]
 	fn invalid_http_url_rejected() {
 		let err =
-			HttpTransportClient::new(80, "ws://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
+			HttpTransportClient::new(80, "ws://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new(), None)
 				.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
@@ -241,7 +241,7 @@ mod tests {
 	#[test]
 	fn https_works() {
 		let client =
-			HttpTransportClient::new(80, "https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
+			HttpTransportClient::new(80, "https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new(), None)
 				.unwrap();
 		assert_target(&client, "localhost", "https", "/", 9933, 80);
 	}
@@ -258,11 +258,11 @@ mod tests {
 	#[test]
 	fn faulty_port() {
 		let err =
-			HttpTransportClient::new(80, "http://localhost:-43", 80, CertificateStore::Native, 80, HeaderMap::new())
+			HttpTransportClient::new(80, "http://localhost:-43", 80, CertificateStore::Native, 80, HeaderMap::new(), None)
 				.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 		let err =
-			HttpTransportClient::new(80, "http://localhost:-99999", 80, CertificateStore::Native, 80, HeaderMap::new())
+			HttpTransportClient::new(80, "http://localhost:-99999", 80, CertificateStore::Native, 80, HeaderMap::new(), None)
 				.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
@@ -276,6 +276,7 @@ mod tests {
 			CertificateStore::Native,
 			80,
 			HeaderMap::new(),
+			None,
 		)
 		.unwrap();
 		assert_target(&client, "localhost", "http", "/my-special-path", 9944, 1337);
@@ -290,6 +291,7 @@ mod tests {
 			CertificateStore::WebPki,
 			80,
 			HeaderMap::new(),
+			None,
 		)
 		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my?name1=value1&name2=value2", 9999, u32::MAX);
@@ -304,6 +306,7 @@ mod tests {
 			CertificateStore::Native,
 			80,
 			HeaderMap::new(),
+			None,
 		)
 		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my.htm", 9944, 999);
@@ -321,6 +324,7 @@ mod tests {
 			CertificateStore::WebPki,
 			99,
 			HeaderMap::new(),
+			None,
 		)
 		.unwrap();
 		assert_eq!(client.max_request_size, eighty_bytes_limit);

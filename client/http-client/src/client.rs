@@ -142,7 +142,7 @@ impl HttpClientBuilder {
 	pub fn set_proxy(mut self, proxy: String) -> Result<Self, Error> {
 		let result = proxy
 			.parse()
-			.map_err(|_| Error::Transport(anyhow::Error::msg(format!("Invalid proxy URL: {}", proxy.to_string()))));
+			.map_err(|_| Error::Transport(anyhow::Error::msg(format!("Invalid proxy URL: {}", proxy))));
 		match result {
 			Ok(uri) => {
 				self.proxy = Some(uri);
