@@ -6,6 +6,8 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+use std::io;
+
 use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper::Uri;
@@ -94,9 +96,8 @@ impl HttpTransportClient {
 				};
 				match proxy {
 					Some(pr) => {
-						let proxy_obj = Proxy::new(Intercept::All, pr.clone());
-						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj)
-							.map_err(|_| Error::Url(format!("Invalid URL: {}", pr)))?;
+						let proxy_obj = Proxy::new(Intercept::All, pr);
+						let proxy_connector = ProxyConnector::from_proxy(connector, proxy_obj).map_err(Error::from)?;
 						HyperClient::Proxy(Client::builder().build::<_, hyper::Body>(proxy_connector))
 					}
 					None => HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector)),
@@ -195,6 +196,10 @@ pub enum Error {
 	/// Invalid certificate store.
 	#[error("Invalid certificate store")]
 	InvalidCertficateStore,
+
+	/// IO error.
+	#[error("I/O error: {0}")]
+	Io(#[from] io::Error),
 }
 
 impl<T> From<GenericTransportError<T>> for Error

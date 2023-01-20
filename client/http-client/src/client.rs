@@ -83,6 +83,16 @@ pub struct HttpClientBuilder {
 	proxy: Option<Uri>,
 }
 
+/// Error that may occur when trying to parse a `proxy URL`.
+#[derive(thiserror::Error, Debug)]
+struct InvalidProxyUrl(String);
+
+impl fmt::Display for InvalidProxyUrl {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_fmt(format_args!("Invalid proxy URL: {}", self.0))
+	}
+}
+
 impl HttpClientBuilder {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_size(mut self, size: u32) -> Self {
@@ -139,16 +149,11 @@ impl HttpClientBuilder {
 	/// Set the HTTP(S) proxy that will proxy every HTTP request (default is none).
 	///
 	/// The proxy should be of the form <http://host_or_ip:port> (without the brackets).
-	pub fn set_proxy(mut self, proxy: String) -> Result<Self, Error> {
+	pub fn set_proxy(mut self, proxy: impl AsRef<str>) -> Result<Self, Error> {
 		let result =
-			proxy.parse().map_err(|_| Error::Transport(anyhow::Error::msg(format!("Invalid proxy URL: {}", proxy))));
-		match result {
-			Ok(uri) => {
-				self.proxy = Some(uri);
-				Ok(self)
-			}
-			Err(e) => Err(e),
-		}
+			proxy.as_ref().parse().map_err(|_| Error::Transport(InvalidProxyUrl(proxy.as_ref().to_owned()).into()))?;
+		self.proxy = Some(result);
+		Ok(self)
 	}
 
 	/// Build the HTTP client with target to connect to.
