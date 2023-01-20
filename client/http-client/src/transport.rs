@@ -6,6 +6,13 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+use std::error::Error as StdError;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
+
+use hyper::body::{Body, HttpBody};
 use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper::Uri;
@@ -14,35 +21,52 @@ use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
 use jsonrpsee_core::tracing::{rx_log_from_bytes, tx_log_from_str};
 use thiserror::Error;
+use tokio::sync::Mutex;
+use tower::{Layer, Service, ServiceExt};
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
+/// Wrapper over HTTP transport and connector.
 #[derive(Debug, Clone)]
-enum HyperClient {
+pub enum HyperClient<B> {
 	/// Hyper client with https connector.
 	#[cfg(feature = "tls")]
-	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>>),
+	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>, B>),
 	/// Hyper client with http connector.
-	Http(Client<HttpConnector>),
+	Http(Client<HttpConnector, B>),
 }
 
-impl HyperClient {
-	fn request(&self, req: hyper::Request<hyper::Body>) -> hyper::client::ResponseFuture {
-		match self {
-			Self::Http(client) => client.request(req),
-			#[cfg(feature = "tls")]
-			Self::Https(client) => client.request(req),
-		}
+impl<B> tower::Service<hyper::Request<B>> for HyperClient<B>
+where
+	B: HttpBody + Send + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+{
+	type Response = hyper::Response<Body>;
+	type Error = Error;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+	fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn call(&mut self, req: hyper::Request<B>) -> Self::Future {
+		let resp = match self {
+			Self::Http(inner) => inner.call(req),
+			Self::Https(inner) => inner.call(req),
+		};
+
+		Box::pin(async move { resp.await.map_err(|e| Error::Http(e.into())) })
 	}
 }
 
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
-pub struct HttpTransportClient {
+pub struct HttpTransportClient<S> {
 	/// Target to connect to.
 	target: Uri,
 	/// HTTP client
-	client: HyperClient,
+	client: Arc<Mutex<S>>,
 	/// Configurable max request body size
 	max_request_body_size: u32,
 	/// Max length for logging for requests and responses
@@ -53,15 +77,25 @@ pub struct HttpTransportClient {
 	headers: HeaderMap,
 }
 
-impl HttpTransportClient {
+impl<S, B> HttpTransportClient<S>
+where
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error>,
+	B: HttpBody + Send + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+{
 	/// Initializes a new HTTP client.
-	pub(crate) fn new(
+	pub(crate) fn new<L>(
 		target: impl AsRef<str>,
 		max_request_body_size: u32,
 		cert_store: CertificateStore,
 		max_log_length: u32,
 		headers: HeaderMap,
-	) -> Result<Self, Error> {
+		service_builder: tower::ServiceBuilder<L>,
+	) -> Result<Self, Error>
+	where
+		L: Layer<HyperClient<Body>, Service = S>,
+	{
 		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.port_u16().is_none() {
 			return Err(Error::Url("Port number is missing in the URL".into()));
@@ -107,10 +141,17 @@ impl HttpTransportClient {
 			}
 		}
 
-		Ok(Self { target, client, max_request_body_size, max_log_length, headers: cached_headers })
-	}
+		let client = service_builder.service(client);
 
-	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
+		Ok(Self {
+			target,
+			client: Arc::new(Mutex::new(client)),
+			max_request_body_size,
+			max_log_length,
+			headers: cached_headers,
+		})
+	}
+	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
 		tx_log_from_str(&body, self.max_log_length);
 
 		if body.len() > self.max_request_body_size as usize {
@@ -122,8 +163,8 @@ impl HttpTransportClient {
 			*headers = self.headers.clone();
 		}
 		let req = req.body(From::from(body)).expect("URI and request headers are valid; qed");
+		let response = self.client.lock().await.ready().await?.call(req).await?;
 
-		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
 		if response.status().is_success() {
 			Ok(response)
 		} else {
@@ -135,7 +176,8 @@ impl HttpTransportClient {
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
-		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_request_body_size).await?;
+
+		let (body, _) = http_helpers::read_generic_body(&parts.headers, body, self.max_request_body_size).await?;
 
 		rx_log_from_bytes(&body, self.max_log_length);
 
@@ -199,7 +241,7 @@ mod tests {
 	use super::*;
 
 	fn assert_target(
-		client: &HttpTransportClient,
+		client: &HttpTransportClient<HyperClient<Body>>,
 		host: &str,
 		scheme: &str,
 		path_and_query: &str,
@@ -215,37 +257,69 @@ mod tests {
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err = HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
-			.unwrap_err();
+		let err = HttpTransportClient::new(
+			"ws://localhost:9933",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[cfg(feature = "tls")]
 	#[test]
 	fn https_works() {
-		let client =
-			HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
-				.unwrap();
+		let client = HttpTransportClient::new(
+			"https://localhost:9933",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap();
 		assert_target(&client, "localhost", "https", "/", 9933, 80);
 	}
 
 	#[cfg(not(feature = "tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
-		let err =
-			HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
-				.unwrap_err();
+		let err = HttpTransportClient::new(
+			"https://localhost:9933",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[test]
 	fn faulty_port() {
-		let err = HttpTransportClient::new("http://localhost:-43", 80, CertificateStore::Native, 80, HeaderMap::new())
-			.unwrap_err();
+		let err = HttpTransportClient::new(
+			"http://localhost:-43",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
-		let err =
-			HttpTransportClient::new("http://localhost:-99999", 80, CertificateStore::Native, 80, HeaderMap::new())
-				.unwrap_err();
+		let err = HttpTransportClient::new(
+			"http://localhost:-99999",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
@@ -257,6 +331,7 @@ mod tests {
 			CertificateStore::Native,
 			80,
 			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
 		assert_target(&client, "localhost", "http", "/my-special-path", 9944, 1337);
@@ -270,6 +345,7 @@ mod tests {
 			CertificateStore::WebPki,
 			80,
 			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my?name1=value1&name2=value2", 9999, u32::MAX);
@@ -283,6 +359,7 @@ mod tests {
 			CertificateStore::Native,
 			80,
 			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my.htm", 9944, 999);
@@ -291,9 +368,15 @@ mod tests {
 	#[tokio::test]
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
-		let client =
-			HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki, 99, HeaderMap::new())
-				.unwrap();
+		let client = HttpTransportClient::new(
+			"http://localhost:9933",
+			80,
+			CertificateStore::WebPki,
+			99,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
 		let body = "a".repeat(81);
