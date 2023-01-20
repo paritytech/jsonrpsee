@@ -192,28 +192,6 @@ pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
 	quote! ( #(#docs)* )
 }
 
-/// Extract the mutable path segment from the given path for the given valid paths.
-pub(crate) fn path_segment_mut<'path, 'valid>(
-	path: &'path mut syn::Path,
-	valid_paths: impl IntoIterator<Item = &'valid [&'valid str]> + 'valid,
-) -> Option<&'path mut syn::PathSegment> {
-	for valids_path in valid_paths {
-		if valids_path.len() != path.segments.len() {
-			continue;
-		}
-		let segments_match = path
-			.segments
-			.iter_mut()
-			.zip(valids_path)
-			.all(|(actual_segment, valid_path_segment)| actual_segment.ident == valid_path_segment);
-		if !segments_match {
-			continue;
-		}
-		return path.segments.last_mut();
-	}
-	None
-}
-
 #[cfg(test)]
 mod tests {
 	use super::is_option;

@@ -24,11 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 use crate::attributes::ParamKind;
-use crate::helpers::{generate_where_clause, path_segment_mut};
+use crate::helpers::generate_where_clause;
 use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
-use syn::{AngleBracketedGenericArguments, FnArg, GenericArgument, Pat, PatIdent, PatType, PathArguments, TypeParam};
+use quote::{quote, quote_spanned};
+use syn::spanned::Spanned;
+use syn::{AngleBracketedGenericArguments, FnArg, Pat, PatIdent, PatType, PathArguments, TypeParam};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -68,44 +69,44 @@ impl RpcDescription {
 		Ok(trait_impl)
 	}
 
-	/// Alter the error varaint (`Err`) type of the [`Result`], or return the type as-is if it is not a [`Result`].
-	/// Intended for rewriting the retuirn type of RPC methods for clients, where the return type is defined
-	/// as a [`Result`] with a custom error. Clients can not actually benefit from custom errors right now, so
-	/// we just rewrtie the type to be the good old [`core::Error`].
-	fn patch_result_error(&self, ty: &syn::Type) -> syn::Type {
-		let mut type_path = match ty {
-			syn::Type::Path(path) => path.clone(),
-			_ => panic!("Client only supports bare or Result values: {:?}", ty),
+	/// Verify and rewrite the return type (for methods).
+	fn return_result_type(&self, ty: &syn::Type) -> TokenStream2 {
+		// We expect a valid type path.
+		let syn::Type::Path(type_path) = ty else  {
+			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here. (1)"));
 		};
 
-		let valids_paths = [&["Result"][..], &["std", "result", "Result"][..], &["core", "result", "Result"][..]];
-		let Some(result_segment) = path_segment_mut(&mut type_path.path, valids_paths) else {
-			return syn::Type::Path(type_path);
+		// The path (eg std::result::Result) should have a final segment like 'Result'.
+		let Some(type_name) = type_path.path.segments.last() else {
+			return quote_spanned!(ty.span() => compile_error!("Expecting this path to end in something like 'Result<Foo, Err>'"));
 		};
 
-		if result_segment.ident != "Result" {
-			return syn::Type::Path(type_path);
+		// Get the generic args eg the <T, E> in Result<T, E>.
+		let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &type_name.arguments else {
+			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here, but got no generic args (eg no '<Foo,Err>')."));
+		};
+
+		if type_name.ident == "Result" {
+			// Result<T, E> should have 2 generic args.
+			if args.len() != 2 {
+				return quote_spanned!(args.span() => compile_error!("Expecting two generic args here."));
+			}
+
+			// The first generic arg is our custom return type.
+			// Return a new Result with that custom type and jsonrpsee::core::Error:
+			let custom_return_type = args.first().unwrap();
+			let error_type = self.jrps_client_item(quote! { core::Error });
+			quote!(std::result::Result<#custom_return_type, #error_type>)
+		} else if type_name.ident == "RpcResult" {
+			// RpcResult<T> (an alias we export) should have 1 generic arg.
+			if args.len() != 1 {
+				return quote_spanned!(args.span() => compile_error!("Expecting two generic args here."));
+			}
+			quote!(#ty)
+		} else {
+			// Any other type name isn't allowed.
+			quote_spanned!(type_name.span() => compile_error!("The response type should be Result or RpcResult"))
 		}
-
-		let args = match result_segment.arguments {
-			PathArguments::AngleBracketed(AngleBracketedGenericArguments { ref mut args, .. }) => args,
-			_ => unreachable!("Unexpected Result structure"),
-		};
-
-		if args.len() != 2 {
-			// Unexpected number of type arguments, just leave it as-is.
-			return syn::Type::Path(type_path);
-		}
-
-		let error = args.last_mut().unwrap();
-		let error_type = match error {
-			GenericArgument::Type(error_type) => error_type,
-			_ => unreachable!("Unexpected Result structure"),
-		};
-
-		*error_type = syn::Type::Verbatim(self.jrps_client_item(quote! { core::Error }));
-
-		syn::Type::Path(type_path)
 	}
 
 	fn render_method(&self, method: &RpcMethod) -> Result<TokenStream2, syn::Error> {
@@ -123,7 +124,7 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::core::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
-			let returns = self.patch_result_error(returns);
+			let returns = self.return_result_type(returns);
 			let returns = quote! { #returns };
 
 			(called_method, returns)
