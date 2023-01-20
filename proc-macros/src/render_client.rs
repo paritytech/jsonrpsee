@@ -87,6 +87,11 @@ impl RpcDescription {
 			_ => unreachable!("Unexpected Result structure"),
 		};
 
+		if args.len() != 2 {
+			// Unexpected number of type arguments, just leave it as-is.
+			return syn::Type::Path(path);
+		}
+
 		let error = args.last_mut().unwrap();
 		let error_type = match error {
 			GenericArgument::Type(error_type) => error_type,
