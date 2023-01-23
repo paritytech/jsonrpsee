@@ -31,7 +31,7 @@ use anyhow::anyhow;
 use hyper::body::{Buf, HttpBody};
 use std::error::Error as StdError;
 
-/// Read a data from a [`hyper::HttpBody`] and return the data if it is valid and within the allowed size range.
+/// Read a data from [`hyper::body::HttpBody`] and return the data if it is valid JSON and within the allowed size range.
 ///
 /// Returns `Ok((bytes, single))` if the body was in valid size range; and a bool indicating whether the JSON-RPC
 /// request is a single or a batch.
