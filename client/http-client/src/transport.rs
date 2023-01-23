@@ -178,7 +178,7 @@ where
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
-		let (body, _) = http_helpers::read_generic_body(&parts.headers, body, self.max_response_size).await?;
+		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_response_size).await?;
 
 		rx_log_from_bytes(&body, self.max_log_length);
 
@@ -224,15 +224,12 @@ pub enum Error {
 	InvalidCertficateStore,
 }
 
-impl<T> From<GenericTransportError<T>> for Error
-where
-	T: std::error::Error + Send + Sync + 'static,
-{
-	fn from(err: GenericTransportError<T>) -> Self {
+impl From<GenericTransportError> for Error {
+	fn from(err: GenericTransportError) -> Self {
 		match err {
-			GenericTransportError::<T>::TooLarge => Self::RequestTooLarge,
-			GenericTransportError::<T>::Malformed => Self::Malformed,
-			GenericTransportError::<T>::Inner(e) => Self::Http(Box::new(e)),
+			GenericTransportError::TooLarge => Self::RequestTooLarge,
+			GenericTransportError::Malformed => Self::Malformed,
+			GenericTransportError::Inner(e) => Self::Http(e.into()),
 		}
 	}
 }
