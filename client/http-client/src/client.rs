@@ -76,7 +76,8 @@ use tracing::instrument;
 /// ```
 #[derive(Debug)]
 pub struct HttpClientBuilder<L = Identity> {
-	max_request_body_size: u32,
+	max_request_size: u32,
+	max_response_size: u32,
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
 	certificate_store: CertificateStore,
@@ -87,9 +88,15 @@ pub struct HttpClientBuilder<L = Identity> {
 }
 
 impl<L> HttpClientBuilder<L> {
-	/// Sets the maximum size of a request body in bytes (default is 10 MiB).
-	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.max_request_body_size = size;
+	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
+	pub fn max_request_size(mut self, size: u32) -> Self {
+		self.max_request_size = size;
+		self
+	}
+
+	/// Set the maximum size of a response in bytes. Default is 10 MiB.
+	pub fn max_response_size(mut self, size: u32) -> Self {
+		self.max_response_size = size;
 		self
 	}
 
@@ -141,7 +148,8 @@ impl<L> HttpClientBuilder<L> {
 			headers: self.headers,
 			max_log_length: self.max_log_length,
 			max_concurrent_requests: self.max_concurrent_requests,
-			max_request_body_size: self.max_request_body_size,
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
 			service_builder,
 			request_timeout: self.request_timeout,
 		}
@@ -159,7 +167,8 @@ where
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient<S>, Error> {
 		let Self {
-			max_request_body_size,
+			max_request_size,
+			max_response_size,
 			max_concurrent_requests,
 			request_timeout,
 			certificate_store,
@@ -171,8 +180,9 @@ where
 		} = self;
 
 		let transport = HttpTransportClient::new(
+			max_request_size,
 			target,
-			max_request_body_size,
+			max_response_size,
 			certificate_store,
 			max_log_length,
 			headers,
@@ -190,7 +200,8 @@ where
 impl Default for HttpClientBuilder<Identity> {
 	fn default() -> Self {
 		Self {
-			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_request_size: TEN_MB_SIZE_BYTES,
+			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
 			certificate_store: CertificateStore::Native,
@@ -216,7 +227,7 @@ pub struct HttpClient<S> {
 #[async_trait]
 impl<B, S> ClientT for HttpClient<S>
 where
-	S: Send + Sync + Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError>,
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync,
 	<S as Service<hyper::Request<Body>>>::Future: Send,
 	B: HttpBody + Send + 'static,
 	B::Data: Send,
@@ -361,7 +372,7 @@ where
 #[async_trait]
 impl<S, B> SubscriptionClientT for HttpClient<S>
 where
-	S: Send + Sync + Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError>,
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync,
 	<S as Service<hyper::Request<Body>>>::Future: Send,
 	B: HttpBody + Send + 'static,
 	B::Data: Send,

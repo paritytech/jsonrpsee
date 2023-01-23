@@ -68,7 +68,9 @@ pub struct HttpTransportClient<S> {
 	/// HTTP client
 	client: Arc<Mutex<S>>,
 	/// Configurable max request body size
-	max_request_body_size: u32,
+	max_request_size: u32,
+	/// Configurable max response body size
+	max_response_size: u32,
 	/// Max length for logging for requests and responses
 	///
 	/// Logs bigger than this limit will be truncated.
@@ -86,8 +88,9 @@ where
 {
 	/// Initializes a new HTTP client.
 	pub(crate) fn new<L>(
+		max_request_size: u32,
 		target: impl AsRef<str>,
-		max_request_body_size: u32,
+		max_response_size: u32,
 		cert_store: CertificateStore,
 		max_log_length: u32,
 		headers: HeaderMap,
@@ -141,12 +144,11 @@ where
 			}
 		}
 
-		let client = service_builder.service(client);
-
 		Ok(Self {
 			target,
-			client: Arc::new(Mutex::new(client)),
-			max_request_body_size,
+			client: Arc::new(Mutex::new(service_builder.service(client))),
+			max_request_size,
+			max_response_size,
 			max_log_length,
 			headers: cached_headers,
 		})
@@ -154,7 +156,7 @@ where
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
 		tx_log_from_str(&body, self.max_log_length);
 
-		if body.len() > self.max_request_body_size as usize {
+		if body.len() > self.max_request_size as usize {
 			return Err(Error::RequestTooLarge);
 		}
 
@@ -176,8 +178,7 @@ where
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
-
-		let (body, _) = http_helpers::read_generic_body(&parts.headers, body, self.max_request_body_size).await?;
+		let (body, _) = http_helpers::read_generic_body(&parts.headers, body, self.max_response_size).await?;
 
 		rx_log_from_bytes(&body, self.max_log_length);
 
@@ -252,12 +253,13 @@ mod tests {
 		assert_eq!(client.target.path_and_query().map(|pq| pq.as_str()), Some(path_and_query));
 		assert_eq!(client.target.host(), Some(host));
 		assert_eq!(client.target.port_u16(), Some(port));
-		assert_eq!(client.max_request_body_size, max_request_size);
+		assert_eq!(client.max_request_size, max_request_size);
 	}
 
 	#[test]
 	fn invalid_http_url_rejected() {
 		let err = HttpTransportClient::new(
+			80,
 			"ws://localhost:9933",
 			80,
 			CertificateStore::Native,
@@ -273,6 +275,7 @@ mod tests {
 	#[test]
 	fn https_works() {
 		let client = HttpTransportClient::new(
+			80,
 			"https://localhost:9933",
 			80,
 			CertificateStore::Native,
@@ -288,6 +291,7 @@ mod tests {
 	#[test]
 	fn https_fails_without_tls_feature() {
 		let err = HttpTransportClient::new(
+			80,
 			"https://localhost:9933",
 			80,
 			CertificateStore::Native,
@@ -302,6 +306,7 @@ mod tests {
 	#[test]
 	fn faulty_port() {
 		let err = HttpTransportClient::new(
+			80,
 			"http://localhost:-43",
 			80,
 			CertificateStore::Native,
@@ -312,6 +317,7 @@ mod tests {
 		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 		let err = HttpTransportClient::new(
+			80,
 			"http://localhost:-99999",
 			80,
 			CertificateStore::Native,
@@ -326,6 +332,7 @@ mod tests {
 	#[test]
 	fn url_with_path_works() {
 		let client = HttpTransportClient::new(
+			1337,
 			"http://localhost:9944/my-special-path",
 			1337,
 			CertificateStore::Native,
@@ -340,6 +347,7 @@ mod tests {
 	#[test]
 	fn url_with_query_works() {
 		let client = HttpTransportClient::new(
+			u32::MAX,
 			"http://127.0.0.1:9999/my?name1=value1&name2=value2",
 			u32::MAX,
 			CertificateStore::WebPki,
@@ -354,6 +362,7 @@ mod tests {
 	#[test]
 	fn url_with_fragment_is_ignored() {
 		let client = HttpTransportClient::new(
+			999,
 			"http://127.0.0.1:9944/my.htm#ignore",
 			999,
 			CertificateStore::Native,
@@ -368,16 +377,20 @@ mod tests {
 	#[tokio::test]
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
+		let fifty_bytes_limit = 50;
+
 		let client = HttpTransportClient::new(
+			eighty_bytes_limit,
 			"http://localhost:9933",
-			80,
+			fifty_bytes_limit,
 			CertificateStore::WebPki,
 			99,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
+		assert_eq!(client.max_request_size, eighty_bytes_limit);
+		assert_eq!(client.max_response_size, fifty_bytes_limit);
 
 		let body = "a".repeat(81);
 		assert_eq!(body.len(), 81);

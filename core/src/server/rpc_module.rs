@@ -515,7 +515,7 @@ impl<Context> DerefMut for RpcModule<Context> {
 	}
 }
 
-/// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
+/// Sets of JSON-RPC methods can be organized into "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API. [`RpcModule`] wraps an additional context
 /// argument that can be used to access data during call execution.
 #[derive(Debug, Clone)]
