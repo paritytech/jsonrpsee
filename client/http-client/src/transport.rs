@@ -37,7 +37,7 @@ impl HyperClient {
 			Self::Http(client) => client.request(req),
 			#[cfg(feature = "tls")]
 			Self::Https(client) => client.request(req),
-			#[cfg(feature = "proxy")]
+			#[cfg(all(feature = "proxy", feature = "tls"))]
 			Self::Proxy(client) => client.request(req),
 		}
 	}
