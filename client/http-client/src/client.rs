@@ -149,7 +149,7 @@ impl HttpClientBuilder {
 	/// Set the HTTP(S) proxy that will proxy every HTTP request (default is none).
 	///
 	/// The proxy should be of the form <http://host_or_ip:port> (without the brackets).
-	#[cfg(feature = "proxy")]
+	#[cfg(all(feature = "proxy", feature = "tls"))]
 	pub fn set_proxy(mut self, proxy: impl AsRef<str>) -> Result<Self, Error> {
 		let result =
 			proxy.as_ref().parse().map_err(|_| Error::Transport(InvalidProxyUrl(proxy.as_ref().to_owned()).into()))?;
