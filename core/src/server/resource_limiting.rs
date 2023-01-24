@@ -75,7 +75,7 @@
 //! module
 //!     .register_async_method("my_expensive_method", |_, _| async move {
 //!         // Do work
-//!         Ok("hello")
+//!         Result::<_, jsonrpsee::core::Error>::Ok("hello")
 //!     })?
 //!     .resource("cpu", 5)?
 //!     .resource("mem", 2)?;

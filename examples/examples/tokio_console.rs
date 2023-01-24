@@ -36,6 +36,7 @@
 
 use std::net::SocketAddr;
 
+use jsonrpsee::core::Error;
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::RpcModule;
 
@@ -55,7 +56,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module.register_method("memory_call", |_, _| Ok("A".repeat(1024 * 1024)))?;
 	module.register_async_method("sleep", |_, _| async {
 		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-		Ok("lo")
+		Result::<_, Error>::Ok("lo")
 	})?;
 
 	let addr = server.local_addr()?;

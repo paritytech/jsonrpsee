@@ -27,8 +27,9 @@ use crate::attributes::ParamKind;
 use crate::helpers::generate_where_clause;
 use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
-use syn::{FnArg, Pat, PatIdent, PatType, TypeParam};
+use quote::{quote, quote_spanned};
+use syn::spanned::Spanned;
+use syn::{AngleBracketedGenericArguments, FnArg, Pat, PatIdent, PatType, PathArguments, TypeParam};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -68,6 +69,46 @@ impl RpcDescription {
 		Ok(trait_impl)
 	}
 
+	/// Verify and rewrite the return type (for methods).
+	fn return_result_type(&self, mut ty: syn::Type) -> TokenStream2 {
+		// We expect a valid type path.
+		let syn::Type::Path(ref mut type_path) = ty else  {
+			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here. (1)"));
+		};
+
+		// The path (eg std::result::Result) should have a final segment like 'Result'.
+		let Some(type_name) = type_path.path.segments.last_mut() else {
+			return quote_spanned!(ty.span() => compile_error!("Expecting this path to end in something like 'Result<Foo, Err>'"));
+		};
+
+		// Get the generic args eg the <T, E> in Result<T, E>.
+		let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &mut type_name.arguments else {
+			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here, but got no generic args (eg no '<Foo,Err>')."));
+		};
+
+		if type_name.ident == "Result" {
+			// Result<T, E> should have 2 generic args.
+			if args.len() != 2 {
+				return quote_spanned!(args.span() => compile_error!("Result must be have two arguments"));
+			}
+
+			// Force the last argument to be `jsonrpsee::core::Error`:
+			let error_arg = args.last_mut().unwrap();
+			*error_arg = syn::GenericArgument::Type(syn::Type::Verbatim(self.jrps_client_item(quote! { core::Error })));
+
+			quote!(#ty)
+		} else if type_name.ident == "RpcResult" {
+			// RpcResult<T> (an alias we export) should have 1 generic arg.
+			if args.len() != 1 {
+				return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"));
+			}
+			quote!(#ty)
+		} else {
+			// Any other type name isn't allowed.
+			quote_spanned!(type_name.span() => compile_error!("The return type must be Result or RpcResult"))
+		}
+	}
+
 	fn render_method(&self, method: &RpcMethod) -> Result<TokenStream2, syn::Error> {
 		// `jsonrpsee::Error`
 		let jrps_error = self.jrps_client_item(quote! { core::Error });
@@ -83,6 +124,7 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::core::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
+			let returns = self.return_result_type(returns.clone());
 			let returns = quote! { #returns };
 
 			(called_method, returns)

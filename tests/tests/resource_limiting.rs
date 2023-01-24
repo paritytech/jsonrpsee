@@ -46,20 +46,20 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 
 	module.register_async_method("say_hello", |_, _| async move {
 		sleep(Duration::from_millis(50)).await;
-		Ok("hello")
+		Result::<_, Error>::Ok("hello")
 	})?;
 
 	module
 		.register_async_method("expensive_call", |_, _| async move {
 			sleep(Duration::from_millis(50)).await;
-			Ok("hello expensive call")
+			Result::<_, Error>::Ok("hello expensive call")
 		})?
 		.resource("CPU", 3)?;
 
 	module
 		.register_async_method("memory_hog", |_, _| async move {
 			sleep(Duration::from_millis(50)).await;
-			Ok("hello memory hog")
+			Result::<_, Error>::Ok("hello memory hog")
 		})?
 		.resource("CPU", 0)?
 		.resource("MEM", 8)?;
