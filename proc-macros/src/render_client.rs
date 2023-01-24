@@ -89,7 +89,7 @@ impl RpcDescription {
 		if type_name.ident == "Result" {
 			// Result<T, E> should have 2 generic args.
 			if args.len() != 2 {
-				return quote_spanned!(args.span() => compile_error!("Expecting two generic args here."));
+				return quote_spanned!(args.span() => compile_error!("Result must be have two arguments));
 			}
 
 			// Force the last argument to be `jsonrpsee::core::Error`:
@@ -100,12 +100,12 @@ impl RpcDescription {
 		} else if type_name.ident == "RpcResult" {
 			// RpcResult<T> (an alias we export) should have 1 generic arg.
 			if args.len() != 1 {
-				return quote_spanned!(args.span() => compile_error!("Expecting two generic args here."));
+				return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"));
 			}
 			quote!(#ty)
 		} else {
 			// Any other type name isn't allowed.
-			quote_spanned!(type_name.span() => compile_error!("The response type should be Result or RpcResult"))
+			quote_spanned!(type_name.span() => compile_error!("The return type must be Result or RpcResult"))
 		}
 	}
 
