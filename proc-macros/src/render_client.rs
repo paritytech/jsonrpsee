@@ -89,7 +89,7 @@ impl RpcDescription {
 		if type_name.ident == "Result" {
 			// Result<T, E> should have 2 generic args.
 			if args.len() != 2 {
-				return quote_spanned!(args.span() => compile_error!("Result must be have two arguments));
+				return quote_spanned!(args.span() => compile_error!("Result must be have two arguments"));
 			}
 
 			// Force the last argument to be `jsonrpsee::core::Error`:
