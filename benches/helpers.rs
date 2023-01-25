@@ -146,15 +146,19 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::se
 	let mut module = gen_rpc_module();
 
 	module
-		.register_subscription(SUB_METHOD_NAME, SUB_METHOD_NAME, UNSUB_METHOD_NAME, |_params, pending, _ctx| {
-			let x = "Hello";
-			tokio::spawn(async move {
+		.register_subscription(
+			SUB_METHOD_NAME,
+			SUB_METHOD_NAME,
+			UNSUB_METHOD_NAME,
+			|_params, pending, _ctx| async move {
+				let x = "Hello";
+
 				let sink = pending.accept().await.unwrap();
 				let msg = sink.build_message(&x).unwrap();
 				sink.send(msg).await.unwrap();
-			});
-			Ok(())
-		})
+				Ok(())
+			},
+		)
 		.unwrap();
 
 	let addr = format!("ws://{}", server.local_addr().unwrap());

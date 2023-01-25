@@ -433,8 +433,11 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, mut tx| {
-			tokio::spawn(async move {
+		.register_subscription(
+			"subscribe_hello",
+			"subscribe_hello",
+			"unsubscribe_hello",
+			|_, pending, mut tx| async move {
 				let sink = pending.accept().await.unwrap();
 				let msg = sink.build_message(&1).unwrap();
 
@@ -446,9 +449,10 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 				};
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed(close_err).await.unwrap();
-			});
-			Ok(())
-		})
+
+				Ok(())
+			},
+		)
 		.unwrap();
 
 	let _handle = server.start(module).unwrap();
@@ -466,6 +470,27 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
 	assert_eq!(close_err, ErrorObject::borrowed(0, &"Subscription terminated successfully", None));
+}
+
+#[tokio::test]
+async fn ws_server_stop_subscription_when_dropped() {
+	use jsonrpsee::{server::ServerBuilder, RpcModule};
+
+	init_logger();
+
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
+		.unwrap();
+
+	let _handle = server.start(module).unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	assert!(client.subscribe::<String, ArrayParams>("subscribe_nop", rpc_params![], "unsubscribe_nop").await.is_err());
 }
 
 #[tokio::test]

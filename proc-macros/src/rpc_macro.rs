@@ -295,15 +295,29 @@ impl RpcDescription {
 						));
 					}
 
-					if !matches!(method.sig.output, syn::ReturnType::Default) {
-						return Err(syn::Error::new_spanned(
-							method,
-							"Subscription methods must not return anything; the error must send via subscription via either `SubscriptionSink::reject` or `SubscriptionSink::close`",
-						));
-					}
+					match method.sig.output.clone() {
+						syn::ReturnType::Type(_, ty) => {
+							if let syn::Type::Path(syn::TypePath { path, .. }) = *ty {
+								if let Some(ident) = path.get_ident() {
+									if ident != "SubscriptionResult" && ident != "Result" {
+										return Err(syn::Error::new_spanned(
+											method,
+											"Subscription methods must return `SubscriptionResult` or `Result`",
+										));
+									}
+								}
+							}
+						}
+						_ => {
+							return Err(syn::Error::new_spanned(
+								method,
+								"Subscription methods must return `SubscriptionResult`",
+							));
+						}
+					};
 
-					if method.sig.asyncness.is_some() {
-						return Err(syn::Error::new_spanned(method, "Subscription methods must not be `async`"));
+					if method.sig.asyncness.is_none() {
+						return Err(syn::Error::new_spanned(method, "Subscription methods must be `async`"));
 					}
 
 					let sub_data = RpcSubscription::from_item(attr.clone(), method.clone())?;

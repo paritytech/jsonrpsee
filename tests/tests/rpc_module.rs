@@ -34,7 +34,7 @@ use helpers::init_logger;
 use jsonrpsee::core::error::Error;
 use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
-use jsonrpsee::types::{EmptyServerParams, ErrorObjectOwned, Params};
+use jsonrpsee::types::{EmptyServerParams, ErrorObjectOwned, Params, SubscriptionEmptyError};
 use serde::{Deserialize, Serialize};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -72,7 +72,7 @@ fn flatten_rpc_modules() {
 #[test]
 fn rpc_context_modules_can_register_subscriptions() {
 	let mut cxmodule = RpcModule::new(());
-	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(())).unwrap();
+	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| async { Ok(()) }).unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -233,21 +233,20 @@ async fn subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let mut stream_data = vec!['0', '1', '2'];
 
-			tokio::spawn(async move {
-				let sink = pending.accept().await.unwrap();
+			let sink = pending.accept().await.unwrap();
 
-				while let Some(letter) = stream_data.pop() {
-					tracing::debug!("This is your friendly subscription sending data.");
-					let msg = sink.build_message(&letter).unwrap();
-					let _ = sink.send(msg).await.unwrap();
-					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-				}
-				let close = ErrorObject::borrowed(0, &"closed successfully", None);
-				let _ = sink.close(close.into_owned()).await;
-			});
+			while let Some(letter) = stream_data.pop() {
+				tracing::debug!("This is your friendly subscription sending data.");
+				let msg = sink.build_message(&letter).unwrap();
+				let _ = sink.send(msg).await.unwrap();
+				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+			}
+			let close = ErrorObject::borrowed(0, &"closed successfully", None);
+			let _ = sink.close(close.into_owned()).await;
+
 			Ok(())
 		})
 		.unwrap();
@@ -268,23 +267,21 @@ async fn close_test_subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			tokio::spawn(async move {
-				let sink = pending.accept().await.unwrap();
-				let msg = sink.build_message(&"lo").unwrap();
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+			let sink = pending.accept().await.unwrap();
+			let msg = sink.build_message(&"lo").unwrap();
 
-				// make sure to only send one item
-				sink.send(msg.clone()).await.unwrap();
-				while !sink.is_closed() {
-					tracing::debug!("[test] Sink is open, sleeping");
-					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-				}
+			// make sure to only send one item
+			sink.send(msg.clone()).await.unwrap();
+			while !sink.is_closed() {
+				tracing::debug!("[test] Sink is open, sleeping");
+				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+			}
 
-				match sink.send(msg).await {
-					Ok(_) => panic!("The sink should be closed"),
-					Err(DisconnectError(_)) => {}
-				}
-			});
+			match sink.send(msg).await {
+				Ok(_) => panic!("The sink should be closed"),
+				Err(DisconnectError(_)) => {}
+			}
 			Ok(())
 		})
 		.unwrap();
@@ -317,24 +314,19 @@ async fn close_test_subscribing_without_server() {
 async fn subscribing_without_server_bad_params() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| {
-			let params = params.into_owned();
-			let fut = async move {
-				let p = match params.one::<String>() {
-					Ok(p) => p,
-					Err(e) => {
-						let err: ErrorObjectOwned = e.into();
-						let _ = pending.reject(err).await;
-						return;
-					}
-				};
-
-				let sink = pending.accept().await.unwrap();
-				let msg = sink.build_message(&p).unwrap();
-				sink.send(msg).await.unwrap();
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| async move {
+			let p = match params.one::<String>() {
+				Ok(p) => p,
+				Err(e) => {
+					let err: ErrorObjectOwned = e.into();
+					let _ = pending.reject(err).await;
+					return Err(SubscriptionEmptyError.into());
+				}
 			};
 
-			tokio::spawn(fut);
+			let sink = pending.accept().await.unwrap();
+			let msg = sink.build_message(&p).unwrap();
+			sink.send(msg).await.unwrap();
 
 			Ok(())
 		})
@@ -351,20 +343,18 @@ async fn subscribing_without_server_bad_params() {
 async fn subscribe_unsubscribe_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(200));
 			let mut stream = IntervalStream::new(interval).map(move |_| 1);
 
-			tokio::spawn(async move {
-				let sink = pending.accept().await.unwrap();
+			let sink = pending.accept().await.unwrap();
 
-				while let Some(item) = stream.next().await {
-					let msg = sink.build_message(&item).unwrap();
-					if sink.send(msg).await.is_ok() {
-						return;
-					}
+			while let Some(item) = stream.next().await {
+				let msg = sink.build_message(&item).unwrap();
+				if sink.send(msg).await.is_err() {
+					return Ok(());
 				}
-			});
+			}
 			Ok(())
 		})
 		.unwrap();
@@ -399,11 +389,9 @@ async fn subscribe_unsubscribe_without_server() {
 async fn rejected_subscription_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			tokio::spawn(async move {
-				let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
-				let _ = pending.reject(err.into_owned()).await;
-			});
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let _ = pending.reject(err.into_owned()).await;
 
 			Ok(())
 		})
@@ -419,12 +407,10 @@ async fn rejected_subscription_without_server() {
 async fn reject_works() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			tokio::spawn(async move {
-				let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
-				let res = pending.reject(err.into_owned()).await;
-				assert!(matches!(res, Ok(())));
-			});
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let res = pending.reject(err.into_owned()).await;
+			assert!(matches!(res, Ok(())));
 
 			Ok(())
 		})

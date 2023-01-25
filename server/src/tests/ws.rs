@@ -402,10 +402,10 @@ async fn register_methods_works() {
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
 	assert!(module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| { Ok(()) })
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async { Ok(()) })
 		.is_ok());
 	assert!(module
-		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| {
+		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| async {
 			Ok(())
 		})
 		.is_err());
@@ -419,7 +419,8 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| { Ok(()) }),
+		module
+			.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { Ok(()) }),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -546,18 +547,15 @@ async fn custom_subscription_id_works() {
 	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
-			tokio::spawn(async move {
-				let sink = sink.accept().await.unwrap();
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| async {
+			let sink = sink.accept().await.unwrap();
 
-				assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
+			assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
 
-				loop {
-					let _ = &sink;
-					tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-				}
-			});
-			Ok(())
+			loop {
+				let _ = &sink;
+				tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+			}
 		})
 		.unwrap();
 	let _handle = server.start(module).unwrap();

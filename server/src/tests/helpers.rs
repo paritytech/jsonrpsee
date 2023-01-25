@@ -82,16 +82,13 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
-			tokio::spawn(async move {
-				let sink = pending.accept().await.unwrap();
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async move {
+			let sink = pending.accept().await.unwrap();
 
-				loop {
-					let _ = &sink;
-					tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-				}
-			});
-			Ok(())
+			loop {
+				let _ = &sink;
+				tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+			}
 		})
 		.unwrap();
 	module.register_method("notif", |_, _| Ok("")).unwrap();

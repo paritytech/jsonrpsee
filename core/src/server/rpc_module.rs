@@ -617,7 +617,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     Ok(())
 	/// });
 	/// ```
-	pub fn register_subscription<F>(
+	pub fn register_subscription<F, Fut>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		notif_method_name: &'static str,
@@ -626,7 +626,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, Error>
 	where
 		Context: Send + Sync + 'static,
-		F: Fn(Params, PendingSubscriptionSink, Arc<Context>) -> SubscriptionResult + Send + Sync + 'static,
+		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>) -> Fut) + Send + Sync + Clone + 'static,
+		Fut: Future<Output = SubscriptionResult> + Send + 'static,
 	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
@@ -693,10 +694,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						subscribe: tx,
 					};
 
-					// The callback returns a `SubscriptionResult` for better ergonomics and is not propagated further.
-					if callback(params, sink, ctx.clone()).is_err() {
-						tracing::warn!("Subscribe call `{}` failed", subscribe_method_name);
-					}
+					let call_fut = callback(params.into_owned(), sink, ctx.clone());
+
+					tokio::spawn(async move {
+						if let Err(e) = call_fut.await {
+							tracing::warn!("Subscribe call `{subscribe_method_name}` canceled because `{e:?}` failed");
+						}
+					});
 
 					let id = id.clone().into_owned();
 

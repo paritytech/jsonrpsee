@@ -50,38 +50,38 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| &"hello from subscription");
 
-			tokio::spawn(async move {
-				pipe_from_stream(stream, pending).await;
-			});
+			pipe_from_stream(stream, pending).await;
+
 			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| {
+		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| async {
 			let interval = interval(Duration::from_millis(100));
 			let stream = IntervalStream::new(interval).map(move |_| 1337_usize);
 
-			tokio::spawn(async move {
-				pipe_from_stream(stream, pending).await;
-			});
+			pipe_from_stream(stream, pending).await;
+
 			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_add_one", "subscribe_add_one", "unsubscribe_add_one", |params, pending, _| {
-			let params = params.into_owned();
-			tokio::spawn(async move {
+		.register_subscription(
+			"subscribe_add_one",
+			"subscribe_add_one",
+			"unsubscribe_add_one",
+			|params, pending, _| async move {
 				let count = match params.one::<usize>().map(|c| c.wrapping_add(1)) {
 					Ok(count) => count,
 					Err(e) => {
 						let _ = pending.reject(ErrorObjectOwned::from(e)).await;
-						return;
+						return Ok(());
 					}
 				};
 
@@ -90,34 +90,33 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 				let stream = IntervalStream::new(interval).zip(wrapping_counter).map(move |(_, c)| c);
 
 				pipe_from_stream(stream, pending).await;
-			});
+
+				Ok(())
+			},
+		)
+		.unwrap();
+
+	module
+		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
+			let sink = pending.accept().await.unwrap();
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			let err = ErrorObject::owned(
+				SUBSCRIPTION_CLOSED_WITH_ERROR,
+				"Server closed the stream because it was lazy",
+				None::<()>,
+			);
+			sink.close(err).await;
+
 			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| {
-			tokio::spawn(async move {
-				let sink = pending.accept().await.unwrap();
-				tokio::time::sleep(Duration::from_secs(1)).await;
-				let err = ErrorObject::owned(
-					SUBSCRIPTION_CLOSED_WITH_ERROR,
-					"Server closed the stream because it was lazy",
-					None::<()>,
-				);
-				sink.close(err).await;
-			});
-			Ok(())
-		})
-		.unwrap();
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| async move {
+			let interval = interval(Duration::from_millis(50));
+			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
+			pipe_from_stream(stream, pending).await;
 
-	module
-		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
-			tokio::spawn(async move {
-				let interval = interval(Duration::from_millis(50));
-				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
-				pipe_from_stream(stream, pending).await;
-			});
 			Ok(())
 		})
 		.unwrap();
@@ -170,15 +169,14 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, pending, mut tx| {
-			tokio::spawn(async move {
-				let interval = interval(Duration::from_secs(60 * 60));
-				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
+		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, pending, mut tx| async move {
+			let interval = interval(Duration::from_secs(60 * 60));
+			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
-				pipe_from_stream(stream, pending).await;
-				let send_back = std::sync::Arc::make_mut(&mut tx);
-				send_back.send(()).await.unwrap();
-			});
+			pipe_from_stream(stream, pending).await;
+			let send_back = std::sync::Arc::make_mut(&mut tx);
+			send_back.send(()).await.unwrap();
+
 			Ok(())
 		})
 		.unwrap();

@@ -70,16 +70,17 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	// let's configure the server only hold 5 messages in memory.
 	let server = ServerBuilder::default().set_buffer_size(5).build("127.0.0.1:0").await?;
-	let mut module = RpcModule::new(());
-	let (tx, _rx) = broadcast::channel(16);
-	let tx2 = tx.clone();
+	let (tx, _rx) = broadcast::channel::<usize>(16);
 
-	std::thread::spawn(move || produce_items(tx2));
+	let mut module = RpcModule::new(tx.clone());
+
+	std::thread::spawn(move || produce_items(tx));
 
 	module
-		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
-			let stream = BroadcastStream::new(tx.clone().subscribe());
-			tokio::spawn(pipe_from_stream_with_bounded_buffer(pending, stream));
+		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, pending, tx| async move {
+			let rx = tx.subscribe();
+			let stream = BroadcastStream::new(rx);
+			pipe_from_stream_with_bounded_buffer(pending, stream).await?;
 
 			Ok(())
 		})

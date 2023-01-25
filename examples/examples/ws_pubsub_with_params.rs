@@ -69,62 +69,58 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = ServerBuilder::default().set_buffer_size(10).build("127.0.0.1:9944").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| async move {
 			let params = params.into_owned();
-			let fut = async move {
-				let idx = match params.one::<usize>() {
-					Ok(p) => p,
-					Err(e) => {
-						let _ = pending.reject(ErrorObjectOwned::from(e)).await;
-						return;
-					}
-				};
-				let item = LETTERS.chars().nth(idx);
 
-				let interval = interval(Duration::from_millis(200));
-				let mut stream = IntervalStream::new(interval).map(move |_| item);
-
-				let mut sink = pending.accept().await.unwrap();
-
-				while let Some(item) = stream.next().await {
-					let notif = sink.build_message(&item).unwrap();
-					if let Err(e) = sink.try_send(notif) {
-						tracing::info!("ignoring to send notif: {:?}", e);
-					}
+			let idx = match params.one::<usize>() {
+				Ok(p) => p,
+				Err(e) => {
+					let _ = pending.reject(ErrorObjectOwned::from(e)).await;
+					return Ok(());
 				}
 			};
+			let item = LETTERS.chars().nth(idx);
 
-			tokio::spawn(fut);
+			let interval = interval(Duration::from_millis(200));
+			let mut stream = IntervalStream::new(interval).map(move |_| item);
+
+			let mut sink = pending.accept().await.unwrap();
+
+			while let Some(item) = stream.next().await {
+				let notif = sink.build_message(&item).unwrap();
+				if let Err(e) = sink.try_send(notif) {
+					tracing::info!("ignoring to send notif: {:?}", e);
+				}
+			}
+
 			Ok(())
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
-			let (one, two) = params.parse::<(usize, usize)>()?;
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| async move {
+			let (one, two) = params.parse::<(usize, usize)>().unwrap();
 
 			let item = &LETTERS[one..two];
 
 			let interval = interval(Duration::from_millis(200));
 			let mut stream = IntervalStream::new(interval).map(move |_| item);
 
-			tokio::spawn(async move {
-				let mut sink = pending.accept().await.unwrap();
+			let mut sink = pending.accept().await.unwrap();
 
-				while let Some(item) = stream.next().await {
-					let notif = sink.build_message(&item).unwrap();
-					match sink.try_send(notif) {
-						Ok(_) => (),
-						Err(TrySendError::Closed(m)) => {
-							tracing::warn!("Subscription is closed; failed to send msg: {:?}", m);
-							return;
-						}
-						Err(TrySendError::Full(m)) => {
-							// you could buffer the message if you want to and try re-send them.
-							tracing::info!("channel is full; dropping message: {:?}", m);
-						}
-					};
-				}
-			});
+			while let Some(item) = stream.next().await {
+				let notif = sink.build_message(&item).unwrap();
+				match sink.try_send(notif) {
+					Ok(_) => (),
+					Err(TrySendError::Closed(m)) => {
+						tracing::warn!("Subscription is closed; failed to send msg: {:?}", m);
+						return Ok(());
+					}
+					Err(TrySendError::Full(m)) => {
+						// you could buffer the message if you want to and try re-send them.
+						tracing::info!("channel is full; dropping message: {:?}", m);
+					}
+				};
+			}
 
 			Ok(())
 		})

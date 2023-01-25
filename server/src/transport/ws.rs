@@ -31,6 +31,7 @@ pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
+	tracing::trace!("attempting to send: {}", response);
 	sender.send_text_owned(response.clone()).await?;
 	sender.flush().await?;
 	tracing::trace!("sent msg: {}", response);
@@ -204,6 +205,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 
 				let conn_state = ConnState { conn_id, id_provider };
 				let response = callback(id.clone(), params, sink.clone(), conn_state).await;
+				// TODO(niklasad1): investigate why we need that.
 				MethodResult::JustLogger(response)
 			}
 			MethodKind::Unsubscription(callback) => {

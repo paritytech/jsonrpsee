@@ -46,7 +46,7 @@ where
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
-	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
+	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl;
@@ -62,17 +62,14 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 	}
 
 	// Note that the server's subscription method must return `SubscriptionResult`.
-	fn subscribe_storage(
+	async fn subscribe_storage(
 		&self,
 		pending: PendingSubscriptionSink,
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> SubscriptionResult {
-		tokio::spawn(async move {
-			if let Ok(sink) = pending.accept().await {
-				let msg = sink.build_message(&1).unwrap();
-				sink.send(msg).await.unwrap();
-			}
-		});
+		let sink = pending.accept().await?;
+		let msg = sink.build_message(&vec![[0; 32]]).unwrap();
+		sink.send(msg).await.unwrap();
 
 		Ok(())
 	}
@@ -94,6 +91,8 @@ async fn main() -> anyhow::Result<()> {
 	let mut sub: Subscription<Vec<ExampleHash>> =
 		RpcClient::<ExampleHash, ExampleStorageKey>::subscribe_storage(&client, None).await.unwrap();
 	assert_eq!(Some(vec![[0; 32]]), sub.next().await.transpose().unwrap());
+
+	sub.unsubscribe().await.unwrap();
 
 	Ok(())
 }

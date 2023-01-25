@@ -56,10 +56,10 @@ mod rpc_impl {
 		fn sync_method(&self) -> RpcResult<u16>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-		fn sub(&self);
+		async fn sub(&self) -> SubscriptionResult;
 
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
-		fn sub_with_params(&self, val: u32);
+		async fn sub_with_params(&self, val: u32) -> SubscriptionResult;
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
@@ -116,7 +116,7 @@ mod rpc_impl {
 
 		/// All head subscription
 		#[subscription(name = "subscribeAllHeads", item = Header)]
-		fn subscribe_all_heads(&self, hash: Hash);
+		async fn subscribe_all_heads(&self, hash: Hash) -> SubscriptionResult;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -131,7 +131,7 @@ mod rpc_impl {
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
 		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
-		fn sub(&self, hash: Input);
+		async fn sub(&self, hash: Input) -> SubscriptionResult;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -168,25 +168,22 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-			tokio::spawn(async move {
-				let sink = pending.accept().await.unwrap();
+		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+			let sink = pending.accept().await.unwrap();
 
-				let _ = sink.send(sink.build_message(&"Response_A").unwrap()).await;
-				let _ = sink.send(sink.build_message(&"Response_B").unwrap()).await;
-			});
+			let _ = sink.send(sink.build_message(&"Response_A").unwrap()).await;
+			let _ = sink.send(sink.build_message(&"Response_B").unwrap()).await;
 
 			Ok(())
 		}
 
-		fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
-			tokio::spawn(async move {
-				let sink = pending.accept().await.unwrap();
-				let msg = sink.build_message(&val).unwrap();
+		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
+			let sink = pending.accept().await.unwrap();
+			let msg = sink.build_message(&val).unwrap();
 
-				let _ = sink.send(msg.clone()).await;
-				let _ = sink.send(msg).await;
-			});
+			let _ = sink.send(msg.clone()).await;
+			let _ = sink.send(msg).await;
+
 			Ok(())
 		}
 	}
@@ -200,12 +197,10 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
-			tokio::spawn(async move {
-				let sink = pending.accept().await.unwrap();
-				let msg = sink.build_message(&"hello").unwrap();
-				let _ = sink.send(msg).await.unwrap();
-			});
+		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
+			let sink = pending.accept().await.unwrap();
+			let msg = sink.build_message(&"hello").unwrap();
+			let _ = sink.send(msg).await.unwrap();
 
 			Ok(())
 		}

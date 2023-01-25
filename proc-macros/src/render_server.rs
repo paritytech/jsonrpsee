@@ -216,9 +216,9 @@ impl RpcDescription {
 				let resources = handle_resource_limits(&sub.resources);
 
 				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| {
+					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
 						#parsing
-						context.as_ref().#rust_method_name(subscription_sink, #params_seq)
+						context.as_ref().#rust_method_name(subscription_sink, #params_seq).await
 					})
 					#resources
 				})
