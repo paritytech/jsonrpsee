@@ -137,7 +137,7 @@ pub async fn server() -> SocketAddr {
 	module
 		.register_async_method("slow_hello", |_, _| async {
 			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-			Ok("hello")
+			Result::<_, Error>::Ok("hello")
 		})
 		.unwrap();
 

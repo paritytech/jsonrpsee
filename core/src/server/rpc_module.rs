@@ -489,7 +489,7 @@ impl<Context> DerefMut for RpcModule<Context> {
 	}
 }
 
-/// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
+/// Sets of JSON-RPC methods can be organized into "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API. [`RpcModule`] wraps an additional context
 /// argument that can be used to access data during call execution.
 #[derive(Debug, Clone)]
@@ -541,14 +541,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
-	pub fn register_async_method<R, Fun, Fut>(
+	pub fn register_async_method<R, E, Fun, Fut>(
 		&mut self,
 		method_name: &'static str,
 		callback: Fun,
 	) -> Result<&mut MethodCallback, Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		Fut: Future<Output = Result<R, Error>> + Send,
+		E: Into<Error>,
+		Fut: Future<Output = Result<R, E>> + Send,
 		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
@@ -561,7 +562,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let future = async move {
 					match callback(params, ctx).await {
 						Ok(res) => MethodResponse::response(id, res, max_response_size),
-						Err(err) => MethodResponse::error(id, err),
+						Err(err) => MethodResponse::error(id, err.into()),
 					}
 				};
 				future.boxed()
@@ -571,7 +572,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 	/// Register a new **blocking** synchronous RPC method, which computes the response with the given callback.
 	/// Unlike the regular [`register_method`](RpcModule::register_method), this method can block its thread and perform expensive computations.
-	pub fn register_blocking_method<R, F>(
+	pub fn register_blocking_method<R, E, F>(
 		&mut self,
 		method_name: &'static str,
 		callback: F,
@@ -579,7 +580,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(Params, Arc<Context>) -> Result<R, Error> + Clone + Send + Sync + 'static,
+		E: Into<Error>,
+		F: Fn(Params, Arc<Context>) -> Result<R, E> + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
@@ -590,7 +592,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 				tokio::task::spawn_blocking(move || match callback(params, ctx) {
 					Ok(result) => MethodResponse::response(id, result, max_response_size),
-					Err(err) => MethodResponse::error(id, err),
+					Err(err) => MethodResponse::error(id, err.into()),
 				})
 				.map(|result| match result {
 					Ok(r) => r,

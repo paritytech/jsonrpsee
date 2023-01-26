@@ -127,7 +127,7 @@ async fn calling_method_without_server() {
 	module
 		.register_async_method("roo", |params, ctx| {
 			let ns: Vec<u8> = params.parse().expect("valid params please");
-			async move { Ok(ctx.roo(ns)) }
+			async move { Result::<_, Error>::Ok(ctx.roo(ns)) }
 		})
 		.unwrap();
 	let res: u64 = module.call("roo", [12, 13]).await.unwrap();

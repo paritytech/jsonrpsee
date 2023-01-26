@@ -171,11 +171,17 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	let mut module = jsonrpsee::RpcModule::new(());
 
 	module.register_method(SYNC_FAST_CALL, |_, _| Ok("lo")).unwrap();
-	module.register_async_method(ASYNC_FAST_CALL, |_, _| async { Ok("lo") }).unwrap();
+	module
+		.register_async_method(ASYNC_FAST_CALL, |_, _| async { Result::<_, jsonrpsee::core::Error>::Ok("lo") })
+		.unwrap();
 
 	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(MIB))).unwrap();
 
-	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(MIB)) }).unwrap();
+	module
+		.register_async_method(ASYNC_MEM_CALL, |_, _| async move {
+			Result::<_, jsonrpsee::core::Error>::Ok("A".repeat(MIB))
+		})
+		.unwrap();
 
 	module
 		.register_method(SYNC_SLOW_CALL, |_, _| {
@@ -187,7 +193,7 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module
 		.register_async_method(ASYNC_SLOW_CALL, |_, _| async move {
 			tokio::time::sleep(SLOW_CALL).await;
-			Ok("slow call async")
+			Result::<_, jsonrpsee::core::Error>::Ok("slow call async")
 		})
 		.unwrap();
 
