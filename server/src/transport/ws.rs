@@ -242,12 +242,12 @@ pub(crate) async fn background_task<L: Logger>(
 		conn_id,
 		logger,
 		remote_addr,
-		buffer_capacity,
+		backpressure_buffer_capacity,
 		conn,
 		..
 	} = svc;
 
-	let (tx, rx) = mpsc::channel::<String>(buffer_capacity as usize);
+	let (tx, rx) = mpsc::channel::<String>(backpressure_buffer_capacity as usize);
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 

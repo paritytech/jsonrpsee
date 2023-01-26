@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-	let server = ServerBuilder::default().set_buffer_size(10).build("127.0.0.1:9944").await?;
+	let server = ServerBuilder::default().set_backpressure_buffer_capacity(10).build("127.0.0.1:9944").await?;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| async move {

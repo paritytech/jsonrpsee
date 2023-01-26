@@ -730,10 +730,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						subscribe: tx,
 					};
 
-					let call_fut = callback(params.into_owned(), sink, ctx.clone());
+					// The subscription callback is a future from the subscription
+					// definition and not the as same when the subscription call has been completed.
+					//
+					// This runs until the subscription callback has completed.
+					let sub_fut = callback(params.into_owned(), sink, ctx.clone());
 
 					tokio::spawn(async move {
-						if let Err(e) = call_fut.await {
+						if sub_fut.await.is_err() {
 							tracing::warn!("Subscribe call `{subscribe_method_name}` closed");
 						}
 					});
