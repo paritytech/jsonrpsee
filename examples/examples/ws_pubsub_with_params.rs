@@ -29,7 +29,6 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::server::rpc_module::TrySendError;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::types::ErrorObjectOwned;
@@ -80,45 +79,26 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
-			let mut stream = IntervalStream::new(interval).map(move |_| item);
+			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			let mut sink = pending.accept().await.unwrap();
 
-			while let Some(item) = stream.next().await {
-				let notif = sink.build_message(&item).unwrap();
-				if let Err(e) = sink.try_send(notif) {
-					tracing::info!("ignoring to send notif: {:?}", e);
-				}
-			}
+			sink.pipe_from_stream(|_last, next| next, stream).await;
 
 			Ok(())
 		})
 		.unwrap();
 	module
 		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| async move {
-			let (one, two) = params.parse::<(usize, usize)>().unwrap();
+			let (one, two) = params.parse::<(usize, usize)>()?;
 
 			let item = &LETTERS[one..two];
-
 			let interval = interval(Duration::from_millis(200));
-			let mut stream = IntervalStream::new(interval).map(move |_| item);
+			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			let mut sink = pending.accept().await?;
 
-			while let Some(item) = stream.next().await {
-				let notif = sink.build_message(&item)?;
-				match sink.try_send(notif) {
-					Ok(_) => (),
-					Err(TrySendError::Closed(m)) => {
-						tracing::warn!("Subscription is closed; failed to send msg: {:?}", m);
-						return Ok(());
-					}
-					Err(TrySendError::Full(m)) => {
-						// you could buffer the message if you want to and try re-send them.
-						tracing::info!("channel is full; dropping message: {:?}", m);
-					}
-				};
-			}
+			sink.pipe_from_stream(|_last, next| next, stream).await;
 
 			Ok(())
 		})

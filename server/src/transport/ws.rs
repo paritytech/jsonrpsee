@@ -31,10 +31,8 @@ pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
-	tracing::trace!("attempting to send: {}", response);
-	sender.send_text_owned(response.clone()).await?;
+	sender.send_text_owned(response).await?;
 	sender.flush().await?;
-	tracing::trace!("sent msg: {}", response);
 
 	Ok(())
 }
@@ -262,14 +260,17 @@ pub(crate) async fn background_task<L: Logger>(
 	let result = loop {
 		data.clear();
 
-		// Wait until the is space in the bounded channel and
-		// don't poll the underlying socket until a spot has been reserved.
+		let sink_permit_fut = sink.reserve();
+
+		tokio::pin!(sink_permit_fut);
+
+		// Wait until there is a slot in the bounded channel which means that
+		// the underlying TCP socket won't be read.
 		//
 		// This will force the client to read socket on the other side
 		// otherwise the socket will not be read again.
-		let sink_permit = match sink.reserve().await {
-			Ok(p) => p,
-			// reserve only fails if the channel is disconnected.
+		let sink_permit = match method_executors.select_with(Monitored::new(sink_permit_fut, &stop_handle)).await {
+			Ok(permit) => permit,
 			Err(_) => break Ok(()),
 		};
 
@@ -428,9 +429,6 @@ async fn send_task(
 	ping_interval: Duration,
 	conn_closed: oneshot::Receiver<()>,
 ) {
-	// fake that no messages were read.
-	//future::pending::<()>().await;
-
 	// Interval to send out continuously `pings`.
 	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
 	let stopped = stop_handle.shutdown();
@@ -451,7 +449,7 @@ async fn send_task(
 			Either::Left((Some(response), not_ready)) => {
 				// If websocket message send fail then terminate the connection.
 				if let Err(err) = send_message(&mut ws_sender, response).await {
-					tracing::error!("WS transport error: send failed: {}", err);
+					tracing::debug!("WS transport error: send failed: {}", err);
 					break;
 				}
 
@@ -467,7 +465,7 @@ async fn send_task(
 			// Handle timer intervals.
 			Either::Right((Either::Left((_, stop)), next_rx)) => {
 				if let Err(err) = send_ping(&mut ws_sender).await {
-					tracing::error!("WS transport error: send ping failed: {}", err);
+					tracing::debug!("WS transport error: send ping failed: {}", err);
 					break;
 				}
 				rx_item = next_rx;

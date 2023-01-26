@@ -118,11 +118,15 @@ impl WebSocketTestClient {
 	}
 
 	pub async fn send_request_text(&mut self, msg: impl AsRef<str>) -> Result<String, Error> {
-		self.tx.send_text(msg).await?;
-		self.tx.flush().await?;
+		self.send(msg).await?;
 		let mut data = Vec::new();
 		self.rx.receive_data(&mut data).await?;
 		String::from_utf8(data).map_err(Into::into)
+	}
+
+	pub async fn send(&mut self, msg: impl AsRef<str>) -> Result<(), Error> {
+		self.tx.send_text(msg).await?;
+		self.tx.flush().await.map_err(Into::into)
 	}
 
 	pub async fn send_request_binary(&mut self, msg: &[u8]) -> Result<String, Error> {
