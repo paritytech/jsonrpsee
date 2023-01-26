@@ -4,7 +4,7 @@ use jsonrpsee::proc_macros::rpc;
 #[rpc(client, server)]
 pub trait NoSubItem {
 	#[subscription(name = "sub")]
-	async fn sub(&self) -> jsonrpsee::types::SubscriptionResult;
+	async fn sub(&self) -> jsonrpsee::core::SubscriptionResult;
 }
 
 fn main() {}

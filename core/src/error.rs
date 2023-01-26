@@ -217,3 +217,59 @@ impl From<hyper::Error> for Error {
 		Error::Transport(hyper_err.into())
 	}
 }
+
+/// The error returned by the subscription's method for the rpc server implementation.
+///
+/// It contains no data, and neither is the error utilized. It provides an abstraction to make the
+/// API more ergonomic while handling errors that may occur during the subscription callback.
+#[derive(Debug, Clone, Copy)]
+pub struct SubscriptionEmptyError;
+
+impl From<anyhow::Error> for SubscriptionEmptyError {
+	fn from(_: anyhow::Error) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+impl From<CallError> for SubscriptionEmptyError {
+	fn from(_: CallError) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+impl From<SubscriptionAcceptRejectError> for SubscriptionEmptyError {
+	fn from(_: SubscriptionAcceptRejectError) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+impl From<serde_json::Error> for SubscriptionEmptyError {
+	fn from(_: serde_json::Error) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::rpc_module::TrySendError> for SubscriptionEmptyError {
+	fn from(_: crate::server::rpc_module::TrySendError) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::rpc_module::DisconnectError> for SubscriptionEmptyError {
+	fn from(_: crate::server::rpc_module::DisconnectError) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+/// The error returned while accepting or rejecting a subscription.
+#[derive(Debug, Copy, Clone)]
+pub enum SubscriptionAcceptRejectError {
+	/// The method was already called.
+	AlreadyCalled,
+	/// The remote peer closed the connection or called the unsubscribe method.
+	RemotePeerAborted,
+	/// The subscription response message was too large.
+	MessageTooLarge,
+}

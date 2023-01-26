@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
 		.expect("setting default subscriber failed");
 
 	let addr = run_server().await?;
-	/*let url = format!("ws://{}", addr);
+	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 
@@ -57,9 +57,7 @@ async fn main() -> anyhow::Result<()> {
 	// Subscription with multiple parameters
 	let mut sub_params_two: Subscription<String> =
 		client.subscribe("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
-	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);*/
-
-	futures::future::pending::<()>().await;
+	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
 }
@@ -105,10 +103,10 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let interval = interval(Duration::from_millis(200));
 			let mut stream = IntervalStream::new(interval).map(move |_| item);
 
-			let mut sink = pending.accept().await.unwrap();
+			let mut sink = pending.accept().await?;
 
 			while let Some(item) = stream.next().await {
-				let notif = sink.build_message(&item).unwrap();
+				let notif = sink.build_message(&item)?;
 				match sink.try_send(notif) {
 					Ok(_) => (),
 					Err(TrySendError::Closed(m)) => {

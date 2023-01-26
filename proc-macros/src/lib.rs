@@ -219,8 +219,8 @@ pub(crate) mod visitor;
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc, core::async_trait, core::RpcResult, server::PendingSubscriptionSink};
-///     use jsonrpsee::types::SubscriptionResult;
+///     use jsonrpsee::{proc_macros::rpc, server::PendingSubscriptionSink};
+///     use jsonrpsee::core::{async_trait, SubscriptionResult, RpcResult};
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
 ///     #[rpc(client, server, namespace = "foo")]

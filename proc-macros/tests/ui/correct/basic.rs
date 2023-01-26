@@ -3,10 +3,10 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::params::ArrayParams;
+use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::*;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 

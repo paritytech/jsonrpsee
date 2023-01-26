@@ -30,17 +30,18 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use crate::error::Error;
+use crate::error::{Error, SubscriptionAcceptRejectError};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::traits::{IdProvider, ToRpcParams};
+use crate::SubscriptionResult;
 use futures_util::future::Either;
 use futures_util::{future::BoxFuture, FutureExt};
-use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned, SubscriptionAcceptRejectError};
+use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned};
 use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
 use jsonrpsee_types::{
 	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
-	SubscriptionResponse, SubscriptionResult,
+	SubscriptionResponse,
 };
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -429,7 +430,7 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::{RpcModule, types::EmptyServerParams};
+	///     use jsonrpsee::{RpcModule, core::EmptyServerParams};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
@@ -980,11 +981,7 @@ impl SubscriptionSink {
 				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
 
 				return Either::Right(async move {
-					let permit = match sink.reserve().await {
-						Ok(permit) => permit,
-						Err(_) => return,
-					};
-					permit.send_raw(msg.0);
+					let _ = sink.send(msg.0).await;
 				});
 			}
 		}

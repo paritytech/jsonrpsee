@@ -12,6 +12,6 @@ fn main() {
 			// angle braces need to be accounted for manually.
 			item = TransactionStatus<Hash, BlockHash>,
 		)]
-		async fn dummy_subscription(&self) -> jsonrpsee::types::SubscriptionResult;
+		async fn dummy_subscription(&self) -> jsonrpsee::core::SubscriptionResult;
 	}
 }

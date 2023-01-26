@@ -30,8 +30,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
-use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
+use jsonrpsee::core::{Error, SubscriptionClosed, SubscriptionResult};
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
@@ -54,9 +54,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| &"hello from subscription");
 
-			pipe_from_stream(stream, pending).await;
-
-			Ok(())
+			pipe_from_stream(stream, pending).await
 		})
 		.unwrap();
 
@@ -65,9 +63,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 			let interval = interval(Duration::from_millis(100));
 			let stream = IntervalStream::new(interval).map(move |_| 1337_usize);
 
-			pipe_from_stream(stream, pending).await;
-
-			Ok(())
+			pipe_from_stream(stream, pending).await
 		})
 		.unwrap();
 
@@ -89,9 +85,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 				let interval = interval(Duration::from_millis(100));
 				let stream = IntervalStream::new(interval).zip(wrapping_counter).map(move |(_, c)| c);
 
-				pipe_from_stream(stream, pending).await;
-
-				Ok(())
+				pipe_from_stream(stream, pending).await
 			},
 		)
 		.unwrap();
@@ -115,9 +109,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
-			pipe_from_stream(stream, pending).await;
-
-			Ok(())
+			pipe_from_stream(stream, pending).await
 		})
 		.unwrap();
 
@@ -173,7 +165,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
-			pipe_from_stream(stream, pending).await;
+			pipe_from_stream(stream, pending).await?;
 			let send_back = std::sync::Arc::make_mut(&mut tx);
 			send_back.send(()).await.unwrap();
 
@@ -222,38 +214,34 @@ pub fn init_logger() {
 		.try_init();
 }
 
-async fn pipe_from_stream<S, T>(mut stream: S, pending: PendingSubscriptionSink)
+async fn pipe_from_stream<S, T>(mut stream: S, pending: PendingSubscriptionSink) -> SubscriptionResult
 where
 	S: StreamExt<Item = T> + Unpin,
 	T: Serialize,
 {
-	let sink = match pending.accept().await {
-		Ok(s) => s,
-		Err(_) => return,
-	};
+	let sink = pending.accept().await?;
 
 	loop {
 		tokio::select! {
 			// poll the sink first.
 			biased;
-			_ = sink.closed() => return,
+			_ = sink.closed() => return Ok(()),
 
 			maybe_item = stream.next() => {
 				let item = match maybe_item {
 					Some(item) => item,
 					None => {
 						let _ = sink.close(SubscriptionClosed::Success).await;
-						return;
+						return Ok(());
 					}
 				};
 
-				let msg = sink.build_message(&item).unwrap();
+				let msg = sink.build_message(&item)?;
 
 				if sink.send(msg).await.is_err() {
-					return;
+					return Ok(());
 				}
 			},
-
 		}
 	}
 }

@@ -31,10 +31,11 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use helpers::init_logger;
-use jsonrpsee::core::error::Error;
+use jsonrpsee::core::error::{Error, SubscriptionEmptyError};
 use jsonrpsee::core::server::rpc_module::*;
+use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
-use jsonrpsee::types::{EmptyServerParams, ErrorObjectOwned, Params, SubscriptionEmptyError};
+use jsonrpsee::types::{ErrorObjectOwned, Params};
 use serde::{Deserialize, Serialize};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;

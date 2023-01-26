@@ -28,11 +28,11 @@
 
 use std::net::SocketAddr;
 
-use anyhow::anyhow;
 use futures::future;
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::server::rpc_module::TrySendError;
+use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -98,8 +98,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 async fn pipe_from_stream_with_bounded_buffer(
 	pending: PendingSubscriptionSink,
 	mut stream: BroadcastStream<usize>,
-) -> anyhow::Result<()> {
-	let mut sink = pending.accept().await.map_err(|e| anyhow!("{:?}", e))?;
+) -> SubscriptionResult {
+	let mut sink = pending.accept().await?;
 	let mut bounded_buffer = bounded_vec_deque::BoundedVecDeque::new(10);
 
 	// This is not recommended approach it would be better to have a queue that returns a future once

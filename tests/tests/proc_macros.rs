@@ -42,9 +42,8 @@ use jsonrpsee::ws_client::*;
 use serde_json::json;
 
 mod rpc_impl {
-	use jsonrpsee::core::{async_trait, RpcResult};
+	use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::types::SubscriptionResult;
 	use jsonrpsee::PendingSubscriptionSink;
 
 	#[rpc(client, server, namespace = "foo")]
@@ -310,7 +309,7 @@ async fn macro_zero_copy_cow() {
 #[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
-	use jsonrpsee::types::EmptyServerParams;
+	use jsonrpsee::core::EmptyServerParams;
 	use std::time::{Duration, Instant};
 
 	let module = RpcServerImpl.into_rpc();

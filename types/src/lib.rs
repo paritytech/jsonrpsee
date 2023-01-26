@@ -43,10 +43,7 @@ pub mod response;
 /// JSON-RPC response error object related types.
 pub mod error;
 
-pub use error::{ErrorObject, ErrorObjectOwned, ErrorResponse, SubscriptionEmptyError, SubscriptionResult};
+pub use error::{ErrorObject, ErrorObjectOwned, ErrorResponse};
 pub use params::{Id, Params, ParamsSequence, SubscriptionId, TwoPointZero};
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
-
-/// Empty server `RpcParams` type to use while registering modules.
-pub type EmptyServerParams = Vec<()>;

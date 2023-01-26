@@ -78,7 +78,7 @@ impl RpcDescription {
 			let mut sub_sig = sub.signature.clone();
 
 			// For ergonomic reasons, the server's subscription method should return `SubscriptionResult`.
-			let return_ty = self.jrps_server_item(quote! { types::SubscriptionResult });
+			let return_ty = self.jrps_server_item(quote! { core::SubscriptionResult });
 			let output: ReturnType = parse_quote! { -> #return_ty };
 			sub_sig.sig.output = output;
 
@@ -320,7 +320,7 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let err = self.jrps_server_item(quote! { core::Error });
-		let sub_err = self.jrps_server_item(quote! { types::SubscriptionEmptyError });
+		let sub_err = self.jrps_server_item(quote! { core::SubscriptionEmptyError });
 		let tokio = self.jrps_server_item(quote! { tokio });
 
 		// Code to decode sequence of parameters from a JSON array.
