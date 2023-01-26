@@ -32,7 +32,7 @@ futures-timer = { version = "3", optional = true }
 soketto = { version = "0.7.1", optional = true }
 
 # web-sys
-gloo-net = { version = "0.2.0", default-features = false, features = ["json", "websocket"], optional = true }
+gloo-net = { version = "0.2.6", default-features = false, features = ["json", "websocket"], optional = true }
 
 [features]
 tls = ["tokio-rustls", "webpki-roots", "rustls-native-certs"]
