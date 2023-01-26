@@ -35,6 +35,14 @@ use jsonrpsee::ws_client::WsClientBuilder;
 type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;
 
+#[rpc(client, server)]
+pub trait DupOverride {
+	#[subscription(name = "subscribeOne" => "override", item = u8)]
+	async fn one(&self) -> jsonrpsee::core::SubscriptionResult;
+	/*#[subscription(name = "subscribeTwo" => "override", item = u8)]
+	async fn two(&self) -> jsonrpsee::core::SubscriptionResult;*/
+}
+
 #[rpc(server, client, namespace = "state")]
 pub trait Rpc<Hash: Clone, StorageKey>
 where

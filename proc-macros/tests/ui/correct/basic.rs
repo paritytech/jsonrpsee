@@ -8,7 +8,7 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::{rpc_params, SubscriptionSink};
+use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -28,15 +28,15 @@ pub trait Rpc {
 	fn sync_method(&self) -> RpcResult<u16>;
 
 	#[subscription(name = "subscribe", item = String)]
-	fn sub(&self);
+	async fn sub(&self) -> SubscriptionResult;
 
 	#[subscription(name = "echo", unsubscribe = "unsubscribeEcho", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
-	fn sub_with_params(&self, val: u32);
+	async fn sub_with_params(&self, val: u32) -> SubscriptionResult;
 
 	// This will send data to subscribers with the `method` field in the JSON payload set to `foo_subscribe_override`
 	// because it's in the `foo` namespace.
 	#[subscription(name = "subscribe_method" => "subscribe_override", item = u32)]
-	fn sub_with_override_notif_method(&self);
+	async fn sub_with_override_notif_method(&self) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl;
@@ -65,20 +65,34 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	fn sub(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-		let _ = sink.send(&"Response_A");
-		let _ = sink.send(&"Response_B");
+	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+		let sink = pending.accept().await?;
+
+		let msg1 = sink.build_message(&"Response_A").unwrap();
+		let msg2 = sink.build_message(&"Response_B").unwrap();
+
+		sink.send(msg1).await.unwrap();
+		sink.send(msg2).await.unwrap();
+
 		Ok(())
 	}
 
-	fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> SubscriptionResult {
-		let _ = sink.send(&val);
-		let _ = sink.send(&val);
+	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
+		let sink = pending.accept().await?;
+
+		let msg = sink.build_message(&val).unwrap();
+
+		sink.send(msg.clone()).await.unwrap();
+		sink.send(msg).await.unwrap();
+
 		Ok(())
 	}
 
-	fn sub_with_override_notif_method(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-		let _ = sink.send(&1);
+	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+		let sink = pending.accept().await?;
+		let msg = sink.build_message(&1).unwrap();
+		sink.send(msg).await.unwrap();
+
 		Ok(())
 	}
 }

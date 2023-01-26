@@ -13,7 +13,7 @@ pub trait ApiWithDocumentation {
 
 	/// Subscription docs.
 	#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-	fn sub(&self);
+	async fn sub(&self) -> jsonrpsee::types::SubscriptionResult;
 }
 
 fn main() {}

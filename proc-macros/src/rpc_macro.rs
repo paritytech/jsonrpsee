@@ -311,7 +311,7 @@ impl RpcDescription {
 						_ => {
 							return Err(syn::Error::new_spanned(
 								method,
-								"Subscription methods must return `SubscriptionResult`",
+								"Subscription methods must return `SubscriptionResult` or `Result`",
 							));
 						}
 					};

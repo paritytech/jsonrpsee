@@ -59,7 +59,7 @@ pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, ConnState) -> BoxFuture<'a, MethodResponse>>;
+	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, ConnState) -> BoxFuture<'a, SubscriptionAnswered>>;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
 
@@ -83,6 +83,18 @@ pub enum TrySendError {
 	Closed(SubscriptionMessage),
 	/// The channel is full.
 	Full(SubscriptionMessage),
+}
+
+#[derive(Debug)]
+/// Represents whether a subscription was answered or not.
+pub enum SubscriptionAnswered {
+	/// The subscription was already answered and doesn't need to answered again.
+	/// The response is kept to be logged.
+	Yes(MethodResponse),
+	/// The subscription was never answered and needs to be answered.
+	///
+	/// This may occur if a subscription dropped without calling `PendingSubscriptionSink::accept` or `PendingSubscriptionSink::reject`.
+	No(MethodResponse),
 }
 
 /// Disconnect error
@@ -132,6 +144,20 @@ type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Recei
 /// Subscription message.
 #[derive(Debug, Clone)]
 pub struct SubscriptionMessage(pub(crate) String);
+
+impl SubscriptionMessage {
+	/// Create a new subscription notification from JSON and subscription stuff.
+	///
+	// TODO(niklasad1): I don't like this leaky API but not super nice to have in the subscription sink as well.
+	pub fn new<T: Serialize>(result: T, method: &str, sub_id: RpcSubscriptionId) -> Result<Self, serde_json::Error> {
+		serde_json::to_string(&SubscriptionResponse::new(
+			method.into(),
+			SubscriptionPayload { subscription: sub_id, result },
+		))
+		.map(|json| SubscriptionMessage(json))
+		.map_err(Into::into)
+	}
+}
 
 /// Represent a unique subscription entry based on [`RpcSubscriptionId`] and [`ConnectionId`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -333,13 +359,18 @@ impl Methods {
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
-	///         sink.send(&"one answer").unwrap();
+	///
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
+	/// 		let sink = pending.accept().await?;
+	/// 		let msg = sink.build_message(&"one answer").unwrap();
+	///         sink.send(msg).await.unwrap();
+	///
 	///         Ok(())
 	///     }).unwrap();
+	///
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#).await.unwrap();
 	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
-	///     let sub_resp = stream.next().await.unwrap();
+	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
 	///         sub_resp
@@ -374,7 +405,10 @@ impl Methods {
 				// The same information is part of `res` above.
 				let _ = rx_sink.recv().await.expect("Every call must at least produce one response; qed");
 
-				res
+				match res {
+					SubscriptionAnswered::Yes(r) => r,
+					SubscriptionAnswered::No(r) => r,
+				}
 			}
 			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
@@ -398,9 +432,13 @@ impl Methods {
 	///     use jsonrpsee::{RpcModule, types::EmptyServerParams};
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
-	///         sink.send(&"one answer").unwrap();
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
+	/// 		let sink = pending.accept().await?;
+	///
+	/// 		let msg = sink.build_message(&"one answer").unwrap();
+	///         sink.send(msg).await.unwrap();
 	///         Ok(())
+	///
 	///     }).unwrap();
 	///
 	///     let mut sub = module.subscribe("hi", EmptyServerParams::new()).await.unwrap();
@@ -599,20 +637,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_core::Error;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, mut sink, ctx| {
-	///     let x = match params.one::<usize>() {
-	///         Ok(x) => x,
-	///         Err(e) => {
-	///             let err: Error = e.into();
-	///             sink.reject(err);
-	///             return Ok(());
-	///         }
-	///     };
-	///     // Sink is accepted on the first `send` call.
-	///     std::thread::spawn(move || {
-	///         let sum = x + (*ctx);
-	///         let _ = sink.send(&sum);
-	///     });
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| async move {
+	/// 	let x = params.one::<usize>()?;
+	///
+	/// 	// mark the subscription is accepted after the params has been parsed successful.
+	/// 	let sink = pending.accept().await?;
+	///
+	///     let sum = x + (*ctx);
+	/// 	let msg = sink.build_message(&sum).unwrap();
+	///     sink.send(msg).await.unwrap();
 	///
 	///     Ok(())
 	/// });
@@ -706,8 +739,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					let result = async move {
 						match rx.await {
-							Ok(result) => result,
-							Err(_) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
+							Ok(r) => SubscriptionAnswered::Yes(r),
+							Err(_) => {
+								let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+								SubscriptionAnswered::No(response)
+							}
 						}
 					};
 
@@ -762,7 +798,10 @@ impl IsUnsubscribed {
 
 /// Represents a single subscription that is waiting to be accepted or rejected.
 ///
-/// You must either call `accept` or `reject` otherwise this does nothing.
+/// If this is dropped without calling `PendingSubscription::reject` or `PendingSubscriptionSink::accept`
+/// a default error is sent out as response to the subscription call.
+///
+/// Thus, if you want a customized error message then `PendingSubscription::reject` must be called.
 #[derive(Debug)]
 #[must_use = "PendningSubscriptionSink does nothing unless `accept` or `reject` is called"]
 pub struct PendingSubscriptionSink {
@@ -844,8 +883,6 @@ pub struct SubscriptionSink {
 
 impl SubscriptionSink {
 	/// Get the subscription ID.
-	///
-	/// [`SubscriptionSink::accept`] should be called prior to this method.
 	pub fn subscription_id(&self) -> RpcSubscriptionId<'static> {
 		self.uniq_sub.sub_id.clone()
 	}
@@ -870,20 +907,6 @@ impl SubscriptionSink {
 		self.inner.send(msg.0).await.map_err(Into::into)
 	}
 
-	/// Similar to `SubscriptionSink::try_send` but it encodes the message as
-	/// a JSON-RPC subscription notification.
-	/// The error could either be encode error or send error.
-	///
-	/// NOTE: if this fails you will get back the message as JSON string and if you want
-	/// to re-send then `SubscriptionSink::send` must be used.
-	//
-	// TODO(niklasad1): do we want this API?!. I don't but a bit more code to use the new APIs
-	// for users as the message needs to be serialized by the user of API.
-	pub async fn encode_and_send<T: Serialize>(&self, val: &T) -> Result<(), ()> {
-		let msg = self.build_message(val).map_err(|_| ())?;
-		self.send(msg).await.map_err(|_| ())
-	}
-
 	/// Attempts to immediately send out the message as JSON string to the subscribers but fails if the
 	/// channel is full, that the connection is closed or the subscription was not explicitly accepted.
 	///
@@ -897,20 +920,6 @@ impl SubscriptionSink {
 		}
 
 		self.inner.try_send(msg.0).map_err(Into::into)
-	}
-
-	/// Similar to `SubscriptionSink::try_send` but it encodes the message as
-	/// a JSON-RPC subscription notification.
-	/// The error could either be encode error or send error.
-	//
-	/// NOTE: if this fails you will get back the message as JSON string and if you want
-	/// to re-send then `SubscriptionSink::send` must be used.
-	//
-	// TODO(niklasad1): do we want this API?!. I don't but a bit more code to use the new APIs
-	// for users as the message needs to be serialized by the user of API.
-	pub fn encode_and_try_send<T: Serialize>(&mut self, val: &T) -> Result<(), ()> {
-		let msg = self.build_message(val).map_err(|_| ())?;
-		self.try_send(msg).map_err(|_| ())
 	}
 
 	/// Returns whether the subscription is closed.
@@ -927,18 +936,14 @@ impl SubscriptionSink {
 		}
 	}
 
-	/// ...
+	/// Build message that will be serialized as JSON-RPC notification.
+	///
+	/// You need to call this method prior to send out a subscription notification.
 	pub fn build_message<T: Serialize>(&self, result: &T) -> Result<SubscriptionMessage, serde_json::Error> {
-		serde_json::to_string(&SubscriptionResponse::new(
-			self.method.into(),
-			SubscriptionPayload { subscription: self.uniq_sub.sub_id.clone(), result },
-		))
-		.map(|json| SubscriptionMessage(json))
-		.map_err(Into::into)
+		SubscriptionMessage::new(result, self.method, self.uniq_sub.sub_id.clone())
 	}
 
-	/// ...
-	pub fn build_error_message<T: Serialize>(&self, error: &T) -> Result<SubscriptionMessage, serde_json::Error> {
+	fn build_error_message<T: Serialize>(&self, error: &T) -> Result<SubscriptionMessage, serde_json::Error> {
 		serde_json::to_string(&SubscriptionError::new(
 			self.method.into(),
 			SubscriptionPayloadError { subscription: self.uniq_sub.sub_id.clone(), error },

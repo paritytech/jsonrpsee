@@ -44,7 +44,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
 use jsonrpsee_core::server::helpers::MethodResponse;
 use jsonrpsee_core::server::host_filtering::AllowHosts;
-use jsonrpsee_core::server::rpc_module::Methods;
+use jsonrpsee_core::server::rpc_module::{Methods, SubscriptionAnswered};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
@@ -502,23 +502,37 @@ impl<B, L> Builder<B, L> {
 	}
 }
 
+/// This represent a response to a RPC call
+/// and `Subscribe` calls are handled differently
+/// because we want to prevent subscriptions to start
+/// before the actual subscription call has been answered.
 pub(crate) enum MethodResult {
-	JustLogger(MethodResponse),
-	SendAndLogger(MethodResponse),
+	/// The subscription callback itself sends back the result
+	/// so it must not be sent back again.
+	Subscribe(SubscriptionAnswered),
+
+	/// Treat it as ordinary call.
+	Call(MethodResponse),
 }
 
 impl MethodResult {
-	pub(crate) fn as_inner(&self) -> &MethodResponse {
+	pub(crate) fn as_response(&self) -> &MethodResponse {
 		match &self {
-			Self::JustLogger(r) => r,
-			Self::SendAndLogger(r) => r,
+			Self::Subscribe(r) => match r {
+				SubscriptionAnswered::Yes(r) => r,
+				SubscriptionAnswered::No(r) => r,
+			},
+			Self::Call(r) => r,
 		}
 	}
 
-	pub(crate) fn into_inner(self) -> MethodResponse {
+	pub(crate) fn into_response(self) -> MethodResponse {
 		match self {
-			Self::JustLogger(r) => r,
-			Self::SendAndLogger(r) => r,
+			Self::Subscribe(r) => match r {
+				SubscriptionAnswered::Yes(r) => r,
+				SubscriptionAnswered::No(r) => r,
+			},
+			Self::Call(r) => r,
 		}
 	}
 }

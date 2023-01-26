@@ -71,7 +71,7 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 /// ### Example
 ///
 /// ```
-///  use jsonrpsee::{proc_macros::rpc, core::RpcResult};
+///  use jsonrpsee::{proc_macros::rpc, core::RpcResult, types::SubscriptionResult};
 ///
 ///  #[rpc(client, server)]
 ///  pub trait RpcTrait<A, B, C> {
@@ -79,7 +79,7 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 ///    fn call(&self, a: A) -> RpcResult<B>;
 ///
 ///    #[subscription(name = "subscribe", item = Vec<C>)]
-///    fn sub(&self);
+///    async fn sub(&self) -> SubscriptionResult;
 ///  }
 /// ```
 ///

@@ -12,7 +12,7 @@ use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse, MethodSink};
-use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
+use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods, SubscriptionAnswered};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -116,7 +116,7 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 			.into_iter()
 			.filter_map(|v| {
 				if let Ok(req) = serde_json::from_str::<Request>(v.get()) {
-					Some(Either::Right(async { execute_call(req, call.clone()).await.into_inner() }))
+					Some(Either::Right(async { execute_call(req, call.clone()).await.into_response() }))
 				} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(v.get()) {
 					// notifications should not be answered.
 					got_notif = true;
@@ -156,7 +156,7 @@ pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallD
 		execute_call_with_tracing(req, call).await
 	} else {
 		let (id, code) = prepare_error(&data);
-		MethodResult::SendAndLogger(MethodResponse::error(id, ErrorObject::from(code)))
+		MethodResult::Call(MethodResponse::error(id, ErrorObject::from(code)))
 	}
 }
 
@@ -184,12 +184,12 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 		None => {
 			logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::WebSocket);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
-			MethodResult::SendAndLogger(response)
+			MethodResult::Call(response)
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
-				MethodResult::SendAndLogger((callback)(id, params, max_response_body_size as usize))
+				MethodResult::Call((callback)(id, params, max_response_body_size as usize))
 			}
 			MethodKind::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
@@ -198,27 +198,27 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				let params = params.into_owned();
 
 				let response = (callback)(id, params, conn_id, max_response_body_size as usize).await;
-				MethodResult::SendAndLogger(response)
+				MethodResult::Call(response)
 			}
 			MethodKind::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 
 				let conn_state = ConnState { conn_id, id_provider };
 				let response = callback(id.clone(), params, sink.clone(), conn_state).await;
-				// TODO(niklasad1): investigate why we need that.
-				MethodResult::JustLogger(response)
+
+				MethodResult::Subscribe(response)
 			}
 			MethodKind::Unsubscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription, TransportProtocol::WebSocket);
 
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);
-				MethodResult::SendAndLogger(result)
+				MethodResult::Call(result)
 			}
 		},
 	};
 
-	let r = response.as_inner();
+	let r = response.as_response();
 
 	tx_log_from_str(&r.result, max_log_length);
 	logger.on_result(name, r.success, request_start, TransportProtocol::WebSocket);
@@ -344,10 +344,14 @@ pub(crate) async fn background_task<L: Logger>(
 					};
 
 					match process_single_request(data, call).await {
-						MethodResult::JustLogger(r) => {
+						MethodResult::Subscribe(SubscriptionAnswered::Yes(r)) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 						}
-						MethodResult::SendAndLogger(r) => {
+						MethodResult::Subscribe(SubscriptionAnswered::No(r)) => {
+							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
+							sink_permit.send_raw(r.result);
+						}
+						MethodResult::Call(r) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 							sink_permit.send_raw(r.result);
 						}
