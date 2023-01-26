@@ -734,7 +734,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					tokio::spawn(async move {
 						if let Err(e) = call_fut.await {
-							tracing::warn!("Subscribe call `{subscribe_method_name}` canceled because `{e:?}` failed");
+							tracing::warn!("Subscribe call `{subscribe_method_name}` closed");
 						}
 					});
 
@@ -792,6 +792,7 @@ impl IsUnsubscribed {
 	/// Wrapper over [`tokio::sync::mpsc::Sender::closed`]
 	///
 	/// # Cancel safety
+	///
 	/// This method is cancel safe. Once the channel is closed,
 	/// it stays closed forever and all future calls to closed will return immediately.
 	async fn unsubscribed(&self) {
@@ -943,7 +944,12 @@ impl SubscriptionSink {
 	///
 	/// You need to call this method prior to send out a subscription notification.
 	pub fn build_message<T: Serialize>(&self, result: &T) -> Result<SubscriptionMessage, serde_json::Error> {
-		SubscriptionMessage::new(result, self.method, self.uniq_sub.sub_id.clone())
+		serde_json::to_string(&SubscriptionResponse::new(
+			self.method.into(),
+			SubscriptionPayload { subscription: self.uniq_sub.sub_id.clone(), result },
+		))
+		.map(|json| SubscriptionMessage(json))
+		.map_err(Into::into)
 	}
 
 	fn build_error_message<T: Serialize>(&self, error: &T) -> Result<SubscriptionMessage, serde_json::Error> {

@@ -44,6 +44,7 @@ server = [
 	"rand",
 	"tokio/rt",
 	"tokio/sync",
+	"tokio/macros",
 ]
 client = ["futures-util/sink", "futures-channel/sink"]
 async-client = [
