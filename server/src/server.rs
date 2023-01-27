@@ -191,7 +191,7 @@ struct Settings {
 	enable_http: bool,
 	/// Enable WS.
 	enable_ws: bool,
-	/// Number of messages that server is allowed `buffer` until backpressure kicks in.
+	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
 	backpressure_buffer_capacity: u32,
 }
 
