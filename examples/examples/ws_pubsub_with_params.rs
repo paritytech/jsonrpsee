@@ -67,8 +67,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| async move {
-			let params = params.into_owned();
-
+			// we are doing this verbose way to get a customized reject error on the subscription.
 			let idx = match params.one::<usize>() {
 				Ok(p) => p,
 				Err(e) => {
@@ -76,12 +75,13 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					return Ok(());
 				}
 			};
+
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
-			let mut sink = pending.accept().await.unwrap();
+			let mut sink = pending.accept().await?;
 
 			sink.pipe_from_stream(|_last, next| next, stream).await;
 

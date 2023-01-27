@@ -346,16 +346,10 @@ async fn subscribe_unsubscribe_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(200));
-			let mut stream = IntervalStream::new(interval).map(move |_| 1);
+			let stream = IntervalStream::new(interval).map(move |_| 1);
+			let mut sink = pending.accept().await.unwrap();
 
-			let sink = pending.accept().await.unwrap();
-
-			while let Some(item) = stream.next().await {
-				let msg = sink.build_message(&item).unwrap();
-				if sink.send(msg).await.is_err() {
-					return Ok(());
-				}
-			}
+			sink.pipe_from_stream(|_, next| next, stream).await;
 			Ok(())
 		})
 		.unwrap();
