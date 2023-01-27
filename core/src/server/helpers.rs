@@ -134,7 +134,7 @@ impl MethodSink {
 	/// Async send which will wait until there is space in channel buffer or that the subscription is disconnected.
 	pub async fn send(&self, msg: String) -> Result<(), DisconnectError> {
 		tx_log_from_str(&msg, self.max_log_length);
-		self.tx.send(msg.clone()).await?;
+		self.tx.send(msg).await?;
 
 		Ok(())
 	}
