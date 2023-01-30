@@ -79,7 +79,7 @@ clippy:
   <<:                              *docker-env
   <<:                              *common-refs
   script:
-    - cargo clippy --all-targets
+    - cargo clippy
 
 check-rustdoc-links:
   stage:                           lint

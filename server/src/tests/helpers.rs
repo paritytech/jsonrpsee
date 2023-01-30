@@ -59,7 +59,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 				tracing::debug!("server respond to hello");
 				// Call some async function inside.
 				futures_util::future::ready(()).await;
-				Ok("hello")
+				Result::<_, Error>::Ok("hello")
 			}
 		})
 		.unwrap();
@@ -67,7 +67,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		.register_async_method("add_async", |params, _| async move {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
+			Result::<_, Error>::Ok(sum)
 		})
 		.unwrap();
 	module
@@ -111,7 +111,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 	module
 		.register_async_method("should_ok_async", |_p, ctx| async move {
 			ctx.ok().map_err(CallError::Failed)?;
-			Ok("ok")
+			Result::<_, Error>::Ok("ok")
 		})
 		.unwrap();
 
@@ -146,7 +146,7 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 		.register_async_method("should_ok_async", |_p, ctx| async move {
 			ctx.ok().map_err(CallError::Failed)?;
 			// Call some async function inside.
-			Ok(futures_util::future::ready("ok!").await)
+			Result::<_, Error>::Ok(futures_util::future::ready("ok!").await)
 		})
 		.unwrap();
 
@@ -154,7 +154,7 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 		.register_async_method("err_async", |_p, ctx| async move {
 			ctx.ok().map_err(CallError::Failed)?;
 			// Async work that returns an error
-			futures_util::future::err::<(), _>(anyhow!("nah").into()).await
+			futures_util::future::err::<(), Error>(anyhow!("nah").into()).await
 		})
 		.unwrap();
 

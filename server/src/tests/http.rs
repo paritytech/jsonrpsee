@@ -46,7 +46,7 @@ async fn server() -> (SocketAddr, ServerHandle) {
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
-	module.register_async_method("say_hello_async", |_, _| async move { Ok("lo") }).unwrap();
+	module.register_async_method("say_hello_async", |_, _| async move { Result::<_, Error>::Ok("lo") }).unwrap();
 	module
 		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
@@ -78,7 +78,7 @@ async fn server() -> (SocketAddr, ServerHandle) {
 	module
 		.register_async_method("should_ok_async", |_p, ctx| async move {
 			ctx.ok().map_err(CallError::Failed)?;
-			Ok("ok")
+			Result::<_, Error>::Ok("ok")
 		})
 		.unwrap();
 
