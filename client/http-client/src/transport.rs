@@ -6,67 +6,31 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use std::error::Error as StdError;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
-
 use hyper::body::{Body, HttpBody};
 use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper::Uri;
-use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
 use jsonrpsee_core::tracing::{rx_log_from_bytes, tx_log_from_str};
+use std::error::Error as StdError;
 use thiserror::Error;
-use tokio::sync::Mutex;
 use tower::{Layer, Service, ServiceExt};
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
-/// Wrapper over HTTP transport and connector.
-#[derive(Debug, Clone)]
-pub enum HyperClient<B> {
-	/// Hyper client with https connector.
-	#[cfg(feature = "tls")]
-	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>, B>),
-	/// Hyper client with http connector.
-	Http(Client<HttpConnector, B>),
-}
-
-impl<B> tower::Service<hyper::Request<B>> for HyperClient<B>
-where
-	B: HttpBody + Send + 'static,
-	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
-{
-	type Response = hyper::Response<Body>;
-	type Error = Error;
-	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
-
-	fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn call(&mut self, req: hyper::Request<B>) -> Self::Future {
-		let resp = match self {
-			Self::Http(inner) => inner.call(req),
-			Self::Https(inner) => inner.call(req),
-		};
-
-		Box::pin(async move { resp.await.map_err(|e| Error::Http(e.into())) })
-	}
-}
+#[cfg(feature = "tls")]
+pub(crate) type TlsService = Client<hyper_rustls::HttpsConnector<HttpConnector>>;
+#[cfg(not(feature = "tls"))]
+pub(crate) type PlainService = Client<HttpConnector>;
 
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
 pub struct HttpTransportClient<S> {
 	/// Target to connect to.
-	target: Uri,
+	target: ParsedUri,
 	/// HTTP client
-	client: Arc<Mutex<S>>,
+	client: S,
 	/// Configurable max request body size
 	max_request_size: u32,
 	/// Configurable max response body size
@@ -79,35 +43,30 @@ pub struct HttpTransportClient<S> {
 	headers: HeaderMap,
 }
 
-impl<S, B> HttpTransportClient<S>
+impl<B, S> HttpTransportClient<S>
 where
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error>,
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = hyper::Error> + Clone,
 	B: HttpBody + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	/// Initializes a new HTTP client.
-	pub(crate) fn new<L>(
+	#[cfg(feature = "tls")]
+	pub(crate) fn new<L: Layer<TlsService, Service = S>>(
 		max_request_size: u32,
 		target: impl AsRef<str>,
 		max_response_size: u32,
-		cert_store: CertificateStore,
+		cert_store: jsonrpsee_core::client::CertificateStore,
 		max_log_length: u32,
 		headers: HeaderMap,
 		service_builder: tower::ServiceBuilder<L>,
-	) -> Result<Self, Error>
-	where
-		L: Layer<HyperClient<Body>, Service = S>,
-	{
-		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
-		if target.port_u16().is_none() {
-			return Err(Error::Url("Port number is missing in the URL".into()));
-		}
+	) -> Result<Self, Error> {
+		use jsonrpsee_core::client::CertificateStore;
 
-		let client = match target.scheme_str() {
-			Some("http") => HyperClient::Http(Client::new()),
-			#[cfg(feature = "tls")]
-			Some("https") => {
+		let uri = ParsedUri::try_from(target.as_ref())?;
+
+		let client = match uri.0.scheme_str() {
+			Some("http") | Some("https") => {
 				let connector = match cert_store {
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
@@ -121,7 +80,7 @@ where
 						.build(),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
-				HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector))
+				Client::builder().build::<_, hyper::Body>(connector)
 			}
 			_ => {
 				#[cfg(feature = "tls")]
@@ -132,27 +91,49 @@ where
 			}
 		};
 
-		// Cache request headers: 2 default headers, followed by user custom headers.
-		// Maintain order for headers in case of duplicate keys:
-		// https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.2
-		let mut cached_headers = HeaderMap::with_capacity(2 + headers.len());
-		cached_headers.insert(hyper::header::CONTENT_TYPE, HeaderValue::from_static(CONTENT_TYPE_JSON));
-		cached_headers.insert(hyper::header::ACCEPT, HeaderValue::from_static(CONTENT_TYPE_JSON));
-		for (key, value) in headers.into_iter() {
-			if let Some(key) = key {
-				cached_headers.insert(key, value);
-			}
-		}
-
 		Ok(Self {
-			target,
-			client: Arc::new(Mutex::new(service_builder.service(client))),
+			target: uri,
+			client: service_builder.service(client),
 			max_request_size,
 			max_response_size,
 			max_log_length,
-			headers: cached_headers,
+			headers: build_header_cache(headers),
 		})
 	}
+
+	/// Initializes a new HTTP client.
+	#[cfg(not(feature = "tls"))]
+	pub(crate) fn new<L: Layer<PlainService, Service = S>>(
+		max_request_size: u32,
+		target: impl AsRef<str>,
+		max_response_size: u32,
+		max_log_length: u32,
+		headers: HeaderMap,
+		service_builder: tower::ServiceBuilder<L>,
+	) -> Result<Self, Error> {
+		let uri = ParsedUri::try_from(target.as_ref())?;
+
+		let client = match uri.0.scheme_str() {
+			Some("http") => Client::new(),
+			_ => {
+				#[cfg(feature = "tls")]
+				let err = "URL scheme not supported, expects 'http' or 'https'";
+				#[cfg(not(feature = "tls"))]
+				let err = "URL scheme not supported, expects 'http'";
+				return Err(Error::Url(err.into()));
+			}
+		};
+
+		Ok(Self {
+			target: uri,
+			client: service_builder.service(client),
+			max_request_size,
+			max_response_size,
+			max_log_length,
+			headers: build_header_cache(headers),
+		})
+	}
+
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
 		tx_log_from_str(&body, self.max_log_length);
 
@@ -160,12 +141,12 @@ where
 			return Err(Error::RequestTooLarge);
 		}
 
-		let mut req = hyper::Request::post(&self.target);
+		let mut req = hyper::Request::post(&self.target.0);
 		if let Some(headers) = req.headers_mut() {
 			*headers = self.headers.clone();
 		}
 		let req = req.body(From::from(body)).expect("URI and request headers are valid; qed");
-		let response = self.client.lock().await.ready().await?.call(req).await?;
+		let response = self.client.clone().ready().await?.call(req).await?;
 
 		if response.status().is_success() {
 			Ok(response)
@@ -191,6 +172,38 @@ where
 
 		Ok(())
 	}
+}
+
+#[derive(Debug, Clone)]
+struct ParsedUri(Uri);
+
+impl TryFrom<&str> for ParsedUri {
+	type Error = Error;
+
+	fn try_from(target: &str) -> Result<Self, Self::Error> {
+		let uri: Uri = target.parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
+		if uri.port_u16().is_none() {
+			return Err(Error::Url("Port number is missing in the URL".into()));
+		} else {
+			Ok(ParsedUri(uri))
+		}
+	}
+}
+
+fn build_header_cache(headers: HeaderMap) -> HeaderMap {
+	// Cache request headers: 2 default headers, followed by user custom headers.
+	// Maintain order for headers in case of duplicate keys:
+	// https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.2
+	let mut cached_headers = HeaderMap::with_capacity(2 + headers.len());
+	cached_headers.insert(hyper::header::CONTENT_TYPE, HeaderValue::from_static(CONTENT_TYPE_JSON));
+	cached_headers.insert(hyper::header::ACCEPT, HeaderValue::from_static(CONTENT_TYPE_JSON));
+	for (key, value) in headers.into_iter() {
+		if let Some(key) = key {
+			cached_headers.insert(key, value);
+		}
+	}
+
+	cached_headers
 }
 
 /// Error that can happen during a request.
@@ -234,22 +247,29 @@ impl From<GenericTransportError> for Error {
 	}
 }
 
+impl From<hyper::Error> for Error {
+	fn from(err: hyper::Error) -> Self {
+		Self::Http(Box::new(err))
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use jsonrpsee_core::client::CertificateStore;
 
 	fn assert_target(
-		client: &HttpTransportClient<HyperClient<Body>>,
+		client: &HttpTransportClient<TlsService>,
 		host: &str,
 		scheme: &str,
 		path_and_query: &str,
 		port: u16,
 		max_request_size: u32,
 	) {
-		assert_eq!(client.target.scheme_str(), Some(scheme));
-		assert_eq!(client.target.path_and_query().map(|pq| pq.as_str()), Some(path_and_query));
-		assert_eq!(client.target.host(), Some(host));
-		assert_eq!(client.target.port_u16(), Some(port));
+		assert_eq!(client.target.0.scheme_str(), Some(scheme));
+		assert_eq!(client.target.0.path_and_query().map(|pq| pq.as_str()), Some(path_and_query));
+		assert_eq!(client.target.0.host(), Some(host));
+		assert_eq!(client.target.0.port_u16(), Some(port));
 		assert_eq!(client.max_request_size, max_request_size);
 	}
 
@@ -291,7 +311,6 @@ mod tests {
 			80,
 			"https://localhost:9933",
 			80,
-			CertificateStore::Native,
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
