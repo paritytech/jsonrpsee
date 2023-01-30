@@ -32,9 +32,7 @@ pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded
 
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
 	sender.send_text_owned(response).await?;
-	sender.flush().await?;
-
-	Ok(())
+	sender.flush().await.map_err(Into::into)
 }
 
 pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
@@ -300,7 +298,7 @@ pub(crate) async fn background_task<L: Logger>(
 						break Ok(());
 					}
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
-						tracing::warn!(
+						tracing::debug!(
 							"WS transport error: request length: {} exceeded max limit: {} bytes",
 							current,
 							maximum
@@ -312,7 +310,7 @@ pub(crate) async fn background_task<L: Logger>(
 
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::error!("WS transport error: {}; terminate connection: {}", err, conn_id);
+						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn_id);
 						break Err(err.into());
 					}
 					MonitoredError::Shutdown => {

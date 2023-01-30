@@ -40,7 +40,6 @@ use helpers::{
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
-use jsonrpsee::core::server::rpc_module::DisconnectError;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -440,15 +439,10 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			|_, pending, mut tx| async move {
 				let sink = pending.accept().await.unwrap();
 				let msg = sink.build_message(&1).unwrap();
-
-				let close_err = loop {
-					if let Err(DisconnectError(_msg)) = sink.send(msg.clone()).await {
-						break ErrorObject::borrowed(0, &"Subscription terminated successfully", None);
-					}
-					tokio::time::sleep(Duration::from_millis(100)).await;
-				};
+				sink.send(msg).await.unwrap();
+				sink.closed().await;
 				let send_back = Arc::make_mut(&mut tx);
-				send_back.feed(close_err).await.unwrap();
+				send_back.feed("Subscription terminated by remote peer").await.unwrap();
 
 				Ok(())
 			},
@@ -469,7 +463,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let close_err = rx.next().await.unwrap();
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert_eq!(close_err, ErrorObject::borrowed(0, &"Subscription terminated successfully", None));
+	assert_eq!(close_err, "Subscription terminated by remote peer");
 }
 
 #[tokio::test]
