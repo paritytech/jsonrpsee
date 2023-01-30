@@ -76,7 +76,8 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder {
 	certificate_store: CertificateStore,
-	max_request_body_size: u32,
+	max_request_size: u32,
+	max_response_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
 	ping_interval: Option<Duration>,
@@ -92,7 +93,8 @@ impl Default for WsClientBuilder {
 	fn default() -> Self {
 		Self {
 			certificate_store: CertificateStore::Native,
-			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_request_size: TEN_MB_SIZE_BYTES,
+			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
 			ping_interval: None,
@@ -137,9 +139,15 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// See documentation [`WsTransportClientBuilder::max_request_body_size`] (default is 10 MB).
-	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.max_request_body_size = size;
+	/// See documentation [`WsTransportClientBuilder::max_request_size`] (default is 10 MB).
+	pub fn max_request_size(mut self, size: u32) -> Self {
+		self.max_request_size = size;
+		self
+	}
+
+	/// See documentation [`WsTransportClientBuilder::max_response_size`] (default is 10 MB).
+	pub fn max_response_size(mut self, size: u32) -> Self {
+		self.max_response_size = size;
 		self
 	}
 
@@ -209,7 +217,8 @@ impl WsClientBuilder {
 		let Self {
 			certificate_store,
 			max_concurrent_requests,
-			max_request_body_size,
+			max_request_size,
+			max_response_size,
 			request_timeout,
 			connection_timeout,
 			ping_interval,
@@ -224,7 +233,8 @@ impl WsClientBuilder {
 			certificate_store,
 			connection_timeout,
 			headers,
-			max_request_body_size,
+			max_request_size,
+			max_response_size,
 			max_redirections,
 		};
 

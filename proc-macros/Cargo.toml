@@ -15,7 +15,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "1.0", default-features = false, features = ["extra-traits", "full", "visit", "parsing"] }
+syn = { version = "1.0", default-features = false, features = ["extra-traits", "full", "visit", "parsing", "printing", "clone-impls", "proc-macro"] }
 proc-macro-crate = "1"
 heck = "0.4.0"
 
@@ -25,3 +25,4 @@ trybuild = "1.0"
 tokio = { version = "1.16", features = ["rt", "macros"] }
 futures-channel = { version = "0.3.14", default-features = false }
 futures-util = { version = "0.3.14", default-features = false }
+serde_json = "1"

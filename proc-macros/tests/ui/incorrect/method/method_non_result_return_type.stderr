@@ -1,0 +1,5 @@
+error: Expecting something like 'Result<Foo, Err>' here, but got no generic args (eg no '<Foo,Err>').
+ --> tests/ui/incorrect/method/method_non_result_return_type.rs:6:23
+  |
+6 |     async fn a(&self) -> u16;
+  |                          ^^^

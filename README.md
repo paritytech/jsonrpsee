@@ -53,5 +53,4 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 ## Benchmarks
 
 Daily benchmarks for jsonrpsee can be found:
-- Github action machine: <https://paritytech.github.io/jsonrpsee/bench/dev>
-- Gitlab machine (experimental): <https://paritytech.github.io/jsonrpsee/bench/dev2>
+- Gitlab machine: <https://paritytech.github.io/jsonrpsee/bench/dev2>
