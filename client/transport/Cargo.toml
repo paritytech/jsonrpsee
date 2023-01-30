@@ -35,7 +35,10 @@ soketto = { version = "0.7.1", optional = true }
 gloo-net = { version = "0.2.0", default-features = false, features = ["json", "websocket"], optional = true }
 
 [features]
-tls = ["tokio-rustls", "webpki-roots", "rustls-native-certs"]
+native-tls = ["rustls-native-certs", "__tls"]
+webpki-tls = ["webpki-roots", "__tls"]
+__tls = ["tokio-rustls"]
+
 ws = [
     "futures-util",
     "http",

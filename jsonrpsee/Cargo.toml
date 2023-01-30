@@ -23,7 +23,8 @@ jsonrpsee-types = { path = "../types", version = "0.16.2", optional = true }
 tracing = { version = "0.1.34", optional = true }
 
 [features]
-client-ws-transport = ["jsonrpsee-client-transport/ws", "jsonrpsee-client-transport/tls"]
+client-ws-transport-native-tls = ["jsonrpsee-client-transport/ws", "jsonrpsee-client-transport/native-tls"]
+client-ws-transport-webpki-tls = ["jsonrpsee-client-transport/ws", "jsonrpsee-client-transport/webpki-tls"]
 client-ws-transport-no-tls = ["jsonrpsee-client-transport/ws"]
 client-web-transport = ["jsonrpsee-client-transport/web"]
 async-client = ["jsonrpsee-core/async-client"]
@@ -33,7 +34,7 @@ wasm-client = ["jsonrpsee-wasm-client", "jsonrpsee-types", "jsonrpsee-core/clien
 ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-core/client"]
 macros = ["jsonrpsee-proc-macros", "jsonrpsee-types", "tracing"]
 
-client = ["http-client", "ws-client", "wasm-client", "client-ws-transport", "client-web-transport", "async-client", "async-wasm-client", "client-core"]
+client = ["http-client", "ws-client", "wasm-client", "client-ws-transport-native-tls", "client-ws-transport-webpki-tls", "client-web-transport", "async-client", "async-wasm-client", "client-core"]
 client-core = ["jsonrpsee-core/client"]
 server = ["jsonrpsee-server", "server-core", "jsonrpsee-types"]
 server-core = ["jsonrpsee-core/server"]

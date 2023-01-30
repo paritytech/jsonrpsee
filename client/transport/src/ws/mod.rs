@@ -85,9 +85,31 @@ impl Default for WsTransportClientBuilder {
 }
 
 impl WsTransportClientBuilder {
-	/// Set whether to use system certificates (default is native).
-	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
-		self.certificate_store = certificate_store;
+	/// Force to use the rustls native certificate store.
+	///
+	/// Since multiple certificate stores can be optionally enabled, this option will
+	/// force the `native certificate store` to be used.
+	///
+	/// # Optional
+	///
+	/// This requires the optional `native-tls` feature.
+	#[cfg(feature = "native-tls")]
+	pub fn use_native_rustls(mut self) -> Self {
+		self.certificate_store = CertificateStore::Native;
+		self
+	}
+
+	/// Force to use the rustls webpki certificate store.
+	///
+	/// Since multiple certificate stores can be optionally enabled, this option will
+	/// force the `webpki certificate store` to be used.
+	///
+	/// # Optional
+	///
+	/// This requires the optional `webpki-tls` feature.
+	#[cfg(feature = "webpki-tls")]
+	pub fn use_webpki_rustls(mut self) -> Self {
+		self.certificate_store = CertificateStore::WebPki;
 		self
 	}
 
@@ -151,7 +173,7 @@ pub enum WsHandshakeError {
 	Transport(#[source] soketto::handshake::Error),
 
 	/// Invalid DNS name error for TLS
-	#[cfg(feature = "tls")]
+	#[cfg(feature = "__tls")]
 	#[error("Invalid DNS name: {0}")]
 	InvalidDnsName(#[source] tokio_rustls::webpki::InvalidDnsNameError),
 
@@ -250,7 +272,7 @@ impl WsTransportClientBuilder {
 		let mut err = None;
 
 		// Only build TLS connector if `wss` in URL.
-		#[cfg(feature = "tls")]
+		#[cfg(feature = "__tls")]
 		let mut connector = match target._mode {
 			Mode::Tls => Some(build_tls_config(&self.certificate_store)?),
 			Mode::Plain => None,
@@ -262,7 +284,7 @@ impl WsTransportClientBuilder {
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
-				#[cfg(feature = "tls")]
+				#[cfg(feature = "__tls")]
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref()).await {
 					Ok(stream) => stream,
 					Err(e) => {
@@ -272,7 +294,7 @@ impl WsTransportClientBuilder {
 					}
 				};
 
-				#[cfg(not(feature = "tls"))]
+				#[cfg(not(feature = "__tls"))]
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout).await {
 					Ok(stream) => stream,
 					Err(e) => {
@@ -322,7 +344,7 @@ impl WsTransportClientBuilder {
 									})?;
 
 									// Only build TLS connector if `wss` in redirection URL.
-									#[cfg(feature = "tls")]
+									#[cfg(feature = "__tls")]
 									match target._mode {
 										Mode::Tls if connector.is_none() => {
 											connector = Some(build_tls_config(&self.certificate_store)?);
@@ -375,7 +397,7 @@ impl WsTransportClientBuilder {
 	}
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "__tls")]
 async fn connect(
 	sockaddr: SocketAddr,
 	timeout_dur: Duration,
@@ -403,7 +425,7 @@ async fn connect(
 	}
 }
 
-#[cfg(not(feature = "tls"))]
+#[cfg(not(feature = "__tls"))]
 async fn connect(sockaddr: SocketAddr, timeout_dur: Duration) -> Result<EitherStream, WsHandshakeError> {
 	let socket = TcpStream::connect(sockaddr);
 	let timeout = tokio::time::sleep(timeout_dur);
@@ -425,7 +447,7 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "__tls")]
 impl From<tokio_rustls::webpki::InvalidDnsNameError> for WsHandshakeError {
 	fn from(err: tokio_rustls::webpki::InvalidDnsNameError) -> WsHandshakeError {
 		WsHandshakeError::InvalidDnsName(err)
@@ -465,13 +487,13 @@ impl TryFrom<Uri> for Target {
 	fn try_from(uri: Uri) -> Result<Self, Self::Error> {
 		let _mode = match uri.scheme_str() {
 			Some("ws") => Mode::Plain,
-			#[cfg(feature = "tls")]
+			#[cfg(feature = "__tls")]
 			Some("wss") => Mode::Tls,
 			invalid_scheme => {
 				let scheme = invalid_scheme.unwrap_or("no scheme");
-				#[cfg(feature = "tls")]
+				#[cfg(feature = "__tls")]
 				let err = format!("`{}` not supported, expects 'ws' or 'wss'", scheme);
-				#[cfg(not(feature = "tls"))]
+				#[cfg(not(feature = "__tls"))]
 				let err = format!("`{}` not supported, expects 'ws' ('wss' requires the tls feature)", scheme);
 				return Err(WsHandshakeError::Url(err.into()));
 			}
@@ -495,13 +517,14 @@ impl TryFrom<Uri> for Target {
 }
 
 // NOTE: this is slow and should be used sparingly.
-#[cfg(feature = "tls")]
+#[cfg(feature = "__tls")]
 fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsConnector, WsHandshakeError> {
 	use tokio_rustls::rustls;
 
 	let mut roots = rustls::RootCertStore::empty();
 
 	match cert_store {
+		#[cfg(feature = "native-tls")]
 		CertificateStore::Native => {
 			let mut first_error = None;
 			let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
@@ -517,6 +540,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 				return Err(WsHandshakeError::CertificateStore(err));
 			}
 		}
+		#[cfg(feature = "webpki-tls")]
 		CertificateStore::WebPki => {
 			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
 				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
@@ -556,14 +580,14 @@ mod tests {
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
 	}
 
-	#[cfg(feature = "tls")]
+	#[cfg(feature = "__tls")]
 	#[test]
 	fn wss_works() {
 		let target = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap();
 		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:443", Mode::Tls, "/");
 	}
 
-	#[cfg(not(feature = "tls"))]
+	#[cfg(not(feature = "__tls"))]
 	#[test]
 	fn wss_fails_with_tls_feature() {
 		let err = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap_err();

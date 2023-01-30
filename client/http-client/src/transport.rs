@@ -17,32 +17,16 @@ use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
-#[derive(Debug, Clone)]
-enum HyperClient {
-	/// Hyper client with https connector.
-	#[cfg(feature = "tls")]
-	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>>),
-	/// Hyper client with http connector.
-	Http(Client<HttpConnector>),
-}
-
-impl HyperClient {
-	fn request(&self, req: hyper::Request<hyper::Body>) -> hyper::client::ResponseFuture {
-		match self {
-			Self::Http(client) => client.request(req),
-			#[cfg(feature = "tls")]
-			Self::Https(client) => client.request(req),
-		}
-	}
-}
-
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
 pub struct HttpTransportClient {
 	/// Target to connect to.
 	target: Uri,
 	/// HTTP client
-	client: HyperClient,
+	#[cfg(feature = "__tls")]
+	client: Client<hyper_rustls::HttpsConnector<HttpConnector>>,
+	#[cfg(not(feature = "__tls"))]
+	client: Client<HttpConnector>,
 	/// Configurable max request body size
 	max_request_body_size: u32,
 	/// Max length for logging for requests and responses
@@ -68,9 +52,10 @@ impl HttpTransportClient {
 		}
 
 		let client = match target.scheme_str() {
-			Some("http") => HyperClient::Http(Client::new()),
-			#[cfg(feature = "tls")]
-			Some("https") => {
+			#[cfg(not(feature = "__tls"))]
+			Some("http") => Client::new(),
+			#[cfg(all(feature = "__tls", feature = "native-tls", feature = "webpki-tls"))]
+			Some("https") | Some("http") => {
 				let connector = match cert_store {
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
@@ -84,12 +69,36 @@ impl HttpTransportClient {
 						.build(),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
-				HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector))
+				Client::builder().build::<_, hyper::Body>(connector)
+			}
+			#[cfg(all(feature = "__tls", feature = "native-tls"))]
+			Some("https") | Some("http") => {
+				let connector = match cert_store {
+					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
+						.with_native_roots()
+						.https_or_http()
+						.enable_http1()
+						.build(),
+					_ => return Err(Error::InvalidCertficateStore),
+				};
+				Client::builder().build::<_, hyper::Body>(connector)
+			}
+			#[cfg(all(feature = "__tls", feature = "webpki-tls"))]
+			Some("https") | Some("http") => {
+				let connector = match cert_store {
+					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
+						.with_webpki_roots()
+						.https_or_http()
+						.enable_http1()
+						.build(),
+					_ => return Err(Error::InvalidCertficateStore),
+				};
+				Client::builder().build::<_, hyper::Body>(connector)
 			}
 			_ => {
-				#[cfg(feature = "tls")]
+				#[cfg(feature = "__tls")]
 				let err = "URL scheme not supported, expects 'http' or 'https'";
-				#[cfg(not(feature = "tls"))]
+				#[cfg(not(feature = "__tls"))]
 				let err = "URL scheme not supported, expects 'http'";
 				return Err(Error::Url(err.into()));
 			}
@@ -220,7 +229,7 @@ mod tests {
 		assert!(matches!(err, Error::Url(_)));
 	}
 
-	#[cfg(feature = "tls")]
+	#[cfg(feature = "__tls")]
 	#[test]
 	fn https_works() {
 		let client =
@@ -229,7 +238,7 @@ mod tests {
 		assert_target(&client, "localhost", "https", "/", 9933, 80);
 	}
 
-	#[cfg(not(feature = "tls"))]
+	#[cfg(not(feature = "__tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
 		let err =
@@ -267,7 +276,7 @@ mod tests {
 		let client = HttpTransportClient::new(
 			"http://127.0.0.1:9999/my?name1=value1&name2=value2",
 			u32::MAX,
-			CertificateStore::WebPki,
+			CertificateStore::Native,
 			80,
 			HeaderMap::new(),
 		)
@@ -292,7 +301,7 @@ mod tests {
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
 		let client =
-			HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki, 99, HeaderMap::new())
+			HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::Native, 99, HeaderMap::new())
 				.unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 

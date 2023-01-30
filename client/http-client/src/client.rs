@@ -99,9 +99,31 @@ impl HttpClientBuilder {
 		self
 	}
 
-	/// Set which certificate store to use.
-	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
-		self.certificate_store = certificate_store;
+	/// Force to use the rustls native certificate store.
+	///
+	/// Since multiple certificate stores can be optionally enabled, this option will
+	/// force the `native certificate store` to be used.
+	///
+	/// # Optional
+	///
+	/// This requires the optional `native-tls` feature.
+	#[cfg(feature = "native-tls")]
+	pub fn use_native_rustls(mut self) -> Self {
+		self.certificate_store = CertificateStore::Native;
+		self
+	}
+
+	/// Force to use the rustls webpki certificate store.
+	///
+	/// Since multiple certificate stores can be optionally enabled, this option will
+	/// force the `webpki certificate store` to be used.
+	///
+	/// # Optional
+	///
+	/// This requires the optional `webpki-tls` feature.
+	#[cfg(feature = "webpki-tls")]
+	pub fn use_webpki_rustls(mut self) -> Self {
+		self.certificate_store = CertificateStore::WebPki;
 		self
 	}
 

@@ -176,7 +176,7 @@ impl<'a> ParamsSequence<'a> {
 			}
 			b'[' | b',' => json = &json[1..],
 			_ => {
-				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {:?}", json);
+				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {json:?}");
 				tracing::error!("[next_inner] {}", errmsg);
 				return Some(Err(CallError::InvalidParams(anyhow!(errmsg))));
 			}
