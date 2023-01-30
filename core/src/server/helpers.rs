@@ -84,7 +84,7 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 #[derive(Clone, Debug)]
 pub struct MethodSink {
 	/// Channel sender.
-	pub tx: mpsc::Sender<String>,
+	tx: mpsc::Sender<String>,
 	/// Max response size in bytes for a executed call.
 	max_response_size: u32,
 	/// Max log length.
