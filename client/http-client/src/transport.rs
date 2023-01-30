@@ -10,6 +10,7 @@ use hyper::body::{Body, HttpBody};
 use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper::Uri;
+use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
 use jsonrpsee_core::tracing::{rx_log_from_bytes, tx_log_from_str};
@@ -56,13 +57,11 @@ where
 		max_request_size: u32,
 		target: impl AsRef<str>,
 		max_response_size: u32,
-		cert_store: jsonrpsee_core::client::CertificateStore,
+		cert_store: CertificateStore,
 		max_log_length: u32,
 		headers: HeaderMap,
 		service_builder: tower::ServiceBuilder<L>,
 	) -> Result<Self, Error> {
-		use jsonrpsee_core::client::CertificateStore;
-
 		let uri = ParsedUri::try_from(target.as_ref())?;
 
 		let client = match uri.0.scheme_str() {
@@ -107,6 +106,7 @@ where
 		max_request_size: u32,
 		target: impl AsRef<str>,
 		max_response_size: u32,
+		_cert_store: CertificateStore,
 		max_log_length: u32,
 		headers: HeaderMap,
 		service_builder: tower::ServiceBuilder<L>,
@@ -258,8 +258,13 @@ mod tests {
 	use super::*;
 	use jsonrpsee_core::client::CertificateStore;
 
+	#[cfg(feature = "tls")]
+	type Client = HttpTransportClient<TlsService>;
+	#[cfg(not(feature = "tls"))]
+	type Client = HttpTransportClient<PlainService>;
+
 	fn assert_target(
-		client: &HttpTransportClient<TlsService>,
+		client: &Client,
 		host: &str,
 		scheme: &str,
 		path_and_query: &str,
@@ -311,6 +316,7 @@ mod tests {
 			80,
 			"https://localhost:9933",
 			80,
+			CertificateStore::Native,
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
