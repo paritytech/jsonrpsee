@@ -40,13 +40,11 @@ variables:
   - rustup +nightly show
   - cargo +nightly --version
   - bash --version
-  - sccache -s
 
 .docker-env:                       &docker-env
   image:                           "${CI_IMAGE}"
   before_script:
     - *rust-info-script
-    - sccache -s
   tags:
     - linux-docker-vm-c2
 
