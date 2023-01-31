@@ -72,7 +72,7 @@ impl<S> ProxyGetRequest<S> {
 	/// Fails if the path does not start with `/`.
 	pub fn new(inner: S, path: &str, method: &str) -> Result<Self, RpcError> {
 		if !path.starts_with('/') {
-			return Err(RpcError::Custom(format!("ProxyGetRequest path must start with `/`, got: {}", path)));
+			return Err(RpcError::Custom(format!("ProxyGetRequest path must start with `/`, got: {path}")));
 		}
 
 		Ok(Self { inner, path: Arc::from(path), method: Arc::from(method) })

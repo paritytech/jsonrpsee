@@ -792,5 +792,5 @@ fn unparse_error(raw: &[u8]) -> Error {
 		Err(e) => e.to_string(),
 	};
 
-	Error::Custom(format!("Unparseable message: {}", json_str))
+	Error::Custom(format!("Unparseable message: {json_str}"))
 }

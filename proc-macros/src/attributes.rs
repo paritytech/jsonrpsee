@@ -186,7 +186,7 @@ impl fmt::Display for MissingArgument<'_> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let MissingArgument(_, missing) = self;
 
-		write!(f, "Missing argument `{}`", missing)
+		write!(f, "Missing argument `{missing}`")
 	}
 }
 

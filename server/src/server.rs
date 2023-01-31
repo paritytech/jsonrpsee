@@ -663,7 +663,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 				}
 				Err(e) => {
 					tracing::error!("Could not upgrade connection: {}", e);
-					hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {}", e)))
+					hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}")))
 				}
 			};
 
