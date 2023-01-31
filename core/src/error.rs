@@ -63,9 +63,6 @@ pub enum Error {
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] anyhow::Error),
-	/// Frontend/backend channel error.
-	#[error("Frontend/backend channel error: {0}")]
-	Internal(#[from] futures_channel::mpsc::SendError),
 	/// Invalid response,
 	#[error("Invalid response: {0}")]
 	InvalidResponse(Mismatch<String>),
