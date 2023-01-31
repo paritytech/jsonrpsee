@@ -38,13 +38,12 @@ use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
 use core::marker::PhantomData;
-use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
-use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
 use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
+use tokio::sync::{mpsc, oneshot};
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
@@ -238,8 +237,8 @@ impl<Notif> std::marker::Unpin for Subscription<Notif> {}
 impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
 	pub fn new(
-		to_back: mpsc::Sender<FrontToBack>,
-		notifs_rx: mpsc::Receiver<JsonValue>,
+		to_back: tokio::sync::mpsc::Sender<FrontToBack>,
+		notifs_rx: tokio::sync::mpsc::Receiver<JsonValue>,
 		kind: SubscriptionKind,
 	) -> Self {
 		Self { to_back, notifs_rx, kind: Some(kind), marker: PhantomData }
@@ -256,10 +255,10 @@ impl<Notif> Subscription<Notif> {
 			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
 			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
 		};
-		self.to_back.send(msg).await?;
+		self.to_back.send(msg).await.unwrap();
 
 		// wait until notif channel is closed then the subscription was closed.
-		while self.notifs_rx.next().await.is_some() {}
+		while self.notifs_rx.recv().await.is_some() {}
 		Ok(())
 	}
 }
@@ -360,7 +359,7 @@ where
 {
 	type Item = Result<Notif, Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
-		let n = futures_util::ready!(self.notifs_rx.poll_next_unpin(cx));
+		let n = futures_util::ready!(self.notifs_rx.poll_recv(cx));
 		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
 			Ok(parsed) => Ok(parsed),
 			Err(e) => Err(Error::ParseError(e)),

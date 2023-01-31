@@ -30,9 +30,9 @@ use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 use crate::Error;
 
-use futures_channel::mpsc;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
+use tokio::sync::mpsc;
 
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
@@ -155,7 +155,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 			Err(err) => {
 				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
 				let _ = manager.remove_notification_handler(notif.method.into_owned());
-				Err(err.into_send_error().into())
+				Err(Error::Custom(err.to_string()))
 			}
 		},
 		None => {
@@ -274,8 +274,8 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
 	timeout: std::time::Duration,
-	rx: futures_channel::oneshot::Receiver<Result<T, Error>>,
-) -> Result<Result<T, Error>, futures_channel::oneshot::Canceled> {
+	rx: tokio::sync::oneshot::Receiver<Result<T, Error>>,
+) -> Result<Result<T, Error>, tokio::sync::oneshot::error::RecvError> {
 	match future::select(rx, Delay::new(timeout)).await {
 		Either::Left((res, _)) => res,
 		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),

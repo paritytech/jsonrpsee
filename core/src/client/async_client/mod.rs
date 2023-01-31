@@ -26,10 +26,8 @@ use manager::RequestManager;
 
 use async_lock::Mutex;
 use async_trait::async_trait;
-use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
-use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::{
@@ -37,6 +35,7 @@ use jsonrpsee_types::{
 	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
+use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
@@ -169,7 +168,7 @@ impl ClientBuilder {
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 		let ping_interval = self.ping_interval;
-		let (on_close_tx, on_close_rx) = oneshot::channel();
+		let (on_exit_tx, on_exit_rx) = oneshot::channel();
 
 		tokio::spawn(async move {
 			background_task(
@@ -179,7 +178,7 @@ impl ClientBuilder {
 				err_tx,
 				max_notifs_per_subscription,
 				ping_interval,
-				on_close_tx,
+				on_exit_rx,
 			)
 			.await;
 		});
@@ -189,7 +188,7 @@ impl ClientBuilder {
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
-			notify: Mutex::new(Some(on_close_rx)),
+			on_exit: Some(on_exit_tx),
 		}
 	}
 
@@ -224,7 +223,7 @@ impl ClientBuilder {
 #[derive(Debug)]
 pub struct Client {
 	/// Channel to send requests to the background task.
-	to_back: mpsc::Sender<FrontToBack>,
+	to_back: tokio::sync::mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Mutex<ErrorFromBack>,
@@ -236,10 +235,8 @@ pub struct Client {
 	///
 	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
-	/// Notify when the client is disconnected or encountered an error.
-	// NOTE: Similar to error, the async fns use immutable references. The `Receiver` is wrapped
-	// into `Option` to ensure the `on_disconnect` awaits only once.
-	notify: Mutex<Option<oneshot::Receiver<()>>>,
+	/// When the client is dropped a message is sent to be background thread.
+	on_exit: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl Client {
@@ -264,17 +261,15 @@ impl Client {
 	///
 	/// This method is cancel safe.
 	pub async fn on_disconnect(&self) {
-		// Wait until the `background_task` exits.
-		let mut notify_lock = self.notify.lock().await;
-		if let Some(notify) = notify_lock.take() {
-			let _ = notify.await;
-		}
+		self.to_back.closed().await
 	}
 }
 
 impl Drop for Client {
 	fn drop(&mut self) {
-		self.to_back.close_channel();
+		if let Some(e) = self.on_exit.take() {
+			let _ = e.send(());
+		}
 	}
 }
 
@@ -293,8 +288,10 @@ impl ClientT for Client {
 		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
 		tx_log_from_str(&raw, self.max_log_length);
 
-		let mut sender = self.to_back.clone();
+		let sender = self.to_back.clone();
 		let fut = sender.send(FrontToBack::Notification(raw));
+
+		tokio::pin!(fut);
 
 		match future::select(fut, Delay::new(self.request_timeout)).await {
 			Either::Left((Ok(()), _)) => Ok(()),
@@ -434,7 +431,7 @@ impl SubscriptionClientT for Client {
 
 		tx_log_from_str(&raw, self.max_log_length);
 
-		let (send_back_tx, send_back_rx) = oneshot::channel();
+		let (send_back_tx, send_back_rx) = tokio::sync::oneshot::channel();
 		if self
 			.to_back
 			.clone()
@@ -698,43 +695,46 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 async fn background_task<S, R>(
 	mut sender: S,
 	receiver: R,
-	mut frontend: mpsc::Receiver<FrontToBack>,
+	frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 	ping_interval: Option<Duration>,
-	on_close: oneshot::Sender<()>,
+	on_exit: oneshot::Receiver<()>,
 ) where
 	S: TransportSenderT,
 	R: TransportReceiverT,
 {
+	// Create either a valid delay fuse triggered every provided `duration`,
+	// or create a terminated fuse that's never selected if the provided `duration` is None.
+	fn ping_fut(ping_interval: Option<Duration>) -> Fuse<Delay> {
+		if let Some(duration) = ping_interval {
+			Delay::new(duration).fuse()
+		} else {
+			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
+			Fuse::<Delay>::terminated()
+		}
+	}
+
 	let mut manager = RequestManager::new();
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
 		Some((res, receiver))
 	});
-	futures_util::pin_mut!(backend_event);
+	let frontend = tokio_stream::wrappers::ReceiverStream::new(frontend);
+
+	tokio::pin!(backend_event, frontend);
 
 	// Place frontend and backend messages into their own select.
 	// This implies that either messages are received (both front or backend),
 	// or the submitted ping timer expires (if provided).
-	let next_frontend = frontend.next();
-	let next_backend = backend_event.next();
-	let mut message_fut = future::select(next_frontend, next_backend);
+	let mut message_fut = future::select(frontend.next(), backend_event.next());
+	let mut exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
 
 	loop {
-		// Create either a valid delay fuse triggered every provided `duration`,
-		// or create a terminated fuse that's never selected if the provided `duration` is None.
-		let submit_ping = if let Some(duration) = ping_interval {
-			Delay::new(duration).fuse()
-		} else {
-			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
-			Fuse::<Delay>::terminated()
-		};
-
-		match future::select(message_fut, submit_ping).await {
+		match future::select(message_fut, exit_or_ping_fut).await {
 			// Message received from the frontend.
-			Either::Left((Either::Left((frontend_value, backend)), _)) => {
+			Either::Left((Either::Left((frontend_value, backend)), exit_or_ping)) => {
 				let frontend_value = if let Some(value) = frontend_value {
 					value
 				} else {
@@ -748,9 +748,10 @@ async fn background_task<S, R>(
 
 				// Advance frontend, save backend.
 				message_fut = future::select(frontend.next(), backend);
+				exit_or_ping_fut = exit_or_ping;
 			}
 			// Message received from the backend.
-			Either::Left((Either::Right((backend_value, frontend)), _)) => {
+			Either::Left((Either::Right((backend_value, frontend)), exit_or_ping)) => {
 				if let Err(err) = handle_backend_messages::<S, R>(
 					backend_value,
 					&mut manager,
@@ -765,21 +766,27 @@ async fn background_task<S, R>(
 				}
 				// Advance backend, save frontend.
 				message_fut = future::select(frontend, backend_event.next());
+				exit_or_ping_fut = exit_or_ping;
+			}
+			// The client is closed.
+			Either::Right((Either::Left((_, _)), _)) => {
+				break;
 			}
 			// Submit ping interval was triggered if enabled.
-			Either::Right((_, next_message_fut)) => {
+			Either::Right((Either::Right((_, on_exit)), msg)) => {
 				if let Err(err) = sender.send_ping().await {
 					tracing::error!("[backend]: Could not send ping frame: {}", err);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
 					break;
 				}
-				message_fut = next_message_fut;
+				message_fut = msg;
+				exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
 			}
 		};
 	}
 
 	// Wake the `on_disconnect` method.
-	let _ = on_close.send(());
+	let _ = frontend.close();
 	// Send close message to the server.
 	let _ = sender.close().await;
 }
