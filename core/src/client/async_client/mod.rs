@@ -114,8 +114,10 @@ impl ClientBuilder {
 	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) such that
 	/// it can keep with the rate as server produces new items on the subscription.
 	///
-	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
-	/// because it is passed to [`futures_channel::mpsc::channel`].
+	///
+	/// # Panics
+	///
+	/// This function panics if `max` is 0.
 	pub fn max_notifs_per_subscription(mut self, max: usize) -> Self {
 		self.max_notifs_per_subscription = max;
 		self
@@ -235,7 +237,7 @@ pub struct Client {
 	///
 	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
-	/// When the client is dropped a message is sent to be background thread.
+	/// When the client is dropped a message is sent to the background thread.
 	on_exit: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
