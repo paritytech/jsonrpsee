@@ -63,9 +63,6 @@ pub enum Error {
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] anyhow::Error),
-	/// Send error.
-	#[error("Send error: {0}")]
-	SendError(String),
 	/// Invalid response,
 	#[error("Invalid response: {0}")]
 	InvalidResponse(Mismatch<String>),
