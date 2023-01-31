@@ -788,7 +788,7 @@ async fn background_task<S, R>(
 	}
 
 	// Wake the `on_disconnect` method.
-	let _ = frontend.close();
+	frontend.close();
 	// Send close message to the server.
 	let _ = sender.close().await;
 }
