@@ -30,7 +30,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transport::{self, HttpTransportClient};
+use crate::transport::{self, Error as TransportError, HttpTransportClient};
 use crate::types::{ErrorResponse, NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::body::HttpBody;
@@ -156,53 +156,10 @@ impl<L> HttpClientBuilder<L> {
 	}
 }
 
-#[cfg(feature = "tls")]
 impl<B, S, L> HttpClientBuilder<L>
 where
-	L: Layer<transport::TlsService, Service = S>,
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = hyper::Error> + Clone,
-	B: HttpBody + Send + 'static,
-	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
-{
-	/// Build the HTTP client with target to connect to.
-	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient<S>, Error> {
-		let Self {
-			max_request_size,
-			max_response_size,
-			max_concurrent_requests,
-			request_timeout,
-			certificate_store,
-			id_kind,
-			headers,
-			max_log_length,
-			service_builder,
-			..
-		} = self;
-
-		let transport = HttpTransportClient::new(
-			max_request_size,
-			target,
-			max_response_size,
-			certificate_store,
-			max_log_length,
-			headers,
-			service_builder,
-		)
-		.map_err(|e| Error::Transport(e.into()))?;
-		Ok(HttpClient {
-			transport,
-			id_manager: Arc::new(RequestIdManager::new(max_concurrent_requests, id_kind)),
-			request_timeout,
-		})
-	}
-}
-
-#[cfg(not(feature = "tls"))]
-impl<B, S, L> HttpClientBuilder<L>
-where
-	L: Layer<transport::PlainService, Service = S>,
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = hyper::Error> + Clone,
+	L: Layer<transport::HttpBackend<Body>, Service = S>,
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Clone,
 	B: HttpBody + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
@@ -270,7 +227,7 @@ pub struct HttpClient<S> {
 #[async_trait]
 impl<B, S> ClientT for HttpClient<S>
 where
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = hyper::Error> + Send + Sync + Clone,
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
 	<S as Service<hyper::Request<Body>>>::Future: Send,
 	B: HttpBody + Send + 'static,
 	B::Data: Send,
@@ -415,7 +372,7 @@ where
 #[async_trait]
 impl<B, S> SubscriptionClientT for HttpClient<S>
 where
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = hyper::Error> + Send + Sync + Clone,
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
 	<S as Service<hyper::Request<Body>>>::Future: Send,
 	B: HttpBody + Send + 'static,
 	B::Data: Send,

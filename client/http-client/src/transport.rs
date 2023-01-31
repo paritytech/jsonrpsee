@@ -15,15 +15,58 @@ use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
 use jsonrpsee_core::tracing::{rx_log_from_bytes, tx_log_from_str};
 use std::error::Error as StdError;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use thiserror::Error;
 use tower::{Layer, Service, ServiceExt};
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
-#[cfg(feature = "tls")]
-pub(crate) type TlsService = Client<hyper_rustls::HttpsConnector<HttpConnector>>;
-#[cfg(not(feature = "tls"))]
-pub(crate) type PlainService = Client<HttpConnector>;
+/// Wrapper over HTTP transport and connector.
+#[derive(Debug)]
+pub enum HttpBackend<B = Body> {
+	/// Hyper client with https connector.
+	#[cfg(feature = "tls")]
+	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>, B>),
+	/// Hyper client with http connector.
+	Http(Client<HttpConnector, B>),
+}
+
+impl Clone for HttpBackend {
+	fn clone(&self) -> Self {
+		match self {
+			Self::Http(inner) => Self::Http(inner.clone()),
+			#[cfg(feature = "tls")]
+			Self::Https(inner) => Self::Https(inner.clone()),
+		}
+	}
+}
+
+impl<B> tower::Service<hyper::Request<B>> for HttpBackend<B>
+where
+	B: HttpBody + Send + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+{
+	type Response = hyper::Response<Body>;
+	type Error = Error;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+	fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn call(&mut self, req: hyper::Request<B>) -> Self::Future {
+		let resp = match self {
+			Self::Http(inner) => inner.call(req),
+			#[cfg(feature = "tls")]
+			Self::Https(inner) => inner.call(req),
+		};
+
+		Box::pin(async move { resp.await.map_err(|e| Error::Http(e.into())) })
+	}
+}
 
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
@@ -46,14 +89,13 @@ pub struct HttpTransportClient<S> {
 
 impl<B, S> HttpTransportClient<S>
 where
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = hyper::Error> + Clone,
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error> + Clone,
 	B: HttpBody + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	/// Initializes a new HTTP client.
-	#[cfg(feature = "tls")]
-	pub(crate) fn new<L: Layer<TlsService, Service = S>>(
+	pub(crate) fn new<L: Layer<HttpBackend<Body>, Service = S>>(
 		max_request_size: u32,
 		target: impl AsRef<str>,
 		max_response_size: u32,
@@ -65,7 +107,9 @@ where
 		let uri = ParsedUri::try_from(target.as_ref())?;
 
 		let client = match uri.0.scheme_str() {
-			Some("http") | Some("https") => {
+			Some("http") => HttpBackend::Http(Client::new()),
+			#[cfg(feature = "tls")]
+			Some("https") => {
 				let connector = match cert_store {
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
@@ -79,42 +123,8 @@ where
 						.build(),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
-				Client::builder().build::<_, hyper::Body>(connector)
+				HttpBackend::Https(Client::builder().build::<_, hyper::Body>(connector))
 			}
-			_ => {
-				#[cfg(feature = "tls")]
-				let err = "URL scheme not supported, expects 'http' or 'https'";
-				#[cfg(not(feature = "tls"))]
-				let err = "URL scheme not supported, expects 'http'";
-				return Err(Error::Url(err.into()));
-			}
-		};
-
-		Ok(Self {
-			target: uri,
-			client: service_builder.service(client),
-			max_request_size,
-			max_response_size,
-			max_log_length,
-			headers: build_header_cache(headers),
-		})
-	}
-
-	/// Initializes a new HTTP client.
-	#[cfg(not(feature = "tls"))]
-	pub(crate) fn new<L: Layer<PlainService, Service = S>>(
-		max_request_size: u32,
-		target: impl AsRef<str>,
-		max_response_size: u32,
-		_cert_store: CertificateStore,
-		max_log_length: u32,
-		headers: HeaderMap,
-		service_builder: tower::ServiceBuilder<L>,
-	) -> Result<Self, Error> {
-		let uri = ParsedUri::try_from(target.as_ref())?;
-
-		let client = match uri.0.scheme_str() {
-			Some("http") => Client::new(),
 			_ => {
 				#[cfg(feature = "tls")]
 				let err = "URL scheme not supported, expects 'http' or 'https'";
@@ -258,13 +268,8 @@ mod tests {
 	use super::*;
 	use jsonrpsee_core::client::CertificateStore;
 
-	#[cfg(feature = "tls")]
-	type Client = HttpTransportClient<TlsService>;
-	#[cfg(not(feature = "tls"))]
-	type Client = HttpTransportClient<PlainService>;
-
 	fn assert_target(
-		client: &Client,
+		client: &HttpTransportClient<HttpBackend>,
 		host: &str,
 		scheme: &str,
 		path_and_query: &str,
