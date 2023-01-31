@@ -62,10 +62,6 @@ where
 	while let Some(d) = body.data().await {
 		let data = d.map_err(|e| GenericTransportError::Inner(anyhow!(e.into())))?;
 
-		if data.chunk().len() > max_request_body_size as usize {
-			return Err(GenericTransportError::TooLarge);
-		}
-
 		if received_data.is_empty() {
 			let first_non_whitespace = data.chunk().iter().find(|byte| !byte.is_ascii_whitespace());
 
@@ -76,10 +72,10 @@ where
 			};
 		}
 
-		let body_length = data.chunk().len() + received_data.len();
-		if body_length > max_request_body_size as usize {
+		if data.chunk().len() + received_data.len() > max_request_body_size as usize {
 			return Err(GenericTransportError::TooLarge);
 		}
+
 		received_data.extend_from_slice(data.chunk());
 	}
 

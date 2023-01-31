@@ -134,13 +134,25 @@ where
 			}
 		};
 
+		// Cache request headers: 2 default headers, followed by user custom headers.
+		// Maintain order for headers in case of duplicate keys:
+		// https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.2
+		let mut cached_headers = HeaderMap::with_capacity(2 + headers.len());
+		cached_headers.insert(hyper::header::CONTENT_TYPE, HeaderValue::from_static(CONTENT_TYPE_JSON));
+		cached_headers.insert(hyper::header::ACCEPT, HeaderValue::from_static(CONTENT_TYPE_JSON));
+		for (key, value) in headers.into_iter() {
+			if let Some(key) = key {
+				cached_headers.insert(key, value);
+			}
+		}
+
 		Ok(Self {
 			target: uri,
 			client: service_builder.service(client),
 			max_request_size,
 			max_response_size,
 			max_log_length,
-			headers: build_header_cache(headers),
+			headers: cached_headers,
 		})
 	}
 
@@ -198,22 +210,6 @@ impl TryFrom<&str> for ParsedUri {
 			Ok(ParsedUri(uri))
 		}
 	}
-}
-
-fn build_header_cache(headers: HeaderMap) -> HeaderMap {
-	// Cache request headers: 2 default headers, followed by user custom headers.
-	// Maintain order for headers in case of duplicate keys:
-	// https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.2
-	let mut cached_headers = HeaderMap::with_capacity(2 + headers.len());
-	cached_headers.insert(hyper::header::CONTENT_TYPE, HeaderValue::from_static(CONTENT_TYPE_JSON));
-	cached_headers.insert(hyper::header::ACCEPT, HeaderValue::from_static(CONTENT_TYPE_JSON));
-	for (key, value) in headers.into_iter() {
-		if let Some(key) = key {
-			cached_headers.insert(key, value);
-		}
-	}
-
-	cached_headers
 }
 
 /// Error that can happen during a request.
