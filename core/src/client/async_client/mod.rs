@@ -225,7 +225,7 @@ impl ClientBuilder {
 #[derive(Debug)]
 pub struct Client {
 	/// Channel to send requests to the background task.
-	to_back: tokio::sync::mpsc::Sender<FrontToBack>,
+	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Mutex<ErrorFromBack>,

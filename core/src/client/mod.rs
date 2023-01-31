@@ -237,8 +237,8 @@ impl<Notif> std::marker::Unpin for Subscription<Notif> {}
 impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
 	pub fn new(
-		to_back: tokio::sync::mpsc::Sender<FrontToBack>,
-		notifs_rx: tokio::sync::mpsc::Receiver<JsonValue>,
+		to_back: mpsc::Sender<FrontToBack>,
+		notifs_rx: mpsc::Receiver<JsonValue>,
 		kind: SubscriptionKind,
 	) -> Self {
 		Self { to_back, notifs_rx, kind: Some(kind), marker: PhantomData }

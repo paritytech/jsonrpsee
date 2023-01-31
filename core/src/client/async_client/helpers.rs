@@ -32,7 +32,7 @@ use crate::Error;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
@@ -274,8 +274,8 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
 	timeout: std::time::Duration,
-	rx: tokio::sync::oneshot::Receiver<Result<T, Error>>,
-) -> Result<Result<T, Error>, tokio::sync::oneshot::error::RecvError> {
+	rx: oneshot::Receiver<Result<T, Error>>,
+) -> Result<Result<T, Error>, oneshot::error::RecvError> {
 	match future::select(rx, Delay::new(timeout)).await {
 		Either::Left((res, _)) => res,
 		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
