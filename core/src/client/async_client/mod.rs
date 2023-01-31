@@ -790,7 +790,7 @@ async fn background_task<S, R>(
 	// Wake the `on_disconnect` method.
 	_ = frontend.close();
 	// Send close message to the server.
-	let _ = sender.close().await;
+	_ = sender.close().await;
 }
 
 fn unparse_error(raw: &[u8]) -> Error {
