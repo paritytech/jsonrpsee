@@ -203,10 +203,10 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
-		let (on_close_tx, on_close_rx) = oneshot::channel();
+		let (on_exit_tx, on_exit_rx) = oneshot::channel();
 
 		wasm_bindgen_futures::spawn_local(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None, on_close_tx).await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None, on_exit_rx).await;
 		});
 		Client {
 			to_back,
@@ -214,7 +214,7 @@ impl ClientBuilder {
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
-			notify: Mutex::new(Some(on_close_rx)),
+			on_exit: Some(on_exit_tx),
 		}
 	}
 }
