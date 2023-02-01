@@ -62,21 +62,36 @@ where
 	while let Some(d) = body.data().await {
 		let data = d.map_err(|e| GenericTransportError::Inner(anyhow!(e.into())))?;
 
+		// if it's the first chunk, trim the whitespaces to determine whether it's valid JSON-RPC call.
 		if received_data.is_empty() {
-			let first_non_whitespace = data.chunk().iter().find(|byte| !byte.is_ascii_whitespace());
+			let first_non_whitespace =
+				data.chunk().iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
-			is_single = match first_non_whitespace {
-				Some(b'{') => Some(true),
-				Some(b'[') => Some(false),
+			let skip = match first_non_whitespace {
+				Some((idx, b'{')) => {
+					is_single = Some(true);
+					idx
+				}
+				Some((idx, b'[')) => {
+					is_single = Some(false);
+					idx
+				}
 				_ => return Err(GenericTransportError::Malformed),
 			};
-		}
 
-		if data.chunk().len() + received_data.len() > max_request_body_size as usize {
-			return Err(GenericTransportError::TooLarge);
-		}
+			if data.chunk().len() - skip > max_request_body_size as usize {
+				return Err(GenericTransportError::TooLarge);
+			}
 
-		received_data.extend_from_slice(data.chunk());
+			// ignore whitespace as these doesn't matter just makes the JSON decoding slower.
+			received_data.extend_from_slice(&data.chunk()[skip..]);
+		} else {
+			if data.chunk().len() + received_data.len() > max_request_body_size as usize {
+				return Err(GenericTransportError::TooLarge);
+			}
+
+			received_data.extend_from_slice(data.chunk());
+		}
 	}
 
 	match is_single {
