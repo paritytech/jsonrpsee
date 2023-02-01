@@ -258,8 +258,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	// don't poll the subscription stream for 2 seconds, should be full now.
 	tokio::time::sleep(Duration::from_secs(2)).await;
 
-	// Capacity is `num_sender` + `capacity`
-	for _ in 0..5 {
+	for _ in 0..4 {
 		assert!(hello_sub.next().await.unwrap().is_ok());
 	}
 

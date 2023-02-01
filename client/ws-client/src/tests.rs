@@ -213,8 +213,7 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 	// don't poll the notification stream for 2 seconds, should be full now.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-	// Capacity is `num_sender` + `capacity`
-	for _ in 0..5 {
+	for _ in 0..4 {
 		assert!(nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
 	}
 

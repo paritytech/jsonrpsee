@@ -38,10 +38,10 @@ use std::{
 };
 
 use crate::{client::BatchEntry, Error};
-use futures_channel::{mpsc, oneshot};
 use jsonrpsee_types::{Id, SubscriptionId};
 use rustc_hash::FxHashMap;
 use serde_json::value::Value as JsonValue;
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug)]
 enum Kind {
@@ -312,9 +312,9 @@ impl RequestManager {
 #[cfg(test)]
 mod tests {
 	use super::{Error, RequestManager};
-	use futures_channel::{mpsc, oneshot};
 	use jsonrpsee_types::{Id, SubscriptionId};
 	use serde_json::Value as JsonValue;
+	use tokio::sync::{mpsc, oneshot};
 
 	#[test]
 	fn insert_remove_pending_request_works() {
