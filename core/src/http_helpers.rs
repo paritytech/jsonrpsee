@@ -56,7 +56,7 @@ where
 
 	futures_util::pin_mut!(body);
 
-	// don't allocate `max_body_size` if someone sets the `content length` to some huge number.
+	// only allocate up to 16KB initially
 	let mut received_data = Vec::with_capacity(std::cmp::min(body_size as usize, 16 * 1024));
 	let mut is_single = None;
 
