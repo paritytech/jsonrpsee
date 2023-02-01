@@ -53,8 +53,13 @@ where
 	type Error = Error;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-	fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
+	fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		match self {
+			Self::Http(inner) => inner.poll_ready(ctx),
+			#[cfg(feature = "tls")]
+			Self::Https(inner) => inner.poll_ready(ctx),
+		}
+		.map_err(Into::into)
 	}
 
 	fn call(&mut self, req: hyper::Request<B>) -> Self::Future {
@@ -64,7 +69,7 @@ where
 			Self::Https(inner) => inner.call(req),
 		};
 
-		Box::pin(async move { resp.await.map_err(|e| Error::Http(e.into())) })
+		Box::pin(async move { resp.await.map_err(Into::into) })
 	}
 }
 

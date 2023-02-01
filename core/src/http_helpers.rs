@@ -39,7 +39,7 @@ use std::error::Error as StdError;
 pub async fn read_body<B>(
 	headers: &hyper::HeaderMap,
 	body: B,
-	max_request_body_size: u32,
+	max_body_size: u32,
 ) -> Result<(Vec<u8>, bool), GenericTransportError>
 where
 	B: HttpBody + Send + 'static,
@@ -47,16 +47,17 @@ where
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in
-	// practice and for that case we fallback to allocating in the while-loop below instead of pre-allocating.
+	// practice and in that case we fallback to allocating in the while-loop below instead of pre-allocating.
 	let body_size = read_header_content_length(headers).unwrap_or(0);
 
-	if body_size > max_request_body_size {
+	if body_size > max_body_size {
 		return Err(GenericTransportError::TooLarge);
 	}
 
 	futures_util::pin_mut!(body);
 
-	let mut received_data = Vec::with_capacity(body_size as usize);
+	// don't allocate `max_body_size` if someone sets the `content length` to some huge number.
+	let mut received_data = Vec::with_capacity(std::cmp::min(body_size as usize, 16 * 1024));
 	let mut is_single = None;
 
 	while let Some(d) = body.data().await {
@@ -79,14 +80,14 @@ where
 				_ => return Err(GenericTransportError::Malformed),
 			};
 
-			if data.chunk().len() - skip > max_request_body_size as usize {
+			if data.chunk().len() - skip > max_body_size as usize {
 				return Err(GenericTransportError::TooLarge);
 			}
 
 			// ignore whitespace as these doesn't matter just makes the JSON decoding slower.
 			received_data.extend_from_slice(&data.chunk()[skip..]);
 		} else {
-			if data.chunk().len() + received_data.len() > max_request_body_size as usize {
+			if data.chunk().len() + received_data.len() > max_body_size as usize {
 				return Err(GenericTransportError::TooLarge);
 			}
 
