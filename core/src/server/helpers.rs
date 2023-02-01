@@ -238,7 +238,7 @@ impl MethodResponse {
 				tracing::error!("Error serializing response: {:?}", err);
 
 				if err.is_io() {
-					let data = format!("Exceeded max limit of {}", max_response_size);
+					let data = format!("Exceeded max limit of {max_response_size}");
 					let err = ErrorObject::owned(OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, Some(data));
 					let result = serde_json::to_string(&ErrorResponse::borrowed(err, id)).unwrap();
 

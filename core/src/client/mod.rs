@@ -38,13 +38,12 @@ use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
 use core::marker::PhantomData;
-use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
-use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
 use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
+use tokio::sync::{mpsc, oneshot};
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
@@ -256,10 +255,11 @@ impl<Notif> Subscription<Notif> {
 			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
 			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
 		};
-		self.to_back.send(msg).await?;
+		// If this fails the connection was already closed i.e, already "unsubscribed".
+		let _ = self.to_back.send(msg).await;
 
 		// wait until notif channel is closed then the subscription was closed.
-		while self.notifs_rx.next().await.is_some() {}
+		while self.notifs_rx.recv().await.is_some() {}
 		Ok(())
 	}
 }
@@ -360,7 +360,7 @@ where
 {
 	type Item = Result<Notif, Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
-		let n = futures_util::ready!(self.notifs_rx.poll_next_unpin(cx));
+		let n = futures_util::ready!(self.notifs_rx.poll_recv(cx));
 		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
 			Ok(parsed) => Ok(parsed),
 			Err(e) => Err(Error::ParseError(e)),
@@ -479,7 +479,7 @@ impl IdKind {
 	pub fn into_id(self, id: u64) -> Id<'static> {
 		match self {
 			IdKind::Number => Id::Number(id),
-			IdKind::String => Id::Str(format!("{}", id).into()),
+			IdKind::String => Id::Str(format!("{id}").into()),
 		}
 	}
 }

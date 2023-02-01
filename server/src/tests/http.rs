@@ -93,7 +93,7 @@ async fn single_method_call_works() {
 	let uri = to_http_uri(addr);
 
 	for i in 0..10 {
-		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
+		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{i}}}"#);
 		let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 		assert_eq!(response.status, StatusCode::OK);
 		assert_eq!(response.body, ok_response(JsonValue::String("lo".to_owned()), Id::Num(i)));
@@ -107,7 +107,7 @@ async fn async_method_call_works() {
 	let uri = to_http_uri(addr);
 
 	for i in 0..10 {
-		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello_async","id":{}}}"#, i);
+		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello_async","id":{i}}}"#);
 		let response = http_request(req.into(), uri.clone()).await.unwrap();
 		assert_eq!(response.status, StatusCode::OK);
 		assert_eq!(response.body, ok_response(JsonValue::String("lo".to_owned()), Id::Num(i)));
@@ -403,12 +403,12 @@ async fn can_register_modules() {
 	let mut mod2 = RpcModule::new(cx2);
 
 	assert_eq!(mod1.method_names().count(), 0);
-	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
-	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
-	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {cx}"))).unwrap();
+	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {cx}"))).unwrap();
+	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {cx:?}"))).unwrap();
 
 	// Won't register, name clashes
-	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {cx:?}"))).unwrap();
 
 	assert_eq!(mod1.method_names().count(), 2);
 
