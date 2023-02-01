@@ -203,9 +203,9 @@ impl TryFrom<&str> for ParsedUri {
 	type Error = Error;
 
 	fn try_from(target: &str) -> Result<Self, Self::Error> {
-		let uri: Uri = target.parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
+		let uri: Uri = target.parse().map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
 		if uri.port_u16().is_none() {
-			return Err(Error::Url("Port number is missing in the URL".into()));
+			Err(Error::Url("Port number is missing in the URL".into()))
 		} else {
 			Ok(ParsedUri(uri))
 		}
