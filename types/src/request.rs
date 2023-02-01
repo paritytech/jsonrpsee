@@ -241,7 +241,7 @@ mod test {
 			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, None, method),
 		];
 
-		for (ser, id, params, method) in test_vector.into_iter().cloned() {
+		for (ser, id, params, method) in test_vector.iter().cloned() {
 			let request = serde_json::to_string(&RequestSer {
 				jsonrpc: TwoPointZero,
 				method: method.into(),

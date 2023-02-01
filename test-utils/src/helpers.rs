@@ -73,8 +73,7 @@ pub fn parse_error(id: Id) -> String {
 
 pub fn oversized_request(max_limit: u32) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32701,"message":"Request is too big","data":"Exceeded max limit of {}"}},"id":null}}"#,
-		max_limit
+		r#"{{"jsonrpc":"2.0","error":{{"code":-32701,"message":"Request is too big","data":"Exceeded max limit of {max_limit}"}},"id":null}}"#
 	)
 }
 
@@ -193,7 +192,7 @@ where
 		.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static("application/json"))
 		.body(body)
 		.expect("uri and request headers are valid; qed");
-	let res = client.request(r).await.map_err(|e| format!("{:?}", e))?;
+	let res = client.request(r).await.map_err(|e| format!("{e:?}"))?;
 
 	let (parts, body) = res.into_parts();
 	let bytes = hyper::body::to_bytes(body).await.unwrap();

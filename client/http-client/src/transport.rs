@@ -65,7 +65,7 @@ impl HttpTransportClient {
 		max_log_length: u32,
 		headers: HeaderMap,
 	) -> Result<Self, Error> {
-		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
+		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
 		if target.port_u16().is_none() {
 			return Err(Error::Url("Port number is missing in the URL".into()));
 		}
