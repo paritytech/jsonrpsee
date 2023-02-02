@@ -130,7 +130,7 @@ async fn can_set_max_connections() {
 	// Third connection is rejected
 	assert!(conn3.is_err());
 	if !matches!(conn3, Err(WebSocketTestError::RejectedWithStatusCode(429))) {
-		panic!("Expected RejectedWithStatusCode(429), got: {:#?}", conn3);
+		panic!("Expected RejectedWithStatusCode(429), got: {conn3:#?}");
 	}
 
 	// Decrement connection count
@@ -152,7 +152,7 @@ async fn single_method_calls_works() {
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	for i in 0..10 {
-		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
+		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{i}}}"#);
 		let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 
 		assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(i)));
@@ -166,7 +166,7 @@ async fn async_method_calls_works() {
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	for i in 0..10 {
-		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello_async","id":{}}}"#, i);
+		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello_async","id":{i}}}"#);
 		let response = client.send_request_text(req).await.unwrap();
 
 		assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(i)));
@@ -191,7 +191,7 @@ async fn batch_method_call_works() {
 
 	let mut batch = vec![r#"{"jsonrpc":"2.0","method":"sleep_for","params":[1000],"id":123}"#.to_string()];
 	for i in 1..4 {
-		batch.push(format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i));
+		batch.push(format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{i}}}"#));
 	}
 	let batch = format!("[{}]", batch.join(","));
 	let response = client.send_request_text(batch).with_default_timeout().await.unwrap().unwrap();
@@ -482,12 +482,12 @@ async fn can_register_modules() {
 
 	assert_eq!(mod1.method_names().count(), 0);
 	assert_eq!(mod2.method_names().count(), 0);
-	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
-	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
-	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {cx}"))).unwrap();
+	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {cx}"))).unwrap();
+	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {cx:?}"))).unwrap();
 
 	// Won't register, name clashes
-	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {cx:?}"))).unwrap();
 
 	assert_eq!(mod1.method_names().count(), 2);
 	let err = mod1.merge(mod2).unwrap_err();

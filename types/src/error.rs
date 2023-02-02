@@ -341,7 +341,7 @@ pub fn reject_too_many_subscriptions(limit: u32) -> ErrorObject<'static> {
 	ErrorObjectOwned::owned(
 		TOO_MANY_SUBSCRIPTIONS_CODE,
 		TOO_MANY_SUBSCRIPTIONS_MSG,
-		Some(format!("Exceeded max limit of {}", limit)),
+		Some(format!("Exceeded max limit of {limit}")),
 	)
 }
 
@@ -350,7 +350,7 @@ pub fn reject_too_big_request(limit: u32) -> ErrorObject<'static> {
 	ErrorObjectOwned::owned(
 		OVERSIZED_REQUEST_CODE,
 		OVERSIZED_REQUEST_MSG,
-		Some(format!("Exceeded max limit of {}", limit)),
+		Some(format!("Exceeded max limit of {limit}")),
 	)
 }
 

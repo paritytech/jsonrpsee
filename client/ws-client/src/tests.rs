@@ -398,7 +398,7 @@ fn assert_error_response(err: Error, exp: ErrorObjectOwned) {
 		Error::Call(e) => {
 			assert_eq!(e.to_string(), exp.to_string());
 		}
-		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
+		e => panic!("Expected error: \"{err}\", got: {e:?}"),
 	};
 }
 
@@ -422,8 +422,8 @@ async fn redirections() {
 	// It's an ok client
 	let client = match client {
 		Ok(Ok(client)) => client,
-		Ok(Err(e)) => panic!("WsClient builder failed with: {:?}", e),
-		Err(e) => panic!("WsClient builder timed out with: {:?}", e),
+		Ok(Err(e)) => panic!("WsClient builder failed with: {e:?}"),
+		Err(e) => panic!("WsClient builder timed out with: {e:?}"),
 	};
 	// It's connected
 	assert!(client.is_connected());

@@ -479,7 +479,7 @@ impl IdKind {
 	pub fn into_id(self, id: u64) -> Id<'static> {
 		match self {
 			IdKind::Number => Id::Number(id),
-			IdKind::String => Id::Str(format!("{}", id).into()),
+			IdKind::String => Id::Str(format!("{id}").into()),
 		}
 	}
 }

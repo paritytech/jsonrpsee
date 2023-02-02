@@ -10,7 +10,7 @@ publish = false
 [dev-dependencies]
 beef = { version = "0.5.1", features = ["impl_serde"] }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
-jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
+jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
 tokio = { version = "1.16", features = ["full"] }
 tracing = "0.1.34"
 serde = "1"

@@ -57,7 +57,7 @@ async fn method_call_with_wrong_id_kind() {
 	let exp = "id as string";
 	let server_addr =
 		http_server_with_hardcoded_response(ok_response(exp.into(), Id::Num(0))).with_default_timeout().await.unwrap();
-	let uri = format!("http://{}", server_addr);
+	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
 	let res: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
 	assert!(matches!(res, Err(Error::InvalidRequestId)));
@@ -70,7 +70,7 @@ async fn method_call_with_id_str() {
 		.with_default_timeout()
 		.await
 		.unwrap();
-	let uri = format!("http://{}", server_addr);
+	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
 	let response: String = client.request("o", rpc_params![]).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(&response, exp);
@@ -79,7 +79,7 @@ async fn method_call_with_id_str() {
 #[tokio::test]
 async fn notification_works() {
 	let server_addr = http_server_with_hardcoded_response(String::new()).with_default_timeout().await.unwrap();
-	let uri = format!("http://{}", server_addr);
+	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client
 		.notification("i_dont_care_about_the_response_because_the_server_should_not_respond", rpc_params![])
@@ -263,14 +263,14 @@ async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::
 	response: String,
 ) -> Result<BatchResponse<T>, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
-	let uri = format!("http://{}", server_addr);
+	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client.batch_request(batch).with_default_timeout().await.unwrap()
 }
 
 async fn run_request_with_response(response: String) -> Result<String, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
-	let uri = format!("http://{}", server_addr);
+	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap()
 }
@@ -281,6 +281,6 @@ fn assert_jsonrpc_error_response(err: Error, exp: ErrorObjectOwned) {
 		Error::Call(err) => {
 			assert_eq!(err.to_string(), exp.to_string());
 		}
-		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
+		e => panic!("Expected error: \"{err}\", got: {e:?}"),
 	};
 }

@@ -163,7 +163,7 @@ impl RpcSubscription {
 		let unsubscribe = match parse_subscribe(unsubscribe)? {
 			Some(unsub) => unsub,
 			None => build_unsubscribe_method(&name).unwrap_or_else(||
-				panic!("Could not generate the unsubscribe method with name '{}'. You need to provide the name manually using the `unsubscribe` attribute in your RPC API definition", name),
+				panic!("Could not generate the unsubscribe method with name '{name}'. You need to provide the name manually using the `unsubscribe` attribute in your RPC API definition"),
 			),
 		};
 
@@ -383,7 +383,7 @@ impl RpcDescription {
 	/// For no namespace and method `makeSpam` it will be just `makeSpam`.
 	pub(crate) fn rpc_identifier<'a>(&self, method: &'a str) -> Cow<'a, str> {
 		if let Some(ns) = &self.namespace {
-			format!("{}_{}", ns, method).into()
+			format!("{ns}_{method}").into()
 		} else {
 			Cow::Borrowed(method)
 		}
@@ -407,5 +407,5 @@ fn find_attr<'a>(attrs: &'a [Attribute], ident: &str) -> Option<&'a Attribute> {
 }
 
 fn build_unsubscribe_method(method: &str) -> Option<String> {
-	method.strip_prefix("subscribe").map(|s| format!("unsubscribe{}", s))
+	method.strip_prefix("subscribe").map(|s| format!("unsubscribe{s}"))
 }

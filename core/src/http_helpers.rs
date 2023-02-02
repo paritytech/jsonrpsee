@@ -27,53 +27,84 @@
 //! Utility methods relying on hyper
 
 use crate::error::GenericTransportError;
-use futures_util::stream::StreamExt;
+use anyhow::anyhow;
+use hyper::body::{Buf, HttpBody};
+use std::error::Error as StdError;
 
-/// Read a data from a [`hyper::Body`] and return the data if it is valid and within the allowed size range.
+/// Read a data from [`hyper::body::HttpBody`] and return the data if it is valid JSON and within the allowed size range.
 ///
 /// Returns `Ok((bytes, single))` if the body was in valid size range; and a bool indicating whether the JSON-RPC
 /// request is a single or a batch.
 /// Returns `Err` if the body was too large or the body couldn't be read.
-pub async fn read_body(
+pub async fn read_body<B>(
 	headers: &hyper::HeaderMap,
-	mut body: hyper::Body,
-	max_request_body_size: u32,
-) -> Result<(Vec<u8>, bool), GenericTransportError<hyper::Error>> {
+	body: B,
+	max_body_size: u32,
+) -> Result<(Vec<u8>, bool), GenericTransportError>
+where
+	B: HttpBody + Send + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+{
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in
-	// practice and for that case we fallback to allocating in the while-loop below instead of pre-allocating.
+	// practice and in that case we fallback to allocating in the while-loop below instead of pre-allocating.
 	let body_size = read_header_content_length(headers).unwrap_or(0);
 
-	if body_size > max_request_body_size {
+	if body_size > max_body_size {
 		return Err(GenericTransportError::TooLarge);
 	}
 
-	let first_chunk =
-		body.next().await.ok_or(GenericTransportError::Malformed)?.map_err(GenericTransportError::Inner)?;
+	futures_util::pin_mut!(body);
 
-	if first_chunk.len() > max_request_body_size as usize {
-		return Err(GenericTransportError::TooLarge);
-	}
+	// only allocate up to 16KB initially
+	let mut received_data = Vec::with_capacity(std::cmp::min(body_size as usize, 16 * 1024));
+	let mut is_single = None;
 
-	let first_non_whitespace = first_chunk.iter().find(|byte| !byte.is_ascii_whitespace());
+	while let Some(d) = body.data().await {
+		let data = d.map_err(|e| GenericTransportError::Inner(anyhow!(e.into())))?;
 
-	let single = match first_non_whitespace {
-		Some(b'{') => true,
-		Some(b'[') => false,
-		_ => return Err(GenericTransportError::Malformed),
-	};
+		// if it's the first chunk, trim the whitespaces to determine whether it's valid JSON-RPC call.
+		if received_data.is_empty() {
+			let first_non_whitespace =
+				data.chunk().iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
-	let mut received_data = Vec::with_capacity(body_size as usize);
-	received_data.extend_from_slice(&first_chunk);
+			let skip = match first_non_whitespace {
+				Some((idx, b'{')) => {
+					is_single = Some(true);
+					idx
+				}
+				Some((idx, b'[')) => {
+					is_single = Some(false);
+					idx
+				}
+				_ => return Err(GenericTransportError::Malformed),
+			};
 
-	while let Some(chunk) = body.next().await {
-		let chunk = chunk.map_err(GenericTransportError::Inner)?;
-		let body_length = chunk.len() + received_data.len();
-		if body_length > max_request_body_size as usize {
-			return Err(GenericTransportError::TooLarge);
+			if data.chunk().len() - skip > max_body_size as usize {
+				return Err(GenericTransportError::TooLarge);
+			}
+
+			// ignore whitespace as these doesn't matter just makes the JSON decoding slower.
+			received_data.extend_from_slice(&data.chunk()[skip..]);
+		} else {
+			if data.chunk().len() + received_data.len() > max_body_size as usize {
+				return Err(GenericTransportError::TooLarge);
+			}
+
+			received_data.extend_from_slice(data.chunk());
 		}
-		received_data.extend_from_slice(&chunk);
 	}
-	Ok((received_data, single))
+
+	match is_single {
+		Some(single) if !received_data.is_empty() => {
+			tracing::trace!(
+				"HTTP response body: {}",
+				std::str::from_utf8(&received_data).unwrap_or("Invalid UTF-8 data")
+			);
+			Ok((received_data, single))
+		}
+		_ => Err(GenericTransportError::Malformed),
+	}
 }
 
 /// Read the `Content-Length` HTTP Header. Must fit into a `u32`; returns `None` otherwise.

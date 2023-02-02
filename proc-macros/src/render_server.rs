@@ -102,7 +102,7 @@ impl RpcDescription {
 		let mut errors = Vec::new();
 		let mut check_name = |name: &str, span: Span| {
 			if registered.contains(name) {
-				let message = format!("{:?} is already defined", name);
+				let message = format!("{name:?} is already defined");
 				errors.push(quote_spanned!(span => compile_error!(#message);));
 			} else {
 				registered.insert(name.to_string());
