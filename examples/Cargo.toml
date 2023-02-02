@@ -9,7 +9,7 @@ publish = false
 [dev-dependencies]
 anyhow = "1"
 futures = "0.3"
-jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
+jsonrpsee = { path = "../jsonrpsee", features = ["server", "http-client", "ws-client", "macros", "client-ws-transport-native-tls"] }
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio = { version = "1.16", features = ["full"] }

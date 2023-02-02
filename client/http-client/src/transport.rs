@@ -27,7 +27,7 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 #[derive(Debug)]
 pub enum HttpBackend<B = Body> {
 	/// Hyper client with https connector.
-	#[cfg(feature = "tls")]
+	#[cfg(feature = "__tls")]
 	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>, B>),
 	/// Hyper client with http connector.
 	Http(Client<HttpConnector, B>),
@@ -37,7 +37,7 @@ impl Clone for HttpBackend {
 	fn clone(&self) -> Self {
 		match self {
 			Self::Http(inner) => Self::Http(inner.clone()),
-			#[cfg(feature = "tls")]
+			#[cfg(feature = "__tls")]
 			Self::Https(inner) => Self::Https(inner.clone()),
 		}
 	}
@@ -56,7 +56,7 @@ where
 	fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		match self {
 			Self::Http(inner) => inner.poll_ready(ctx),
-			#[cfg(feature = "tls")]
+			#[cfg(feature = "__tls")]
 			Self::Https(inner) => inner.poll_ready(ctx),
 		}
 		.map_err(Into::into)
@@ -65,7 +65,7 @@ where
 	fn call(&mut self, req: hyper::Request<B>) -> Self::Future {
 		let resp = match self {
 			Self::Http(inner) => inner.call(req),
-			#[cfg(feature = "tls")]
+			#[cfg(feature = "__tls")]
 			Self::Https(inner) => inner.call(req),
 		};
 
@@ -112,15 +112,18 @@ where
 		let uri = ParsedUri::try_from(target.as_ref())?;
 
 		let client = match uri.0.scheme_str() {
+			#[cfg(not(feature = "__tls"))]
 			Some("http") => HttpBackend::Http(Client::new()),
-			#[cfg(feature = "tls")]
-			Some("https") => {
+			#[cfg(feature = "__tls")]
+			Some("https") | Some("http") => {
 				let connector = match cert_store {
+					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
 						.https_or_http()
 						.enable_http1()
 						.build(),
+					#[cfg(feature = "webpki-tls")]
 					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_webpki_roots()
 						.https_or_http()
@@ -131,9 +134,9 @@ where
 				HttpBackend::Https(Client::builder().build::<_, hyper::Body>(connector))
 			}
 			_ => {
-				#[cfg(feature = "tls")]
+				#[cfg(feature = "__tls")]
 				let err = "URL scheme not supported, expects 'http' or 'https'";
-				#[cfg(not(feature = "tls"))]
+				#[cfg(not(feature = "__tls"))]
 				let err = "URL scheme not supported, expects 'http'";
 				return Err(Error::Url(err.into()));
 			}
@@ -299,7 +302,7 @@ mod tests {
 		assert!(matches!(err, Error::Url(_)));
 	}
 
-	#[cfg(feature = "tls")]
+	#[cfg(feature = "__tls")]
 	#[test]
 	fn https_works() {
 		let client = HttpTransportClient::new(
@@ -315,7 +318,7 @@ mod tests {
 		assert_target(&client, "localhost", "https", "/", 9933, 80);
 	}
 
-	#[cfg(not(feature = "tls"))]
+	#[cfg(not(feature = "__tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
 		let err = HttpTransportClient::new(
@@ -378,7 +381,7 @@ mod tests {
 			u32::MAX,
 			"http://127.0.0.1:9999/my?name1=value1&name2=value2",
 			u32::MAX,
-			CertificateStore::WebPki,
+			CertificateStore::Native,
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
@@ -411,7 +414,7 @@ mod tests {
 			eighty_bytes_limit,
 			"http://localhost:9933",
 			fifty_bytes_limit,
-			CertificateStore::WebPki,
+			CertificateStore::Native,
 			99,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
