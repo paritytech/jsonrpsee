@@ -63,9 +63,6 @@ pub enum Error {
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] anyhow::Error),
-	/// Frontend/backend channel error.
-	#[error("Frontend/backend channel error: {0}")]
-	Internal(#[from] futures_channel::mpsc::SendError),
 	/// Invalid response,
 	#[error("Invalid response: {0}")]
 	InvalidResponse(Mismatch<String>),
@@ -194,7 +191,7 @@ impl From<SubscriptionClosed> for ErrorObjectOwned {
 
 /// Generic transport error.
 #[derive(Debug, thiserror::Error)]
-pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
+pub enum GenericTransportError {
 	/// Request was too large.
 	#[error("The request was too big")]
 	TooLarge,
@@ -203,7 +200,7 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 	Malformed,
 	/// Concrete transport error.
 	#[error("Transport error: {0}")]
-	Inner(T),
+	Inner(anyhow::Error),
 }
 
 impl From<std::io::Error> for Error {

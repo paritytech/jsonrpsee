@@ -213,8 +213,7 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 	// don't poll the notification stream for 2 seconds, should be full now.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-	// Capacity is `num_sender` + `capacity`
-	for _ in 0..5 {
+	for _ in 0..4 {
 		assert!(nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
 	}
 
@@ -399,7 +398,7 @@ fn assert_error_response(err: Error, exp: ErrorObjectOwned) {
 		Error::Call(e) => {
 			assert_eq!(e.to_string(), exp.to_string());
 		}
-		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
+		e => panic!("Expected error: \"{err}\", got: {e:?}"),
 	};
 }
 
@@ -423,8 +422,8 @@ async fn redirections() {
 	// It's an ok client
 	let client = match client {
 		Ok(Ok(client)) => client,
-		Ok(Err(e)) => panic!("WsClient builder failed with: {:?}", e),
-		Err(e) => panic!("WsClient builder timed out with: {:?}", e),
+		Ok(Err(e)) => panic!("WsClient builder failed with: {e:?}"),
+		Err(e) => panic!("WsClient builder timed out with: {e:?}"),
 	};
 	// It's connected
 	assert!(client.is_connected());

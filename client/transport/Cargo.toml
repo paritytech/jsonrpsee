@@ -37,6 +37,9 @@ gloo-net = { version = "0.2.6", default-features = false, features = ["json", "w
 [features]
 native-tls = ["rustls-native-certs", "__tls"]
 webpki-tls = ["webpki-roots", "__tls"]
+
+# Internal feature to indicate whether TLS is enabled.
+# Does nothing on its own.
 __tls = ["tokio-rustls"]
 
 ws = [

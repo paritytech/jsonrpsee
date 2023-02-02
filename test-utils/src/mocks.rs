@@ -337,7 +337,7 @@ pub fn ws_server_with_redirect(other_server: String) -> String {
 	let addr = server.local_addr();
 
 	tokio::spawn(async move { server.await });
-	format!("ws://{}", addr)
+	format!("ws://{addr}")
 }
 
 /// Handle incoming HTTP Requests.

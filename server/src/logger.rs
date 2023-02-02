@@ -56,7 +56,7 @@ impl std::fmt::Display for MethodKind {
 			Self::Unsubscription => "unsubscription",
 		};
 
-		write!(f, "{}", s)
+		write!(f, "{s}")
 	}
 }
 
@@ -76,7 +76,7 @@ impl std::fmt::Display for TransportProtocol {
 			Self::WebSocket => "websocket",
 		};
 
-		write!(f, "{}", s)
+		write!(f, "{s}")
 	}
 }
 

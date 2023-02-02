@@ -118,8 +118,8 @@ impl Host {
 			"{}{}",
 			hostname,
 			match *port {
-				Port::Fixed(port) => format!(":{}", port),
-				Port::Pattern(ref port) => format!(":{}", port),
+				Port::Fixed(port) => format!(":{port}"),
+				Port::Pattern(ref port) => format!(":{port}"),
 				Port::None => "".into(),
 			},
 		)

@@ -21,6 +21,7 @@ serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.16", features = ["time"] }
 tracing = "0.1.34"
+tower = { version = "0.4.13", features = ["util"] }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -32,6 +33,8 @@ default = ["native-tls"]
 native-tls = ["hyper-rustls/native-tokio", "__tls"]
 webpki-tls = ["hyper-rustls/webpki-tokio", "__tls"]
 
+# Internal feature to indicate whether TLS is enabled.
+# Does nothing on its own.
 __tls = ["hyper-rustls"]
 
 [package.metadata.docs.rs]

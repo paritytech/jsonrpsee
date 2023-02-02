@@ -389,8 +389,7 @@ impl WsTransportClientBuilder {
 											None => {
 												err = Some(Err(WsHandshakeError::Url(
 													format!(
-														"path_and_query: {}; this is a bug it must contain `/` please open issue",
-														location
+														"path_and_query: {location}; this is a bug it must contain `/` please open issue"
 													)
 													.into(),
 												)));
@@ -435,7 +434,7 @@ async fn connect(
 			match tls_connector {
 				None => Ok(EitherStream::Plain(socket)),
 				Some(connector) => {
-					let server_name: tokio_rustls::rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {} {:?}", host, e).into()))?;
+					let server_name: tokio_rustls::rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {host} {e:?}").into()))?;
 					let tls_stream = connector.connect(server_name, socket).await?;
 					Ok(EitherStream::Tls(tls_stream))
 				}
@@ -512,7 +511,7 @@ impl TryFrom<Uri> for Target {
 			invalid_scheme => {
 				let scheme = invalid_scheme.unwrap_or("no scheme");
 				#[cfg(feature = "__tls")]
-				let err = format!("`{}` not supported, expects 'ws' or 'wss'", scheme);
+				let err = format!("`{scheme}` not supported, expects 'ws' or 'wss'");
 				#[cfg(not(feature = "__tls"))]
 				let err = format!("`{}` not supported, expects 'ws' ('wss' requires the tls feature)", scheme);
 				return Err(WsHandshakeError::Url(err.into()));
@@ -522,7 +521,7 @@ impl TryFrom<Uri> for Target {
 		let port = uri
 			.port_u16()
 			.ok_or_else(|| WsHandshakeError::Url("No port number in URL (default port is not supported)".into()))?;
-		let host_header = format!("{}:{}", host, port);
+		let host_header = format!("{host}:{port}");
 		let parts = uri.into_parts();
 		let path_and_query = parts.path_and_query.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
 		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
