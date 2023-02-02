@@ -115,7 +115,7 @@ where
 			#[cfg(not(feature = "__tls"))]
 			Some("http") => HttpBackend::Http(Client::new()),
 			#[cfg(feature = "__tls")]
-			Some("https") => {
+			Some("https") | Some("http") => {
 				let connector = match cert_store {
 					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
