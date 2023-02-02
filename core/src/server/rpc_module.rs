@@ -337,7 +337,7 @@ impl Methods {
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
 	///
 	/// This is a low-level API where you might be able build "in-memory" client
-	/// but it's not ergonomic to use, see [`RpcModule::call`] and [`RpcModule::subscribe_bounded`]
+	/// but it's not ergonomic to use, see [`Methods::call`] and [`Methods::subscribe_bounded`]
 	/// for more ergonomic APIs to perform method calls or subscriptions for testing or other purposes.
 	///
 	/// Returns the raw JSON response to the call, additional responses are sent out
@@ -411,7 +411,7 @@ impl Methods {
 	///
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
-	/// Returns [`Subscription`] on success which can used to get results from the subscriptions.
+	/// Returns [`Subscription`] on success which can used to get results from the subscription.
 	///
 	/// # Examples
 	///
@@ -440,7 +440,7 @@ impl Methods {
 		self.subscribe_bounded(sub_method, params, u32::MAX as usize).await
 	}
 
-	/// Similar to `RpcMethods::subscribe_unbounded` but it's a using bounded channel.
+	/// Similar to [`Methods::subscribe_unbounded`] but it's a using bounded channel.
 	pub async fn subscribe_bounded(
 		&self,
 		sub_method: &str,
@@ -630,7 +630,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// * `unsubscription_method` - name of the method to call to terminate a subscription
 	/// * `callback` - A callback to invoke on each subscription; it takes three parameters:
 	///     - [`Params`]: JSON-RPC parameters in the subscription call.
-	///     - [`SubscriptionSink`]: A sink to send messages to the subscriber.
+	///     - [`PendingSubscriptionSink`]: A pending subscription waiting to accepted.
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
 	/// # Examples
@@ -925,7 +925,7 @@ impl SubscriptionSink {
 	/// channel is full or the connection/subscription is closed
 	///
 	///
-	/// This differs from [`SubscriptionSink::send`] as it will until there is capacity
+	/// This differs from [`SubscriptionSink::send`] where it will until there is capacity
 	/// in the channel.
 	pub fn try_send(&mut self, msg: SubscriptionMessage) -> Result<(), TrySendError> {
 		// Only possible to trigger when the connection is dropped.
