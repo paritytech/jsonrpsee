@@ -26,7 +26,7 @@
 
 mod helpers;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 
 use futures::StreamExt;
@@ -37,6 +37,7 @@ use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Params};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 
@@ -252,7 +253,8 @@ async fn subscribing_without_server() {
 		})
 		.unwrap();
 
-	let mut my_sub = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap();
+	let mut my_sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
+
 	for i in (0..=2).rev() {
 		let (val, id) = my_sub.next::<char>().await.unwrap().unwrap();
 		assert_eq!(val, std::char::from_digit(i, 10).unwrap());
@@ -287,11 +289,12 @@ async fn close_test_subscribing_without_server() {
 		})
 		.unwrap();
 
-	let mut my_sub = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap();
+	let mut my_sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
 	let (val, id) = my_sub.next::<String>().await.unwrap().unwrap();
 	assert_eq!(&val, "lo");
 	assert_eq!(&id, my_sub.subscription_id());
-	let mut my_sub2 = std::mem::ManuallyDrop::new(module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap());
+	let mut my_sub2 =
+		std::mem::ManuallyDrop::new(module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap());
 
 	// Close the subscription to ensure it doesn't return any items.
 	my_sub.close();
@@ -333,7 +336,7 @@ async fn subscribing_without_server_bad_params() {
 		})
 		.unwrap();
 
-	let sub = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap_err();
+	let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
 
 	assert!(
 		matches!(sub, Error::Call(CallError::Custom(e)) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
@@ -355,21 +358,21 @@ async fn subscribe_unsubscribe_without_server() {
 		.unwrap();
 
 	async fn subscribe_and_assert(module: &RpcModule<()>) {
-		let sub = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap();
-
+		let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
 		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
+		let (tx, _) = mpsc::channel(1);
 
 		assert!(!sub.is_closed());
 
 		// Unsubscribe should be valid.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
-		let (resp, _) = module.raw_json_request(&unsub_req).await.unwrap();
+		let resp = module.raw_json_request(&unsub_req, tx.clone()).await.unwrap();
 
 		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 
 		// Unsubscribe already performed; should be error.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
-		let (resp, _) = module.raw_json_request(&unsub_req).await.unwrap();
+		let resp = module.raw_json_request(&unsub_req, tx).await.unwrap();
 
 		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
 	}
@@ -392,7 +395,7 @@ async fn rejected_subscription_without_server() {
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap_err();
+	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
 	assert!(
 		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
 	);
@@ -411,8 +414,74 @@ async fn reject_works() {
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap_err();
+	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
 	assert!(
 		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
 	);
+}
+
+#[tokio::test]
+async fn bounded_subscription_work() {
+	init_logger();
+
+	let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+	let mut module = RpcModule::new(tx);
+
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx| async move {
+			println!("accept");
+			let mut sink = pending.accept().await?;
+
+			let mut stream = IntervalStream::new(interval(std::time::Duration::from_millis(100)))
+				.enumerate()
+				.map(|(n, _)| n)
+				.take(6);
+			let fail = std::sync::Arc::make_mut(&mut ctx);
+			let mut buf = VecDeque::new();
+
+			while let Some(n) = stream.next().await {
+				let msg = sink.build_message(&n).expect("usize infallible; qed");
+
+				match sink.try_send(msg) {
+					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
+					Err(TrySendError::Full(m)) => {
+						buf.push_back(m);
+					}
+					Ok(_) => (),
+				}
+			}
+
+			if !buf.is_empty() {
+				fail.send("Full".to_string()).unwrap();
+			}
+
+			while let Some(m) = buf.pop_front() {
+				match sink.try_send(m) {
+					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
+					Err(TrySendError::Full(m)) => {
+						buf.push_front(m);
+					}
+					Ok(_) => (),
+				}
+
+				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+			}
+
+			Ok(())
+		})
+		.unwrap();
+
+	// create a bounded subscription and don't poll it
+	// after 3 items has been produced messages will be dropped.
+	let mut sub = module.subscribe_bounded("my_sub", EmptyServerParams::new(), 3).await.unwrap();
+
+	// assert that some items couldn't be sent.
+	assert_eq!(rx.recv().await, Some("Full".to_string()));
+
+	// the subscription should continue produce items are consumed
+	// and the failed messages should be able to go succeed.
+	for exp in 0..6 {
+		let (item, _) = sub.next::<usize>().await.unwrap().unwrap();
+		assert_eq!(item, exp);
+	}
 }

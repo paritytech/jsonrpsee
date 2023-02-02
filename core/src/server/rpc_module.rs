@@ -321,7 +321,8 @@ impl Methods {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
-		let (resp, _, _) = self.inner_call(req).await;
+		let (tx, _rx) = mpsc::channel(1);
+		let resp = self.inner_call(req, tx).await;
 
 		if resp.success {
 			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
@@ -335,7 +336,12 @@ impl Methods {
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
 	///
-	/// Returns the raw JSON response to the call and a stream to receive notifications if the call was a subscription.
+	/// This is a low-level API where you might be able build "in-memory" client
+	/// but it's not ergonomic to use, see [`RpcModule::call`] and [`RpcModule::subscribe_bounded`]
+	/// for more ergonomic APIs to perform method calls or subscriptions for testing or other purposes.
+	///
+	/// Returns the raw JSON response to the call, additional responses are sent out
+	/// on the the receiver connected to the sender as passed to this method.
 	///
 	/// # Examples
 	///
@@ -356,26 +362,27 @@ impl Methods {
 	///          Ok(())
 	///     }).unwrap();
 	///
-	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#).await.unwrap();
+	///     let (tx, mut rx) = tokio::sync::mpsc::channel(16);
+	///     let resp = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, tx).await.unwrap();
 	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
-	///     let sub_resp = stream.recv().await.unwrap();
+	///     // ignore duplicated subscription call response.
+	///     _ = rx.recv().await.unwrap();
+	///     let sub_resp = rx.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
 	///         sub_resp
 	///     );
 	/// }
 	/// ```
-	pub async fn raw_json_request(&self, request: &str) -> Result<(MethodResponse, mpsc::Receiver<String>), Error> {
+	pub async fn raw_json_request(&self, request: &str, tx: mpsc::Sender<String>) -> Result<MethodResponse, Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
-		let (resp, rx, _) = self.inner_call(req).await;
-		Ok((resp, rx))
+		let resp = self.inner_call(req, tx).await;
+		Ok(resp)
 	}
 
 	/// Execute a callback.
-	async fn inner_call(&self, req: Request<'_>) -> RawRpcResponse {
-		let (tx_sink, mut rx_sink) = mpsc::channel(u32::MAX as usize / 2);
-		let sink = MethodSink::new(tx_sink);
+	async fn inner_call(&self, req: Request<'_>, tx: mpsc::Sender<String>) -> MethodResponse {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
 
@@ -385,13 +392,7 @@ impl Methods {
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
 			Some(MethodKind::Subscription(cb)) => {
 				let conn_state = ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider };
-				let res = (cb)(id, params, sink.clone(), conn_state).await;
-
-				// This message is not used because it's used for metrics so we discard in other to
-				// not read once this is used for subscriptions.
-				//
-				// The same information is part of `res` above.
-				let _ = rx_sink.recv().await.expect("Every call must at least produce one response; qed");
+				let res = (cb)(id, params, MethodSink::new(tx), conn_state).await;
 
 				match res {
 					SubscriptionAnswered::Yes(r) => r,
@@ -403,7 +404,7 @@ impl Methods {
 
 		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
 
-		(response, rx_sink, sink)
+		response
 	}
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
@@ -429,19 +430,30 @@ impl Methods {
 	///
 	///     }).unwrap();
 	///
-	///     let mut sub = module.subscribe("hi", EmptyServerParams::new()).await.unwrap();
+	///     let mut sub = module.subscribe_unbounded("hi", EmptyServerParams::new()).await.unwrap();
 	///     // In this case we ignore the subscription ID,
 	///     let (sub_resp, _sub_id) = sub.next::<String>().await.unwrap().unwrap();
 	///     assert_eq!(&sub_resp, "one answer");
 	/// }
 	/// ```
-	pub async fn subscribe(&self, sub_method: &str, params: impl ToRpcParams) -> Result<Subscription, Error> {
+	pub async fn subscribe_unbounded(&self, sub_method: &str, params: impl ToRpcParams) -> Result<Subscription, Error> {
+		self.subscribe_bounded(sub_method, params, u32::MAX as usize).await
+	}
+
+	/// Similar to `RpcMethods::subscribe_unbounded` but it's a using bounded channel.
+	pub async fn subscribe_bounded(
+		&self,
+		sub_method: &str,
+		params: impl ToRpcParams,
+		buf_size: usize,
+	) -> Result<Subscription, Error> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
+		let (tx, mut rx) = mpsc::channel(buf_size);
 
 		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
-		let (response, rx, tx) = self.inner_call(req).await;
+		let response = self.inner_call(req, tx.clone()).await;
 
 		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&response.result) {
 			Ok(r) => r,
@@ -452,8 +464,10 @@ impl Methods {
 		};
 
 		let sub_id = subscription_response.result.into_owned();
+		// throw away the response to the subscription call.
+		_ = rx.recv().await;
 
-		Ok(Subscription { sub_id, rx, tx })
+		Ok(Subscription { sub_id, rx, tx: MethodSink::new(tx) })
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.
@@ -835,6 +849,7 @@ impl PendingSubscriptionSink {
 		let permit = self.inner.reserve().await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
 
 		Self::answer_subscription(permit, response, self.subscribe).await?;
+		tracing::info!("accepted");
 
 		if success {
 			let (tx, rx) = mpsc::channel(1);
