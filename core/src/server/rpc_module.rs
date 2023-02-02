@@ -849,7 +849,6 @@ impl PendingSubscriptionSink {
 		let permit = self.inner.reserve().await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
 
 		Self::answer_subscription(permit, response, self.subscribe).await?;
-		tracing::info!("accepted");
 
 		if success {
 			let (tx, rx) = mpsc::channel(1);
