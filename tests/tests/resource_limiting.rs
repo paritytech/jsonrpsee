@@ -172,7 +172,7 @@ async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, ServerHandle)
 fn assert_server_busy<T: std::fmt::Debug>(fail: Result<T, Error>) {
 	match fail {
 		Err(Error::Call(CallError::Custom(err))) => {
-			assert_eq!(err.code(), -32604);
+			assert_eq!(err.code(), -32009);
 			assert_eq!(err.message(), "Server is busy, try again later");
 		}
 		fail => panic!("Expected error, got: {:?}", fail),
