@@ -26,21 +26,14 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, client::Subscription, Error, SubscriptionResult};
+use jsonrpsee::core::{async_trait, client::Subscription, Error};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder};
+use jsonrpsee::server::{ServerBuilder, SubscriptionSink};
+use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::WsClientBuilder;
 
 type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;
-
-#[rpc(client, server)]
-pub trait DupOverride {
-	#[subscription(name = "subscribeOne" => "override", item = u8)]
-	async fn one(&self) -> jsonrpsee::core::SubscriptionResult;
-	/*#[subscription(name = "subscribeTwo" => "override", item = u8)]
-	async fn two(&self) -> jsonrpsee::core::SubscriptionResult;*/
-}
 
 #[rpc(server, client, namespace = "state")]
 pub trait Rpc<Hash: Clone, StorageKey>
@@ -53,7 +46,7 @@ where
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
-	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> SubscriptionResult;
+	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
 }
 
 pub struct RpcServerImpl;
@@ -69,15 +62,12 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 	}
 
 	// Note that the server's subscription method must return `SubscriptionResult`.
-	async fn subscribe_storage(
+	fn subscribe_storage(
 		&self,
-		pending: PendingSubscriptionSink,
+		mut sink: SubscriptionSink,
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> SubscriptionResult {
-		let sink = pending.accept().await?;
-		let msg = sink.build_message(&vec![[0; 32]]).unwrap();
-		sink.send(msg).await.unwrap();
-
+		let _ = sink.send(&vec![[0; 32]]);
 		Ok(())
 	}
 }
@@ -98,8 +88,6 @@ async fn main() -> anyhow::Result<()> {
 	let mut sub: Subscription<Vec<ExampleHash>> =
 		RpcClient::<ExampleHash, ExampleStorageKey>::subscribe_storage(&client, None).await.unwrap();
 	assert_eq!(Some(vec![[0; 32]]), sub.next().await.transpose().unwrap());
-
-	sub.unsubscribe().await.unwrap();
 
 	Ok(())
 }
