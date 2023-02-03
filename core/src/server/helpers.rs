@@ -168,7 +168,7 @@ impl<'a> MethodSinkPermit<'a> {
 		self.send_error(id, err.into())
 	}
 
-	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
+	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check the validity
 	/// of the JSON being sent.
 	pub fn send_raw(self, json: String) {
 		self.tx.send(json.clone());
