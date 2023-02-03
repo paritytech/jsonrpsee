@@ -224,6 +224,37 @@ impl Debug for MethodKind {
 	}
 }
 
+/// A future that only resolves if a future was set.
+pub enum PendingOrFuture<'a> {
+	/// This will never resolve.
+	Pending,
+	/// Resolves once the future is completed.
+	Future(BoxFuture<'a, Result<(), DisconnectError>>),
+}
+
+impl<'a> std::fmt::Debug for PendingOrFuture<'a> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let msg = match self {
+			Self::Pending => "pending",
+			Self::Future(_) => "future",
+		};
+		f.write_str(msg)
+	}
+}
+
+impl<'a> std::future::Future for PendingOrFuture<'a> {
+	type Output = Result<(), DisconnectError>;
+
+	fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+		let this = std::pin::Pin::into_inner(self);
+
+		match this {
+			Self::Pending => std::task::Poll::Pending,
+			Self::Future(fut) => fut.poll_unpin(cx),
+		}
+	}
+}
+
 /// Reference-counted, clone-on-write collection of synchronous and asynchronous methods.
 #[derive(Default, Debug, Clone)]
 pub struct Methods {
@@ -1007,9 +1038,9 @@ impl SubscriptionSink {
 	///     Ok(())
 	/// });
 	/// ```
-	pub async fn pipe_from_try_stream<S, T, F, E>(&mut self, f: F, mut stream: S) -> SubscriptionClosed
+	pub async fn pipe_from_try_stream<'a, S, T, F, E>(&'a mut self, f: F, stream: S) -> SubscriptionClosed
 	where
-		F: Fn(Option<SubscriptionMessage>, SubscriptionMessage) -> SubscriptionMessage,
+		F: Fn(Option<PendingOrFuture<'a>>, PendingOrFuture<'a>) -> PendingOrFuture<'a>,
 		S: TryStream<Ok = T, Error = E> + Unpin,
 		T: Serialize,
 		E: std::fmt::Display,
@@ -1019,40 +1050,51 @@ impl SubscriptionSink {
 			SubscriptionClosed::Failed(err)
 		}
 
-		let mut last = None;
+		let mut pending_send = PendingOrFuture::Pending;
+		let closed = self.closed();
+
+		tokio::pin!(closed, stream);
+
+		let mut next_item = stream.try_next();
 
 		loop {
-			tokio::select! {
-				// add priority for the closed future
-				// if that fires there's no point reading the stream
-				biased;
-				_ = self.closed() => {
-					break SubscriptionClosed::RemotePeerAborted
+			match futures_util::future::select(closed, futures_util::future::select(pending_send, next_item)).await {
+				Either::Left((_, _)) => {
+					break SubscriptionClosed::RemotePeerAborted;
 				}
 
-				item = stream.try_next() => {
+				Either::Right((Either::Left((maybe_sent, n)), c)) => {
+					if maybe_sent.is_err() {
+						break SubscriptionClosed::RemotePeerAborted;
+					}
+					pending_send = PendingOrFuture::Pending;
+					next_item = n;
+					closed = c;
+				}
+
+				Either::Right((Either::Right((item, pending)), c)) => {
 					let item = match item {
 						Ok(Some(item)) => item,
 						Ok(None) => break SubscriptionClosed::Success,
 						Err(e) => break err(e),
 					};
 
-					let next = match self.build_message(&item) {
+					let msg = match self.build_message(&item) {
 						Ok(msg) => msg,
 						Err(e) => break err(e),
 					};
 
-					let msg = f(last.take(), next);
+					let next: BoxFuture<_> = Box::pin(self.send(msg));
 
-					match self.try_send(msg) {
-						Ok(_) => (),
-						Err(TrySendError::Closed(_)) => break SubscriptionClosed::RemotePeerAborted,
-						Err(TrySendError::Full(m)) => {
-							tracing::debug!("Failed to send message the buffer is full");
-							last = Some(m);
-						}
-					}
-				},
+					let pending = match pending {
+						PendingOrFuture::Pending => None,
+						fut => Some(fut),
+					};
+
+					pending_send = f(pending, PendingOrFuture::Future(next));
+					closed = c;
+					next_item = stream.try_next();
+				}
 			}
 		}
 	}
@@ -1078,9 +1120,9 @@ impl SubscriptionSink {
 	///    Ok(())
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T, F>(&mut self, f: F, stream: S) -> SubscriptionClosed
+	pub async fn pipe_from_stream<'a, S, T, F>(&'a mut self, f: F, stream: S) -> SubscriptionClosed
 	where
-		F: Fn(Option<SubscriptionMessage>, SubscriptionMessage) -> SubscriptionMessage,
+		F: Fn(Option<PendingOrFuture<'a>>, PendingOrFuture<'a>) -> PendingOrFuture<'a>,
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
 	{
