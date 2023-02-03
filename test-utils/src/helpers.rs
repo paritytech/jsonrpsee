@@ -73,7 +73,7 @@ pub fn parse_error(id: Id) -> String {
 
 pub fn oversized_request(max_limit: u32) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32701,"message":"Request is too big","data":"Exceeded max limit of {max_limit}"}},"id":null}}"#
+		r#"{{"jsonrpc":"2.0","error":{{"code":-32007,"message":"Request is too big","data":"Exceeded max limit of {max_limit}"}},"id":null}}"#
 	)
 }
 
@@ -83,7 +83,7 @@ pub fn batches_not_supported() -> String {
 
 pub fn oversized_response(id: Id, max_limit: u32) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32702,"message":"Response is too big","data":"Exceeded max limit of {}"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","error":{{"code":-32008,"message":"Response is too big","data":"Exceeded max limit of {}"}},"id":{}}}"#,
 		max_limit,
 		serde_json::to_string(&id).unwrap(),
 	)
