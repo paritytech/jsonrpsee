@@ -4,7 +4,7 @@ use jsonrpsee::proc_macros::rpc;
 #[rpc(client, server)]
 pub trait DupName {
 	#[subscription(name = "one" => "one", unsubscribe = "unsubscribeOne", item = u8)]
-	async fn one(&self) -> jsonrpsee::core::SubscriptionResult;
+	async fn one(&self);
 }
 
 fn main() {}

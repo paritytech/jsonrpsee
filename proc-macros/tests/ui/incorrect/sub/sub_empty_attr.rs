@@ -4,7 +4,7 @@ use jsonrpsee::proc_macros::rpc;
 #[rpc(client, server)]
 pub trait SubEmptyAttr {
 	#[subscription()]
-	async fn sub(&self) -> jsonrpsee::core::SubscriptionResult;
+	async fn sub(&self);
 }
 
 fn main() {}

@@ -28,15 +28,15 @@ pub trait Rpc {
 	fn sync_method(&self) -> RpcResult<u16>;
 
 	#[subscription(name = "subscribe", item = String)]
-	async fn sub(&self) -> SubscriptionResult;
+	async fn sub(&self);
 
 	#[subscription(name = "echo", unsubscribe = "unsubscribeEcho", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
-	async fn sub_with_params(&self, val: u32) -> SubscriptionResult;
+	async fn sub_with_params(&self, val: u32);
 
 	// This will send data to subscribers with the `method` field in the JSON payload set to `foo_subscribe_override`
 	// because it's in the `foo` namespace.
 	#[subscription(name = "subscribe_method" => "subscribe_override", item = u32)]
-	async fn sub_with_override_notif_method(&self) -> SubscriptionResult;
+	async fn sub_with_override_notif_method(&self);
 }
 
 pub struct RpcServerImpl;

@@ -13,7 +13,7 @@ pub trait Rpc {
 	fn sync_method(&self) -> RpcResult<u16>;
 
 	#[subscription(name = "subscribe", item = String)]
-	async fn sub(&self) -> SubscriptionResult;
+	async fn sub(&self);
 }
 
 pub struct RpcServerImpl;

@@ -1,5 +1,5 @@
 error: "hello_is_goodbye" is already defined
- --> tests/ui/incorrect/sub/sub_conflicting_alias.rs:6:11
+ --> $DIR/sub_conflicting_alias.rs:6:11
   |
-6 |     async fn async_method(&self) -> jsonrpsee::core::SubscriptionResult;
+6 |     async fn async_method(&self);
   |              ^^^^^^^^^^^^

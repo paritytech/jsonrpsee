@@ -86,7 +86,7 @@ pub(crate) mod visitor;
 ///     fn sync_method(&self) -> String;
 ///
 ///     #[subscription(name = "subscribe", item = "String")]
-///     async fn sub(&self) -> SubscriptionResult;
+///     async fn sub(&self);
 /// }
 /// ```
 ///
@@ -248,7 +248,7 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "sub" => "subNotif", unsubscribe = "unsub", item = String)]
-///         async fn sub_override_notif_method(&self) -> SubscriptionResult;
+///         async fn sub_override_notif_method(&self);
 ///
 ///         /// Use the same method name for both the `subscribe call` and `notifications`
 ///         ///
@@ -265,7 +265,7 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "subscribe", item = String)]
-///         async fn sub(&self) -> SubscriptionResult;
+///         async fn sub(&self);
 ///     }
 ///
 ///     // Structure that will implement the `MyRpcServer` trait.

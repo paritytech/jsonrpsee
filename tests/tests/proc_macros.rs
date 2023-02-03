@@ -55,10 +55,10 @@ mod rpc_impl {
 		fn sync_method(&self) -> RpcResult<u16>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-		async fn sub(&self) -> SubscriptionResult;
+		async fn sub(&self);
 
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
-		async fn sub_with_params(&self, val: u32) -> SubscriptionResult;
+		async fn sub_with_params(&self, val: u32);
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
@@ -115,7 +115,7 @@ mod rpc_impl {
 
 		/// All head subscription
 		#[subscription(name = "subscribeAllHeads", item = Header)]
-		async fn subscribe_all_heads(&self, hash: Hash) -> SubscriptionResult;
+		async fn subscribe_all_heads(&self, hash: Hash);
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -130,7 +130,7 @@ mod rpc_impl {
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
 		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
-		async fn sub(&self, hash: Input) -> SubscriptionResult;
+		async fn sub(&self, hash: Input);
 	}
 
 	/// Trait to ensure that the trait bounds are correct.

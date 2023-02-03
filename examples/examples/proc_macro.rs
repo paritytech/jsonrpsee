@@ -45,7 +45,7 @@ where
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
-	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> SubscriptionResult;
+	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
 }
 
 pub struct RpcServerImpl;

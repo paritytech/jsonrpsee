@@ -295,26 +295,9 @@ impl RpcDescription {
 						));
 					}
 
-					match method.sig.output.clone() {
-						syn::ReturnType::Type(_, ty) => {
-							if let syn::Type::Path(syn::TypePath { path, .. }) = *ty {
-								if let Some(ident) = path.get_ident() {
-									if ident != "SubscriptionResult" && ident != "Result" {
-										return Err(syn::Error::new_spanned(
-											method,
-											"Subscription methods must return `SubscriptionResult` or `Result`",
-										));
-									}
-								}
-							}
-						}
-						_ => {
-							return Err(syn::Error::new_spanned(
-								method,
-								"Subscription methods must return `SubscriptionResult` or `Result`",
-							));
-						}
-					};
+					if !matches!(method.sig.output, syn::ReturnType::Default) {
+						return Err(syn::Error::new_spanned(method, "Subscription methods must not return anything"));
+					}
 
 					if method.sig.asyncness.is_none() {
 						return Err(syn::Error::new_spanned(method, "Subscription methods must be `async`"));

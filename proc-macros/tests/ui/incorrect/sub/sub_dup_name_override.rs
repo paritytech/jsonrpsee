@@ -4,9 +4,9 @@ use jsonrpsee::proc_macros::rpc;
 #[rpc(client, server)]
 pub trait DupOverride {
 	#[subscription(name = "subscribeOne" => "override", item = u8)]
-	async fn one(&self) -> jsonrpsee::core::SubscriptionResult;
+	async fn one(&self);
 	#[subscription(name = "subscribeTwo" => "override", item = u8)]
-	async fn two(&self) -> jsonrpsee::core::SubscriptionResult;
+	async fn two(&self);
 }
 
 fn main() {}
