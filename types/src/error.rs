@@ -239,7 +239,6 @@ pub const OVERSIZED_RESPONSE_CODE: i32 = -32008;
 /// Server is busy error code.
 pub const SERVER_IS_BUSY_CODE: i32 = -32009;
 
-
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
 /// Oversized request message
