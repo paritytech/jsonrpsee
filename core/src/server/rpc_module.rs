@@ -72,12 +72,6 @@ pub type ConnectionId = usize;
 /// Max response size.
 pub type MaxResponseSize = usize;
 
-/// Raw response from an RPC
-/// A 3-tuple containing:
-///   - Call result as a `String`,
-///   - a [`mpsc::Receiver<String>`] to receive future subscription results
-pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, MethodSink);
-
 /// TrySendError
 #[derive(Debug)]
 pub enum TrySendError {
@@ -87,7 +81,7 @@ pub enum TrySendError {
 	Full(SubscriptionMessage),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Represents whether a subscription was answered or not.
 pub enum SubscriptionAnswered {
 	/// The subscription was already answered and doesn't need to answered again.
@@ -142,6 +136,44 @@ impl<'a> std::fmt::Debug for ConnState<'a> {
 }
 
 type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Receiver<()>)>>>;
+
+/// This represent a response to a RPC call
+/// and `Subscribe` calls are handled differently
+/// because we want to prevent subscriptions to start
+/// before the actual subscription call has been answered.
+#[derive(Debug, Clone)]
+pub enum CallResponse {
+	/// The subscription callback itself sends back the result
+	/// so it must not be sent back again.
+	Subscribe(SubscriptionAnswered),
+
+	/// Treat it as ordinary call.
+	Call(MethodResponse),
+}
+
+impl CallResponse {
+	/// Extract the JSON-RPC response.
+	pub fn as_response(&self) -> &MethodResponse {
+		match &self {
+			Self::Subscribe(r) => match r {
+				SubscriptionAnswered::Yes(r) => r,
+				SubscriptionAnswered::No(r) => r,
+			},
+			Self::Call(r) => r,
+		}
+	}
+
+	/// Convert the `CallResponse` to JSON-RPC response.
+	pub fn into_response(self) -> MethodResponse {
+		match self {
+			Self::Subscribe(r) => match r {
+				SubscriptionAnswered::Yes(r) => r,
+				SubscriptionAnswered::No(r) => r,
+			},
+			Self::Call(r) => r,
+		}
+	}
+}
 
 /// Subscription message.
 #[derive(Debug, Clone)]
@@ -353,7 +385,8 @@ impl Methods {
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (tx, _rx) = mpsc::channel(1);
-		let resp = self.inner_call(req, tx).await;
+		let call_resp = self.inner_call(req, tx).await;
+		let resp = call_resp.as_response();
 
 		if resp.success {
 			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
@@ -371,8 +404,8 @@ impl Methods {
 	/// but it's not ergonomic to use, see [`Methods::call`] and [`Methods::subscribe_bounded`]
 	/// for more ergonomic APIs to perform method calls or subscriptions for testing or other purposes.
 	///
-	/// Returns the raw JSON response to the call, additional responses are sent out
-	/// on the the receiver connected to the sender as passed to this method.
+	/// After this method returns the responses can be read on the corresponding `Receiver` to the `Sender`
+	/// that was passed into to the call.
 	///
 	/// # Examples
 	///
@@ -394,43 +427,46 @@ impl Methods {
 	///     }).unwrap();
 	///
 	///     let (tx, mut rx) = tokio::sync::mpsc::channel(16);
-	///     let resp = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, tx).await.unwrap();
-	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
-	///     // ignore duplicated subscription call response.
-	///     _ = rx.recv().await.unwrap();
+	///     module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, tx).await.unwrap();
 	///     let sub_resp = rx.recv().await.unwrap();
+	///     // the subscription ID is sent in the `result` field.
+	///     let sub_resp = serde_json::from_str::<Response<u64>>(&sub_resp).unwrap();
+	///
+	///     let sub_notif = rx.recv().await.unwrap();
 	///     assert_eq!(
-	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
-	///         sub_resp
+	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, sub_resp.result),
+	///         sub_notif
 	///     );
 	/// }
 	/// ```
-	pub async fn raw_json_request(&self, request: &str, tx: mpsc::Sender<String>) -> Result<MethodResponse, Error> {
+	pub async fn raw_json_request(&self, request: &str, tx: mpsc::Sender<String>) -> Result<(), Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
-		let resp = self.inner_call(req, tx).await;
-		Ok(resp)
+		if let CallResponse::Call(r) = self.inner_call(req, tx.clone()).await {
+			tx.send(r.result).await.map_err(|_| Error::Custom("Connection dropped; you have to keep the corresponding `Receiver` for `Methods::raw_json_request` to work".to_string()))?;
+		}
+
+		Ok(())
 	}
 
 	/// Execute a callback.
-	async fn inner_call(&self, req: Request<'_>, tx: mpsc::Sender<String>) -> MethodResponse {
+	async fn inner_call(&self, req: Request<'_>, tx: mpsc::Sender<String>) -> CallResponse {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
 
 		let response = match self.method(&req.method).map(|c| &c.callback) {
-			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
-			Some(MethodKind::Sync(cb)) => (cb)(id, params, usize::MAX),
-			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
+			None => CallResponse::Call(MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound))),
+			Some(MethodKind::Sync(cb)) => CallResponse::Call((cb)(id, params, usize::MAX)),
+			Some(MethodKind::Async(cb)) => {
+				CallResponse::Call((cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await)
+			}
 			Some(MethodKind::Subscription(cb)) => {
 				let conn_state = ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider };
 				let res = (cb)(id, params, MethodSink::new(tx), conn_state).await;
 
-				match res {
-					SubscriptionAnswered::Yes(r) => r,
-					SubscriptionAnswered::No(r) => r,
-				}
+				CallResponse::Subscribe(res)
 			}
-			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
+			Some(MethodKind::Unsubscription(cb)) => CallResponse::Call((cb)(id, params, 0, usize::MAX)),
 		};
 
 		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
@@ -471,7 +507,7 @@ impl Methods {
 		self.subscribe_bounded(sub_method, params, u32::MAX as usize).await
 	}
 
-	/// Similar to [`Methods::subscribe_unbounded`] but it's a using bounded channel.
+	/// Similar to [`Methods::subscribe_unbounded`] but it's using a bounded channel.
 	pub async fn subscribe_bounded(
 		&self,
 		sub_method: &str,
@@ -484,7 +520,8 @@ impl Methods {
 
 		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
-		let response = self.inner_call(req, tx.clone()).await;
+		let call_resp = self.inner_call(req, tx.clone()).await;
+		let response = call_resp.as_response();
 
 		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&response.result) {
 			Ok(r) => r,
@@ -996,8 +1033,8 @@ impl SubscriptionSink {
 	/// when items gets produced by the stream.
 	///
 	/// The underlying sink is a bounded channel which may not have room for new items
-	/// if the client can't keep up with all the messages. Thus, you need to provide a closure
-	/// with a policy what to then the underlying channel has not space to "buffer" more messages.
+	/// if the client can't keep up with all the messages from the stream. Thus, you need to provide a closure
+	/// with a policy what to do when the underlying channel has not space to "buffer" more messages.
 	///
 	/// The underlying stream must produce `Result values, see [`futures_util::TryStream`] for further information.
 	///

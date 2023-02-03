@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::future::{FutureDriver, StopHandle};
 use crate::logger::{self, Logger, TransportProtocol};
-use crate::server::{MethodResult, ServiceData};
+use crate::server::ServiceData;
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -12,7 +12,7 @@ use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse, MethodSink};
-use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods, SubscriptionAnswered};
+use jsonrpsee_core::server::rpc_module::{CallResponse, ConnState, MethodKind, Methods, SubscriptionAnswered};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -147,17 +147,17 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 	}
 }
 
-pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
+pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> CallResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		execute_call_with_tracing(req, call).await
 	} else {
 		let (id, code) = prepare_error(&data);
-		MethodResult::Call(MethodResponse::error(id, ErrorObject::from(code)))
+		CallResponse::Call(MethodResponse::error(id, ErrorObject::from(code)))
 	}
 }
 
 #[instrument(name = "method_call", fields(method = req.method.as_ref()), skip(call, req), level = "TRACE")]
-pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> MethodResult {
+pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> CallResponse {
 	execute_call(req, call).await
 }
 
@@ -166,7 +166,7 @@ pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, c
 ///
 /// Returns `(MethodResponse, None)` on every call that isn't a subscription
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
-pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> MethodResult {
+pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> CallResponse {
 	let CallData { methods, max_response_body_size, max_log_length, conn_id, id_provider, sink, logger, request_start } =
 		call;
 
@@ -180,12 +180,12 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 		None => {
 			logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::WebSocket);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
-			MethodResult::Call(response)
+			CallResponse::Call(response)
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
-				MethodResult::Call((callback)(id, params, max_response_body_size as usize))
+				CallResponse::Call((callback)(id, params, max_response_body_size as usize))
 			}
 			MethodKind::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
@@ -194,7 +194,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				let params = params.into_owned();
 
 				let response = (callback)(id, params, conn_id, max_response_body_size as usize).await;
-				MethodResult::Call(response)
+				CallResponse::Call(response)
 			}
 			MethodKind::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
@@ -202,14 +202,14 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				let conn_state = ConnState { conn_id, id_provider };
 				let response = callback(id.clone(), params, sink.clone(), conn_state).await;
 
-				MethodResult::Subscribe(response)
+				CallResponse::Subscribe(response)
 			}
 			MethodKind::Unsubscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription, TransportProtocol::WebSocket);
 
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);
-				MethodResult::Call(result)
+				CallResponse::Call(result)
 			}
 		},
 	};
@@ -343,14 +343,14 @@ pub(crate) async fn background_task<L: Logger>(
 					};
 
 					match process_single_request(data, call).await {
-						MethodResult::Subscribe(SubscriptionAnswered::Yes(r)) => {
+						CallResponse::Subscribe(SubscriptionAnswered::Yes(r)) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 						}
-						MethodResult::Subscribe(SubscriptionAnswered::No(r)) => {
+						CallResponse::Subscribe(SubscriptionAnswered::No(r)) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 							sink_permit.send_raw(r.result);
 						}
-						MethodResult::Call(r) => {
+						CallResponse::Call(r) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 							sink_permit.send_raw(r.result);
 						}

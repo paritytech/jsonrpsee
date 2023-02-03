@@ -260,7 +260,7 @@ async fn macro_param_parsing() {
 async fn macro_optional_param_parsing() {
 	let module = RpcServerImpl.into_rpc();
 
-	let (tx, _) = mpsc::channel(1);
+	let (tx, mut rx) = mpsc::channel(1);
 
 	// Optional param omitted at tail
 	let res: String = module.call("foo_optional_params", [42_u64, 70]).await.unwrap();
@@ -272,11 +272,12 @@ async fn macro_optional_param_parsing() {
 	assert_eq!(&res, "Called with: 42, None, Some(70)");
 
 	// Named params using a map
-	let resp = module
+	module
 		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_optional_params","params":{"a":22,"c":50},"id":0}"#, tx)
 		.await
 		.unwrap();
-	assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
+	let resp = rx.recv().await.unwrap();
+	assert_eq!(resp, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
 }
 
 #[tokio::test]
@@ -290,11 +291,13 @@ async fn macro_lifetimes_parsing() {
 
 #[tokio::test]
 async fn macro_zero_copy_cow() {
+	init_logger();
+
 	let module = RpcServerImpl.into_rpc();
 
-	let (tx, _) = mpsc::channel(1);
+	let (tx, mut rx) = mpsc::channel(16);
 
-	let resp = module
+	module
 		.raw_json_request(
 			r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo", "bar"],"id":0}"#,
 			tx.clone(),
@@ -303,14 +306,14 @@ async fn macro_zero_copy_cow() {
 		.unwrap();
 
 	// std::borrow::Cow<str> always deserialized to owned variant here
-	assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, true","id":0}"#);
+	assert_eq!(rx.recv().await.unwrap(), r#"{"jsonrpc":"2.0","result":"Zero copy params: false, true","id":0}"#);
 
 	// serde_json will have to allocate a new string to replace `\t` with byte 0x09 (tab)
-	let resp = module
+	module
 		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo", "\tbar"],"id":0}"#, tx)
 		.await
 		.unwrap();
-	assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
+	assert_eq!(rx.recv().await.unwrap(), r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
 }
 
 // Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.

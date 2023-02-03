@@ -42,9 +42,8 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
-use jsonrpsee_core::server::helpers::MethodResponse;
 use jsonrpsee_core::server::host_filtering::AllowHosts;
-use jsonrpsee_core::server::rpc_module::{Methods, SubscriptionAnswered};
+use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
@@ -514,41 +513,6 @@ impl<B, L> Builder<B, L> {
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
 		})
-	}
-}
-
-/// This represent a response to a RPC call
-/// and `Subscribe` calls are handled differently
-/// because we want to prevent subscriptions to start
-/// before the actual subscription call has been answered.
-pub(crate) enum MethodResult {
-	/// The subscription callback itself sends back the result
-	/// so it must not be sent back again.
-	Subscribe(SubscriptionAnswered),
-
-	/// Treat it as ordinary call.
-	Call(MethodResponse),
-}
-
-impl MethodResult {
-	pub(crate) fn as_response(&self) -> &MethodResponse {
-		match &self {
-			Self::Subscribe(r) => match r {
-				SubscriptionAnswered::Yes(r) => r,
-				SubscriptionAnswered::No(r) => r,
-			},
-			Self::Call(r) => r,
-		}
-	}
-
-	pub(crate) fn into_response(self) -> MethodResponse {
-		match self {
-			Self::Subscribe(r) => match r {
-				SubscriptionAnswered::Yes(r) => r,
-				SubscriptionAnswered::No(r) => r,
-			},
-			Self::Call(r) => r,
-		}
 	}
 }
 

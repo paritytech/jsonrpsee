@@ -360,21 +360,21 @@ async fn subscribe_unsubscribe_without_server() {
 	async fn subscribe_and_assert(module: &RpcModule<()>) {
 		let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
 		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
-		let (tx, _) = mpsc::channel(1);
+		let (tx, mut rx) = mpsc::channel(1);
 
 		assert!(!sub.is_closed());
 
 		// Unsubscribe should be valid.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
-		let resp = module.raw_json_request(&unsub_req, tx.clone()).await.unwrap();
+		module.raw_json_request(&unsub_req, tx.clone()).await.unwrap();
 
-		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
+		assert_eq!(rx.recv().await.unwrap(), r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 
 		// Unsubscribe already performed; should be error.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
-		let resp = module.raw_json_request(&unsub_req, tx).await.unwrap();
+		module.raw_json_request(&unsub_req, tx).await.unwrap();
 
-		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
+		assert_eq!(rx.recv().await.unwrap(), r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
 	}
 
 	let sub1 = subscribe_and_assert(&module);
