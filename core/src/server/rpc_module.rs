@@ -49,7 +49,7 @@ use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::{mpsc, oneshot};
 
-use super::helpers::{MethodResponse, MethodSinkPermit};
+use super::helpers::MethodResponse;
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -901,9 +901,9 @@ impl PendingSubscriptionSink {
 	/// Reject the subscription call with the error from [`ErrorObject`].
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) -> Result<(), SubscriptionAcceptRejectError> {
 		let err = MethodResponse::error(self.id, err.into());
-		let permit = self.inner.reserve().await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
+		self.inner.send(err.result.clone()).await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
+		self.subscribe.send(err).map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
 
-		Self::answer_subscription(permit, err, self.subscribe).await?;
 		Ok(())
 	}
 
@@ -914,9 +914,8 @@ impl PendingSubscriptionSink {
 		let response =
 			MethodResponse::response(self.id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
-		let permit = self.inner.reserve().await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
-
-		Self::answer_subscription(permit, response, self.subscribe).await?;
+		self.inner.send(response.result.clone()).await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
+		self.subscribe.send(response).map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
 
 		if success {
 			let (tx, rx) = mpsc::channel(1);
@@ -931,15 +930,6 @@ impl PendingSubscriptionSink {
 		} else {
 			Err(SubscriptionAcceptRejectError::MessageTooLarge)
 		}
-	}
-
-	async fn answer_subscription(
-		permit: MethodSinkPermit<'_>,
-		response: MethodResponse,
-		subscribe_call: oneshot::Sender<MethodResponse>,
-	) -> Result<(), SubscriptionAcceptRejectError> {
-		permit.send_raw(response.result.clone());
-		subscribe_call.send(response).map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)
 	}
 }
 
