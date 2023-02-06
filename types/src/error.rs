@@ -186,10 +186,6 @@ pub const SERVER_IS_BUSY_CODE: i32 = -32604;
 pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Unknown error.
 pub const UNKNOWN_ERROR_CODE: i32 = -32001;
-/// Subscription got closed by the server.
-pub const SUBSCRIPTION_CLOSED: i32 = -32003;
-/// Subscription got closed by the server.
-pub const SUBSCRIPTION_CLOSED_WITH_ERROR: i32 = -32004;
 /// Batched requests are not supported by the server.
 pub const BATCHES_NOT_SUPPORTED_CODE: i32 = -32005;
 /// Subscription limit per connection was exceeded.

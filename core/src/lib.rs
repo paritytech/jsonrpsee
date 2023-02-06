@@ -58,7 +58,7 @@ cfg_client! {
 /// Shared tracing helpers to trace RPC calls.
 pub mod tracing;
 pub use async_trait::async_trait;
-pub use error::{Error, SubscriptionAcceptRejectError, SubscriptionClosed, SubscriptionEmptyError};
+pub use error::{Error, SubscriptionAcceptRejectError, SubscriptionEmptyError};
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, Error>;

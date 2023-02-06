@@ -34,11 +34,10 @@ use crate::error::{Error, SubscriptionAcceptRejectError};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::traits::{IdProvider, ToRpcParams};
-use crate::{SubscriptionClosed, SubscriptionResult};
+use crate::SubscriptionResult;
 use futures_util::future::Either;
 use futures_util::{future::BoxFuture, FutureExt};
-use futures_util::{Stream, StreamExt, TryStream, TryStreamExt};
-use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned, SUBSCRIPTION_CLOSED_WITH_ERROR};
+use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned};
 use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
 use jsonrpsee_types::{
 	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
@@ -252,37 +251,6 @@ impl Debug for MethodKind {
 			Self::Sync(_) => write!(f, "Sync"),
 			Self::Subscription(_) => write!(f, "Subscription"),
 			Self::Unsubscription(_) => write!(f, "Unsubscription"),
-		}
-	}
-}
-
-/// A future that only resolves if a future was set.
-pub enum PendingOrFuture<'a> {
-	/// This will never resolve.
-	Pending,
-	/// Resolves once the future is completed.
-	Future(BoxFuture<'a, Result<(), DisconnectError>>),
-}
-
-impl<'a> std::fmt::Debug for PendingOrFuture<'a> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let msg = match self {
-			Self::Pending => "pending",
-			Self::Future(_) => "future",
-		};
-		f.write_str(msg)
-	}
-}
-
-impl<'a> std::future::Future for PendingOrFuture<'a> {
-	type Output = Result<(), DisconnectError>;
-
-	fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-		let this = std::pin::Pin::into_inner(self);
-
-		match this {
-			Self::Pending => std::task::Poll::Pending,
-			Self::Future(fut) => fut.poll_unpin(cx),
 		}
 	}
 }
@@ -850,7 +818,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 ///
 // NOTE: The reason why we use `mpsc` here is because it allows `IsUnsubscribed::unsubscribed`
 // to be &self instead of &mut self.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct IsUnsubscribed(mpsc::Sender<()>);
 
 impl IsUnsubscribed {
@@ -934,7 +902,7 @@ impl PendingSubscriptionSink {
 }
 
 /// Represents a single subscription that hasn't been processed yet.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
@@ -1017,143 +985,6 @@ impl SubscriptionSink {
 		))
 		.map(SubscriptionMessage)
 		.map_err(Into::into)
-	}
-
-	/// Reads data from the `stream` and sends back data on the subscription
-	/// when items gets produced by the stream.
-	///
-	/// The underlying sink is a bounded channel which may not have room for new items
-	/// if the client can't keep up with all the messages from the stream. Thus, you need to provide a closure
-	/// with a policy what to do when the underlying channel has not space to "buffer" more messages.
-	///
-	/// The underlying stream must produce `Result values, see [`futures_util::TryStream`] for further information.
-	///
-	/// Returns `Ok(())` if the stream or connection was terminated.
-	/// Returns `Err(_)` immediately if the underlying stream returns an error or if an item from the stream could not be serialized.
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	///
-	/// use jsonrpsee_core::server::rpc_module::RpcModule;
-	/// use jsonrpsee_core::error::{Error, SubscriptionClosed};
-	/// use jsonrpsee_types::ErrorObjectOwned;
-	/// use anyhow::anyhow;
-	///
-	/// let mut m = RpcModule::new(());
-	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| async move {
-	///     let mut sink = pending.accept().await?;
-	///
-	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
-	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
-	///     // because after the `Err(_)` then the stream is terminated.
-	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
-	///
-	///     // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
-	///     // If we pipe messages to the sink, we can inspect why it ended:
-	///     match sink.pipe_from_try_stream(|last, next| last.unwrap_or(next), stream).await {
-	///         SubscriptionClosed::Success => {
-	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
-	///                sink.close(err_obj).await;
-	///         }
-	///         // we don't want to send close reason when the client is unsubscribed or disconnected.
-	///         SubscriptionClosed::RemotePeerAborted => (),
-	///         SubscriptionClosed::Failed(e) => {
-	///           sink.close(e).await;
-	///         }
-	///     }
-	///     Ok(())
-	/// });
-	/// ```
-	pub async fn pipe_from_try_stream<'a, S, T, F, E>(&'a mut self, f: F, stream: S) -> SubscriptionClosed
-	where
-		F: Fn(Option<PendingOrFuture<'a>>, PendingOrFuture<'a>) -> PendingOrFuture<'a>,
-		S: TryStream<Ok = T, Error = E> + Unpin,
-		T: Serialize,
-		E: std::fmt::Display,
-	{
-		fn err(err: impl std::fmt::Display) -> SubscriptionClosed {
-			let err = ErrorObject::owned(SUBSCRIPTION_CLOSED_WITH_ERROR, err.to_string(), None::<()>);
-			SubscriptionClosed::Failed(err)
-		}
-
-		let mut pending_send = PendingOrFuture::Pending;
-		let closed = self.closed();
-
-		tokio::pin!(closed, stream);
-
-		let mut next_item = stream.try_next();
-
-		loop {
-			match futures_util::future::select(closed, futures_util::future::select(pending_send, next_item)).await {
-				Either::Left((_, _)) => {
-					break SubscriptionClosed::RemotePeerAborted;
-				}
-
-				Either::Right((Either::Left((maybe_sent, n)), c)) => {
-					if maybe_sent.is_err() {
-						break SubscriptionClosed::RemotePeerAborted;
-					}
-					pending_send = PendingOrFuture::Pending;
-					next_item = n;
-					closed = c;
-				}
-
-				Either::Right((Either::Right((item, pending)), c)) => {
-					let item = match item {
-						Ok(Some(item)) => item,
-						Ok(None) => break SubscriptionClosed::Success,
-						Err(e) => break err(e),
-					};
-
-					let msg = match self.build_message(&item) {
-						Ok(msg) => msg,
-						Err(e) => break err(e),
-					};
-
-					let next: BoxFuture<_> = Box::pin(self.send(msg));
-
-					let pending = match pending {
-						PendingOrFuture::Pending => None,
-						fut => Some(fut),
-					};
-
-					pending_send = f(pending, PendingOrFuture::Future(next));
-					closed = c;
-					next_item = stream.try_next();
-				}
-			}
-		}
-	}
-
-	/// Similar to [`SubscriptionSink::pipe_from_try_stream`] but it doesn't require the stream return `Result`.
-	///
-	/// Warning: it's possible to pass in a stream that returns `Result` if `Result: Serialize` is satisfied
-	/// but it won't cancel the stream when an error occurs. If you want the stream to be canceled when an
-	/// error occurs use [`SubscriptionSink::pipe_from_try_stream`] instead.
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	///
-	/// use jsonrpsee_core::server::rpc_module::RpcModule;
-	///
-	/// let mut m = RpcModule::new(());
-	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| async move {
-	///    let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
-	///
-	///    let mut sink = pending.accept().await?;
-	///    sink.pipe_from_stream(|_last, next| next, stream).await;
-	///    Ok(())
-	/// });
-	/// ```
-	pub async fn pipe_from_stream<'a, S, T, F>(&'a mut self, f: F, stream: S) -> SubscriptionClosed
-	where
-		F: Fn(Option<PendingOrFuture<'a>>, PendingOrFuture<'a>) -> PendingOrFuture<'a>,
-		S: Stream<Item = T> + Unpin,
-		T: Serialize,
-	{
-		self.pipe_from_try_stream::<_, _, _, Error>(f, stream.map(|item| Ok(item))).await
 	}
 
 	fn build_error_message<T: Serialize>(&self, error: &T) -> Result<SubscriptionMessage, serde_json::Error> {

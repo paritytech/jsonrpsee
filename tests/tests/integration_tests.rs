@@ -588,24 +588,6 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 }
 
 #[tokio::test]
-async fn ws_server_cancels_sub_stream_after_err() {
-	init_logger();
-
-	let addr = server_with_subscription().await;
-	let server_url = format!("ws://{}", addr);
-
-	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub: Subscription<serde_json::Value> = client
-		.subscribe("subscribe_with_err_on_stream", rpc_params![], "unsubscribe_with_err_on_stream")
-		.await
-		.unwrap();
-
-	assert_eq!(sub.next().await.unwrap().unwrap(), 1);
-	// The server closed down the subscription with the underlying error from the stream.
-	assert!(sub.next().await.is_none());
-}
-
-#[tokio::test]
 async fn ws_server_subscribe_with_stream() {
 	init_logger();
 
@@ -659,22 +641,6 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 	let rx_len = rx.take(10).fold(0, |acc, _| async move { acc + 1 }).await;
 
 	assert_eq!(rx_len, 10);
-}
-
-#[tokio::test]
-async fn ws_server_pipe_from_stream_can_be_reused() {
-	init_logger();
-
-	let addr = server_with_subscription().await;
-	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
-	let sub = client
-		.subscribe::<i32, ArrayParams>("can_reuse_subscription", rpc_params![], "u_can_reuse_subscription")
-		.await
-		.unwrap();
-
-	let items = sub.fold(0, |acc, _| async move { acc + 1 }).await;
-
-	assert_eq!(items, 10);
 }
 
 #[tokio::test]

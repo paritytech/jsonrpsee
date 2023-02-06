@@ -27,12 +27,14 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::rpc_params;
+use jsonrpsee::core::server::rpc_module::TrySendError;
+use jsonrpsee::core::{Serialize, SubscriptionResult};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 
@@ -80,10 +82,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
-
-			let mut sink = pending.accept().await?;
-
-			sink.pipe_from_stream(|_last, next| next, stream).await;
+			pipe_from_stream_and_drop(pending, stream).await?;
 
 			Ok(())
 		})
@@ -95,10 +94,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let item = &LETTERS[one..two];
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
-
-			let mut sink = pending.accept().await?;
-
-			sink.pipe_from_stream(|_last, next| next, stream).await;
+			pipe_from_stream_and_drop(pending, stream).await?;
 
 			Ok(())
 		})
@@ -112,4 +108,28 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	tokio::spawn(handle.stopped());
 
 	Ok(addr)
+}
+
+async fn pipe_from_stream_and_drop<S, T>(pending: PendingSubscriptionSink, mut stream: S) -> SubscriptionResult
+where
+	S: Stream<Item = T> + Unpin,
+	T: Serialize,
+{
+	let mut sink = pending.accept().await?;
+
+	loop {
+		tokio::select! {
+			_ = sink.closed() => break Ok(()),
+			Some(item) = stream.next() => {
+				let msg = sink.build_message(&item)?;
+				match sink.try_send(msg) {
+					Ok(_) => (),
+					Err(TrySendError::Closed(_)) => break Ok(()),
+					// channel is full, let's be naive an just drop the message.
+					Err(TrySendError::Full(_)) => break Ok(()),
+				}
+			}
+			else => break Ok(()),
+		}
+	}
 }

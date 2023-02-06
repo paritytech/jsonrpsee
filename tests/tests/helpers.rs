@@ -29,14 +29,17 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::{SinkExt, StreamExt};
+use futures::future::Either;
+use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
-use jsonrpsee::core::{Error, SubscriptionClosed};
+use jsonrpsee::core::server::rpc_module::TrySendError;
+use jsonrpsee::core::{Error, SubscriptionResult};
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
-use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
+use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::RpcModule;
+use jsonrpsee::{PendingSubscriptionSink, RpcModule};
+use serde::Serialize;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
@@ -52,9 +55,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| &"hello from subscription");
-
-			let mut sink = pending.accept().await?;
-			sink.pipe_from_stream(|_, next| next, stream).await;
+			pipe_from_stream_and_drop(pending, stream).await?;
 
 			Ok(())
 		})
@@ -64,9 +65,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| async {
 			let interval = interval(Duration::from_millis(100));
 			let stream = IntervalStream::new(interval).map(move |_| 1337_usize);
-
-			let mut sink = pending.accept().await?;
-			sink.pipe_from_stream(|_, next| next, stream).await;
+			pipe_from_stream_and_drop(pending, stream).await?;
 
 			Ok(())
 		})
@@ -89,9 +88,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 				let wrapping_counter = futures::stream::iter((count..).cycle());
 				let interval = interval(Duration::from_millis(100));
 				let stream = IntervalStream::new(interval).zip(wrapping_counter).map(move |(_, c)| c);
-
-				let mut sink = pending.accept().await?;
-				sink.pipe_from_stream(|_, next| next, stream).await;
+				pipe_from_stream_and_drop(pending, stream).await?;
 
 				Ok(())
 			},
@@ -102,11 +99,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
 			let sink = pending.accept().await.unwrap();
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			let err = ErrorObject::owned(
-				SUBSCRIPTION_CLOSED_WITH_ERROR,
-				"Server closed the stream because it was lazy",
-				None::<()>,
-			);
+			let err = ErrorObject::owned(1, "Server closed the stream because it was lazy", None::<()>);
 			sink.close(err).await;
 
 			Ok(())
@@ -117,65 +110,11 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
-
-			let mut sink = pending.accept().await?;
-			match sink.pipe_from_stream(|_, next| next, stream).await {
-				SubscriptionClosed::Success => {
-					sink.close(SubscriptionClosed::Success).await;
-				}
-				_ => unreachable!(),
-			}
+			tracing::info!("pipe_from_stream");
+			pipe_from_stream_and_drop(pending, stream).await?;
 
 			Ok(())
 		})
-		.unwrap();
-
-	module
-		.register_subscription("can_reuse_subscription", "n", "u_can_reuse_subscription", |_, pending, _| async move {
-			let stream1 = IntervalStream::new(interval(Duration::from_millis(50)))
-				.zip(futures::stream::iter(1..=5))
-				.map(|(_, c)| c);
-			let stream2 = IntervalStream::new(interval(Duration::from_millis(50)))
-				.zip(futures::stream::iter(6..=10))
-				.map(|(_, c)| c);
-
-			let mut sink = pending.accept().await?;
-			let result = sink.pipe_from_stream(|_, next| next, stream1).await;
-			assert!(matches!(result, SubscriptionClosed::Success));
-
-			match sink.pipe_from_stream(|_, next| next, stream2).await {
-				SubscriptionClosed::Success => {
-					sink.close(SubscriptionClosed::Success).await;
-				}
-				_ => unreachable!(),
-			}
-
-			Ok(())
-		})
-		.unwrap();
-
-	module
-		.register_subscription(
-			"subscribe_with_err_on_stream",
-			"n",
-			"unsubscribe_with_err_on_stream",
-			move |_, pending, _| async {
-				let err: &'static str = "error on the stream";
-
-				// Create stream that produce an error which will cancel the subscription.
-				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
-
-				let mut sink = pending.accept().await?;
-				match sink.pipe_from_try_stream(|_, next| next, stream).await {
-					SubscriptionClosed::Failed(e) => {
-						sink.close(e).await;
-					}
-					_ => unreachable!(),
-				};
-
-				Ok(())
-			},
-		)
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
@@ -230,8 +169,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
-			let mut sink = pending.accept().await?;
-			sink.pipe_from_stream(|_, next| next, stream).await;
+			pipe_from_stream_and_drop(pending, stream).await?;
 
 			let send_back = std::sync::Arc::make_mut(&mut tx);
 			send_back.send(()).await.unwrap();
@@ -279,4 +217,52 @@ pub fn init_logger() {
 	let _ = tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init();
+}
+
+pub async fn pipe_from_stream_and_drop<T: Serialize>(
+	pending: PendingSubscriptionSink,
+	stream: impl Stream<Item = T> + Unpin,
+) -> SubscriptionResult {
+	let mut sink = pending.accept().await?;
+	let other = sink.clone();
+	let closed = other.closed();
+
+	tokio::pin!(closed, stream);
+
+	let mut rx_next = stream.next();
+
+	loop {
+		match futures::future::select(closed, rx_next).await {
+			Either::Left((_, _)) => {
+				break;
+			}
+
+			Either::Right((Some(item), c)) => {
+				let msg = match sink.build_message(&item) {
+					Ok(msg) => msg,
+					Err(e) => {
+						sink.close(ErrorObject::owned(1, e.to_string(), None::<()>)).await;
+						return Err(e.into());
+					}
+				};
+
+				match sink.try_send(msg) {
+					Ok(_) => (),
+					Err(TrySendError::Closed(_)) => break,
+					Err(TrySendError::Full(_)) => (),
+				};
+
+				closed = c;
+				rx_next = stream.next();
+			}
+
+			Either::Right((None, _)) => {
+				break;
+			}
+		}
+	}
+
+	sink.close(ErrorObject::owned(1, "Subscription executed successful", None::<()>)).await;
+
+	Ok(())
 }

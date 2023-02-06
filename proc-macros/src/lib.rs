@@ -295,8 +295,8 @@ pub(crate) mod visitor;
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
 ///
-///             let stream = futures_util::stream::iter(["one", "two", "three"]);
-///             sink.pipe_from_stream(|_last, next| next, stream).await;
+///             let msg = sink.build_message(&"Response_A")?;
+///             sink.send(msg).await?;
 ///
 ///             Ok(())
 ///         }
@@ -305,11 +305,11 @@ pub(crate) mod visitor;
 ///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
-///             let msg1 = sink.build_message(&"Response_A").unwrap();
-///             let msg2 = sink.build_message(&"Response_B").unwrap();
+///             let msg1 = sink.build_message(&"Response_A")?;
+///             let msg2 = sink.build_message(&"Response_B")?;
 ///
-///             sink.send(msg1).await.unwrap();
-///             sink.send(msg2).await.unwrap();
+///             sink.send(msg1).await?;
+///             sink.send(msg2).await?;
 ///
 ///             Ok(())
 ///         }

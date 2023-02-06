@@ -30,7 +30,7 @@ use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 
 use futures::StreamExt;
-use helpers::init_logger;
+use helpers::{init_logger, pipe_from_stream_and_drop};
 use jsonrpsee::core::error::{Error, SubscriptionEmptyError};
 use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::core::EmptyServerParams;
@@ -350,9 +350,8 @@ async fn subscribe_unsubscribe_without_server() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);
-			let mut sink = pending.accept().await.unwrap();
+			pipe_from_stream_and_drop(pending, stream).await?;
 
-			sink.pipe_from_stream(|_, next| next, stream).await;
 			Ok(())
 		})
 		.unwrap();

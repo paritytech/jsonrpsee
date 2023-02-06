@@ -27,8 +27,7 @@
 use std::fmt;
 
 use jsonrpsee_types::error::{
-	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
-	UNKNOWN_ERROR_CODE,
+	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, UNKNOWN_ERROR_CODE,
 };
 
 /// Convenience type for displaying errors.
@@ -142,34 +141,6 @@ impl From<Error> for ErrorObjectOwned {
 				ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>)
 			}
 			_ => ErrorObject::owned(UNKNOWN_ERROR_CODE, err.to_string(), None::<()>),
-		}
-	}
-}
-
-/// A type to represent when a subscription gets closed
-/// by either the server or client side.
-#[derive(Clone, Debug)]
-pub enum SubscriptionClosed {
-	/// The remote peer closed the connection or called the unsubscribe method.
-	RemotePeerAborted,
-	/// The subscription was completed successfully by the server.
-	Success,
-	/// The subscription failed during execution by the server.
-	Failed(ErrorObject<'static>),
-}
-
-impl From<SubscriptionClosed> for ErrorObjectOwned {
-	fn from(err: SubscriptionClosed) -> Self {
-		match err {
-			SubscriptionClosed::RemotePeerAborted => {
-				ErrorObject::owned(SUBSCRIPTION_CLOSED, "Subscription was closed by the remote peer", None::<()>)
-			}
-			SubscriptionClosed::Success => ErrorObject::owned(
-				SUBSCRIPTION_CLOSED,
-				"Subscription was completed by the server successfully",
-				None::<()>,
-			),
-			SubscriptionClosed::Failed(err) => err,
 		}
 	}
 }
