@@ -31,6 +31,7 @@ use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
+use jsonrpsee::core::server::rpc_module::TrySendError;
 use jsonrpsee::core::{Error, SubscriptionClosed};
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -184,33 +185,30 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 			"n",
 			"unsubscribe_with_backpressure_aggregation",
 			move |_, pending, _| async {
-				let sink = pending.accept().await?;
-				let mut n = sink.build_message(&1).unwrap();
+				let mut sink = pending.accept().await?;
+				let n = sink.build_message(&1).unwrap();
+				let bp = sink.build_message(&2).unwrap();
+				let mut msg = n.clone();
 
 				loop {
-					tokio::select! {
-						biased;
-						_ = sink.closed() => {
-							// User closed connection.
-							println!("User closed");
+					match sink.try_send(msg) {
+						Err(TrySendError::Closed(_)) => {
+							println!("user closed");
 							break;
-						},
-						res = sink.send(n) => {
-							// n back to 1 when message sends
-							if res.is_err() {
-								break;
-							}
-							n = sink.build_message(&1).unwrap();
-						},
-						else => {
-							// Every time sending is busy, increment n.
-							n = sink.build_message(&2).unwrap();
+						}
+						Err(TrySendError::Full(_)) => {
+							println!("buffer full kick in backpressure");
+							msg = bp.clone();
+						}
+						Ok(()) => {
+							msg = n.clone();
 						}
 					}
 				}
 				Ok(())
-			})
-			.unwrap();
+			},
+		)
+		.unwrap();
 
 	let addr = server.local_addr().unwrap();
 	let server_handle = server.start(module).unwrap();

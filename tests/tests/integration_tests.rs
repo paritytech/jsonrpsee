@@ -682,7 +682,11 @@ async fn ws_backpressure_works() {
 	let addr = server_with_subscription().await;
 	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
 	let mut sub = client
-		.subscribe::<i32, ArrayParams>("subscribe_with_backpressure_aggregation", rpc_params![], "unsubscribe_with_backpressure_aggregation")
+		.subscribe::<i32, ArrayParams>(
+			"subscribe_with_backpressure_aggregation",
+			rpc_params![],
+			"unsubscribe_with_backpressure_aggregation",
+		)
 		.await
 		.unwrap();
 
@@ -690,8 +694,9 @@ async fn ws_backpressure_works() {
 		let item = item.unwrap();
 		if item > 1 {
 			println!("WOOOOO");
-			break
+			break;
 		}
+		tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 	}
 	println!("DONE")
 }
