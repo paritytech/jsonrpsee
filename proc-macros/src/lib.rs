@@ -99,7 +99,7 @@ pub(crate) mod visitor;
 ///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
 ///     fn sync_method(&self) -> String;
 ///
-///     // Note that `pending subscription sink` was added automatically.
+///     // Note that `pending_subscription_sink` and `SubscriptionResult` were added automatically.
 ///     async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult;
 ///
 ///     fn into_rpc(self) -> Result<Self, jsonrpsee::core::Error> {
