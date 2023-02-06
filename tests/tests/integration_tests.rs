@@ -678,6 +678,25 @@ async fn ws_server_pipe_from_stream_can_be_reused() {
 }
 
 #[tokio::test]
+async fn ws_backpressure_works() {
+	let addr = server_with_subscription().await;
+	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
+	let mut sub = client
+		.subscribe::<i32, ArrayParams>("subscribe_with_backpressure_aggregation", rpc_params![], "unsubscribe_with_backpressure_aggregation")
+		.await
+		.unwrap();
+
+	while let Some(item) = sub.next().await {
+		let item = item.unwrap();
+		if item > 1 {
+			println!("WOOOOO");
+			break
+		}
+	}
+	println!("DONE")
+}
+
+#[tokio::test]
 async fn ws_batch_works() {
 	init_logger();
 

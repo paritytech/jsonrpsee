@@ -178,6 +178,40 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		)
 		.unwrap();
 
+	module
+		.register_subscription(
+			"subscribe_with_backpressure_aggregation",
+			"n",
+			"unsubscribe_with_backpressure_aggregation",
+			move |_, pending, _| async {
+				let sink = pending.accept().await?;
+				let mut n = sink.build_message(&1).unwrap();
+
+				loop {
+					tokio::select! {
+						biased;
+						_ = sink.closed() => {
+							// User closed connection.
+							println!("User closed");
+							break;
+						},
+						res = sink.send(n) => {
+							// n back to 1 when message sends
+							if res.is_err() {
+								break;
+							}
+							n = sink.build_message(&1).unwrap();
+						},
+						else => {
+							// Every time sending is busy, increment n.
+							n = sink.build_message(&2).unwrap();
+						}
+					}
+				}
+				Ok(())
+			})
+			.unwrap();
+
 	let addr = server.local_addr().unwrap();
 	let server_handle = server.start(module).unwrap();
 
