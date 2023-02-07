@@ -433,7 +433,7 @@ impl<B, L> Builder<B, L> {
 	/// and the client can't keep up then no new messages are handled.
 	///
 	/// If this limit is exceeded the server will "back-off"
-	/// and only accept ones the client reads pending messages.
+	/// and only accept new messages once the client reads pending messages.
 	///
 	/// # Panics
 	///
