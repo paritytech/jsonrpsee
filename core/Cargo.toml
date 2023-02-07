@@ -45,6 +45,7 @@ server = [
 	"tokio/rt",
 	"tokio/sync",
 	"tokio/macros",
+	"tokio/time",
 ]
 client = ["futures-util/sink", "tokio/sync"]
 async-client = [
