@@ -24,13 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::collections::VecDeque;
+
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
+use jsonrpsee_core::server::rpc_module::TrySendError;
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_types::SubscriptionResponse;
 use serde_json::Value as JsonValue;
 
 use super::helpers::server;
@@ -645,4 +649,111 @@ async fn batch_with_mixed_calls() {
 	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":"5"}]"#;
 	let response = client.send_request_text(req.to_string()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, res);
+}
+
+#[tokio::test]
+async fn ws_server_backpressure_works() {
+	init_logger();
+
+	let (backpressure_tx, mut backpressure_rx) = tokio::sync::mpsc::channel(1);
+
+	let server = ServerBuilder::default()
+		.set_backpressure_buffer_capacity(5)
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	let mut module = RpcModule::new(backpressure_tx);
+
+	module
+		.register_subscription(
+			"subscribe_with_backpressure_aggregation",
+			"n",
+			"unsubscribe_with_backpressure_aggregation",
+			move |_, pending, mut backpressure_tx| async move {
+				let mut sink = pending.accept().await?;
+				let n = sink.build_message(&1).unwrap();
+				let bp = sink.build_message(&2).unwrap();
+
+				let mut buf = VecDeque::new();
+				buf.push_back(n.clone());
+				let mut sent = 0;
+
+				while let Some(next) = buf.pop_front() {
+					if sent > 20 {
+						break;
+					}
+
+					// just try "buffer" 20 items to avoid OOM.
+					if buf.len() > 20 {
+						sink.send(next).await?;
+						sent += 1;
+					} else {
+						match sink.try_send(next) {
+							Err(TrySendError::Closed(_)) => {
+								println!("user closed");
+								break;
+							}
+							Err(TrySendError::Full(unsent)) => {
+								// send a message to the testing code to indicate that
+								// the buffer was exceeded.
+								let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);
+								let _ = b_tx.send(()).await;
+
+								buf.push_back(unsent);
+								buf.push_back(bp.clone());
+							}
+							Ok(()) => {
+								sent += 1;
+								buf.push_back(n.clone());
+							}
+						}
+					}
+				}
+
+				Ok(())
+			},
+		)
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+
+	let _server_handle = server.start(module).unwrap();
+
+	// Send a valid batch.
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let req = r#"
+		{"jsonrpc":"2.0","method":"subscribe_with_backpressure_aggregation", "params":[],"id":1}"#;
+	client.send(req).with_default_timeout().await.unwrap().unwrap();
+
+	backpressure_rx.recv().await.unwrap();
+
+	let now = std::time::Instant::now();
+	let mut msg;
+
+	// Assert that first `item == 2` was sent and then
+	// the client start reading the socket again the buffered items should be sent.
+	// Thus, eventually `item == 1` should be sent again.
+	let mut seen_backpressure_item = false;
+	let mut seen_item_after_backpressure = false;
+
+	while now.elapsed() < std::time::Duration::from_secs(10) {
+		msg = client.receive().with_default_timeout().await.unwrap().unwrap();
+		if let Ok(sub_notif) = serde_json::from_str::<SubscriptionResponse<usize>>(&msg) {
+			match sub_notif.params.result {
+				1 if seen_backpressure_item => {
+					seen_item_after_backpressure = true;
+					break;
+				}
+				2 => {
+					seen_backpressure_item = true;
+				}
+				_ => (),
+			}
+		}
+	}
+
+	assert!(seen_backpressure_item);
+	assert!(seen_item_after_backpressure);
 }

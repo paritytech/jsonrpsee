@@ -132,6 +132,10 @@ impl WebSocketTestClient {
 	pub async fn send_request_binary(&mut self, msg: &[u8]) -> Result<String, Error> {
 		self.tx.send_binary(msg).await?;
 		self.tx.flush().await?;
+		self.receive().await
+	}
+
+	pub async fn receive(&mut self) -> Result<String, Error> {
 		let mut data = Vec::new();
 		self.rx.receive_data(&mut data).await?;
 		String::from_utf8(data).map_err(Into::into)
