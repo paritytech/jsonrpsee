@@ -423,7 +423,7 @@ impl<B, L> Builder<B, L> {
 
 	/// The server enforces backpressure which means that
 	/// `n` messages can be buffered and if the client
-	/// can't keep with the server.
+	/// can't keep with up the server.
 	///
 	/// This `capacity` is applied per connection and
 	/// applies globally on the connection which implies
