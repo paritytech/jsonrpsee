@@ -29,6 +29,7 @@ use std::fmt::{self, Debug};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::error::{Error, SubscriptionAcceptRejectError};
 use crate::id_providers::RandomIntegerIdProvider;
@@ -71,7 +72,7 @@ pub type ConnectionId = usize;
 /// Max response size.
 pub type MaxResponseSize = usize;
 
-/// TrySendError
+/// Error that may occur during `SubscriptionSink::try_send`.
 #[derive(Debug)]
 pub enum TrySendError {
 	/// The channel is closed.
@@ -92,9 +93,19 @@ pub enum SubscriptionAnswered {
 	No(MethodResponse),
 }
 
-/// Disconnect error
+/// Error that may occur during `MethodSink::send` or `SubscriptionSink::send`.
 #[derive(Debug)]
 pub struct DisconnectError(pub SubscriptionMessage);
+
+/// Error that may occur during `SubscriptionSink::send_timeout`.
+#[derive(Debug)]
+pub enum SendTimeoutError {
+	/// The data could not be sent because the timeout elapsed
+	/// which most likely is that the channel is full.
+	Timeout(SubscriptionMessage),
+	/// The channel is full.
+	Closed(SubscriptionMessage),
+}
 
 /// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
@@ -124,6 +135,15 @@ impl From<mpsc::error::TrySendError<String>> for TrySendError {
 		match e {
 			mpsc::error::TrySendError::Closed(m) => Self::Closed(SubscriptionMessage(m)),
 			mpsc::error::TrySendError::Full(m) => Self::Full(SubscriptionMessage(m)),
+		}
+	}
+}
+
+impl From<mpsc::error::SendTimeoutError<String>> for SendTimeoutError {
+	fn from(e: mpsc::error::SendTimeoutError<String>) -> Self {
+		match e {
+			mpsc::error::SendTimeoutError::Closed(m) => Self::Closed(SubscriptionMessage(m)),
+			mpsc::error::SendTimeoutError::Timeout(m) => Self::Timeout(SubscriptionMessage(m)),
 		}
 	}
 }
@@ -944,6 +964,16 @@ impl SubscriptionSink {
 		}
 
 		self.inner.send(msg.0).await.map_err(Into::into)
+	}
+
+	/// Similar to to `SubscriptionSink::send` but only waits for a limited time.
+	pub async fn send_timeout(&self, msg: SubscriptionMessage, timeout: Duration) -> Result<(), SendTimeoutError> {
+		// Only possible to trigger when the connection is dropped.
+		if self.is_closed() {
+			return Err(SendTimeoutError::Closed(msg));
+		}
+
+		self.inner.send_timeout(msg.0, timeout).await.map_err(Into::into)
 	}
 
 	/// Attempts to immediately send out the message as JSON string to the subscribers but fails if the

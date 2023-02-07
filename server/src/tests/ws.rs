@@ -24,12 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::collections::VecDeque;
-
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
-use jsonrpsee_core::server::rpc_module::TrySendError;
+use jsonrpsee_core::server::rpc_module::SendTimeoutError;
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
@@ -655,7 +653,7 @@ async fn batch_with_mixed_calls() {
 async fn ws_server_backpressure_works() {
 	init_logger();
 
-	let (backpressure_tx, mut backpressure_rx) = tokio::sync::mpsc::channel(1);
+	let (backpressure_tx, mut backpressure_rx) = tokio::sync::mpsc::channel::<()>(1);
 
 	let server = ServerBuilder::default()
 		.set_backpressure_buffer_capacity(5)
@@ -673,46 +671,36 @@ async fn ws_server_backpressure_works() {
 			"n",
 			"unsubscribe_with_backpressure_aggregation",
 			move |_, pending, mut backpressure_tx| async move {
-				let mut sink = pending.accept().await?;
+				let sink = pending.accept().await?;
 				let n = sink.build_message(&1).unwrap();
 				let bp = sink.build_message(&2).unwrap();
 
-				let mut buf = VecDeque::new();
-				buf.push_back(n.clone());
-				let mut sent = 0;
+				let mut msg = n.clone();
 
-				while let Some(next) = buf.pop_front() {
-					if sent > 20 {
-						break;
-					}
-
-					// just try "buffer" 20 items to avoid OOM.
-					if buf.len() > 20 {
-						sink.send(next).await?;
-						sent += 1;
-					} else {
-						match sink.try_send(next) {
-							Err(TrySendError::Closed(_)) => {
-								println!("user closed");
-								break;
-							}
-							Err(TrySendError::Full(unsent)) => {
-								// send a message to the testing code to indicate that
-								// the buffer was exceeded.
-								let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);
-								let _ = b_tx.send(()).await;
-
-								buf.push_back(unsent);
-								buf.push_back(bp.clone());
-							}
-							Ok(()) => {
-								sent += 1;
-								buf.push_back(n.clone());
-							}
-						}
+				loop {
+					tokio::select! {
+						biased;
+						_ = sink.closed() => {
+							// User closed connection.
+							break;
+						},
+						res = sink.send_timeout(msg.clone(), std::time::Duration::from_millis(100)) => {
+							match res {
+								// msg == 1
+								Ok(_) => {
+									msg = n.clone();
+								}
+								Err(SendTimeoutError::Closed(_)) => break,
+								// msg == 2
+								Err(SendTimeoutError::Timeout(_)) => {
+									let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);
+									let _ = b_tx.send(()).await;
+									msg = bp.clone();
+								}
+							};
+						},
 					}
 				}
-
 				Ok(())
 			},
 		)
@@ -740,6 +728,7 @@ async fn ws_server_backpressure_works() {
 
 	while now.elapsed() < std::time::Duration::from_secs(10) {
 		msg = client.receive().with_default_timeout().await.unwrap().unwrap();
+		tracing::info!("{msg}");
 		if let Ok(sub_notif) = serde_json::from_str::<SubscriptionResponse<usize>>(&msg) {
 			match sub_notif.params.result {
 				1 if seen_backpressure_item => {

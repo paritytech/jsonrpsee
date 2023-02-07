@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::io;
+use std::time::Duration;
 
 use crate::tracing::tx_log_from_str;
 use crate::Error;
@@ -33,7 +34,7 @@ use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Permit};
 
-use super::rpc_module::{DisconnectError, SubscriptionMessage, TrySendError};
+use super::rpc_module::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -121,22 +122,25 @@ impl MethodSink {
 		self.max_response_size
 	}
 
-	/// Non-blocking send which fails if the channel is closed or full
+	/// Attempts to send out the message immediately and fails if the underlying
+	/// connection has been closed or if the message buffer is full.
 	///
 	/// Returns the message if the send fails such that either can be thrown away or re-sent later.
 	pub fn try_send(&mut self, msg: String) -> Result<(), TrySendError> {
 		tx_log_from_str(&msg, self.max_log_length);
-		self.tx.try_send(msg)?;
-
-		Ok(())
+		self.tx.try_send(msg).map_err(Into::into)
 	}
 
 	/// Async send which will wait until there is space in channel buffer or that the subscription is disconnected.
 	pub async fn send(&self, msg: String) -> Result<(), DisconnectError> {
 		tx_log_from_str(&msg, self.max_log_length);
-		self.tx.send(msg).await?;
+		self.tx.send(msg).await.map_err(Into::into)
+	}
 
-		Ok(())
+	/// Similar to to `MethodSink::send` but only waits for a limited time.
+	pub async fn send_timeout(&self, msg: String, timeout: Duration) -> Result<(), SendTimeoutError> {
+		tx_log_from_str(&msg, self.max_log_length);
+		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
 	}
 
 	/// Waits for channel capacity. Once capacity to send one message is available, it is reserved for the caller.
