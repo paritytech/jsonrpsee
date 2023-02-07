@@ -29,7 +29,6 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::future::Either;
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
 use jsonrpsee::core::server::rpc_module::TrySendError;
@@ -221,23 +220,18 @@ pub fn init_logger() {
 
 pub async fn pipe_from_stream_and_drop<T: Serialize>(
 	pending: PendingSubscriptionSink,
-	stream: impl Stream<Item = T> + Unpin,
+	mut stream: impl Stream<Item = T> + Unpin,
 ) -> SubscriptionResult {
 	let mut sink = pending.accept().await?;
-	let other = sink.clone();
-	let closed = other.closed();
-
-	tokio::pin!(closed, stream);
-
-	let mut rx_next = stream.next();
 
 	loop {
-		match futures::future::select(closed, rx_next).await {
-			Either::Left((_, _)) => {
-				break;
-			}
-
-			Either::Right((Some(item), c)) => {
+		tokio::select! {
+			_ = sink.closed() => break,
+			maybe_item = stream.next() => {
+				let item = match maybe_item {
+					Some(item) => item,
+					None => break,
+				};
 				let msg = match sink.build_message(&item) {
 					Ok(msg) => msg,
 					Err(e) => {
@@ -249,15 +243,9 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 				match sink.try_send(msg) {
 					Ok(_) => (),
 					Err(TrySendError::Closed(_)) => break,
+					// channel is full, let's be naive an just drop the message.
 					Err(TrySendError::Full(_)) => (),
-				};
-
-				closed = c;
-				rx_next = stream.next();
-			}
-
-			Either::Right((None, _)) => {
-				break;
+				}
 			}
 		}
 	}

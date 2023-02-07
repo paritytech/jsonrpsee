@@ -32,7 +32,7 @@ use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::server::rpc_module::TrySendError;
 use jsonrpsee::core::{Serialize, SubscriptionResult};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
-use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 use tokio::time::interval;
@@ -82,6 +82,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
+
 			pipe_from_stream_and_drop(pending, stream).await?;
 
 			Ok(())
@@ -119,17 +120,31 @@ where
 
 	loop {
 		tokio::select! {
-			_ = sink.closed() => break Ok(()),
-			Some(item) = stream.next() => {
-				let msg = sink.build_message(&item)?;
+			_ = sink.closed() => break,
+			maybe_item = stream.next() => {
+				let item = match maybe_item {
+					Some(item) => item,
+					None => break,
+				};
+				let msg = match sink.build_message(&item) {
+					Ok(msg) => msg,
+					Err(e) => {
+						sink.close(ErrorObject::owned(1, e.to_string(), None::<()>)).await;
+						return Err(e.into());
+					}
+				};
+
 				match sink.try_send(msg) {
 					Ok(_) => (),
-					Err(TrySendError::Closed(_)) => break Ok(()),
+					Err(TrySendError::Closed(_)) => break,
 					// channel is full, let's be naive an just drop the message.
-					Err(TrySendError::Full(_)) => break Ok(()),
+					Err(TrySendError::Full(_)) => (),
 				}
 			}
-			else => break Ok(()),
 		}
 	}
+
+	sink.close(ErrorObject::owned(1, "Ok", None::<()>)).await;
+
+	Ok(())
 }
