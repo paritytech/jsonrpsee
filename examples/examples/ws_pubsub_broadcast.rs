@@ -28,19 +28,18 @@
 
 use std::net::SocketAddr;
 
-use futures::future;
+use futures::future::{self, Either};
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::server::rpc_module::TrySendError;
+use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+
 use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::PendingSubscriptionSink;
 use tokio::sync::broadcast;
-use tokio::time::interval;
 use tokio_stream::wrappers::BroadcastStream;
-use tokio_stream::wrappers::IntervalStream;
 
 const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 
@@ -97,62 +96,40 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 async fn pipe_from_stream_with_bounded_buffer(
 	pending: PendingSubscriptionSink,
-	mut stream: BroadcastStream<usize>,
+	stream: BroadcastStream<usize>,
 ) -> SubscriptionResult {
-	let mut sink = pending.accept().await?;
-	let mut bounded_buffer = bounded_vec_deque::BoundedVecDeque::new(10);
+	let sink = pending.accept().await?;
+	let closed = sink.closed();
 
-	// This is not recommended approach it would be better to have a queue that returns a future once
-	// a element is ready to consumed in the bounded_buffer. This might waste CPU with the timeouts
-	// as it's no guarantee that buffer has elements.
-	let mut timeout = IntervalStream::new(interval(std::time::Duration::from_millis(100)));
+	futures::pin_mut!(closed, stream);
 
 	loop {
-		tokio::select! {
-			// subscription was closed, no point of reading more messages from the stream.
-			_ = sink.closed() => {
-				return Ok(());
-			}
-			// stream yielded a new element, try to send it.
-			Some(Ok(v)) = stream.next() => {
-				let msg = sink.build_message(&v).expect("usize serialize is infalliable; qed");
-				match sink.try_send(msg) {
-					// message was sent successfully.
-					Ok(()) => (),
-					// the connection is closed.
-					Err(TrySendError::Closed(_msg_unset_dont_care)) => {
-						tracing::warn!("The connection closed; closing subscription");
-						return Ok(());
-					}
-					// the channel was full let's buffer the ten most recent messages.
-					Err(TrySendError::Full(unsent_msg)) => {
-						if let Some(msg) = bounded_buffer.push_back(unsent_msg) {
-							tracing::warn!("Dropping the oldest message: {:?}", msg);
-						}
-					}
-				};
-			}
-			// try to pop to oldest element for our bounded buffer and send it.
-			_ = timeout.next() => {
-				if let Some(msg) = bounded_buffer.pop_front() {
-					match sink.try_send(msg) {
-						// message was sent successfully.
-						Ok(()) => (),
-						// the connection is closed.
-						Err(TrySendError::Closed(_msg_unset_dont_care)) => {
-							tracing::warn!("The connection closed; closing subscription");
-							return Ok(());
-						}
-						// the channel was full, let's insert back the pop:ed element.
-						Err(TrySendError::Full(unsent_msg)) => {
-							bounded_buffer.push_front(unsent_msg).expect("pop:ed an element must be space in; qed");
-						}
-					};
+		match future::select(closed, stream.next()).await {
+			// subscription closed.
+			Either::Left((_, _)) => break,
+
+			// received new item from the stream.
+			Either::Right((Some(Ok(item)), c)) => {
+				let notif = SubscriptionMessage::from_json(&item)?;
+
+				// NOTE: this will block until there a spot in the queue
+				// and you might want to something smarter if it's
+				// critical that newer must be sent when they are produced.
+				if sink.send(notif).await.is_err() {
+					break;
 				}
+
+				closed = c;
 			}
-			else => return Ok(()),
+
+			// stream is closed or some error, just quit.
+			Either::Right((_, _)) => {
+				break;
+			}
 		}
 	}
+
+	Ok(())
 }
 
 // Naive example that broadcasts the produced values to all active subscribers.

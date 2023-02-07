@@ -41,8 +41,7 @@ use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned};
 use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
 use jsonrpsee_types::{
-	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
-	SubscriptionResponse,
+	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionResponse,
 };
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -126,15 +125,15 @@ pub enum InnerSubscriptionResult {
 
 impl From<mpsc::error::SendError<String>> for DisconnectError {
 	fn from(e: mpsc::error::SendError<String>) -> Self {
-		DisconnectError(SubscriptionMessage(e.0))
+		DisconnectError(SubscriptionMessage::from_complete_message(e.0))
 	}
 }
 
 impl From<mpsc::error::TrySendError<String>> for TrySendError {
 	fn from(e: mpsc::error::TrySendError<String>) -> Self {
 		match e {
-			mpsc::error::TrySendError::Closed(m) => Self::Closed(SubscriptionMessage(m)),
-			mpsc::error::TrySendError::Full(m) => Self::Full(SubscriptionMessage(m)),
+			mpsc::error::TrySendError::Closed(m) => Self::Closed(SubscriptionMessage::from_complete_message(m)),
+			mpsc::error::TrySendError::Full(m) => Self::Full(SubscriptionMessage::from_complete_message(m)),
 		}
 	}
 }
@@ -142,8 +141,8 @@ impl From<mpsc::error::TrySendError<String>> for TrySendError {
 impl From<mpsc::error::SendTimeoutError<String>> for SendTimeoutError {
 	fn from(e: mpsc::error::SendTimeoutError<String>) -> Self {
 		match e {
-			mpsc::error::SendTimeoutError::Closed(m) => Self::Closed(SubscriptionMessage(m)),
-			mpsc::error::SendTimeoutError::Timeout(m) => Self::Timeout(SubscriptionMessage(m)),
+			mpsc::error::SendTimeoutError::Closed(m) => Self::Closed(SubscriptionMessage::from_complete_message(m)),
+			mpsc::error::SendTimeoutError::Timeout(m) => Self::Timeout(SubscriptionMessage::from_complete_message(m)),
 		}
 	}
 }
@@ -194,9 +193,33 @@ impl CallResponse {
 	}
 }
 
+/// A complete subscription message or partial subscription message.
+#[derive(Debug, Clone)]
+pub enum SubscriptionMessageInner {
+	/// Complete JSON message.
+	Complete(String),
+	/// Need subscription ID and method name.
+	NeedsData(String),
+}
+
 /// Subscription message.
 #[derive(Debug, Clone)]
-pub struct SubscriptionMessage(pub(crate) String);
+pub struct SubscriptionMessage(pub(crate) SubscriptionMessageInner);
+
+impl SubscriptionMessage {
+	/// Create a new subscription message from JSON.
+	pub fn from_json(t: &impl Serialize) -> Result<Self, serde_json::Error> {
+		serde_json::to_string(t).map(|json| SubscriptionMessage(SubscriptionMessageInner::NeedsData(json)))
+	}
+
+	pub(crate) fn from_complete_message(msg: String) -> Self {
+		SubscriptionMessage(SubscriptionMessageInner::Complete(msg))
+	}
+
+	pub(crate) fn empty() -> Self {
+		Self::from_complete_message(String::new())
+	}
+}
 
 /// Represent a unique subscription entry based on [`RpcSubscriptionId`] and [`ConnectionId`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -400,7 +423,7 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::RpcModule;
+	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
 	///     use jsonrpsee::types::Response;
 	///     use futures_util::StreamExt;
 	///
@@ -408,7 +431,7 @@ impl Methods {
 	///
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
 	///          let sink = pending.accept().await?;
-	///          let msg = sink.build_message(&"one answer").unwrap();
+	///          let msg = SubscriptionMessage::from_json(&"one answer").unwrap();
 	///          sink.send(msg).await.unwrap();
 	///
 	///          Ok(())
@@ -473,13 +496,13 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::{RpcModule, core::EmptyServerParams};
+	///     use jsonrpsee::{RpcModule, core::EmptyServerParams, SubscriptionMessage};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
 	///         let sink = pending.accept().await?;
 	///
-	///         let msg = sink.build_message(&"one answer")?;
+	///         let msg = SubscriptionMessage::from_json(&"one answer")?;
 	///         sink.send(msg).await?;
 	///         Ok(())
 	///
@@ -693,7 +716,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///
 	/// ```no_run
 	///
-	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
+	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink, SubscriptionMessage};
 	/// use jsonrpsee_core::Error;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
@@ -704,7 +727,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     let sink = pending.accept().await?;
 	///
 	///     let sum = x + (*ctx);
-	///     let msg = sink.build_message(&sum)?;
+	///     let msg = SubscriptionMessage::from_json(&sum)?;
 	///     sink.send(msg).await?;
 	///
 	///     Ok(())
@@ -963,7 +986,8 @@ impl SubscriptionSink {
 			return Err(DisconnectError(msg));
 		}
 
-		self.inner.send(msg.0).await.map_err(Into::into)
+		let json = self.sub_message_to_json(msg);
+		self.inner.send(json).await.map_err(Into::into)
 	}
 
 	/// Similar to to `SubscriptionSink::send` but only waits for a limited time.
@@ -973,7 +997,8 @@ impl SubscriptionSink {
 			return Err(SendTimeoutError::Closed(msg));
 		}
 
-		self.inner.send_timeout(msg.0, timeout).await.map_err(Into::into)
+		let json = self.sub_message_to_json(msg);
+		self.inner.send_timeout(json, timeout).await.map_err(Into::into)
 	}
 
 	/// Attempts to immediately send out the message as JSON string to the subscribers but fails if the
@@ -988,7 +1013,8 @@ impl SubscriptionSink {
 			return Err(TrySendError::Closed(msg));
 		}
 
-		self.inner.try_send(msg.0).map_err(Into::into)
+		let json = self.sub_message_to_json(msg);
+		self.inner.try_send(json).map_err(Into::into)
 	}
 
 	/// Returns whether the subscription is closed.
@@ -1005,24 +1031,24 @@ impl SubscriptionSink {
 		}
 	}
 
-	/// Build message that will be serialized as JSON-RPC notification.
-	///
-	/// You need to call this method prior to send out a subscription notification.
-	pub fn build_message<T: Serialize>(&self, result: &T) -> Result<SubscriptionMessage, serde_json::Error> {
-		serde_json::to_string(&SubscriptionResponse::new(
-			self.method.into(),
-			SubscriptionPayload { subscription: self.uniq_sub.sub_id.clone(), result },
-		))
-		.map(SubscriptionMessage)
-		.map_err(Into::into)
+	fn sub_message_to_json(&self, msg: SubscriptionMessage) -> String {
+		match msg.0 {
+			SubscriptionMessageInner::Complete(msg) => msg,
+			SubscriptionMessageInner::NeedsData(result) => {
+				let sub_id = serde_json::to_string(&self.uniq_sub.sub_id).expect("valid JSON; qed");
+				let method = self.method;
+				format!(
+					r#"{{"jsonrpc":"2.0","method":"{method}","params":{{"subscription":{sub_id},"result":{result}}}}}"#,
+				)
+			}
+		}
 	}
 
-	fn build_error_message<T: Serialize>(&self, error: &T) -> Result<SubscriptionMessage, serde_json::Error> {
+	fn build_error_message<T: Serialize>(&self, error: &T) -> Result<String, serde_json::Error> {
 		serde_json::to_string(&SubscriptionError::new(
 			self.method.into(),
 			SubscriptionPayloadError { subscription: self.uniq_sub.sub_id.clone(), error },
 		))
-		.map(SubscriptionMessage)
 		.map_err(Into::into)
 	}
 
@@ -1054,7 +1080,7 @@ impl SubscriptionSink {
 				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
 
 				return Either::Right(async move {
-					let _ = sink.send(msg.0).await;
+					let _ = sink.send(msg).await;
 				});
 			}
 		}

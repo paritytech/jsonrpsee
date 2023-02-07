@@ -132,7 +132,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 /// Run jsonrpsee WebSocket server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
 pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::server::ServerHandle) {
-	use jsonrpsee::server::ServerBuilder;
+	use jsonrpsee::{core::server::rpc_module::SubscriptionMessage, server::ServerBuilder};
 
 	let server = ServerBuilder::default()
 		.max_request_body_size(u32::MAX)
@@ -151,10 +151,8 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::se
 			SUB_METHOD_NAME,
 			UNSUB_METHOD_NAME,
 			|_params, pending, _ctx| async move {
-				let x = "Hello";
-
 				let sink = pending.accept().await?;
-				let msg = sink.build_message(&x)?;
+				let msg = SubscriptionMessage::from_json(&"Hello")?;
 				sink.send(msg).await?;
 				Ok(())
 			},

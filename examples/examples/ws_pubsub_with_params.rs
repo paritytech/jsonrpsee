@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use futures::{Stream, StreamExt};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::server::rpc_module::TrySendError;
+use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
 use jsonrpsee::core::{Serialize, SubscriptionResult};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
@@ -126,7 +126,7 @@ where
 					Some(item) => item,
 					None => break,
 				};
-				let msg = match sink.build_message(&item) {
+				let msg = match SubscriptionMessage::from_json(&item) {
 					Ok(msg) => msg,
 					Err(e) => {
 						sink.close(ErrorObject::owned(1, e.to_string(), None::<()>)).await;

@@ -147,7 +147,7 @@ impl MethodSink {
 	pub async fn reserve(&self) -> Result<MethodSinkPermit, DisconnectError> {
 		match self.tx.reserve().await {
 			Ok(permit) => Ok(MethodSinkPermit { tx: permit, max_log_length: self.max_log_length }),
-			Err(_) => Err(DisconnectError(SubscriptionMessage(String::new()))),
+			Err(_) => Err(DisconnectError(SubscriptionMessage::empty())),
 		}
 	}
 }

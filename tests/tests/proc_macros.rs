@@ -42,6 +42,7 @@ use jsonrpsee::ws_client::*;
 use serde_json::json;
 
 mod rpc_impl {
+	use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
 	use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::PendingSubscriptionSink;
@@ -170,15 +171,15 @@ mod rpc_impl {
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 			let sink = pending.accept().await.unwrap();
 
-			let _ = sink.send(sink.build_message(&"Response_A").unwrap()).await;
-			let _ = sink.send(sink.build_message(&"Response_B").unwrap()).await;
+			let _ = sink.send(SubscriptionMessage::from_json(&"Response_A").unwrap()).await;
+			let _ = sink.send(SubscriptionMessage::from_json(&"Response_B").unwrap()).await;
 
 			Ok(())
 		}
 
 		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
 			let sink = pending.accept().await.unwrap();
-			let msg = sink.build_message(&val).unwrap();
+			let msg = SubscriptionMessage::from_json(&val).unwrap();
 
 			let _ = sink.send(msg.clone()).await;
 			let _ = sink.send(msg).await;
@@ -198,7 +199,7 @@ mod rpc_impl {
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
 		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
 			let sink = pending.accept().await.unwrap();
-			let msg = sink.build_message(&"hello").unwrap();
+			let msg = SubscriptionMessage::from_json(&"hello").unwrap();
 			let _ = sink.send(msg).await.unwrap();
 
 			Ok(())

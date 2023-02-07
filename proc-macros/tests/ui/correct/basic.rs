@@ -6,7 +6,7 @@ use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::{ServerBuilder, SubscriptionMessage};
 use jsonrpsee::ws_client::*;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 
@@ -68,8 +68,8 @@ impl RpcServer for RpcServerImpl {
 	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		let msg1 = sink.build_message(&"Response_A").unwrap();
-		let msg2 = sink.build_message(&"Response_B").unwrap();
+		let msg1 = SubscriptionMessage::from_json(&"Response_A").unwrap();
+		let msg2 = SubscriptionMessage::from_json(&"Response_B").unwrap();
 
 		sink.send(msg1).await.unwrap();
 		sink.send(msg2).await.unwrap();
@@ -80,7 +80,7 @@ impl RpcServer for RpcServerImpl {
 	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		let msg = sink.build_message(&val).unwrap();
+		let msg = SubscriptionMessage::from_json(&val).unwrap();
 
 		sink.send(msg.clone()).await.unwrap();
 		sink.send(msg).await.unwrap();
@@ -90,7 +90,7 @@ impl RpcServer for RpcServerImpl {
 
 	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
-		let msg = sink.build_message(&1).unwrap();
+		let msg = SubscriptionMessage::from_json(&1).unwrap();
 		sink.send(msg).await.unwrap();
 
 		Ok(())

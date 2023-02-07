@@ -219,7 +219,7 @@ pub(crate) mod visitor;
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc, server::PendingSubscriptionSink};
+///     use jsonrpsee::{proc_macros::rpc, server::PendingSubscriptionSink, server::SubscriptionMessage};
 ///     use jsonrpsee::core::{async_trait, SubscriptionResult, RpcResult};
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
@@ -295,7 +295,7 @@ pub(crate) mod visitor;
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
 ///
-///             let msg = sink.build_message(&"Response_A")?;
+///             let msg = SubscriptionMessage::from_json(&"Response_A")?;
 ///             sink.send(msg).await?;
 ///
 ///             Ok(())
@@ -305,8 +305,8 @@ pub(crate) mod visitor;
 ///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
-///             let msg1 = sink.build_message(&"Response_A")?;
-///             let msg2 = sink.build_message(&"Response_B")?;
+///             let msg1 = SubscriptionMessage::from_json(&"Response_A")?;
+///             let msg2 = SubscriptionMessage::from_json(&"Response_B")?;
 ///
 ///             sink.send(msg1).await?;
 ///             sink.send(msg2).await?;

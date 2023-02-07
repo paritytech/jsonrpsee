@@ -242,7 +242,7 @@ async fn subscribing_without_server() {
 
 			while let Some(letter) = stream_data.pop() {
 				tracing::debug!("This is your friendly subscription sending data.");
-				let msg = sink.build_message(&letter).unwrap();
+				let msg = SubscriptionMessage::from_json(&letter).unwrap();
 				let _ = sink.send(msg).await.unwrap();
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
@@ -272,7 +272,7 @@ async fn close_test_subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let sink = pending.accept().await.unwrap();
-			let msg = sink.build_message(&"lo").unwrap();
+			let msg = SubscriptionMessage::from_json(&"lo").unwrap();
 
 			// make sure to only send one item
 			sink.send(msg.clone()).await.unwrap();
@@ -329,7 +329,7 @@ async fn subscribing_without_server_bad_params() {
 			};
 
 			let sink = pending.accept().await.unwrap();
-			let msg = sink.build_message(&p).unwrap();
+			let msg = SubscriptionMessage::from_json(&p).unwrap();
 			sink.send(msg).await.unwrap();
 
 			Ok(())
@@ -439,7 +439,7 @@ async fn bounded_subscription_work() {
 			let mut buf = VecDeque::new();
 
 			while let Some(n) = stream.next().await {
-				let msg = sink.build_message(&n).expect("usize infallible; qed");
+				let msg = SubscriptionMessage::from_json(&n).expect("usize infallible; qed");
 
 				match sink.try_send(msg) {
 					Err(TrySendError::Closed(_)) => panic!("This is a bug"),

@@ -40,6 +40,7 @@ use helpers::{
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
+use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -437,7 +438,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			"unsubscribe_hello",
 			|_, pending, mut tx| async move {
 				let sink = pending.accept().await.unwrap();
-				let msg = sink.build_message(&1).unwrap();
+				let msg = SubscriptionMessage::from_json(&1).unwrap();
 				sink.send(msg).await.unwrap();
 				sink.closed().await;
 				let send_back = Arc::make_mut(&mut tx);

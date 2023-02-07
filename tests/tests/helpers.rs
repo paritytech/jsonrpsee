@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
-use jsonrpsee::core::server::rpc_module::TrySendError;
+use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
 use jsonrpsee::core::{Error, SubscriptionResult};
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -232,7 +232,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 					Some(item) => item,
 					None => break,
 				};
-				let msg = match sink.build_message(&item) {
+				let msg = match SubscriptionMessage::from_json(&item) {
 					Ok(msg) => msg,
 					Err(e) => {
 						sink.close(ErrorObject::owned(1, e.to_string(), None::<()>)).await;
