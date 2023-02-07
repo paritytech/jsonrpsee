@@ -432,7 +432,7 @@ impl<B, L> Builder<B, L> {
 	/// For example if a subscription produces plenty of new items
 	/// and the client can't keep up then no new messages are handled.
 	///
-	/// If this limit is exceeded the server will "back-off"
+	/// If this limit is exceeded then the server will "back-off"
 	/// and only accept new messages once the client reads pending messages.
 	///
 	/// # Panics
