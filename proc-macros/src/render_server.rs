@@ -28,12 +28,11 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use super::RpcDescription;
-use crate::attributes::Resource;
 use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType, Token};
+use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -121,28 +120,6 @@ impl RpcDescription {
 			}}
 		}
 
-		/// Helper that will parse the resources passed to the macro and call the appropriate resource
-		/// builder to register the resource limits.
-		fn handle_resource_limits(resources: &Punctuated<Resource, Token![,]>) -> TokenStream2 {
-			// Nothing to be done if no resources were set.
-			if resources.is_empty() {
-				return quote! {};
-			}
-
-			// Transform each resource into a call to `.resource(name, value)`.
-			let resources = resources.iter().map(|resource| {
-				let Resource { name, value, .. } = resource;
-				quote! { .resource(#name, #value)? }
-			});
-
-			quote! {
-				.and_then(|resource_builder| {
-					resource_builder #(#resources)*;
-					Ok(())
-				})
-			}
-		}
-
 		let methods = self
 			.methods
 			.iter()
@@ -159,15 +136,12 @@ impl RpcDescription {
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
-				let resources = handle_resource_limits(&method.resources);
-
 				if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
 						rpc.register_async_method(#rpc_method_name, |params, context| async move {
 							#parsing
 							context.as_ref().#rust_method_name(#params_seq).await
 						})
-						#resources
 					})
 				} else {
 					let register_kind =
@@ -178,7 +152,6 @@ impl RpcDescription {
 							#parsing
 							context.#rust_method_name(#params_seq)
 						})
-						#resources
 					})
 				}
 			})
@@ -213,14 +186,11 @@ impl RpcDescription {
 					None => rpc_sub_name.clone(),
 				};
 
-				let resources = handle_resource_limits(&sub.resources);
-
 				handle_register_result(quote! {
 					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
 						#parsing
 						context.as_ref().#rust_method_name(subscription_sink, #params_seq).await
 					})
-					#resources
 				})
 			})
 			.collect::<Vec<_>>();
