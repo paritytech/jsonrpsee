@@ -195,20 +195,20 @@ type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Recei
 /// because we want to prevent subscriptions to start
 /// before the actual subscription call has been answered.
 #[derive(Debug, Clone)]
-pub enum CallResponse {
+pub enum CallOrSubscription {
 	/// The subscription callback itself sends back the result
 	/// so it must not be sent back again.
-	Subscribe(SubscriptionAnswered),
+	Subscription(SubscriptionAnswered),
 
 	/// Treat it as ordinary call.
 	Call(MethodResponse),
 }
 
-impl CallResponse {
+impl CallOrSubscription {
 	/// Extract the JSON-RPC response.
 	pub fn as_response(&self) -> &MethodResponse {
 		match &self {
-			Self::Subscribe(r) => match r {
+			Self::Subscription(r) => match r {
 				SubscriptionAnswered::Yes(r) => r,
 				SubscriptionAnswered::No(r) => r,
 			},
@@ -216,10 +216,10 @@ impl CallResponse {
 		}
 	}
 
-	/// Convert the `CallResponse` to JSON-RPC response.
+	/// Convert the `CallOrSubscription` to JSON-RPC response.
 	pub fn into_response(self) -> MethodResponse {
 		match self {
-			Self::Subscribe(r) => match r {
+			Self::Subscription(r) => match r {
 				SubscriptionAnswered::Yes(r) => r,
 				SubscriptionAnswered::No(r) => r,
 			},
