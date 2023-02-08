@@ -50,9 +50,9 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().set_backpressure_buffer_capacity(2).build("127.0.0.1:9944").await?;
+	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("a".repeat(1024)))?;
+	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
 	let handle = server.start(module)?;
 
