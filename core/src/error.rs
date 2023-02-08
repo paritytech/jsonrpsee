@@ -201,14 +201,14 @@ pub enum SubscriptionCallbackError {
 // User defined error.
 impl From<anyhow::Error> for SubscriptionCallbackError {
 	fn from(e: anyhow::Error) -> Self {
-		Self::Some(format!("Other: {}", e.to_string()))
+		Self::Some(format!("Other: {e}"))
 	}
 }
 
 // User defined error.
 impl From<Box<dyn std::error::Error>> for SubscriptionCallbackError {
 	fn from(e: Box<dyn std::error::Error>) -> Self {
-		Self::Some(format!("Other: {}", e.to_string()))
+		Self::Some(format!("Other: {e}"))
 	}
 }
 
@@ -226,28 +226,28 @@ impl From<SubscriptionAcceptRejectError> for SubscriptionCallbackError {
 
 impl From<serde_json::Error> for SubscriptionCallbackError {
 	fn from(e: serde_json::Error) -> Self {
-		Self::Some(format!("Failed to parse SubscriptionMessage::from_json: {}", e.to_string()))
+		Self::Some(format!("Failed to parse SubscriptionMessage::from_json: {e}"))
 	}
 }
 
 #[cfg(feature = "server")]
 impl From<crate::server::rpc_module::TrySendError> for SubscriptionCallbackError {
 	fn from(e: crate::server::rpc_module::TrySendError) -> Self {
-		Self::Some(format!("SubscriptionSink::try_send failed: {}", e.to_string()))
+		Self::Some(format!("SubscriptionSink::try_send failed: {e}"))
 	}
 }
 
 #[cfg(feature = "server")]
 impl From<crate::server::rpc_module::DisconnectError> for SubscriptionCallbackError {
 	fn from(e: crate::server::rpc_module::DisconnectError) -> Self {
-		Self::Some(format!("SubscriptionSink::send failed: {}", e.to_string()))
+		Self::Some(format!("SubscriptionSink::send failed: {e}"))
 	}
 }
 
 #[cfg(feature = "server")]
 impl From<crate::server::rpc_module::SendTimeoutError> for SubscriptionCallbackError {
 	fn from(e: crate::server::rpc_module::SendTimeoutError) -> Self {
-		Self::Some(format!("SubscriptionSink::send_timeout failed: {}", e.to_string()))
+		Self::Some(format!("SubscriptionSink::send_timeout failed: {e}"))
 	}
 }
 
