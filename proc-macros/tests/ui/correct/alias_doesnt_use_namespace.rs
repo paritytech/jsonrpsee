@@ -8,7 +8,7 @@ pub trait Rpc {
 	async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
 	#[subscription(name = "subscribeGetFood", item = String, aliases = ["getFood"], unsubscribe_aliases = ["unsubscribegetFood"])]
-	fn sub(&self);
+	async fn sub(&self);
 }
 
 fn main() {}

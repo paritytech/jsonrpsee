@@ -29,7 +29,7 @@
 use std::borrow::Cow;
 
 use crate::attributes::{
-	optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, Resource,
+	optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind,
 };
 use crate::helpers::extract_doc_comments;
 use proc_macro2::TokenStream as TokenStream2;
@@ -48,19 +48,17 @@ pub struct RpcMethod {
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
-	pub resources: Punctuated<Resource, Token![,]>,
 }
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, blocking, name, param_kind, resources] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "resources"])?;
+		let [aliases, blocking, name, param_kind] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
 		let param_kind = parse_param_kind(param_kind)?;
-		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = method.sig.clone();
 		let docs = extract_doc_comments(&method.attrs);
@@ -100,18 +98,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self {
-			aliases,
-			blocking,
-			name,
-			params,
-			param_kind,
-			returns,
-			signature: method,
-			docs,
-			resources,
-			deprecated,
-		})
+		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated })
 	}
 }
 
@@ -133,21 +120,12 @@ pub struct RpcSubscription {
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
 	pub unsubscribe_aliases: Vec<String>,
-	pub resources: Punctuated<Resource, Token![,]>,
 }
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases, resources] =
-			AttributeMeta::parse(attr)?.retain([
-				"aliases",
-				"item",
-				"name",
-				"param_kind",
-				"unsubscribe",
-				"unsubscribe_aliases",
-				"resources",
-			])?;
+		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases] = AttributeMeta::parse(attr)?
+			.retain(["aliases", "item", "name", "param_kind", "unsubscribe", "unsubscribe_aliases"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let map = name?.value::<NameMapping>()?;
@@ -156,7 +134,6 @@ impl RpcSubscription {
 		let item = item?.value()?;
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
-		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = sub.sig.clone();
 		let docs = extract_doc_comments(&sub.attrs);
@@ -193,7 +170,6 @@ impl RpcSubscription {
 			signature: sub,
 			aliases,
 			docs,
-			resources,
 		})
 	}
 }
@@ -296,14 +272,11 @@ impl RpcDescription {
 					}
 
 					if !matches!(method.sig.output, syn::ReturnType::Default) {
-						return Err(syn::Error::new_spanned(
-							method,
-							"Subscription methods must not return anything; the error must send via subscription via either `SubscriptionSink::reject` or `SubscriptionSink::close`",
-						));
+						return Err(syn::Error::new_spanned(method, "Subscription methods must not return anything"));
 					}
 
-					if method.sig.asyncness.is_some() {
-						return Err(syn::Error::new_spanned(method, "Subscription methods must not be `async`"));
+					if method.sig.asyncness.is_none() {
+						return Err(syn::Error::new_spanned(method, "Subscription methods must be `async`"));
 					}
 
 					let sub_data = RpcSubscription::from_item(attr.clone(), method.clone())?;

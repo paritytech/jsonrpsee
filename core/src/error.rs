@@ -27,8 +27,7 @@
 use std::fmt;
 
 use jsonrpsee_types::error::{
-	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
-	UNKNOWN_ERROR_CODE,
+	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, UNKNOWN_ERROR_CODE,
 };
 
 /// Convenience type for displaying errors.
@@ -108,21 +107,6 @@ pub enum Error {
 	/// Access control verification of HTTP headers failed.
 	#[error("HTTP header: `{0}` value: `{1}` verification failed")]
 	HttpHeaderRejected(&'static str, String),
-	/// Failed to execute a method because a resource was already at capacity
-	#[error("Resource at capacity: {0}")]
-	ResourceAtCapacity(&'static str),
-	/// Failed to register a resource due to a name conflict
-	#[error("Resource name already taken: {0}")]
-	ResourceNameAlreadyTaken(&'static str),
-	/// Failed to initialize resources for a method at startup
-	#[error("Resource name `{0}` not found for method `{1}`")]
-	ResourceNameNotFoundForMethod(&'static str, &'static str),
-	/// Trying to claim resources for a method execution, but the method resources have not been initialized
-	#[error("Method `{0}` has uninitialized resources")]
-	UninitializedMethod(Box<str>),
-	/// Failed to register a resource due to a maximum number of resources already registered
-	#[error("Maximum number of resources reached")]
-	MaxResourcesReached,
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),
@@ -157,34 +141,6 @@ impl From<Error> for ErrorObjectOwned {
 				ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>)
 			}
 			_ => ErrorObject::owned(UNKNOWN_ERROR_CODE, err.to_string(), None::<()>),
-		}
-	}
-}
-
-/// A type to represent when a subscription gets closed
-/// by either the server or client side.
-#[derive(Clone, Debug)]
-pub enum SubscriptionClosed {
-	/// The remote peer closed the connection or called the unsubscribe method.
-	RemotePeerAborted,
-	/// The subscription was completed successfully by the server.
-	Success,
-	/// The subscription failed during execution by the server.
-	Failed(ErrorObject<'static>),
-}
-
-impl From<SubscriptionClosed> for ErrorObjectOwned {
-	fn from(err: SubscriptionClosed) -> Self {
-		match err {
-			SubscriptionClosed::RemotePeerAborted => {
-				ErrorObject::owned(SUBSCRIPTION_CLOSED, "Subscription was closed by the remote peer", None::<()>)
-			}
-			SubscriptionClosed::Success => ErrorObject::owned(
-				SUBSCRIPTION_CLOSED,
-				"Subscription was completed by the server successfully",
-				None::<()>,
-			),
-			SubscriptionClosed::Failed(err) => err,
 		}
 	}
 }
@@ -228,4 +184,80 @@ impl From<hyper::Error> for Error {
 	fn from(hyper_err: hyper::Error) -> Error {
 		Error::Transport(hyper_err.into())
 	}
+}
+
+/// The error returned by the subscription's method for the rpc server implementation.
+///
+/// It provides an abstraction to make the API more ergonomic while handling errors
+/// that may occur during the subscription callback.
+#[derive(Debug)]
+pub enum SubscriptionCallbackError {
+	/// Error cause is propagated by other code or connection related.
+	None,
+	/// Some error happened to be logged.
+	Some(String),
+}
+
+// User defined error.
+impl From<anyhow::Error> for SubscriptionCallbackError {
+	fn from(e: anyhow::Error) -> Self {
+		Self::Some(format!("Other: {e}"))
+	}
+}
+
+// User defined error.
+impl From<Box<dyn std::error::Error>> for SubscriptionCallbackError {
+	fn from(e: Box<dyn std::error::Error>) -> Self {
+		Self::Some(format!("Other: {e}"))
+	}
+}
+
+impl From<CallError> for SubscriptionCallbackError {
+	fn from(e: CallError) -> Self {
+		Self::Some(e.to_string())
+	}
+}
+
+impl From<SubscriptionAcceptRejectError> for SubscriptionCallbackError {
+	fn from(_: SubscriptionAcceptRejectError) -> Self {
+		Self::None
+	}
+}
+
+impl From<serde_json::Error> for SubscriptionCallbackError {
+	fn from(e: serde_json::Error) -> Self {
+		Self::Some(format!("Failed to parse SubscriptionMessage::from_json: {e}"))
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::rpc_module::TrySendError> for SubscriptionCallbackError {
+	fn from(e: crate::server::rpc_module::TrySendError) -> Self {
+		Self::Some(format!("SubscriptionSink::try_send failed: {e}"))
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::rpc_module::DisconnectError> for SubscriptionCallbackError {
+	fn from(e: crate::server::rpc_module::DisconnectError) -> Self {
+		Self::Some(format!("SubscriptionSink::send failed: {e}"))
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::rpc_module::SendTimeoutError> for SubscriptionCallbackError {
+	fn from(e: crate::server::rpc_module::SendTimeoutError) -> Self {
+		Self::Some(format!("SubscriptionSink::send_timeout failed: {e}"))
+	}
+}
+
+/// The error returned while accepting or rejecting a subscription.
+#[derive(Debug, Copy, Clone)]
+pub enum SubscriptionAcceptRejectError {
+	/// The method was already called.
+	AlreadyCalled,
+	/// The remote peer closed the connection or called the unsubscribe method.
+	RemotePeerAborted,
+	/// The subscription response message was too large.
+	MessageTooLarge,
 }

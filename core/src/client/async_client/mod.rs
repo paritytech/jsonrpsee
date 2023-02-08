@@ -40,7 +40,7 @@ use tracing::instrument;
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
-/// Wrapper over a [`oneshot::Receiver`](futures_channel::oneshot::Receiver) that reads
+/// Wrapper over a [`oneshot::Receiver`](tokio::sync::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
 /// It is possible that the error is read more than once if several calls are made
 /// when the background thread has been terminated.

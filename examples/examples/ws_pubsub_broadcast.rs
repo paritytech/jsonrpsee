@@ -28,13 +28,16 @@
 
 use std::net::SocketAddr;
 
-use futures::future;
+use futures::future::{self, Either};
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::SubscriptionClosed;
+use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+
+use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::PendingSubscriptionSink;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -64,29 +67,23 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
-	let mut module = RpcModule::new(());
-	let (tx, _rx) = broadcast::channel(16);
-	let tx2 = tx.clone();
+	// let's configure the server only hold 5 messages in memory.
+	let server = ServerBuilder::default().set_message_buffer_capacity(5).build("127.0.0.1:0").await?;
+	let (tx, _rx) = broadcast::channel::<usize>(16);
 
-	std::thread::spawn(move || produce_items(tx2));
+	let mut module = RpcModule::new(tx.clone());
 
-	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, mut sink, _| {
-		let rx = BroadcastStream::new(tx.clone().subscribe());
+	std::thread::spawn(move || produce_items(tx));
 
-		tokio::spawn(async move {
-			match sink.pipe_from_try_stream(rx).await {
-				SubscriptionClosed::Success => {
-					sink.close(SubscriptionClosed::Success);
-				}
-				SubscriptionClosed::RemotePeerAborted => (),
-				SubscriptionClosed::Failed(err) => {
-					sink.close(err);
-				}
-			};
-		});
-		Ok(())
-	})?;
+	module
+		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, pending, tx| async move {
+			let rx = tx.subscribe();
+			let stream = BroadcastStream::new(rx);
+			pipe_from_stream_with_bounded_buffer(pending, stream).await?;
+
+			Ok(())
+		})
+		.unwrap();
 	let addr = server.local_addr()?;
 	let handle = server.start(module)?;
 
@@ -97,10 +94,48 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	Ok(addr)
 }
 
+async fn pipe_from_stream_with_bounded_buffer(
+	pending: PendingSubscriptionSink,
+	stream: BroadcastStream<usize>,
+) -> SubscriptionResult {
+	let sink = pending.accept().await?;
+	let closed = sink.closed();
+
+	futures::pin_mut!(closed, stream);
+
+	loop {
+		match future::select(closed, stream.next()).await {
+			// subscription closed.
+			Either::Left((_, _)) => break,
+
+			// received new item from the stream.
+			Either::Right((Some(Ok(item)), c)) => {
+				let notif = SubscriptionMessage::from_json(&item)?;
+
+				// NOTE: this will block until there a spot in the queue
+				// and you might want to do something smarter if it's
+				// critical that "the most recent item" must be sent when it is produced.
+				if sink.send(notif).await.is_err() {
+					break;
+				}
+
+				closed = c;
+			}
+
+			// stream is closed or some error, just quit.
+			Either::Right((_, _)) => {
+				break;
+			}
+		}
+	}
+
+	Ok(())
+}
+
 // Naive example that broadcasts the produced values to all active subscribers.
 fn produce_items(tx: broadcast::Sender<usize>) {
 	for c in 1..=100 {
-		std::thread::sleep(std::time::Duration::from_secs(1));
+		std::thread::sleep(std::time::Duration::from_millis(1));
 
 		// This might fail if no receivers are alive, could occur if no subscriptions are active...
 		// Also be aware that this will succeed when at least one receiver is alive

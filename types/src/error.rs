@@ -79,50 +79,6 @@ impl<'a> fmt::Display for ErrorResponse<'a> {
 		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
 	}
 }
-/// The return type of the subscription's method for the rpc server implementation.
-///
-/// **Note**: The error does not contain any data and is discarded on drop.
-pub type SubscriptionResult = Result<(), SubscriptionEmptyError>;
-
-/// The error returned by the subscription's method for the rpc server implementation.
-///
-/// It contains no data, and neither is the error utilized. It provides an abstraction to make the
-/// API more ergonomic while handling errors that may occur during the subscription callback.
-#[derive(Debug, Clone, Copy)]
-pub struct SubscriptionEmptyError;
-
-impl From<anyhow::Error> for SubscriptionEmptyError {
-	fn from(_: anyhow::Error) -> Self {
-		SubscriptionEmptyError
-	}
-}
-
-impl From<CallError> for SubscriptionEmptyError {
-	fn from(_: CallError) -> Self {
-		SubscriptionEmptyError
-	}
-}
-
-impl<'a> From<ErrorObject<'a>> for SubscriptionEmptyError {
-	fn from(_: ErrorObject<'a>) -> Self {
-		SubscriptionEmptyError
-	}
-}
-
-impl From<SubscriptionAcceptRejectError> for SubscriptionEmptyError {
-	fn from(_: SubscriptionAcceptRejectError) -> Self {
-		SubscriptionEmptyError
-	}
-}
-
-/// The error returned while accepting or rejecting a subscription.
-#[derive(Debug, Copy, Clone)]
-pub enum SubscriptionAcceptRejectError {
-	/// The method was already called.
-	AlreadyCalled,
-	/// The remote peer closed the connection or called the unsubscribe method.
-	RemotePeerAborted,
-}
 
 /// Owned variant of [`ErrorObject`].
 pub type ErrorObjectOwned = ErrorObject<'static>;
@@ -230,10 +186,6 @@ pub const SERVER_IS_BUSY_CODE: i32 = -32604;
 pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Unknown error.
 pub const UNKNOWN_ERROR_CODE: i32 = -32001;
-/// Subscription got closed by the server.
-pub const SUBSCRIPTION_CLOSED: i32 = -32003;
-/// Subscription got closed by the server.
-pub const SUBSCRIPTION_CLOSED_WITH_ERROR: i32 = -32004;
 /// Batched requests are not supported by the server.
 pub const BATCHES_NOT_SUPPORTED_CODE: i32 = -32005;
 /// Subscription limit per connection was exceeded.

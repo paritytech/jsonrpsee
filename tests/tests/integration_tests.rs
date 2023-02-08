@@ -34,13 +34,13 @@ use std::time::Duration;
 
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
-	init_logger, server, server_with_access_control, server_with_health_api, server_with_subscription,
-	server_with_subscription_and_handle,
+	init_logger, pipe_from_stream_and_drop, server, server_with_access_control, server_with_health_api,
+	server_with_subscription, server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
+use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -434,20 +434,21 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
-			sink.accept().unwrap();
-			tokio::spawn(async move {
-				let close_err = loop {
-					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
-						break ErrorObject::borrowed(0, &"Subscription terminated successfully", None);
-					}
-					tokio::time::sleep(Duration::from_millis(100)).await;
-				};
+		.register_subscription(
+			"subscribe_hello",
+			"subscribe_hello",
+			"unsubscribe_hello",
+			|_, pending, mut tx| async move {
+				let sink = pending.accept().await.unwrap();
+				let msg = SubscriptionMessage::from_json(&1).unwrap();
+				sink.send(msg).await.unwrap();
+				sink.closed().await;
 				let send_back = Arc::make_mut(&mut tx);
-				send_back.feed(close_err).await.unwrap();
-			});
-			Ok(())
-		})
+				send_back.feed("Subscription terminated by remote peer").await.unwrap();
+
+				Ok(())
+			},
+		)
 		.unwrap();
 
 	let _handle = server.start(module).unwrap();
@@ -464,7 +465,28 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let close_err = rx.next().await.unwrap();
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert_eq!(close_err, ErrorObject::borrowed(0, &"Subscription terminated successfully", None));
+	assert_eq!(close_err, "Subscription terminated by remote peer");
+}
+
+#[tokio::test]
+async fn ws_server_stop_subscription_when_dropped() {
+	use jsonrpsee::{server::ServerBuilder, RpcModule};
+
+	init_logger();
+
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
+		.unwrap();
+
+	let _handle = server.start(module).unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	assert!(client.subscribe::<String, ArrayParams>("subscribe_nop", rpc_params![], "unsubscribe_nop").await.is_err());
 }
 
 #[tokio::test]
@@ -569,24 +591,6 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 }
 
 #[tokio::test]
-async fn ws_server_cancels_sub_stream_after_err() {
-	init_logger();
-
-	let addr = server_with_subscription().await;
-	let server_url = format!("ws://{}", addr);
-
-	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub: Subscription<serde_json::Value> = client
-		.subscribe("subscribe_with_err_on_stream", rpc_params![], "unsubscribe_with_err_on_stream")
-		.await
-		.unwrap();
-
-	assert_eq!(sub.next().await.unwrap().unwrap(), 1);
-	// The server closed down the subscription with the underlying error from the stream.
-	assert!(sub.next().await.is_none());
-}
-
-#[tokio::test]
 async fn ws_server_subscribe_with_stream() {
 	init_logger();
 
@@ -640,22 +644,6 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 	let rx_len = rx.take(10).fold(0, |acc, _| async move { acc + 1 }).await;
 
 	assert_eq!(rx_len, 10);
-}
-
-#[tokio::test]
-async fn ws_server_pipe_from_stream_can_be_reused() {
-	init_logger();
-
-	let addr = server_with_subscription().await;
-	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
-	let sub = client
-		.subscribe::<i32, ArrayParams>("can_reuse_subscription", rpc_params![], "u_can_reuse_subscription")
-		.await
-		.unwrap();
-
-	let items = sub.fold(0, |acc, _| async move { acc + 1 }).await;
-
-	assert_eq!(items, 10);
 }
 
 #[tokio::test]
@@ -752,19 +740,11 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, mut sink, _| {
-			tokio::spawn(async move {
-				let interval = interval(Duration::from_millis(50));
-				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| async move {
+			let interval = interval(Duration::from_millis(50));
+			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-				match sink.pipe_from_stream(stream).await {
-					SubscriptionClosed::Success => {
-						sink.close(SubscriptionClosed::Success);
-					}
-					_ => unreachable!(),
-				};
-			});
-			Ok(())
+			pipe_from_stream_and_drop(pending, stream).await
 		})
 		.unwrap();
 	let _handle = server.start(module).unwrap();
@@ -815,19 +795,11 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, mut sink, _| {
-			tokio::spawn(async move {
-				let interval = interval(Duration::from_millis(50));
-				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| async {
+			let interval = interval(Duration::from_millis(50));
+			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-				match sink.pipe_from_stream(stream).await {
-					SubscriptionClosed::RemotePeerAborted => {
-						sink.close(SubscriptionClosed::RemotePeerAborted);
-					}
-					_ => unreachable!(),
-				};
-			});
-			Ok(())
+			pipe_from_stream_and_drop(pending, stream).await
 		})
 		.unwrap();
 	let _handle = server.start(module).unwrap();

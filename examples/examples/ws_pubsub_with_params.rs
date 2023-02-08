@@ -27,12 +27,14 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::SubscriptionClosed;
-use jsonrpsee::rpc_params;
+use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
+use jsonrpsee::core::{Serialize, SubscriptionResult};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 
@@ -63,38 +65,37 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default().set_message_buffer_capacity(10).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {
-			let idx = params.one()?;
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| async move {
+			// we are doing this verbose way to get a customized reject error on the subscription.
+			let idx = match params.one::<usize>() {
+				Ok(p) => p,
+				Err(e) => {
+					let _ = pending.reject(ErrorObjectOwned::from(e)).await;
+					return Ok(());
+				}
+			};
+
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
-			tokio::spawn(async move {
-				if let SubscriptionClosed::Failed(err) = sink.pipe_from_stream(stream).await {
-					sink.close(err);
-				}
-			});
+			pipe_from_stream_and_drop(pending, stream).await?;
+
 			Ok(())
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, mut sink, _| {
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| async move {
 			let (one, two) = params.parse::<(usize, usize)>()?;
 
 			let item = &LETTERS[one..two];
-
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
-
-			tokio::spawn(async move {
-				if let SubscriptionClosed::Failed(err) = sink.pipe_from_stream(stream).await {
-					sink.close(err);
-				}
-			});
+			pipe_from_stream_and_drop(pending, stream).await?;
 
 			Ok(())
 		})
@@ -108,4 +109,42 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	tokio::spawn(handle.stopped());
 
 	Ok(addr)
+}
+
+async fn pipe_from_stream_and_drop<S, T>(pending: PendingSubscriptionSink, mut stream: S) -> SubscriptionResult
+where
+	S: Stream<Item = T> + Unpin,
+	T: Serialize,
+{
+	let mut sink = pending.accept().await?;
+
+	loop {
+		tokio::select! {
+			_ = sink.closed() => break,
+			maybe_item = stream.next() => {
+				let item = match maybe_item {
+					Some(item) => item,
+					None => break,
+				};
+				let msg = match SubscriptionMessage::from_json(&item) {
+					Ok(msg) => msg,
+					Err(e) => {
+						sink.close(ErrorObject::owned(1, e.to_string(), None::<()>)).await;
+						return Err(e.into());
+					}
+				};
+
+				match sink.try_send(msg) {
+					Ok(_) => (),
+					Err(TrySendError::Closed(_)) => break,
+					// channel is full, let's be naive an just drop the message.
+					Err(TrySendError::Full(_)) => (),
+				}
+			}
+		}
+	}
+
+	sink.close(ErrorObject::owned(1, "Ok", None::<()>)).await;
+
+	Ok(())
 }

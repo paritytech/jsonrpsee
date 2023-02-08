@@ -58,10 +58,18 @@ cfg_client! {
 /// Shared tracing helpers to trace RPC calls.
 pub mod tracing;
 pub use async_trait::async_trait;
-pub use error::Error;
+pub use error::{Error, SubscriptionAcceptRejectError, SubscriptionCallbackError};
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, Error>;
+
+/// The return type of the subscription's method for the rpc server implementation.
+///
+/// **Note**: The error does not contain any data and is discarded on drop.
+pub type SubscriptionResult = Result<(), SubscriptionCallbackError>;
+
+/// Empty server `RpcParams` type to use while registering modules.
+pub type EmptyServerParams = Vec<()>;
 
 /// Re-exports for proc-macro library to not require any additional
 /// dependencies to be explicitly added on the client side.

@@ -42,10 +42,10 @@ use jsonrpsee::ws_client::*;
 use serde_json::json;
 
 mod rpc_impl {
-	use jsonrpsee::core::{async_trait, RpcResult};
+	use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+	use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::types::SubscriptionResult;
-	use jsonrpsee::SubscriptionSink;
+	use jsonrpsee::PendingSubscriptionSink;
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
@@ -56,10 +56,10 @@ mod rpc_impl {
 		fn sync_method(&self) -> RpcResult<u16>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-		fn sub(&self);
+		async fn sub(&self);
 
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
-		fn sub_with_params(&self, val: u32);
+		async fn sub_with_params(&self, val: u32);
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
@@ -116,7 +116,7 @@ mod rpc_impl {
 
 		/// All head subscription
 		#[subscription(name = "subscribeAllHeads", item = Header)]
-		fn subscribe_all_heads(&self, hash: Hash);
+		async fn subscribe_all_heads(&self, hash: Hash);
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -131,7 +131,7 @@ mod rpc_impl {
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
 		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
-		fn sub(&self, hash: Input);
+		async fn sub(&self, hash: Input);
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -168,15 +168,22 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		fn sub(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-			let _ = sink.send(&"Response_A");
-			let _ = sink.send(&"Response_B");
+		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+			let sink = pending.accept().await.unwrap();
+
+			let _ = sink.send(SubscriptionMessage::from_json(&"Response_A").unwrap()).await;
+			let _ = sink.send(SubscriptionMessage::from_json(&"Response_B").unwrap()).await;
+
 			Ok(())
 		}
 
-		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> SubscriptionResult {
-			let _ = sink.send(&val);
-			let _ = sink.send(&val);
+		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
+			let sink = pending.accept().await.unwrap();
+			let msg = SubscriptionMessage::from_json(&val).unwrap();
+
+			let _ = sink.send(msg.clone()).await;
+			let _ = sink.send(msg).await;
+
 			Ok(())
 		}
 	}
@@ -190,8 +197,11 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		fn sub(&self, mut sink: SubscriptionSink, _: String) -> SubscriptionResult {
-			let _ = sink.send(&"hello");
+		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
+			let sink = pending.accept().await.unwrap();
+			let msg = SubscriptionMessage::from_json(&"hello").unwrap();
+			let _ = sink.send(msg).await.unwrap();
+
 			Ok(())
 		}
 	}
@@ -261,7 +271,7 @@ async fn macro_optional_param_parsing() {
 
 	// Named params using a map
 	let (resp, _) = module
-		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_optional_params","params":{"a":22,"c":50},"id":0}"#)
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_optional_params","params":{"a":22,"c":50},"id":0}"#, 1)
 		.await
 		.unwrap();
 	assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
@@ -278,10 +288,12 @@ async fn macro_lifetimes_parsing() {
 
 #[tokio::test]
 async fn macro_zero_copy_cow() {
+	init_logger();
+
 	let module = RpcServerImpl.into_rpc();
 
 	let (resp, _) = module
-		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo", "bar"],"id":0}"#)
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo", "bar"],"id":0}"#, 1)
 		.await
 		.unwrap();
 
@@ -290,7 +302,7 @@ async fn macro_zero_copy_cow() {
 
 	// serde_json will have to allocate a new string to replace `\t` with byte 0x09 (tab)
 	let (resp, _) = module
-		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo", "\tbar"],"id":0}"#)
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo", "\tbar"],"id":0}"#, 1)
 		.await
 		.unwrap();
 	assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
@@ -300,7 +312,7 @@ async fn macro_zero_copy_cow() {
 #[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
-	use jsonrpsee::types::EmptyServerParams;
+	use jsonrpsee::core::EmptyServerParams;
 	use std::time::{Duration, Instant};
 
 	let module = RpcServerImpl.into_rpc();
