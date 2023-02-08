@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	// let's configure the server only hold 5 messages in memory.
-	let server = ServerBuilder::default().set_backpressure_buffer_capacity(5).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default().set_message_buffer_capacity(5).build("127.0.0.1:0").await?;
 	let (tx, _rx) = broadcast::channel::<usize>(16);
 
 	let mut module = RpcModule::new(tx.clone());

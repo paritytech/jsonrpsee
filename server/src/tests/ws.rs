@@ -656,7 +656,7 @@ async fn ws_server_backpressure_works() {
 	let (backpressure_tx, mut backpressure_rx) = tokio::sync::mpsc::channel::<()>(1);
 
 	let server = ServerBuilder::default()
-		.set_backpressure_buffer_capacity(5)
+		.set_message_buffer_capacity(5)
 		.build("127.0.0.1:0")
 		.with_default_timeout()
 		.await
