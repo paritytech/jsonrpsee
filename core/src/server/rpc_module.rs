@@ -709,7 +709,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// * `unsubscription_method` - name of the method to call to terminate a subscription
 	/// * `callback` - A callback to invoke on each subscription; it takes three parameters:
 	///     - [`Params`]: JSON-RPC parameters in the subscription call.
-	///     - [`PendingSubscriptionSink`]: A pending subscription waiting to accepted.
+	///     - [`PendingSubscriptionSink`]: A pending subscription waiting to be accepted, in order to send out messages on the subscription
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
 	/// # Examples
