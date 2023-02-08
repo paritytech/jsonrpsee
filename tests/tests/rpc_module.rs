@@ -276,10 +276,7 @@ async fn close_test_subscribing_without_server() {
 
 			// make sure to only send one item
 			sink.send(msg.clone()).await.unwrap();
-			while !sink.is_closed() {
-				tracing::debug!("[test] Sink is open, sleeping");
-				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-			}
+			sink.closed().await;
 
 			match sink.send(msg).await {
 				Ok(_) => panic!("The sink should be closed"),
@@ -420,7 +417,7 @@ async fn reject_works() {
 }
 
 #[tokio::test]
-async fn bounded_subscription_work() {
+async fn bounded_subscription_works() {
 	init_logger();
 
 	let (tx, mut rx) = mpsc::unbounded_channel::<String>();
