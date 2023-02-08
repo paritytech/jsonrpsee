@@ -114,7 +114,7 @@ async fn pipe_from_stream_with_bounded_buffer(
 
 				// NOTE: this will block until there a spot in the queue
 				// and you might want to do something smarter if it's
-				// critical that newer must be sent when they are produced.
+				// critical that "the most recent item" must be sent when it is produced.
 				if sink.send(notif).await.is_err() {
 					break;
 				}
