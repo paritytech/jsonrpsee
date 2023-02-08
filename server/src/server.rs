@@ -120,6 +120,7 @@ where
 		let max_request_body_size = self.cfg.max_request_body_size;
 		let max_response_body_size = self.cfg.max_response_body_size;
 		let max_log_length = self.cfg.max_log_length;
+		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 		let allow_hosts = self.cfg.allow_hosts;
 		let logger = self.logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
@@ -140,6 +141,7 @@ where
 						max_request_body_size,
 						max_response_body_size,
 						max_log_length,
+						max_subscriptions_per_connection,
 						batch_requests_supported,
 						id_provider: id_provider.clone(),
 						ping_interval: self.cfg.ping_interval,
@@ -178,6 +180,8 @@ struct Settings {
 	///
 	/// Logs bigger than this limit will be truncated.
 	max_log_length: u32,
+	/// Maximum number of subscriptions per connection.
+	max_subscriptions_per_connection: u32,
 	/// Host filtering.
 	allow_hosts: AllowHosts,
 	/// Whether batch requests are supported by this server or not.
@@ -201,6 +205,7 @@ impl Default for Settings {
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			max_log_length: 4096,
 			max_connections: MAX_CONNECTIONS,
+			max_subscriptions_per_connection: 1024,
 			batch_requests_supported: true,
 			allow_hosts: AllowHosts::Any,
 			tokio_runtime: None,
@@ -262,6 +267,12 @@ impl<B, L> Builder<B, L> {
 	/// By default, support is enabled.
 	pub fn batch_requests_supported(mut self, supported: bool) -> Self {
 		self.settings.batch_requests_supported = supported;
+		self
+	}
+
+	/// Set the maximum number of connections allowed. Default is 1024.
+	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
+		self.settings.max_subscriptions_per_connection = max;
 		self
 	}
 
@@ -533,6 +544,8 @@ pub(crate) struct ServiceData<L: Logger> {
 	///
 	/// Logs bigger than this limit will be truncated.
 	pub(crate) max_log_length: u32,
+	/// Maximum number of subscriptions per connection.
+	pub(crate) max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
 	pub(crate) batch_requests_supported: bool,
 	/// Subscription ID provider.
@@ -721,6 +734,8 @@ struct ProcessConnection<L> {
 	///
 	/// Logs bigger than this limit will be truncated.
 	max_log_length: u32,
+	/// Maximum number of subscriptions per connection.
+	max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_supported: bool,
 	/// Subscription ID provider.
@@ -789,6 +804,7 @@ fn process_connection<'a, L: Logger, B, U>(
 			max_request_body_size: cfg.max_request_body_size,
 			max_response_body_size: cfg.max_response_body_size,
 			max_log_length: cfg.max_log_length,
+			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
 			batch_requests_supported: cfg.batch_requests_supported,
 			id_provider: cfg.id_provider,
 			ping_interval: cfg.ping_interval,

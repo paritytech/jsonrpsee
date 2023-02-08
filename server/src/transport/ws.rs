@@ -11,13 +11,16 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse, MethodSink};
+use jsonrpsee_core::server::helpers::{
+	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
+};
 use jsonrpsee_core::server::rpc_module::{CallResponse, ConnState, MethodKind, Methods, SubscriptionAnswered};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
 use jsonrpsee_types::error::{
-	reject_too_big_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
+	reject_too_big_request, reject_too_many_subscriptions, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
+	BATCHES_NOT_SUPPORTED_MSG,
 };
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
@@ -54,6 +57,7 @@ pub(crate) struct Batch<'a, L: Logger> {
 #[derive(Debug, Clone)]
 pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) conn_id: usize,
+	pub(crate) bounded_subscriptions: BoundedSubscriptions,
 	pub(crate) id_provider: &'a dyn IdProvider,
 	pub(crate) methods: &'a Methods,
 	pub(crate) max_response_body_size: u32,
@@ -167,8 +171,17 @@ pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, c
 /// Returns `(MethodResponse, None)` on every call that isn't a subscription
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
 pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> CallResponse {
-	let CallData { methods, max_response_body_size, max_log_length, conn_id, id_provider, sink, logger, request_start } =
-		call;
+	let CallData {
+		methods,
+		max_response_body_size,
+		max_log_length,
+		conn_id,
+		id_provider,
+		sink,
+		logger,
+		request_start,
+		bounded_subscriptions,
+	} = call;
 
 	rx_log_from_json(&req, call.max_log_length);
 
@@ -199,10 +212,16 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 			MethodKind::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 
-				let conn_state = ConnState { conn_id, id_provider };
-				let response = callback(id.clone(), params, sink.clone(), conn_state).await;
-
-				CallResponse::Subscribe(response)
+				if let Some(p) = bounded_subscriptions.acquire() {
+					tracing::info!("{:?}", p);
+					let conn_state = ConnState { conn_id, id_provider, subscription_permit: p };
+					let response = callback(id.clone(), params, sink.clone(), conn_state).await;
+					CallResponse::Subscribe(response)
+				} else {
+					let response =
+						MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
+					CallResponse::Call(response)
+				}
 			}
 			MethodKind::Unsubscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription, TransportProtocol::WebSocket);
@@ -231,6 +250,7 @@ pub(crate) async fn background_task<L: Logger>(
 		max_request_body_size,
 		max_response_body_size,
 		max_log_length,
+		max_subscriptions_per_connection,
 		batch_requests_supported,
 		stop_handle,
 		id_provider,
@@ -246,6 +266,7 @@ pub(crate) async fn background_task<L: Logger>(
 	let (tx, rx) = mpsc::channel::<String>(backpressure_buffer_capacity as usize);
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
+	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval, conn_rx));
@@ -329,10 +350,12 @@ pub(crate) async fn background_task<L: Logger>(
 				let sink = sink.clone();
 				let methods = &methods;
 				let id_provider = &*id_provider;
+				let bounded_subscriptions = bounded_subscriptions.clone();
 
 				let fut = async move {
 					let call = CallData {
 						conn_id: conn_id as usize,
+						bounded_subscriptions,
 						max_response_body_size,
 						max_log_length,
 						methods,
@@ -374,12 +397,14 @@ pub(crate) async fn background_task<L: Logger>(
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
 				let data = std::mem::take(&mut data);
+				let bounded_subscriptions = bounded_subscriptions.clone();
 
 				let fut = async move {
 					let response = process_batch_request(Batch {
 						data,
 						call: CallData {
 							conn_id: conn_id as usize,
+							bounded_subscriptions,
 							max_response_body_size,
 							max_log_length,
 							methods,

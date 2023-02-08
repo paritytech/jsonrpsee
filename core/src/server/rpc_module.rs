@@ -33,7 +33,7 @@ use std::time::Duration;
 
 use crate::error::{Error, SubscriptionAcceptRejectError};
 use crate::id_providers::RandomIntegerIdProvider;
-use crate::server::helpers::MethodSink;
+use crate::server::helpers::{BoundedSubscriptions, MethodSink};
 use crate::traits::{IdProvider, ToRpcParams};
 use crate::{SubscriptionCallbackError, SubscriptionResult};
 use futures_util::future::Either;
@@ -48,7 +48,7 @@ use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::{mpsc, oneshot};
 
-use super::helpers::MethodResponse;
+use super::helpers::{MethodResponse, SubscriptionPermit};
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -138,6 +138,8 @@ pub struct ConnState<'a> {
 	pub conn_id: ConnectionId,
 	/// ID provider.
 	pub id_provider: &'a dyn IdProvider,
+	/// Subscription limit
+	pub subscription_permit: SubscriptionPermit,
 }
 
 /// Outcome of a successful terminated subscription.
@@ -490,6 +492,8 @@ impl Methods {
 	async fn inner_call(&self, req: Request<'_>, tx: mpsc::Sender<String>) -> CallResponse {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
+		let bounded_subs = BoundedSubscriptions::new(u32::MAX);
+		let subscription_permit = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 
 		let response = match self.method(&req.method).map(|c| &c.callback) {
 			None => CallResponse::Call(MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound))),
@@ -498,7 +502,7 @@ impl Methods {
 				CallResponse::Call((cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await)
 			}
 			Some(MethodKind::Subscription(cb)) => {
-				let conn_state = ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider };
+				let conn_state = ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
 				let res = (cb)(id, params, MethodSink::new(tx), conn_state).await;
 
 				CallResponse::Subscribe(res)
@@ -847,6 +851,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						uniq_sub,
 						id: id.clone().into_owned(),
 						subscribe: tx,
+						permit: conn.subscription_permit,
 					};
 
 					// The subscription callback is a future from the subscription
@@ -945,6 +950,8 @@ pub struct PendingSubscriptionSink {
 	id: Id<'static>,
 	/// Sender to answer the subscribe call.
 	subscribe: oneshot::Sender<MethodResponse>,
+	/// Subscription permit.
+	permit: SubscriptionPermit,
 }
 
 impl PendingSubscriptionSink {
@@ -976,6 +983,7 @@ impl PendingSubscriptionSink {
 				subscribers: self.subscribers,
 				uniq_sub: self.uniq_sub,
 				unsubscribe: IsUnsubscribed(tx),
+				_permit: Arc::new(self.permit),
 			})
 		} else {
 			Err(SubscriptionAcceptRejectError::MessageTooLarge)
@@ -996,6 +1004,8 @@ pub struct SubscriptionSink {
 	uniq_sub: SubscriptionKey,
 	/// A future to that fires once the unsubscribe method has been called.
 	unsubscribe: IsUnsubscribed,
+	/// Subscription permit
+	_permit: Arc<SubscriptionPermit>,
 }
 
 impl SubscriptionSink {
