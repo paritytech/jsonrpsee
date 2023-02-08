@@ -35,7 +35,7 @@ use crate::error::{Error, SubscriptionAcceptRejectError};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::traits::{IdProvider, ToRpcParams};
-use crate::SubscriptionResult;
+use crate::{SubscriptionCallbackError, SubscriptionResult};
 use futures_util::future::Either;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned};
@@ -80,6 +80,16 @@ pub enum TrySendError {
 	Full(SubscriptionMessage),
 }
 
+impl std::fmt::Display for TrySendError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let msg = match self {
+			Self::Closed(_) => "closed",
+			Self::Full(_) => "full",
+		};
+		f.write_str(msg)
+	}
+}
+
 #[derive(Debug, Clone)]
 /// Represents whether a subscription was answered or not.
 pub enum SubscriptionAnswered {
@@ -96,6 +106,12 @@ pub enum SubscriptionAnswered {
 #[derive(Debug)]
 pub struct DisconnectError(pub SubscriptionMessage);
 
+impl std::fmt::Display for DisconnectError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str("closed")
+	}
+}
+
 /// Error that may occur during `SubscriptionSink::send_timeout`.
 #[derive(Debug)]
 pub enum SendTimeoutError {
@@ -104,6 +120,16 @@ pub enum SendTimeoutError {
 	Timeout(SubscriptionMessage),
 	/// The channel is full.
 	Closed(SubscriptionMessage),
+}
+
+impl std::fmt::Display for SendTimeoutError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let msg = match self {
+			Self::Timeout(_) => "timed out waiting on send operation",
+			Self::Closed(_) => "closed",
+		};
+		f.write_str(msg)
+	}
 }
 
 /// Helper struct to manage subscriptions.
@@ -695,7 +721,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///
 	/// Furthermore, it generates the `unsubscribe implementation` where a `bool` is used as
 	/// the result to indicate whether the subscription was successfully unsubscribed to or not.
-	/// For instance an `unsubscribe call` may fail if a non-existent subscriptionID is used in the call.
+	/// For instance an `unsubscribe call` may fail if a non-existent subscription ID is used in the call.
 	///
 	/// This method ensures that the `subscription_method_name` and `unsubscription_method_name` are unique.
 	/// The `notif_method_name` argument sets the content of the `method` field in the JSON document that
@@ -711,6 +737,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     - [`Params`]: JSON-RPC parameters in the subscription call.
 	///     - [`PendingSubscriptionSink`]: A pending subscription waiting to be accepted, in order to send out messages on the subscription
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
+	///  
+	/// # Returns
+	///
+	/// An async block which returns `Result<(), SubscriptionCallbackError>` the error is simply
+	/// for a more ergonomic API and is not used (except logged for user-related caused errors).
+	/// By default jsonrpsee doesn't send any special close notification,
+	/// it can be a footgun if one wants to send out a "special notification" to indicate that an error occurred.  
+	///
+	/// If you want to a special error notification use `SubscriptionSink::close` or
+	/// `SubscriptionSink::send` before returning from the async block.
 	///
 	/// # Examples
 	///
@@ -727,6 +763,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     let sink = pending.accept().await?;
 	///
 	///     let sum = x + (*ctx);
+	///     
+	///     // NOTE: the error handling here is for easy of use
+	///     // and are thrown away
 	///     let msg = SubscriptionMessage::from_json(&sum)?;
 	///     sink.send(msg).await?;
 	///
@@ -779,7 +818,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let result = subscribers.lock().remove(&key).is_some();
 
 					if !result {
-						tracing::warn!(
+						tracing::debug!(
 							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
 							unsubscribe_method_name,
 							key,
@@ -817,8 +856,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let sub_fut = callback(params.into_owned(), sink, ctx.clone());
 
 					tokio::spawn(async move {
-						if sub_fut.await.is_err() {
-							tracing::warn!("Subscribe call `{subscribe_method_name}` closed");
+						if let Err(SubscriptionCallbackError::Some(msg)) = sub_fut.await {
+							tracing::warn!("Subscribe call `{subscribe_method_name}` failed: {msg}");
 						}
 					});
 

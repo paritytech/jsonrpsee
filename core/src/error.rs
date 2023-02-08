@@ -188,46 +188,66 @@ impl From<hyper::Error> for Error {
 
 /// The error returned by the subscription's method for the rpc server implementation.
 ///
-/// It contains no data, and neither is the error utilized. It provides an abstraction to make the
-/// API more ergonomic while handling errors that may occur during the subscription callback.
-#[derive(Debug, Clone, Copy)]
-pub struct SubscriptionEmptyError;
+/// It provides an abstraction to make the API more ergonomic while handling errors
+/// that may occur during the subscription callback.
+#[derive(Debug)]
+pub enum SubscriptionCallbackError {
+	/// Error cause is propagated by other code or connection related.
+	None,
+	/// Some error happened to be logged.
+	Some(String),
+}
 
-impl From<anyhow::Error> for SubscriptionEmptyError {
-	fn from(_: anyhow::Error) -> Self {
-		SubscriptionEmptyError
+// User defined error.
+impl From<anyhow::Error> for SubscriptionCallbackError {
+	fn from(e: anyhow::Error) -> Self {
+		Self::Some(format!("Other: {}", e.to_string()))
 	}
 }
 
-impl From<CallError> for SubscriptionEmptyError {
-	fn from(_: CallError) -> Self {
-		SubscriptionEmptyError
+// User defined error.
+impl From<Box<dyn std::error::Error>> for SubscriptionCallbackError {
+	fn from(e: Box<dyn std::error::Error>) -> Self {
+		Self::Some(format!("Other: {}", e.to_string()))
 	}
 }
 
-impl From<SubscriptionAcceptRejectError> for SubscriptionEmptyError {
+impl From<CallError> for SubscriptionCallbackError {
+	fn from(e: CallError) -> Self {
+		Self::Some(e.to_string())
+	}
+}
+
+impl From<SubscriptionAcceptRejectError> for SubscriptionCallbackError {
 	fn from(_: SubscriptionAcceptRejectError) -> Self {
-		SubscriptionEmptyError
+		Self::None
 	}
 }
 
-impl From<serde_json::Error> for SubscriptionEmptyError {
-	fn from(_: serde_json::Error) -> Self {
-		SubscriptionEmptyError
-	}
-}
-
-#[cfg(feature = "server")]
-impl From<crate::server::rpc_module::TrySendError> for SubscriptionEmptyError {
-	fn from(_: crate::server::rpc_module::TrySendError) -> Self {
-		SubscriptionEmptyError
+impl From<serde_json::Error> for SubscriptionCallbackError {
+	fn from(e: serde_json::Error) -> Self {
+		Self::Some(format!("Failed to parse SubscriptionMessage::from_json: {}", e.to_string()))
 	}
 }
 
 #[cfg(feature = "server")]
-impl From<crate::server::rpc_module::DisconnectError> for SubscriptionEmptyError {
-	fn from(_: crate::server::rpc_module::DisconnectError) -> Self {
-		SubscriptionEmptyError
+impl From<crate::server::rpc_module::TrySendError> for SubscriptionCallbackError {
+	fn from(e: crate::server::rpc_module::TrySendError) -> Self {
+		Self::Some(format!("SubscriptionSink::try_send failed: {}", e.to_string()))
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::rpc_module::DisconnectError> for SubscriptionCallbackError {
+	fn from(e: crate::server::rpc_module::DisconnectError) -> Self {
+		Self::Some(format!("SubscriptionSink::send failed: {}", e.to_string()))
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::rpc_module::SendTimeoutError> for SubscriptionCallbackError {
+	fn from(e: crate::server::rpc_module::SendTimeoutError) -> Self {
+		Self::Some(format!("SubscriptionSink::send_timeout failed: {}", e.to_string()))
 	}
 }
 

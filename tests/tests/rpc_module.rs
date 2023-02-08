@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
-use jsonrpsee::core::error::{Error, SubscriptionEmptyError};
+use jsonrpsee::core::error::{Error, SubscriptionCallbackError};
 use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
@@ -321,7 +321,7 @@ async fn subscribing_without_server_bad_params() {
 				Err(e) => {
 					let err: ErrorObjectOwned = e.into();
 					let _ = pending.reject(err).await;
-					return Err(SubscriptionEmptyError.into());
+					return Err(SubscriptionCallbackError::None);
 				}
 			};
 
