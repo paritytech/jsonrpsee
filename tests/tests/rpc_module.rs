@@ -468,7 +468,7 @@ async fn bounded_subscription_works() {
 
 	// create a bounded subscription and don't poll it
 	// after 3 items has been produced messages will be dropped.
-	let mut sub = module.subscribe_bounded("my_sub", EmptyServerParams::new(), 3).await.unwrap();
+	let mut sub = module.subscribe("my_sub", EmptyServerParams::new(), 3).await.unwrap();
 
 	// assert that some items couldn't be sent.
 	assert_eq!(rx.recv().await, Some("Full".to_string()));

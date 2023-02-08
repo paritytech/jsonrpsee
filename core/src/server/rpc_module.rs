@@ -550,11 +550,11 @@ impl Methods {
 	/// }
 	/// ```
 	pub async fn subscribe_unbounded(&self, sub_method: &str, params: impl ToRpcParams) -> Result<Subscription, Error> {
-		self.subscribe_bounded(sub_method, params, u32::MAX as usize).await
+		self.subscribe(sub_method, params, u32::MAX as usize).await
 	}
 
-	/// Similar to [`Methods::subscribe_unbounded`] but it's using a bounded channel.
-	pub async fn subscribe_bounded(
+	/// Similar to [`Methods::subscribe_unbounded`] but it's using a bounded channel and the buffer capacity must be provided.
+	pub async fn subscribe(
 		&self,
 		sub_method: &str,
 		params: impl ToRpcParams,
