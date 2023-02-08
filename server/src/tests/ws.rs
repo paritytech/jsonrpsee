@@ -728,7 +728,6 @@ async fn ws_server_backpressure_works() {
 
 	while now.elapsed() < std::time::Duration::from_secs(10) {
 		msg = client.receive().with_default_timeout().await.unwrap().unwrap();
-		tracing::info!("{msg}");
 		if let Ok(sub_notif) = serde_json::from_str::<SubscriptionResponse<usize>>(&msg) {
 			match sub_notif.params.result {
 				1 if seen_backpressure_item => {

@@ -213,7 +213,6 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 
 				if let Some(p) = bounded_subscriptions.acquire() {
-					tracing::info!("{:?}", p);
 					let conn_state = ConnState { conn_id, id_provider, subscription_permit: p };
 					let response = callback(id.clone(), params, sink.clone(), conn_state).await;
 					CallResponse::Subscribe(response)

@@ -210,7 +210,6 @@ mod rpc_impl {
 // Use generated implementations of server and client.
 use jsonrpsee::core::params::{ArrayParams, ObjectParams};
 use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
-use tokio::sync::mpsc;
 
 pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
@@ -261,8 +260,6 @@ async fn macro_param_parsing() {
 async fn macro_optional_param_parsing() {
 	let module = RpcServerImpl.into_rpc();
 
-	let (tx, mut rx) = mpsc::channel(1);
-
 	// Optional param omitted at tail
 	let res: String = module.call("foo_optional_params", [42_u64, 70]).await.unwrap();
 	assert_eq!(&res, "Called with: 42, Some(70), None");
@@ -273,12 +270,11 @@ async fn macro_optional_param_parsing() {
 	assert_eq!(&res, "Called with: 42, None, Some(70)");
 
 	// Named params using a map
-	module
-		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_optional_params","params":{"a":22,"c":50},"id":0}"#, tx)
+	let (resp, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_optional_params","params":{"a":22,"c":50},"id":0}"#, 1)
 		.await
 		.unwrap();
-	let resp = rx.recv().await.unwrap();
-	assert_eq!(resp, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
+	assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
 }
 
 #[tokio::test]
@@ -296,25 +292,20 @@ async fn macro_zero_copy_cow() {
 
 	let module = RpcServerImpl.into_rpc();
 
-	let (tx, mut rx) = mpsc::channel(16);
-
-	module
-		.raw_json_request(
-			r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo", "bar"],"id":0}"#,
-			tx.clone(),
-		)
+	let (resp, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo", "bar"],"id":0}"#, 1)
 		.await
 		.unwrap();
 
 	// std::borrow::Cow<str> always deserialized to owned variant here
-	assert_eq!(rx.recv().await.unwrap(), r#"{"jsonrpc":"2.0","result":"Zero copy params: false, true","id":0}"#);
+	assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, true","id":0}"#);
 
 	// serde_json will have to allocate a new string to replace `\t` with byte 0x09 (tab)
-	module
-		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo", "\tbar"],"id":0}"#, tx)
+	let (resp, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo", "\tbar"],"id":0}"#, 1)
 		.await
 		.unwrap();
-	assert_eq!(rx.recv().await.unwrap(), r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
+	assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
 }
 
 // Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.

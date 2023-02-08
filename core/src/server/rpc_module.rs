@@ -71,6 +71,13 @@ pub type ConnectionId = usize;
 /// Max response size.
 pub type MaxResponseSize = usize;
 
+/// Raw response from an RPC
+/// A 3-tuple containing:
+///   - Call result as a `String`,
+///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
+///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
+pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, SubscriptionPermit, mpsc::Sender<String>);
+
 /// Error that may occur during `SubscriptionSink::try_send`.
 #[derive(Debug)]
 pub enum TrySendError {
@@ -423,9 +430,7 @@ impl Methods {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
-		let (tx, _rx) = mpsc::channel(1);
-		let call_resp = self.inner_call(req, tx).await;
-		let resp = call_resp.as_response();
+		let (resp, _, _, _) = self.inner_call(req, 1).await;
 
 		if resp.success {
 			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
@@ -439,12 +444,7 @@ impl Methods {
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
 	///
-	/// This is a low-level API where you might be able build "in-memory" client
-	/// but it's not ergonomic to use, see [`Methods::call`] and [`Methods::subscribe_bounded`]
-	/// for more ergonomic APIs to perform method calls or subscriptions for testing or other purposes.
-	///
-	/// After this method returns the responses can be read on the corresponding `Receiver` to the `Sender`
-	/// that was passed into to the call.
+	/// Returns the raw JSON response to the call and a stream to receive notifications if the call was a subscription.
 	///
 	/// # Examples
 	///
@@ -456,63 +456,68 @@ impl Methods {
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
-	///          let sink = pending.accept().await?;
-	///          let msg = SubscriptionMessage::from_json(&"one answer").unwrap();
-	///          sink.send(msg).await.unwrap();
-	///
-	///          Ok(())
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async {
+	///         let sink = pending.accept().await?;
+	///         let msg = SubscriptionMessage::from_json(&"one answer")?;
+	///         sink.send(msg).await?;
+	///         Ok(())
 	///     }).unwrap();
-	///
-	///     let (tx, mut rx) = tokio::sync::mpsc::channel(16);
-	///     module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, tx).await.unwrap();
-	///     let sub_resp = rx.recv().await.unwrap();
-	///     // the subscription ID is sent in the `result` field.
-	///     let sub_resp = serde_json::from_str::<Response<u64>>(&sub_resp).unwrap();
-	///
-	///     let sub_notif = rx.recv().await.unwrap();
+	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
+	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
+	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
-	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, sub_resp.result),
-	///         sub_notif
+	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
+	///         sub_resp
 	///     );
 	/// }
 	/// ```
-	pub async fn raw_json_request(&self, request: &str, tx: mpsc::Sender<String>) -> Result<(), Error> {
+	pub async fn raw_json_request(
+		&self,
+		request: &str,
+		buf_size: usize,
+	) -> Result<(MethodResponse, mpsc::Receiver<String>), Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
-		if let CallResponse::Call(r) = self.inner_call(req, tx.clone()).await {
-			tx.send(r.result).await.map_err(|_| Error::Custom("Connection dropped; you have to keep the corresponding `Receiver` for `Methods::raw_json_request` to work".to_string()))?;
-		}
+		let (resp, rx, _, _) = self.inner_call(req, buf_size).await;
 
-		Ok(())
+		Ok((resp, rx))
 	}
 
 	/// Execute a callback.
-	async fn inner_call(&self, req: Request<'_>, tx: mpsc::Sender<String>) -> CallResponse {
+	async fn inner_call(&self, req: Request<'_>, buf_size: usize) -> RawRpcResponse {
+		let (tx, mut rx) = mpsc::channel(buf_size);
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
 		let bounded_subs = BoundedSubscriptions::new(u32::MAX);
-		let subscription_permit = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
+		let p1 = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
+		let p2 = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 
 		let response = match self.method(&req.method).map(|c| &c.callback) {
-			None => CallResponse::Call(MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound))),
-			Some(MethodKind::Sync(cb)) => CallResponse::Call((cb)(id, params, usize::MAX)),
-			Some(MethodKind::Async(cb)) => {
-				CallResponse::Call((cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await)
-			}
+			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
+			Some(MethodKind::Sync(cb)) => (cb)(id, params, usize::MAX),
+			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
 			Some(MethodKind::Subscription(cb)) => {
-				let conn_state = ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
-				let res = (cb)(id, params, MethodSink::new(tx), conn_state).await;
+				let conn_state =
+					ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit: p1 };
+				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await;
 
-				CallResponse::Subscribe(res)
+				// This message is not used because it's used for metrics so we discard in other to
+				// not read once this is used for subscriptions.
+				//
+				// The same information is part of `res` above.
+				let _ = rx.recv().await.expect("Every call must at least produce one response; qed");
+
+				match res {
+					SubscriptionAnswered::Yes(r) => r,
+					SubscriptionAnswered::No(r) => r,
+				}
 			}
-			Some(MethodKind::Unsubscription(cb)) => CallResponse::Call((cb)(id, params, 0, usize::MAX)),
+			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
 
 		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
 
-		response
+		(response, rx, p2, tx)
 	}
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
@@ -557,26 +562,22 @@ impl Methods {
 	) -> Result<Subscription, Error> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
-		let (tx, mut rx) = mpsc::channel(buf_size);
 
 		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
-		let call_resp = self.inner_call(req, tx.clone()).await;
-		let response = call_resp.as_response();
+		let (resp, rx, permit, tx) = self.inner_call(req, buf_size).await;
 
-		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&response.result) {
+		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result) {
 			Ok(r) => r,
-			Err(_) => match serde_json::from_str::<ErrorResponse>(&response.result) {
+			Err(_) => match serde_json::from_str::<ErrorResponse>(&resp.result) {
 				Ok(err) => return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))),
 				Err(err) => return Err(err.into()),
 			},
 		};
 
 		let sub_id = subscription_response.result.into_owned();
-		// throw away the response to the subscription call.
-		_ = rx.recv().await;
 
-		Ok(Subscription { sub_id, rx, tx: MethodSink::new(tx) })
+		Ok(Subscription { sub_id, rx, tx: MethodSink::new(tx), _permit: permit })
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.
@@ -1155,6 +1156,7 @@ pub struct Subscription {
 	tx: MethodSink,
 	rx: mpsc::Receiver<String>,
 	sub_id: RpcSubscriptionId<'static>,
+	_permit: SubscriptionPermit,
 }
 
 impl Subscription {
