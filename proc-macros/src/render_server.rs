@@ -28,12 +28,11 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use super::RpcDescription;
-use crate::attributes::Resource;
 use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType, Token};
+use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -72,13 +71,13 @@ impl RpcDescription {
 
 		let subscriptions = self.subscriptions.iter().map(|sub| {
 			let docs = &sub.docs;
-			let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
+			let subscription_sink_ty = self.jrps_server_item(quote! { PendingSubscriptionSink });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
 
 			// For ergonomic reasons, the server's subscription method should return `SubscriptionResult`.
-			let return_ty = self.jrps_server_item(quote! { types::SubscriptionResult });
+			let return_ty = self.jrps_server_item(quote! { core::SubscriptionResult });
 			let output: ReturnType = parse_quote! { -> #return_ty };
 			sub_sig.sig.output = output;
 
@@ -121,28 +120,6 @@ impl RpcDescription {
 			}}
 		}
 
-		/// Helper that will parse the resources passed to the macro and call the appropriate resource
-		/// builder to register the resource limits.
-		fn handle_resource_limits(resources: &Punctuated<Resource, Token![,]>) -> TokenStream2 {
-			// Nothing to be done if no resources were set.
-			if resources.is_empty() {
-				return quote! {};
-			}
-
-			// Transform each resource into a call to `.resource(name, value)`.
-			let resources = resources.iter().map(|resource| {
-				let Resource { name, value, .. } = resource;
-				quote! { .resource(#name, #value)? }
-			});
-
-			quote! {
-				.and_then(|resource_builder| {
-					resource_builder #(#resources)*;
-					Ok(())
-				})
-			}
-		}
-
 		let methods = self
 			.methods
 			.iter()
@@ -159,15 +136,12 @@ impl RpcDescription {
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
-				let resources = handle_resource_limits(&method.resources);
-
 				if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
 						rpc.register_async_method(#rpc_method_name, |params, context| async move {
 							#parsing
 							context.as_ref().#rust_method_name(#params_seq).await
 						})
-						#resources
 					})
 				} else {
 					let register_kind =
@@ -178,7 +152,6 @@ impl RpcDescription {
 							#parsing
 							context.#rust_method_name(#params_seq)
 						})
-						#resources
 					})
 				}
 			})
@@ -213,14 +186,11 @@ impl RpcDescription {
 					None => rpc_sub_name.clone(),
 				};
 
-				let resources = handle_resource_limits(&sub.resources);
-
 				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| {
+					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
 						#parsing
-						context.as_ref().#rust_method_name(subscription_sink, #params_seq)
+						context.as_ref().#rust_method_name(subscription_sink, #params_seq).await
 					})
-					#resources
 				})
 			})
 			.collect::<Vec<_>>();
@@ -320,7 +290,8 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let err = self.jrps_server_item(quote! { core::Error });
-		let sub_err = self.jrps_server_item(quote! { types::SubscriptionEmptyError });
+		let sub_err = self.jrps_server_item(quote! { core::SubscriptionCallbackError::None });
+		let tokio = self.jrps_server_item(quote! { tokio });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -330,9 +301,11 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
-								#pending.reject(_e)?;
+								#tokio::spawn(async move {
+									let _ = #pending.reject(_e).await;
+								});
 								return Err(#sub_err);
 							}
 						};
@@ -343,7 +316,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return Err(e.into())
 							}
 						};
@@ -354,9 +327,11 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::warn!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
-								#pending.reject(_e)?;
+								#tokio::spawn(async move {
+									let _ = #pending.reject(_e).await;
+								});
 								return Err(#sub_err);
 							}
 						};
@@ -367,7 +342,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::warn!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return Err(e.into())
 							}
 						};
@@ -433,9 +408,11 @@ impl RpcDescription {
 					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
 						Ok(p) => p,
 						Err(e) => {
-							#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
+							#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
 							let _e: #err = e.into();
-							#pending.reject(_e)?;
+							#tokio::spawn(async move {
+								let _ = #pending.reject(_e).await;
+							});
 							return Err(#sub_err);
 						}
 					};
@@ -451,7 +428,7 @@ impl RpcDescription {
 					}
 
 					let parsed: ParamsObject<#(#types,)*> = params.parse().map_err(|e| {
-						#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
+						#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
 						e
 					})?;
 					(#(#destruct),*)

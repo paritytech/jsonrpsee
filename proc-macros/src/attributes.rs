@@ -29,7 +29,7 @@ use std::{fmt, iter};
 use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
-use syn::{spanned::Spanned, Attribute, Error, LitInt, LitStr, Token};
+use syn::{spanned::Spanned, Attribute, Error, LitStr, Token};
 
 pub(crate) struct AttributeMeta {
 	pub path: syn::Path,
@@ -45,13 +45,6 @@ pub(crate) struct Argument {
 pub enum ParamKind {
 	Array,
 	Map,
-}
-
-#[derive(Debug, Clone)]
-pub struct Resource {
-	pub name: LitStr,
-	pub assign: Token![=],
-	pub value: LitInt,
 }
 
 pub struct NameMapping {
@@ -90,12 +83,6 @@ impl Parse for Argument {
 		.collect();
 
 		Ok(Argument { label, tokens })
-	}
-}
-
-impl Parse for Resource {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
-		Ok(Resource { name: input.parse()?, assign: input.parse()?, value: input.parse()? })
 	}
 }
 

@@ -4,9 +4,8 @@ use std::time::Duration;
 
 use crate::future::{FutureDriver, StopHandle};
 use crate::logger::{self, Logger, TransportProtocol};
-use crate::server::{MethodResult, ServiceData};
+use crate::server::ServiceData;
 
-use futures_channel::mpsc;
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::FuturesOrdered;
@@ -15,8 +14,7 @@ use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::resource_limiting::Resources;
-use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
+use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodKind, Methods, SubscriptionAnswered};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -27,7 +25,8 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
-use tokio_stream::wrappers::IntervalStream;
+use tokio::sync::{mpsc, oneshot};
+use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::Compat;
 use tracing::instrument;
 
@@ -63,7 +62,6 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) methods: &'a Methods,
 	pub(crate) max_response_body_size: u32,
 	pub(crate) max_log_length: u32,
-	pub(crate) resources: &'a Resources,
 	pub(crate) sink: &'a MethodSink,
 	pub(crate) logger: &'a L,
 	pub(crate) request_start: L::Instant,
@@ -118,7 +116,7 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 			.into_iter()
 			.filter_map(|v| {
 				if let Ok(req) = serde_json::from_str::<Request>(v.get()) {
-					Some(Either::Right(async { execute_call(req, call.clone()).await.into_inner() }))
+					Some(Either::Right(async { execute_call(req, call.clone()).await.into_response() }))
 				} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(v.get()) {
 					// notifications should not be answered.
 					got_notif = true;
@@ -153,17 +151,20 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 	}
 }
 
-pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
+pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> CallOrSubscription {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		execute_call_with_tracing(req, call).await
 	} else {
 		let (id, code) = prepare_error(&data);
-		MethodResult::SendAndLogger(MethodResponse::error(id, ErrorObject::from(code)))
+		CallOrSubscription::Call(MethodResponse::error(id, ErrorObject::from(code)))
 	}
 }
 
 #[instrument(name = "method_call", fields(method = req.method.as_ref()), skip(call, req), level = "TRACE")]
-pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> MethodResult {
+pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(
+	req: Request<'a>,
+	call: CallData<'_, L>,
+) -> CallOrSubscription {
 	execute_call(req, call).await
 }
 
@@ -172,18 +173,17 @@ pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, c
 ///
 /// Returns `(MethodResponse, None)` on every call that isn't a subscription
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
-pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> MethodResult {
+pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> CallOrSubscription {
 	let CallData {
-		resources,
 		methods,
 		max_response_body_size,
 		max_log_length,
 		conn_id,
-		bounded_subscriptions,
 		id_provider,
 		sink,
 		logger,
 		request_start,
+		bounded_subscriptions,
 	} = call;
 
 	rx_log_from_json(&req, call.max_log_length);
@@ -196,61 +196,33 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 		None => {
 			logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::WebSocket);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
-			MethodResult::SendAndLogger(response)
+			CallOrSubscription::Call(response)
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let r = (callback)(id, params, max_response_body_size as usize);
-						drop(guard);
-						MethodResult::SendAndLogger(r)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
-				}
+				CallOrSubscription::Call((callback)(id, params, max_response_body_size as usize))
 			}
 			MethodKind::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let id = id.into_owned();
-						let params = params.into_owned();
 
-						let response =
-							(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
-						MethodResult::SendAndLogger(response)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
-				}
+				let id = id.into_owned();
+				let params = params.into_owned();
+
+				let response = (callback)(id, params, conn_id, max_response_body_size as usize).await;
+				CallOrSubscription::Call(response)
 			}
 			MethodKind::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						if let Some(cn) = bounded_subscriptions.acquire() {
-							let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
-							let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
-							MethodResult::JustLogger(response)
-						} else {
-							let response =
-								MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
-							MethodResult::SendAndLogger(response)
-						}
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
+
+				if let Some(p) = bounded_subscriptions.acquire() {
+					let conn_state = ConnState { conn_id, id_provider, subscription_permit: p };
+					let response = callback(id.clone(), params, sink.clone(), conn_state).await;
+					CallOrSubscription::Subscription(response)
+				} else {
+					let response =
+						MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
+					CallOrSubscription::Call(response)
 				}
 			}
 			MethodKind::Unsubscription(callback) => {
@@ -258,12 +230,12 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);
-				MethodResult::SendAndLogger(result)
+				CallOrSubscription::Call(result)
 			}
 		},
 	};
 
-	let r = response.as_inner();
+	let r = response.as_response();
 
 	tx_log_from_str(&r.result, max_log_length);
 	logger.on_result(name, r.success, request_start, TransportProtocol::WebSocket);
@@ -277,28 +249,29 @@ pub(crate) async fn background_task<L: Logger>(
 ) -> Result<(), Error> {
 	let ServiceData {
 		methods,
-		resources,
 		max_request_body_size,
 		max_response_body_size,
 		max_log_length,
+		max_subscriptions_per_connection,
 		batch_requests_supported,
 		stop_handle,
 		id_provider,
 		ping_interval,
-		max_subscriptions_per_connection,
 		conn_id,
 		logger,
 		remote_addr,
+		message_buffer_capacity,
 		conn,
 		..
 	} = svc;
 
-	let (tx, rx) = mpsc::unbounded::<String>();
-	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
+	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
+	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
+	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 
 	// Spawn another task that sends out the responses on the Websocket.
-	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval));
+	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval, conn_rx));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -307,6 +280,20 @@ pub(crate) async fn background_task<L: Logger>(
 
 	let result = loop {
 		data.clear();
+
+		let sink_permit_fut = sink.reserve();
+
+		tokio::pin!(sink_permit_fut);
+
+		// Wait until there is a slot in the bounded channel which means that
+		// the underlying TCP socket won't be read.
+		//
+		// This will force the client to read socket on the other side
+		// otherwise the socket will not be read again.
+		let sink_permit = match method_executors.select_with(Monitored::new(sink_permit_fut, &stop_handle)).await {
+			Ok(permit) => permit,
+			Err(_) => break Ok(()),
+		};
 
 		{
 			// Need the extra scope to drop this pinned future and reclaim access to `data`
@@ -334,18 +321,19 @@ pub(crate) async fn background_task<L: Logger>(
 						break Ok(());
 					}
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
-						tracing::warn!(
+						tracing::debug!(
 							"WS transport error: request length: {} exceeded max limit: {} bytes",
 							current,
 							maximum
 						);
-						sink.send_error(Id::Null, reject_too_big_request(max_request_body_size));
+						sink_permit.send_error(Id::Null, reject_too_big_request(max_request_body_size));
+
 						continue;
 					}
 
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::error!("WS transport error: {}; terminate connection: {}", err, conn_id);
+						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn_id);
 						break Err(err.into());
 					}
 					MonitoredError::Shutdown => {
@@ -362,19 +350,17 @@ pub(crate) async fn background_task<L: Logger>(
 			Some(b'{') => {
 				let data = std::mem::take(&mut data);
 				let sink = sink.clone();
-				let resources = &resources;
 				let methods = &methods;
-				let bounded_subscriptions = bounded_subscriptions.clone();
 				let id_provider = &*id_provider;
+				let bounded_subscriptions = bounded_subscriptions.clone();
 
 				let fut = async move {
 					let call = CallData {
 						conn_id: conn_id as usize,
-						resources,
+						bounded_subscriptions,
 						max_response_body_size,
 						max_log_length,
 						methods,
-						bounded_subscriptions,
 						sink: &sink,
 						id_provider,
 						logger,
@@ -382,12 +368,16 @@ pub(crate) async fn background_task<L: Logger>(
 					};
 
 					match process_single_request(data, call).await {
-						MethodResult::JustLogger(r) => {
+						CallOrSubscription::Subscription(SubscriptionAnswered::Yes(r)) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 						}
-						MethodResult::SendAndLogger(r) => {
+						CallOrSubscription::Subscription(SubscriptionAnswered::No(r)) => {
 							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-							let _ = sink.send_raw(r.result);
+							sink_permit.send_raw(r.result);
+						}
+						CallOrSubscription::Call(r) => {
+							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
+							sink_permit.send_raw(r.result);
 						}
 					};
 				}
@@ -401,27 +391,25 @@ pub(crate) async fn background_task<L: Logger>(
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 				);
 				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-				let _ = sink.send_raw(response.result);
+				sink_permit.send_raw(response.result);
 			}
 			Some(b'[') => {
 				// Make sure the following variables are not moved into async closure below.
-				let resources = &resources;
 				let methods = &methods;
-				let bounded_subscriptions = bounded_subscriptions.clone();
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
 				let data = std::mem::take(&mut data);
+				let bounded_subscriptions = bounded_subscriptions.clone();
 
 				let fut = async move {
 					let response = process_batch_request(Batch {
 						data,
 						call: CallData {
 							conn_id: conn_id as usize,
-							resources,
+							bounded_subscriptions,
 							max_response_body_size,
 							max_log_length,
 							methods,
-							bounded_subscriptions,
 							sink: &sink,
 							id_provider: &*id_provider,
 							logger,
@@ -433,14 +421,14 @@ pub(crate) async fn background_task<L: Logger>(
 					if let Some(response) = response {
 						tx_log_from_str(&response.result, max_log_length);
 						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-						let _ = sink.send_raw(response.result);
+						sink_permit.send_raw(response.result);
 					}
 				};
 
 				method_executors.add(Box::pin(fut));
 			}
 			_ => {
-				sink.send_error(Id::Null, ErrorCode::ParseError.into());
+				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
 			}
 		}
 	};
@@ -452,10 +440,7 @@ pub(crate) async fn background_task<L: Logger>(
 	// proper drop behaviour.
 	method_executors.await;
 
-	// Notify all listeners and close down associated tasks.
-	sink.close();
-	bounded_subscriptions.close();
-
+	let _ = conn_tx.send(());
 	drop(conn);
 
 	result
@@ -463,22 +448,23 @@ pub(crate) async fn background_task<L: Logger>(
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
 async fn send_task(
-	mut rx: mpsc::UnboundedReceiver<String>,
+	rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
 	mut stop_handle: StopHandle,
 	ping_interval: Duration,
+	conn_closed: oneshot::Receiver<()>,
 ) {
-	// Received messages from the WebSocket.
-	let mut rx_item = rx.next();
-
 	// Interval to send out continuously `pings`.
 	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
 	let stopped = stop_handle.shutdown();
+	let rx = ReceiverStream::new(rx);
 
-	tokio::pin!(ping_interval, stopped);
+	tokio::pin!(ping_interval, stopped, rx, conn_closed);
 
+	// Received messages from the WebSocket.
+	let mut rx_item = rx.next();
 	let next_ping = ping_interval.next();
-	let mut futs = future::select(next_ping, stopped);
+	let mut futs = future::select(next_ping, future::select(stopped, conn_closed));
 
 	loop {
 		// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
@@ -488,9 +474,10 @@ async fn send_task(
 			Either::Left((Some(response), not_ready)) => {
 				// If websocket message send fail then terminate the connection.
 				if let Err(err) = send_message(&mut ws_sender, response).await {
-					tracing::error!("WS transport error: send failed: {}", err);
+					tracing::debug!("WS transport error: send failed: {}", err);
 					break;
 				}
+
 				rx_item = rx.next();
 				futs = not_ready;
 			}
@@ -503,15 +490,15 @@ async fn send_task(
 			// Handle timer intervals.
 			Either::Right((Either::Left((_, stop)), next_rx)) => {
 				if let Err(err) = send_ping(&mut ws_sender).await {
-					tracing::error!("WS transport error: send ping failed: {}", err);
+					tracing::debug!("WS transport error: send ping failed: {}", err);
 					break;
 				}
 				rx_item = next_rx;
 				futs = future::select(ping_interval.next(), stop);
 			}
 
-			// Server is closed
-			Either::Right((Either::Right((_, _)), _)) => {
+			// Server is stopped or closed
+			Either::Right((Either::Right(_), _)) => {
 				break;
 			}
 		}
@@ -519,4 +506,5 @@ async fn send_task(
 
 	// Terminate connection and send close message.
 	let _ = ws_sender.close().await;
+	rx.close();
 }

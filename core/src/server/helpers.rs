@@ -26,14 +26,17 @@
 
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::tracing::tx_log_from_str;
 use crate::Error;
-use futures_channel::mpsc;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
+use tokio::sync::mpsc::{self, Permit};
 use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
+
+use super::rpc_module::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -84,7 +87,7 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 #[derive(Clone, Debug)]
 pub struct MethodSink {
 	/// Channel sender.
-	tx: mpsc::UnboundedSender<String>,
+	tx: mpsc::Sender<String>,
 	/// Max response size in bytes for a executed call.
 	max_response_size: u32,
 	/// Max log length.
@@ -93,12 +96,12 @@ pub struct MethodSink {
 
 impl MethodSink {
 	/// Create a new `MethodSink` with unlimited response size.
-	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {
+	pub fn new(tx: mpsc::Sender<String>) -> Self {
 		MethodSink { tx, max_response_size: u32::MAX, max_log_length: u32::MAX }
 	}
 
 	/// Create a new `MethodSink` with a limited response size.
-	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32, max_log_length: u32) -> Self {
+	pub fn new_with_limit(tx: mpsc::Sender<String>, max_response_size: u32, max_log_length: u32) -> Self {
 		MethodSink { tx, max_response_size, max_log_length }
 	}
 
@@ -107,47 +110,75 @@ impl MethodSink {
 		self.tx.is_closed()
 	}
 
-	/// Send a JSON-RPC error to the client
-	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
-		let json = match serde_json::to_string(&ErrorResponse::borrowed(error, id)) {
-			Ok(json) => json,
-			Err(err) => {
-				tracing::error!("Error serializing response: {:?}", err);
+	/// Same as [`tokio::sync::mpsc::Sender::closed`].
+	///
+	/// # Cancel safety
+	/// This method is cancel safe. Once the channel is closed,
+	/// it stays closed forever and all future calls to closed will return immediately.
+	pub async fn closed(&self) {
+		self.tx.closed().await
+	}
 
-				return false;
-			}
-		};
+	/// Get the max response size.
+	pub const fn max_response_size(&self) -> u32 {
+		self.max_response_size
+	}
 
-		tx_log_from_str(&json, self.max_log_length);
+	/// Attempts to send out the message immediately and fails if the underlying
+	/// connection has been closed or if the message buffer is full.
+	///
+	/// Returns the message if the send fails such that either can be thrown away or re-sent later.
+	pub fn try_send(&mut self, msg: String) -> Result<(), TrySendError> {
+		tx_log_from_str(&msg, self.max_log_length);
+		self.tx.try_send(msg).map_err(Into::into)
+	}
 
-		if let Err(err) = self.send_raw(json) {
-			tracing::warn!("Error sending response {:?}", err);
-			false
-		} else {
-			true
+	/// Async send which will wait until there is space in channel buffer or that the subscription is disconnected.
+	pub async fn send(&self, msg: String) -> Result<(), DisconnectError> {
+		tx_log_from_str(&msg, self.max_log_length);
+		self.tx.send(msg).await.map_err(Into::into)
+	}
+
+	/// Similar to to `MethodSink::send` but only waits for a limited time.
+	pub async fn send_timeout(&self, msg: String, timeout: Duration) -> Result<(), SendTimeoutError> {
+		tx_log_from_str(&msg, self.max_log_length);
+		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
+	}
+
+	/// Waits for channel capacity. Once capacity to send one message is available, it is reserved for the caller.
+	pub async fn reserve(&self) -> Result<MethodSinkPermit, DisconnectError> {
+		match self.tx.reserve().await {
+			Ok(permit) => Ok(MethodSinkPermit { tx: permit, max_log_length: self.max_log_length }),
+			Err(_) => Err(DisconnectError(SubscriptionMessage::empty())),
 		}
+	}
+}
+
+/// A method sink with reserved spot in the bounded queue.
+#[derive(Debug)]
+pub struct MethodSinkPermit<'a> {
+	tx: Permit<'a, String>,
+	max_log_length: u32,
+}
+
+impl<'a> MethodSinkPermit<'a> {
+	/// Send a JSON-RPC error to the client
+	pub fn send_error(self, id: Id, error: ErrorObject) {
+		let json = serde_json::to_string(&ErrorResponse::borrowed(error, id)).expect("valid JSON; qed");
+
+		self.send_raw(json)
 	}
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client.
-	pub fn send_call_error(&self, id: Id, err: Error) -> bool {
+	pub fn send_call_error(self, id: Id, err: Error) {
 		self.send_error(id, err.into())
 	}
 
-	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
+	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check the validity
 	/// of the JSON being sent.
-	pub fn send_raw(&self, json: String) -> Result<(), mpsc::TrySendError<String>> {
+	pub fn send_raw(self, json: String) {
+		self.tx.send(json.clone());
 		tx_log_from_str(&json, self.max_log_length);
-		self.tx.unbounded_send(json)
-	}
-
-	/// Close the channel for any further messages.
-	pub fn close(&self) {
-		self.tx.close_channel();
-	}
-
-	/// Get the maximum number of permitted subscriptions.
-	pub const fn max_response_size(&self) -> u32 {
-		self.max_response_size
 	}
 }
 
@@ -331,7 +362,6 @@ impl BatchResponse {
 
 #[cfg(test)]
 mod tests {
-	use crate::server::helpers::BoundedSubscriptions;
 
 	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, Response};
 
@@ -349,20 +379,6 @@ mod tests {
 		let mut writer = BoundedWriter::new(100);
 		// NOTE: `"` is part of the serialization so 101 characters.
 		assert!(serde_json::to_writer(&mut writer, &"x".repeat(99)).is_err());
-	}
-
-	#[test]
-	fn bounded_subscriptions_work() {
-		let subs = BoundedSubscriptions::new(5);
-		let mut handles = Vec::new();
-
-		for _ in 0..5 {
-			handles.push(subs.acquire().unwrap());
-		}
-
-		assert!(subs.acquire().is_none());
-		handles.swap_remove(0);
-		assert!(subs.acquire().is_some());
 	}
 
 	#[test]

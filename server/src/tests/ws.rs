@@ -27,10 +27,12 @@
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
+use jsonrpsee_core::server::rpc_module::{SendTimeoutError, SubscriptionMessage};
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_types::SubscriptionResponse;
 use serde_json::Value as JsonValue;
 
 use super::helpers::server;
@@ -402,10 +404,10 @@ async fn register_methods_works() {
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
 	assert!(module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| { Ok(()) })
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async { Ok(()) })
 		.is_ok());
 	assert!(module
-		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| {
+		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| async {
 			Ok(())
 		})
 		.is_err());
@@ -419,7 +421,8 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| { Ok(()) }),
+		module
+			.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { Ok(()) }),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -546,23 +549,15 @@ async fn custom_subscription_id_works() {
 	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
-			// There is no subscription ID prior to calling accept.
-			let sub_id = sink.subscription_id();
-			assert!(sub_id.is_none());
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| async {
+			let sink = sink.accept().await.unwrap();
 
-			sink.accept()?;
+			assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
 
-			let sub_id = sink.subscription_id();
-			assert!(matches!(sub_id, Some(SubscriptionId::Str(id)) if id == "0xdeadbeef"));
-
-			tokio::spawn(async move {
-				loop {
-					let _ = &sink;
-					tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-				}
-			});
-			Ok(())
+			loop {
+				let _ = &sink;
+				tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+			}
 		})
 		.unwrap();
 	let _handle = server.start(module).unwrap();
@@ -652,4 +647,101 @@ async fn batch_with_mixed_calls() {
 	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":"5"}]"#;
 	let response = client.send_request_text(req.to_string()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, res);
+}
+
+#[tokio::test]
+async fn ws_server_backpressure_works() {
+	init_logger();
+
+	let (backpressure_tx, mut backpressure_rx) = tokio::sync::mpsc::channel::<()>(1);
+
+	let server = ServerBuilder::default()
+		.set_message_buffer_capacity(5)
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	let mut module = RpcModule::new(backpressure_tx);
+
+	module
+		.register_subscription(
+			"subscribe_with_backpressure_aggregation",
+			"n",
+			"unsubscribe_with_backpressure_aggregation",
+			move |_, pending, mut backpressure_tx| async move {
+				let sink = pending.accept().await?;
+				let n = SubscriptionMessage::from_json(&1).unwrap();
+				let bp = SubscriptionMessage::from_json(&2).unwrap();
+
+				let mut msg = n.clone();
+
+				loop {
+					tokio::select! {
+						biased;
+						_ = sink.closed() => {
+							// User closed connection.
+							break;
+						},
+						res = sink.send_timeout(msg.clone(), std::time::Duration::from_millis(100)) => {
+							match res {
+								// msg == 1
+								Ok(_) => {
+									msg = n.clone();
+								}
+								Err(SendTimeoutError::Closed(_)) => break,
+								// msg == 2
+								Err(SendTimeoutError::Timeout(_)) => {
+									let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);
+									let _ = b_tx.send(()).await;
+									msg = bp.clone();
+								}
+							};
+						},
+					}
+				}
+				Ok(())
+			},
+		)
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+
+	let _server_handle = server.start(module).unwrap();
+
+	// Send a valid batch.
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let req = r#"
+		{"jsonrpc":"2.0","method":"subscribe_with_backpressure_aggregation", "params":[],"id":1}"#;
+	client.send(req).with_default_timeout().await.unwrap().unwrap();
+
+	backpressure_rx.recv().await.unwrap();
+
+	let now = std::time::Instant::now();
+	let mut msg;
+
+	// Assert that first `item == 2` was sent and then
+	// the client start reading the socket again the buffered items should be sent.
+	// Thus, eventually `item == 1` should be sent again.
+	let mut seen_backpressure_item = false;
+	let mut seen_item_after_backpressure = false;
+
+	while now.elapsed() < std::time::Duration::from_secs(10) {
+		msg = client.receive().with_default_timeout().await.unwrap().unwrap();
+		if let Ok(sub_notif) = serde_json::from_str::<SubscriptionResponse<usize>>(&msg) {
+			match sub_notif.params.result {
+				1 if seen_backpressure_item => {
+					seen_item_after_backpressure = true;
+					break;
+				}
+				2 => {
+					seen_backpressure_item = true;
+				}
+				_ => (),
+			}
+		}
+	}
+
+	assert!(seen_backpressure_item);
+	assert!(seen_item_after_backpressure);
 }

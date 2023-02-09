@@ -90,7 +90,8 @@ cfg_types! {
 }
 
 cfg_server! {
-	pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
+	pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink, PendingSubscriptionSink, SubscriptionMessage, DisconnectError, TrySendError, SendTimeoutError};
+	pub use tokio;
 }
 
 cfg_client_or_server! {

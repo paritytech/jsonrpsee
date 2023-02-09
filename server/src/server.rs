@@ -42,9 +42,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
-use jsonrpsee_core::server::helpers::MethodResponse;
 use jsonrpsee_core::server::host_filtering::AllowHosts;
-use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
@@ -64,7 +62,6 @@ const MAX_CONNECTIONS: u32 = 100;
 pub struct Server<B = Identity, L = ()> {
 	listener: TcpListener,
 	cfg: Settings,
-	resources: Resources,
 	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 	service_builder: tower::ServiceBuilder<B>,
@@ -76,7 +73,6 @@ impl<L> std::fmt::Debug for Server<L> {
 			.field("listener", &self.listener)
 			.field("cfg", &self.cfg)
 			.field("id_provider", &self.id_provider)
-			.field("resources", &self.resources)
 			.finish()
 	}
 }
@@ -107,7 +103,7 @@ where
 	///
 	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
-		let methods = methods.into().initialize_resources(&self.resources)?;
+		let methods = methods.into();
 		let (stop_tx, stop_rx) = watch::channel(());
 
 		let stop_handle = StopHandle::new(stop_rx);
@@ -124,12 +120,11 @@ where
 		let max_request_body_size = self.cfg.max_request_body_size;
 		let max_response_body_size = self.cfg.max_response_body_size;
 		let max_log_length = self.cfg.max_log_length;
+		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 		let allow_hosts = self.cfg.allow_hosts;
-		let resources = self.resources;
 		let logger = self.logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
 		let id_provider = self.id_provider;
-		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 
 		let mut id: u32 = 0;
 		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
@@ -143,20 +138,20 @@ where
 						remote_addr,
 						methods: methods.clone(),
 						allow_hosts: allow_hosts.clone(),
-						resources: resources.clone(),
 						max_request_body_size,
 						max_response_body_size,
 						max_log_length,
+						max_subscriptions_per_connection,
 						batch_requests_supported,
 						id_provider: id_provider.clone(),
 						ping_interval: self.cfg.ping_interval,
 						stop_handle: stop_handle.clone(),
-						max_subscriptions_per_connection,
 						conn_id: id,
 						logger: logger.clone(),
 						max_connections: self.cfg.max_connections,
 						enable_http: self.cfg.enable_http,
 						enable_ws: self.cfg.enable_ws,
+						message_buffer_capacity: self.cfg.message_buffer_capacity,
 					};
 					process_connection(&self.service_builder, &connection_guard, data, socket, &mut connections);
 					id = id.wrapping_add(1);
@@ -181,12 +176,12 @@ struct Settings {
 	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u32,
-	/// Maximum number of subscriptions per connection.
-	max_subscriptions_per_connection: u32,
 	/// Max length for logging for requests and responses
 	///
 	/// Logs bigger than this limit will be truncated.
 	max_log_length: u32,
+	/// Maximum number of subscriptions per connection.
+	max_subscriptions_per_connection: u32,
 	/// Host filtering.
 	allow_hosts: AllowHosts,
 	/// Whether batch requests are supported by this server or not.
@@ -199,6 +194,8 @@ struct Settings {
 	enable_http: bool,
 	/// Enable WS.
 	enable_ws: bool,
+	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
+	message_buffer_capacity: u32,
 }
 
 impl Default for Settings {
@@ -207,14 +204,15 @@ impl Default for Settings {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			max_log_length: 4096,
-			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
+			max_subscriptions_per_connection: 1024,
 			batch_requests_supported: true,
 			allow_hosts: AllowHosts::Any,
 			tokio_runtime: None,
 			ping_interval: Duration::from_secs(60),
 			enable_http: true,
 			enable_ws: true,
+			message_buffer_capacity: 1024,
 		}
 	}
 }
@@ -223,7 +221,6 @@ impl Default for Settings {
 #[derive(Debug)]
 pub struct Builder<B = Identity, L = ()> {
 	settings: Settings,
-	resources: Resources,
 	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 	service_builder: tower::ServiceBuilder<B>,
@@ -233,7 +230,6 @@ impl Default for Builder {
 	fn default() -> Self {
 		Builder {
 			settings: Settings::default(),
-			resources: Resources::default(),
 			logger: (),
 			id_provider: Arc::new(RandomIntegerIdProvider),
 			service_builder: tower::ServiceBuilder::new(),
@@ -280,16 +276,6 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
-	/// registered resources on this server instance would exceed 8.
-	///
-	/// See the module documentation for [`resurce_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
-	/// for details.
-	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
-		self.resources.register(label, capacity, default)?;
-		Ok(self)
-	}
-
 	/// Add a logger to the builder [`Logger`](../jsonrpsee_core/logger/trait.Logger.html).
 	///
 	/// ```
@@ -334,7 +320,6 @@ impl<B, L> Builder<B, L> {
 	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<B, T> {
 		Builder {
 			settings: self.settings,
-			resources: self.resources,
 			logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
@@ -424,13 +409,7 @@ impl<B, L> Builder<B, L> {
 	/// }
 	/// ```
 	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> Builder<T, L> {
-		Builder {
-			settings: self.settings,
-			resources: self.resources,
-			logger: self.logger,
-			id_provider: self.id_provider,
-			service_builder,
-		}
+		Builder { settings: self.settings, logger: self.logger, id_provider: self.id_provider, service_builder }
 	}
 
 	/// Configure the server to only serve JSON-RPC HTTP requests.
@@ -450,6 +429,29 @@ impl<B, L> Builder<B, L> {
 	pub fn ws_only(mut self) -> Self {
 		self.settings.enable_http = false;
 		self.settings.enable_ws = true;
+		self
+	}
+
+	/// The server enforces backpressure which means that
+	/// `n` messages can be buffered and if the client
+	/// can't keep with up the server.
+	///
+	/// This `capacity` is applied per connection and
+	/// applies globally on the connection which implies
+	/// all JSON-RPC messages.
+	///
+	/// For example if a subscription produces plenty of new items
+	/// and the client can't keep up then no new messages are handled.
+	///
+	/// If this limit is exceeded then the server will "back-off"
+	/// and only accept new messages once the client reads pending messages.
+	///
+	/// # Panics
+	///
+	/// Panics if the buffer capacity is 0.
+	///
+	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
+		self.settings.message_buffer_capacity = c;
 		self
 	}
 
@@ -483,7 +485,6 @@ impl<B, L> Builder<B, L> {
 		Ok(Server {
 			listener,
 			cfg: self.settings,
-			resources: self.resources,
 			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
@@ -519,32 +520,10 @@ impl<B, L> Builder<B, L> {
 		Ok(Server {
 			listener,
 			cfg: self.settings,
-			resources: self.resources,
 			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
 		})
-	}
-}
-
-pub(crate) enum MethodResult {
-	JustLogger(MethodResponse),
-	SendAndLogger(MethodResponse),
-}
-
-impl MethodResult {
-	pub(crate) fn as_inner(&self) -> &MethodResponse {
-		match &self {
-			Self::JustLogger(r) => r,
-			Self::SendAndLogger(r) => r,
-		}
-	}
-
-	pub(crate) fn into_inner(self) -> MethodResponse {
-		match self {
-			Self::JustLogger(r) => r,
-			Self::SendAndLogger(r) => r,
-		}
 	}
 }
 
@@ -557,8 +536,6 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) methods: Methods,
 	/// Access control.
 	pub(crate) allow_hosts: AllowHosts,
-	/// Tracker for currently used resources on the server.
-	pub(crate) resources: Resources,
 	/// Max request body size.
 	pub(crate) max_request_body_size: u32,
 	/// Max response body size.
@@ -567,6 +544,8 @@ pub(crate) struct ServiceData<L: Logger> {
 	///
 	/// Logs bigger than this limit will be truncated.
 	pub(crate) max_log_length: u32,
+	/// Maximum number of subscriptions per connection.
+	pub(crate) max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
 	pub(crate) batch_requests_supported: bool,
 	/// Subscription ID provider.
@@ -575,8 +554,6 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) ping_interval: Duration,
 	/// Stop handle.
 	pub(crate) stop_handle: StopHandle,
-	/// Max subscriptions per connection.
-	pub(crate) max_subscriptions_per_connection: u32,
 	/// Connection ID
 	pub(crate) conn_id: u32,
 	/// Logger.
@@ -587,6 +564,8 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) enable_http: bool,
 	/// Enable WS.
 	pub(crate) enable_ws: bool,
+	/// Number of messages that server is allowed `buffer` until backpressure kicks in.
+	pub(crate) message_buffer_capacity: u32,
 }
 
 /// JsonRPSee service compatible with `tower`.
@@ -672,7 +651,6 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 			// The request wasn't an upgrade request; let's treat it as a standard HTTP request:
 			let data = http::HandleRequest {
 				methods: self.inner.methods.clone(),
-				resources: self.inner.resources.clone(),
 				max_request_body_size: self.inner.max_request_body_size,
 				max_response_body_size: self.inner.max_response_body_size,
 				max_log_length: self.inner.max_log_length,
@@ -748,8 +726,6 @@ struct ProcessConnection<L> {
 	methods: Methods,
 	/// Access control.
 	allow_hosts: AllowHosts,
-	/// Tracker for currently used resources on the server.
-	resources: Resources,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Max response body size.
@@ -758,6 +734,8 @@ struct ProcessConnection<L> {
 	///
 	/// Logs bigger than this limit will be truncated.
 	max_log_length: u32,
+	/// Maximum number of subscriptions per connection.
+	max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_supported: bool,
 	/// Subscription ID provider.
@@ -766,8 +744,6 @@ struct ProcessConnection<L> {
 	ping_interval: Duration,
 	/// Stop handle.
 	stop_handle: StopHandle,
-	/// Max subscriptions per connection.
-	max_subscriptions_per_connection: u32,
 	/// Max connections,
 	max_connections: u32,
 	/// Connection ID
@@ -778,6 +754,8 @@ struct ProcessConnection<L> {
 	enable_http: bool,
 	/// Allow JSON-RPC WS request and WS upgrade requests.
 	enable_ws: bool,
+	/// Number of messages that server is allowed `buffer` until backpressure kicks in.
+	message_buffer_capacity: u32,
 }
 
 #[instrument(name = "connection", skip_all, fields(remote_addr = %cfg.remote_addr, conn_id = %cfg.conn_id), level = "INFO")]
@@ -823,20 +801,20 @@ fn process_connection<'a, L: Logger, B, U>(
 			remote_addr: cfg.remote_addr,
 			methods: cfg.methods,
 			allow_hosts: cfg.allow_hosts,
-			resources: cfg.resources,
 			max_request_body_size: cfg.max_request_body_size,
 			max_response_body_size: cfg.max_response_body_size,
 			max_log_length: cfg.max_log_length,
+			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
 			batch_requests_supported: cfg.batch_requests_supported,
 			id_provider: cfg.id_provider,
 			ping_interval: cfg.ping_interval,
 			stop_handle: cfg.stop_handle.clone(),
-			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
 			conn_id: cfg.conn_id,
 			logger: cfg.logger,
 			conn: Arc::new(conn),
 			enable_http: cfg.enable_http,
 			enable_ws: cfg.enable_ws,
+			message_buffer_capacity: cfg.message_buffer_capacity,
 		},
 	};
 
