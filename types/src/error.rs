@@ -168,20 +168,14 @@ impl<'a> From<CallError> for ErrorObject<'a> {
 
 /// Parse error code.
 pub const PARSE_ERROR_CODE: i32 = -32700;
-/// Oversized request error code.
-pub const OVERSIZED_REQUEST_CODE: i32 = -32701;
-/// Oversized response error code.
-pub const OVERSIZED_RESPONSE_CODE: i32 = -32702;
-/// Internal error code.
-pub const INTERNAL_ERROR_CODE: i32 = -32603;
-/// Invalid params error code.
-pub const INVALID_PARAMS_CODE: i32 = -32602;
 /// Invalid request error code.
 pub const INVALID_REQUEST_CODE: i32 = -32600;
 /// Method not found error code.
 pub const METHOD_NOT_FOUND_CODE: i32 = -32601;
-/// Server is busy error code.
-pub const SERVER_IS_BUSY_CODE: i32 = -32604;
+/// Invalid params error code.
+pub const INVALID_PARAMS_CODE: i32 = -32602;
+/// Internal error code.
+pub const INTERNAL_ERROR_CODE: i32 = -32603;
 /// Custom server error when a call failed.
 pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Unknown error.
@@ -190,6 +184,12 @@ pub const UNKNOWN_ERROR_CODE: i32 = -32001;
 pub const BATCHES_NOT_SUPPORTED_CODE: i32 = -32005;
 /// Subscription limit per connection was exceeded.
 pub const TOO_MANY_SUBSCRIPTIONS_CODE: i32 = -32006;
+/// Oversized request error code.
+pub const OVERSIZED_REQUEST_CODE: i32 = -32007;
+/// Oversized response error code.
+pub const OVERSIZED_RESPONSE_CODE: i32 = -32008;
+/// Server is busy error code.
+pub const SERVER_IS_BUSY_CODE: i32 = -32009;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
