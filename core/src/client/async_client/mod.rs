@@ -75,7 +75,7 @@ impl ErrorFromBack {
 pub struct ClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
-	max_notifs_per_subscription: usize,
+	max_buffer_capacity_per_subscription: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
 	ping_interval: Option<Duration>,
@@ -86,7 +86,7 @@ impl Default for ClientBuilder {
 		Self {
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
-			max_notifs_per_subscription: 1024,
+			max_buffer_capacity_per_subscription: 1024,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			ping_interval: None,
@@ -107,7 +107,7 @@ impl ClientBuilder {
 		self
 	}
 
-	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription
+	/// Set max buffer capacity for each subscription; when the capacity is exceeded the subscription
 	/// will be dropped (default is 1024).
 	///
 	/// You may prevent the subscription from being dropped by polling often enough
@@ -118,8 +118,8 @@ impl ClientBuilder {
 	/// # Panics
 	///
 	/// This function panics if `max` is 0.
-	pub fn max_notifs_per_subscription(mut self, max: usize) -> Self {
-		self.max_notifs_per_subscription = max;
+	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
+		self.max_buffer_capacity_per_subscription = max;
 		self
 	}
 
@@ -168,7 +168,7 @@ impl ClientBuilder {
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
-		let max_notifs_per_subscription = self.max_notifs_per_subscription;
+		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let ping_interval = self.ping_interval;
 		let (on_exit_tx, on_exit_rx) = oneshot::channel();
 
@@ -178,7 +178,7 @@ impl ClientBuilder {
 				receiver,
 				from_front,
 				err_tx,
-				max_notifs_per_subscription,
+				max_buffer_capacity_per_subscription,
 				ping_interval,
 				on_exit_rx,
 			)
@@ -204,11 +204,20 @@ impl ClientBuilder {
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
-		let max_notifs_per_subscription = self.max_notifs_per_subscription;
+		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (on_exit_tx, on_exit_rx) = oneshot::channel();
 
 		wasm_bindgen_futures::spawn_local(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None, on_exit_rx).await;
+			background_task(
+				sender,
+				receiver,
+				from_front,
+				err_tx,
+				max_buffer_capacity_per_subscription,
+				None,
+				on_exit_rx,
+			)
+			.await;
 		});
 		Client {
 			to_back,
@@ -500,14 +509,14 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
 	manager: &mut RequestManager,
 	sender: &mut S,
-	max_notifs_per_subscription: usize,
+	max_buffer_capacity_per_subscription: usize,
 ) -> Result<(), Error> {
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
 	async fn handle_recv_message<S: TransportSenderT>(
 		raw: &[u8],
 		manager: &mut RequestManager,
 		sender: &mut S,
-		max_notifs_per_subscription: usize,
+		max_buffer_capacity_per_subscription: usize,
 	) -> Result<(), Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
 
@@ -515,7 +524,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			Some(b'{') => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
-					match process_single_response(manager, single, max_notifs_per_subscription) {
+					match process_single_response(manager, single, max_buffer_capacity_per_subscription) {
 						Ok(Some(unsub)) => {
 							stop_subscription(sender, manager, unsub).await;
 						}
@@ -599,10 +608,10 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			tracing::debug!("Received pong");
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
+			handle_recv_message(raw.as_ref(), manager, sender, max_buffer_capacity_per_subscription).await?;
 		}
 		Some(Ok(ReceivedMessage::Text(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
+			handle_recv_message(raw.as_ref(), manager, sender, max_buffer_capacity_per_subscription).await?;
 		}
 		Some(Err(e)) => {
 			return Err(Error::Transport(e.into()));
@@ -620,7 +629,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 	message: FrontToBack,
 	manager: &mut RequestManager,
 	sender: &mut S,
-	max_notifs_per_subscription: usize,
+	max_buffer_capacity_per_subscription: usize,
 ) {
 	match message {
 		FrontToBack::Batch(batch) => {
@@ -678,7 +687,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
+			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
 
 			if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
@@ -699,7 +708,7 @@ async fn background_task<S, R>(
 	receiver: R,
 	frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
-	max_notifs_per_subscription: usize,
+	max_buffer_capacity_per_subscription: usize,
 	ping_interval: Option<Duration>,
 	on_exit: oneshot::Receiver<()>,
 ) where
@@ -746,7 +755,13 @@ async fn background_task<S, R>(
 					break;
 				};
 
-				handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await;
+				handle_frontend_messages(
+					frontend_value,
+					&mut manager,
+					&mut sender,
+					max_buffer_capacity_per_subscription,
+				)
+				.await;
 
 				// Advance frontend, save backend.
 				message_fut = future::select(frontend.next(), backend);
@@ -758,7 +773,7 @@ async fn background_task<S, R>(
 					backend_value,
 					&mut manager,
 					&mut sender,
-					max_notifs_per_subscription,
+					max_buffer_capacity_per_subscription,
 				)
 				.await
 				{

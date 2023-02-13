@@ -207,8 +207,11 @@ async fn ws_subscription_several_clients_with_drop() {
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
-		let client =
-			WsClientBuilder::default().max_notifs_per_subscription(u32::MAX as usize).build(&server_url).await.unwrap();
+		let client = WsClientBuilder::default()
+			.max_buffer_capacity_per_subscription(u32::MAX as usize)
+			.build(&server_url)
+			.await
+			.unwrap();
 		let hello_sub: Subscription<String> =
 			client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 		let foo_sub: Subscription<u64> =
@@ -254,7 +257,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
+	let client = WsClientBuilder::default().max_buffer_capacity_per_subscription(4).build(&server_url).await.unwrap();
 	let mut hello_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
