@@ -201,7 +201,7 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default()
-		.max_notifs_per_subscription(4)
+		.max_buffer_capacity_per_subscription(4)
 		.build(&uri)
 		.with_default_timeout()
 		.await

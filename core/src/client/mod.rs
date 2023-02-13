@@ -38,7 +38,6 @@ use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
 use core::marker::PhantomData;
-use futures_util::future::FutureExt;
 use futures_util::stream::{Stream, StreamExt};
 use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
@@ -216,8 +215,10 @@ pub enum SubscriptionKind {
 
 /// Active subscription on the client.
 ///
-/// It will automatically unsubscribe in the [`Subscription::drop`] so no need to explicitly call
-/// the `unsubscribe method` if it is an an subscription based on [`SubscriptionId`].
+/// It will try to `unsubscribe` in the drop implementation
+/// but it may fail if the underlying buffer is full.
+/// Thus, if you want to ensure it's actually unsubscribed then
+/// [`Subscription::unsubscribe`] is recommended to use.
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
@@ -381,7 +382,7 @@ impl<Notif> Drop for Subscription<Notif> {
 			Some(SubscriptionKind::Subscription(sub_id)) => FrontToBack::SubscriptionClosed(sub_id),
 			None => return,
 		};
-		let _ = self.to_back.send(msg).now_or_never();
+		let _ = self.to_back.try_send(msg);
 	}
 }
 
