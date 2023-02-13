@@ -217,7 +217,7 @@ pub enum SubscriptionKind {
 ///
 /// It will try to `unsubscribe` in the drop implementation
 /// but it may fail if the underlying buffer is full.
-/// Thus, if you want to ensure it's actually unsubscribe then
+/// Thus, if you want to ensure it's actually unsubscribed then
 /// [`Subscription::unsubscribe`] is recommended to use.
 #[derive(Debug)]
 pub struct Subscription<Notif> {
