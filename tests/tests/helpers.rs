@@ -98,8 +98,8 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
 			let sink = pending.accept().await.unwrap();
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			let err = ErrorObject::owned(1, "Server closed the stream because it was lazy", None::<()>);
-			sink.close(err).await;
+			let err = ErrorObject::borrowed(1, &"Server closed the stream because it was lazy", None);
+			sink.close_with_error_notif(SubscriptionMessage::from_json(&err).unwrap()).await;
 
 			Ok(())
 		})
@@ -224,33 +224,30 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 ) -> SubscriptionResult {
 	let mut sink = pending.accept().await?;
 
-	loop {
+	let msg = loop {
 		tokio::select! {
-			_ = sink.closed() => break,
+			_ = sink.closed() => break "Subscription was closed".to_string(),
 			maybe_item = stream.next() => {
 				let item = match maybe_item {
 					Some(item) => item,
-					None => break,
+					None => break "Subscription executed successful".to_string(),
 				};
 				let msg = match SubscriptionMessage::from_json(&item) {
 					Ok(msg) => msg,
-					Err(e) => {
-						sink.close(ErrorObject::owned(1, e.to_string(), None::<()>)).await;
-						return Err(e.into());
-					}
+					Err(e) => break e.to_string(),
 				};
 
 				match sink.try_send(msg) {
 					Ok(_) => (),
-					Err(TrySendError::Closed(_)) => break,
+					Err(TrySendError::Closed(_)) => break "Subscription was closed".to_string(),
 					// channel is full, let's be naive an just drop the message.
 					Err(TrySendError::Full(_)) => (),
 				}
 			}
 		}
-	}
+	};
 
-	sink.close(ErrorObject::owned(1, "Subscription executed successful", None::<()>)).await;
+	sink.close_with_error_notif(SubscriptionMessage::from_json(&msg).unwrap()).await;
 
 	Ok(())
 }

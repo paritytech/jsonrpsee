@@ -39,7 +39,7 @@ use crate::{SubscriptionCallbackError, SubscriptionResult};
 use futures_util::future::Either;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned};
-use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
+use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
 	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionResponse,
 };
@@ -78,7 +78,7 @@ pub type MaxResponseSize = usize;
 ///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, SubscriptionPermit, mpsc::Sender<String>);
 
-/// Error that may occur during `SubscriptionSink::try_send`.
+/// Error that may occur during [`SubscriptionSink::try_send`].
 #[derive(Debug)]
 pub enum TrySendError {
 	/// The channel is closed.
@@ -288,6 +288,20 @@ pub enum MethodResult<T> {
 	Sync(T),
 	/// Future of a value
 	Async(BoxFuture<'static, T>),
+}
+
+enum SubNotifResultOrError {
+	Result,
+	Error,
+}
+
+impl SubNotifResultOrError {
+	const fn as_str(&self) -> &str {
+		match self {
+			Self::Result => "result",
+			Self::Error => "error",
+		}
+	}
 }
 
 impl<T: Debug> Debug for MethodResult<T> {
@@ -1036,7 +1050,7 @@ impl SubscriptionSink {
 			return Err(DisconnectError(msg));
 		}
 
-		let json = self.sub_message_to_json(msg);
+		let json = self.sub_message_to_json(msg, SubNotifResultOrError::Result);
 		self.inner.send(json).await.map_err(Into::into)
 	}
 
@@ -1047,7 +1061,7 @@ impl SubscriptionSink {
 			return Err(SendTimeoutError::Closed(msg));
 		}
 
-		let json = self.sub_message_to_json(msg);
+		let json = self.sub_message_to_json(msg, SubNotifResultOrError::Result);
 		self.inner.send_timeout(json, timeout).await.map_err(Into::into)
 	}
 
@@ -1063,7 +1077,7 @@ impl SubscriptionSink {
 			return Err(TrySendError::Closed(msg));
 		}
 
-		let json = self.sub_message_to_json(msg);
+		let json = self.sub_message_to_json(msg, SubNotifResultOrError::Result);
 		self.inner.try_send(json).map_err(Into::into)
 	}
 
@@ -1081,33 +1095,29 @@ impl SubscriptionSink {
 		}
 	}
 
-	fn sub_message_to_json(&self, msg: SubscriptionMessage) -> String {
+	fn sub_message_to_json(&self, msg: SubscriptionMessage, result_or_err: SubNotifResultOrError) -> String {
+		let result_or_err = result_or_err.as_str();
+
 		match msg.0 {
 			SubscriptionMessageInner::Complete(msg) => msg,
 			SubscriptionMessageInner::NeedsData(result) => {
 				let sub_id = serde_json::to_string(&self.uniq_sub.sub_id).expect("valid JSON; qed");
 				let method = self.method;
 				format!(
-					r#"{{"jsonrpc":"2.0","method":"{method}","params":{{"subscription":{sub_id},"result":{result}}}}}"#,
+					r#"{{"jsonrpc":"2.0","method":"{method}","params":{{"subscription":{sub_id},"{result_or_err}":{result}}}}}"#,
 				)
 			}
 		}
 	}
 
-	fn build_error_message<T: Serialize>(&self, error: &T) -> Result<String, serde_json::Error> {
-		serde_json::to_string(&SubscriptionError::new(
-			self.method.into(),
-			SubscriptionPayloadError { subscription: self.uniq_sub.sub_id.clone(), error },
-		))
-		.map_err(Into::into)
-	}
-
-	/// Close the subscription, sending a notification with a special `error` field containing the provided error.
+	/// Close the subscription, sending a notification with a special `error` field containing the provided close reason.
 	///
-	/// This can be used to signal an actual error, or just to signal that the subscription has been closed,
-	/// depending on your preference.
+	/// This can be used to signal that an subscription was closed because of some particular state
+	/// and doesn't imply that subscription was closed because of an error occurred. Just
+	/// a custom way to indicate the client that subscription was closed.
 	///
-	/// If you'd like to to close the subscription without sending an error, just drop it and don't call this method.
+	/// If you'd like to to close the subscription without sending an extra notification,
+	/// just drop it and don't call this method.
 	///
 	///
 	/// ```json
@@ -1116,20 +1126,47 @@ impl SubscriptionSink {
 	///  "method": "<method>",
 	///  "params": {
 	///    "subscription": "<subscriptionID>",
-	///    "error": { "code": <code from error>, "message": <message from error>, "data": <data from error> }
+	///    "error": <your msg>
 	///    }
 	///  }
 	/// }
 	/// ```
 	///
-	pub fn close(self, err: impl Into<ErrorObjectOwned>) -> impl Future<Output = ()> {
+	pub fn close_with_error_notif(self, msg: SubscriptionMessage) -> impl Future<Output = ()> {
+		self.inner_close(msg, SubNotifResultOrError::Error)
+	}
+
+	/// Close the subscription by sending a notification in the `result` field which
+	/// is the the same as [`SubscriptionSink::send`] but makes it only possible to utilize once.
+	///
+	/// If you'd like to to close the subscription without sending an extra notification,
+	/// just drop it and don't call this method.
+	///
+	/// ```json
+	/// {
+	///  "jsonrpc": "2.0",
+	///  "method": "<method>",
+	///  "params": {
+	///    "subscription": "<subscriptionID>",
+	///    "result": <your message>
+	///    }
+	///  }
+	/// }
+	/// ```
+	///
+	pub fn close_with_result_notif(self, msg: SubscriptionMessage) -> impl Future<Output = ()> {
+		self.inner_close(msg, SubNotifResultOrError::Result)
+	}
+
+	fn inner_close(self, msg: SubscriptionMessage, result_or_err: SubNotifResultOrError) -> impl Future<Output = ()> {
 		if self.is_active_subscription() {
 			if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
 				tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
-
-				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
+				let msg = self.sub_message_to_json(msg, result_or_err);
 
 				return Either::Right(async move {
+					// This only fails if the connection was closed
+					// Fine to ignore
 					let _ = sink.send(msg).await;
 				});
 			}
