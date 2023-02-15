@@ -76,7 +76,7 @@ pub type MaxResponseSize = usize;
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 ///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
-pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, SubscriptionPermit, mpsc::Sender<String>);
+pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, SubscriptionPermit);
 
 /// Error that may occur during [`SubscriptionSink::try_send`].
 #[derive(Debug)]
@@ -444,7 +444,7 @@ impl Methods {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
-		let (resp, _, _, _) = self.inner_call(req, 1).await;
+		let (resp, _, _) = self.inner_call(req, 1).await;
 
 		if resp.success {
 			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
@@ -492,7 +492,7 @@ impl Methods {
 	) -> Result<(MethodResponse, mpsc::Receiver<String>), Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
-		let (resp, rx, _, _) = self.inner_call(req, buf_size).await;
+		let (resp, rx, _) = self.inner_call(req, buf_size).await;
 
 		Ok((resp, rx))
 	}
@@ -531,7 +531,7 @@ impl Methods {
 
 		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
 
-		(response, rx, p2, tx)
+		(response, rx, p2)
 	}
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
@@ -579,7 +579,7 @@ impl Methods {
 
 		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
-		let (resp, rx, permit, tx) = self.inner_call(req, buf_size).await;
+		let (resp, rx, permit) = self.inner_call(req, buf_size).await;
 
 		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result) {
 			Ok(r) => r,
@@ -591,7 +591,7 @@ impl Methods {
 
 		let sub_id = subscription_response.result.into_owned();
 
-		Ok(Subscription { sub_id, rx, tx: MethodSink::new(tx), _permit: permit })
+		Ok(Subscription { sub_id, rx, _permit: permit })
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.
@@ -1168,7 +1168,6 @@ impl Drop for SubscriptionSink {
 /// Wrapper struct that maintains a subscription "mainly" for testing.
 #[derive(Debug)]
 pub struct Subscription {
-	tx: MethodSink,
 	rx: mpsc::Receiver<String>,
 	sub_id: RpcSubscriptionId<'static>,
 	_permit: SubscriptionPermit,
@@ -1184,11 +1183,6 @@ impl Subscription {
 	/// Get the subscription ID
 	pub fn subscription_id(&self) -> &RpcSubscriptionId {
 		&self.sub_id
-	}
-
-	/// Check whether the subscription is closed.
-	pub fn is_closed(&self) -> bool {
-		self.tx.is_closed()
 	}
 
 	/// Returns `Some((val, sub_id))` for the next element of type T from the underlying stream,

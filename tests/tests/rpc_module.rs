@@ -341,6 +341,30 @@ async fn subscribing_without_server_bad_params() {
 }
 
 #[tokio::test]
+async fn subscribing_without_server_indicates_close() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+			let sink = pending.accept().await.unwrap();
+
+			for m in 0..5 {
+				let msg = SubscriptionMessage::from_json(&m).unwrap();
+				sink.send(msg).await.unwrap();
+			}
+
+			Ok(())
+		})
+		.unwrap();
+
+	let mut sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
+
+	for _ in 0..5 {
+		assert!(sub.next::<usize>().await.is_some());
+	}
+	assert!(sub.next::<usize>().await.is_none());
+}
+
+#[tokio::test]
 async fn subscribe_unsubscribe_without_server() {
 	let mut module = RpcModule::new(());
 	module
@@ -356,8 +380,6 @@ async fn subscribe_unsubscribe_without_server() {
 	async fn subscribe_and_assert(module: &RpcModule<()>) {
 		let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
 		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
-
-		assert!(!sub.is_closed());
 
 		// Unsubscribe should be valid.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
