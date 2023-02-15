@@ -32,7 +32,7 @@ use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
 use jsonrpsee::core::{Serialize, SubscriptionResult};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
+use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 use tokio::time::interval;
@@ -111,40 +111,42 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	Ok(addr)
 }
 
-async fn pipe_from_stream_and_drop<S, T>(pending: PendingSubscriptionSink, mut stream: S) -> SubscriptionResult
-where
-	S: Stream<Item = T> + Unpin,
-	T: Serialize,
-{
+pub async fn pipe_from_stream_and_drop<T: Serialize>(
+	pending: PendingSubscriptionSink,
+	mut stream: impl Stream<Item = T> + Unpin,
+) -> SubscriptionResult {
 	let mut sink = pending.accept().await?;
 
-	loop {
+	let msg = loop {
 		tokio::select! {
-			_ = sink.closed() => break,
+			_ = sink.closed() => break "Subscription was closed".to_string(),
 			maybe_item = stream.next() => {
 				let item = match maybe_item {
 					Some(item) => item,
-					None => break,
+					None => break "Subscription executed successful".to_string(),
 				};
 				let msg = match SubscriptionMessage::from_json(&item) {
 					Ok(msg) => msg,
-					Err(e) => {
-						sink.close(ErrorObject::owned(1, e.to_string(), None::<()>)).await;
-						return Err(e.into());
-					}
+					Err(e) => break e.to_string(),
 				};
 
 				match sink.try_send(msg) {
 					Ok(_) => (),
-					Err(TrySendError::Closed(_)) => break,
+					Err(TrySendError::Closed(_)) => break "Subscription was closed".to_string(),
 					// channel is full, let's be naive an just drop the message.
 					Err(TrySendError::Full(_)) => (),
 				}
 			}
 		}
-	}
+	};
 
-	sink.close(ErrorObject::owned(1, "Ok", None::<()>)).await;
+	// NOTE: we are using `close_with_error` for the jsonrpsee client to terminate the subscription
+	// when the "close message" is received without any custom logic.
+	//
+	// Otherwise, the subscription would need custom logic on the client side
+	// for example with dedicate states/different messages to know whether the
+	// server closed just the particular subscription.
+	sink.close_with_error(SubscriptionMessage::from_json(&msg).unwrap()).await;
 
 	Ok(())
 }
