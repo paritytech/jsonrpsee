@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::collections::HashMap;
 use std::{fmt, iter};
 
 use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
@@ -37,7 +36,6 @@ pub(crate) struct AttributeMeta {
 	pub arguments: Punctuated<Argument, Token![,]>,
 }
 
-#[derive(Clone)]
 pub(crate) struct Argument {
 	pub label: syn::Ident,
 	pub tokens: TokenStream2,
@@ -136,7 +134,7 @@ impl AttributeMeta {
 
 	/// Attempt to get a list of `Argument`s from a list of names in order.
 	///
-	/// Errors if there is an argument with a name that's not on the list, or if there is a duplicate definition. Ignores arguments beginning with param_name_.
+	/// Errors if there is an argument with a name that's not on the list, or if there is a duplicate definition.
 	pub fn retain<const N: usize>(self, allowed: [&str; N]) -> syn::Result<[Result<Argument, MissingArgument>; N]> {
 		assert!(
 			N != 0,
@@ -155,15 +153,13 @@ impl AttributeMeta {
 
 				result[idx] = Ok(argument);
 			} else {
-				//Arguments beginning with param_name_ are ignored because they are stored in the name_map.
-				if !&argument.label.to_string().starts_with("param_name_") {
-					let mut err_str = format!("Unknown argument `{}`, expected one of: `", &argument.label);
-					err_str.push_str(allowed[0]);
-					err_str.extend(allowed[1..].iter().flat_map(|&label| ["`, `", label]));
-					err_str.push('`');
+				let mut err_str = format!("Unknown argument `{}`, expected one of: `", &argument.label);
 
-					return Err(Error::new(argument.label.span(), err_str));
-				}
+				err_str.push_str(allowed[0]);
+				err_str.extend(allowed[1..].iter().flat_map(|&label| ["`, `", label]));
+				err_str.push('`');
+
+				return Err(Error::new(argument.label.span(), err_str));
 			}
 		}
 
@@ -236,16 +232,4 @@ pub(crate) fn parse_param_kind(arg: Result<Argument, MissingArgument>) -> syn::R
 		Some(ident) if ident == "map" => Ok(ParamKind::Map),
 		ident => Err(Error::new(ident.span(), "param_kind must be either `map` or `array`")),
 	}
-}
-
-pub(crate) fn parse_param_name_map(attrs: &AttributeMeta) -> syn::Result<HashMap<String, String>> {
-	let mut retval = HashMap::new();
-	for arg in attrs.arguments.iter().filter(|arg| arg.label.to_string().starts_with("param_name_")) {
-		let arg_label = &arg.label.to_string();
-		let arg_value = arg.clone().string()?;
-		let name = arg_label.trim_start_matches("param_name_");
-		retval.insert(name.to_string(), arg_value.clone());
-	}
-
-	Ok(retval)
 }
