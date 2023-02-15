@@ -1114,7 +1114,7 @@ impl SubscriptionSink {
 	///
 	/// This can be used to signal that an subscription was closed because of some particular state
 	/// and doesn't imply that subscription was closed because of an error occurred. Just
-	/// a custom way to indicate the client that subscription was closed.
+	/// a custom way to indicate to the client that the subscription was closed.
 	///
 	/// If you'd like to to close the subscription without sending an extra notification,
 	/// just drop it and don't call this method.
