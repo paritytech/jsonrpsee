@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 // Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
@@ -136,7 +138,8 @@ impl RpcDescription {
 		};
 
 		// Encoded parameters for the request.
-		let parameter_builder = self.encode_params(&method.params, &method.param_kind, &method.signature);
+		let parameter_builder =
+			self.encode_params(&method.params, &method.param_kind, &method.signature, &method.name_map);
 		// Doc-comment to be associated with the method.
 		let docs = &method.docs;
 		// Mark the method as deprecated, if previously declared as so.
@@ -172,7 +175,7 @@ impl RpcDescription {
 		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
 
 		// Encoded parameters for the request.
-		let parameter_builder = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
+		let parameter_builder = self.encode_params(&sub.params, &sub.param_kind, &sub.signature, &sub.name_map);
 		// Doc-comment to be associated with the method.
 		let docs = &sub.docs;
 
@@ -191,6 +194,7 @@ impl RpcDescription {
 		params: &[(syn::PatIdent, syn::Type)],
 		param_kind: &ParamKind,
 		signature: &syn::TraitItemMethod,
+		name_map: &HashMap<String, String>,
 	) -> TokenStream2 {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 
@@ -206,7 +210,12 @@ impl RpcDescription {
 				let param_names = extract_param_names(&signature.sig);
 				// Combine parameter names and values to pass them as parameters.
 				let params_insert = param_names.iter().zip(params).map(|pair| {
-					let name = pair.0;
+					let name;
+					if let Some(custom_name) = name_map.get(pair.0) {
+						name = custom_name.clone();
+					} else {
+						name = pair.0.to_string();
+					}
 					// Throw away the type.
 					let (value, _value_type) = pair.1;
 					quote!(#name, #value)

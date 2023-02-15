@@ -172,6 +172,7 @@ pub(crate) mod visitor;
 ///              namespace.
 /// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
+/// - `param_name_<parameter name>`: set a custom name for a request parameter. The name of the argument should contain the valid Rust identifier given in the method declaration; the value should be the name to map to. For example: param_name_foo="bar" maps the method parameter named `foo` to a parameter in the `params` array/map named `bar`. You can specify multiple parameter name maps by repeating this parameter with a different name for each one.
 ///
 /// **Method requirements:**
 ///
@@ -195,6 +196,7 @@ pub(crate) mod visitor;
 /// - `unsubscribe_aliases` (optional): Similar to `aliases` but for `unsubscribe`.
 /// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
+/// - `param_name_<parameter name>`: set a custom name for a request parameter. The name of the argument should contain the valid Rust identifier given in the method declaration; the value should be the name to map to. For example: param_name_foo="bar" maps the method parameter named `foo` to a parameter in the `params` array/map named `bar`. You can specify multiple parameter name maps by repeating this parameter with a different name for each one.
 ///
 /// **Method requirements:**
 ///
@@ -225,8 +227,9 @@ pub(crate) mod visitor;
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
 ///     #[rpc(client, server, namespace = "foo")]
 ///     pub trait MyRpc {
-///         #[method(name = "foo")]
-///         async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
+/// 	    //This request will supply a parameter named `type` with the value of `param_c`.
+///         #[method(name = "foo", param_name_param_c = "type")]
+///         async fn async_method(&self, param_a: u8, param_b: String, param_c: String) -> RpcResult<u16>;
 ///
 ///         #[method(name = "bar")]
 ///         fn sync_method(&self) -> RpcResult<u16>;

@@ -27,9 +27,11 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use crate::attributes::{
-	optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind,
+	optional, parse_param_kind, parse_param_name_map, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping,
+	ParamKind,
 };
 use crate::helpers::extract_doc_comments;
 use proc_macro2::TokenStream as TokenStream2;
@@ -48,10 +50,13 @@ pub struct RpcMethod {
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
+	pub name_map: HashMap<String, String>,
 }
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
+		let attrs = AttributeMeta::parse(attr.clone())?;
+		let name_map = parse_param_name_map(&attrs)?;
 		let [aliases, blocking, name, param_kind] =
 			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
 
@@ -98,7 +103,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated })
+		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated, name_map })
 	}
 }
 
@@ -120,10 +125,13 @@ pub struct RpcSubscription {
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
 	pub unsubscribe_aliases: Vec<String>,
+	pub name_map: HashMap<String, String>,
 }
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
+		let attrs = AttributeMeta::parse(attr.clone())?;
+		let name_map = parse_param_name_map(&attrs)?;
 		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases] = AttributeMeta::parse(attr)?
 			.retain(["aliases", "item", "name", "param_kind", "unsubscribe", "unsubscribe_aliases"])?;
 
@@ -170,6 +178,7 @@ impl RpcSubscription {
 			signature: sub,
 			aliases,
 			docs,
+			name_map,
 		})
 	}
 }
