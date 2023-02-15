@@ -140,7 +140,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 		}
 	};
 
-	// NOTE: we are using `close_with_err_notifor` for the jsonrpsee client to terminate the subscription
+	// NOTE: we are using `close_with_error` for the jsonrpsee client to terminate the subscription
 	// when the "close message" is received without any custom logic.
 	//
 	// Otherwise, the subscription would need custom logic on the client side
