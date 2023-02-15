@@ -99,7 +99,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 			let sink = pending.accept().await.unwrap();
 			tokio::time::sleep(Duration::from_secs(1)).await;
 			let err = ErrorObject::borrowed(1, &"Server closed the stream because it was lazy", None);
-			sink.close_with_error_notif(SubscriptionMessage::from_json(&err).unwrap()).await;
+			sink.close_with_error(SubscriptionMessage::from_json(&err).unwrap()).await;
 
 			Ok(())
 		})
@@ -247,7 +247,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 		}
 	};
 
-	sink.close_with_error_notif(SubscriptionMessage::from_json(&msg).unwrap()).await;
+	sink.close_with_error(SubscriptionMessage::from_json(&msg).unwrap()).await;
 
 	Ok(())
 }

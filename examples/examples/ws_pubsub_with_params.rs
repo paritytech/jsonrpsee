@@ -146,7 +146,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 	// Otherwise, the subscription would need custom logic on the client side
 	// for example with dedicate states/different messages to know whether the
 	// server closed just the particular subscription.
-	sink.close_with_error_notif(SubscriptionMessage::from_json(&msg).unwrap()).await;
+	sink.close_with_error(SubscriptionMessage::from_json(&msg).unwrap()).await;
 
 	Ok(())
 }

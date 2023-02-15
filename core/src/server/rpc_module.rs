@@ -1132,30 +1132,8 @@ impl SubscriptionSink {
 	/// }
 	/// ```
 	///
-	pub fn close_with_error_notif(self, msg: SubscriptionMessage) -> impl Future<Output = ()> {
+	pub fn close_with_error(self, msg: SubscriptionMessage) -> impl Future<Output = ()> {
 		self.inner_close(msg, SubNotifResultOrError::Error)
-	}
-
-	/// Close the subscription by sending a notification in the `result` field which
-	/// is the the same as [`SubscriptionSink::send`] but makes it only possible to utilize once.
-	///
-	/// If you'd like to to close the subscription without sending an extra notification,
-	/// just drop it and don't call this method.
-	///
-	/// ```json
-	/// {
-	///  "jsonrpc": "2.0",
-	///  "method": "<method>",
-	///  "params": {
-	///    "subscription": "<subscriptionID>",
-	///    "result": <your message>
-	///    }
-	///  }
-	/// }
-	/// ```
-	///
-	pub fn close_with_result_notif(self, msg: SubscriptionMessage) -> impl Future<Output = ()> {
-		self.inner_close(msg, SubNotifResultOrError::Result)
 	}
 
 	fn inner_close(self, msg: SubscriptionMessage, result_or_err: SubNotifResultOrError) -> impl Future<Output = ()> {

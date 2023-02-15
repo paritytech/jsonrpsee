@@ -247,7 +247,7 @@ async fn subscribing_without_server() {
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
 			let close = ErrorObject::borrowed(0, &"closed successfully", None);
-			let _ = sink.close_with_error_notif(SubscriptionMessage::from_json(&close).unwrap()).await;
+			let _ = sink.close_with_error(SubscriptionMessage::from_json(&close).unwrap()).await;
 
 			Ok(())
 		})
