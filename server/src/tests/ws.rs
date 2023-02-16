@@ -768,5 +768,6 @@ async fn notif_is_ignored() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
+	// This call should not be answered and a timeout is regarded as "not answered"
 	assert!(client.send_request_text(r#"{"jsonrpc":"2.0","method":"bar"}"#).with_default_timeout().await.is_err());
 }
