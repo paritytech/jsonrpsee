@@ -161,7 +161,7 @@ pub(crate) async fn process_single_request<L: Logger>(
 
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		Some(execute_call_with_tracing(req, call).await)
-	} else if let Ok(_) = serde_json::from_slice::<Notif>(&data) {
+	} else if serde_json::from_slice::<Notif>(&data).is_ok() {
 		None
 	} else {
 		let (id, code) = prepare_error(&data);
