@@ -156,7 +156,7 @@ where
 			.filter_map(|v| {
 				if let Ok(req) = serde_json::from_str::<Request>(v.get()) {
 					Some(Either::Right(execute_call(req, call.clone())))
-				} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(v.get()) {
+				} else if let Ok(_notif) = serde_json::from_str::<Notif>(v.get()) {
 					// notifications should not be answered.
 					got_notif = true;
 					None

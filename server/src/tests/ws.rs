@@ -650,6 +650,22 @@ async fn batch_with_mixed_calls() {
 }
 
 #[tokio::test]
+async fn batch_notif_without_params_works() {
+	init_logger();
+
+	let addr = server().with_default_timeout().await.unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	// mixed notifications, method calls and valid json should be valid.
+	let req = r#"[
+			{"jsonrpc": "2.0", "method": "add", "params": [1,2,4], "id": "1"},
+			{"jsonrpc": "2.0", "method": "add"}
+		]"#;
+	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"}]"#;
+	let response = client.send_request_text(req.to_string()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, res);
+}
+
+#[tokio::test]
 async fn ws_server_backpressure_works() {
 	init_logger();
 
@@ -744,4 +760,13 @@ async fn ws_server_backpressure_works() {
 
 	assert!(seen_backpressure_item);
 	assert!(seen_item_after_backpressure);
+}
+
+#[tokio::test]
+async fn notif_is_ignored() {
+	init_logger();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	assert!(client.send_request_text(r#"{"jsonrpc":"2.0","method":"bar"}"#).with_default_timeout().await.is_err());
 }

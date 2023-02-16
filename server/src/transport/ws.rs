@@ -33,6 +33,8 @@ use tracing::instrument;
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
+type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
+
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
 	sender.send_text_owned(response).await?;
 	sender.flush().await.map_err(Into::into)
@@ -117,7 +119,7 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 			.filter_map(|v| {
 				if let Ok(req) = serde_json::from_str::<Request>(v.get()) {
 					Some(Either::Right(async { execute_call(req, call.clone()).await.into_response() }))
-				} else if let Ok(_notif) = serde_json::from_str::<Notification<&JsonRawValue>>(v.get()) {
+				} else if let Ok(_notif) = serde_json::from_str::<Notif>(v.get()) {
 					// notifications should not be answered.
 					got_notif = true;
 					None
@@ -151,12 +153,19 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 	}
 }
 
-pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> CallOrSubscription {
+pub(crate) async fn process_single_request<L: Logger>(
+	data: Vec<u8>,
+	call: CallData<'_, L>,
+) -> Option<CallOrSubscription> {
+	tracing::info!("process_request: {:?}", data);
+
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-		execute_call_with_tracing(req, call).await
+		Some(execute_call_with_tracing(req, call).await)
+	} else if let Ok(_) = serde_json::from_slice::<Notif>(&data) {
+		None
 	} else {
 		let (id, code) = prepare_error(&data);
-		CallOrSubscription::Call(MethodResponse::error(id, ErrorObject::from(code)))
+		Some(CallOrSubscription::Call(MethodResponse::error(id, ErrorObject::from(code))))
 	}
 }
 
@@ -367,17 +376,19 @@ pub(crate) async fn background_task<L: Logger>(
 						request_start,
 					};
 
-					match process_single_request(data, call).await {
-						CallOrSubscription::Subscription(SubscriptionAnswered::Yes(r)) => {
-							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-						}
-						CallOrSubscription::Subscription(SubscriptionAnswered::No(r)) => {
-							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-							sink_permit.send_raw(r.result);
-						}
-						CallOrSubscription::Call(r) => {
-							logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-							sink_permit.send_raw(r.result);
+					if let Some(rp) = process_single_request(data, call).await {
+						match rp {
+							CallOrSubscription::Subscription(SubscriptionAnswered::Yes(r)) => {
+								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
+							}
+							CallOrSubscription::Subscription(SubscriptionAnswered::No(r)) => {
+								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
+								sink_permit.send_raw(r.result);
+							}
+							CallOrSubscription::Call(r) => {
+								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
+								sink_permit.send_raw(r.result);
+							}
 						}
 					};
 				}
