@@ -283,6 +283,23 @@ async fn batch_with_mixed_calls() {
 }
 
 #[tokio::test]
+async fn batch_notif_without_params_works() {
+	init_logger();
+
+	let (addr, _handle) = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+	// mixed notifications, method calls and valid json should be valid.
+	let req = r#"[
+			{"jsonrpc": "2.0", "method": "add", "params": [1,2,4], "id": "1"},
+			{"jsonrpc": "2.0", "method": "add"}
+		]"#;
+	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"}]"#;
+	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, res);
+}
+
+#[tokio::test]
 async fn garbage_request_fails() {
 	let (addr, _handle) = server().await;
 	let uri = to_http_uri(addr);
