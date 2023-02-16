@@ -345,7 +345,7 @@ impl BatchResponseBuilder {
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
-	serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).expect("ErrorResponse Serialize is infallible; qed");
+	serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).expect("ErrorResponse Serialize is infallible; qed")
 }
 
 #[cfg(test)]
@@ -395,10 +395,7 @@ mod tests {
 		builder.append(&m1).unwrap();
 		let batch = builder.finish();
 
-		assert_eq!(
-			batch,
-			r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#
-		)
+		assert_eq!(batch, r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#)
 	}
 
 	#[test]
