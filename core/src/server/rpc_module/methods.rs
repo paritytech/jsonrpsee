@@ -25,22 +25,20 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::Entry;
-use std::fmt::{Debug};
+use std::fmt::Debug;
 use std::sync::Arc;
 
-use crate::error::{Error};
+use crate::error::Error;
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::{BoundedSubscriptions, MethodSink};
-use crate::traits::{ToRpcParams};
+use crate::traits::ToRpcParams;
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
-use jsonrpsee_types::{
-	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId,
-};
+use jsonrpsee_types::{ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId};
 use rustc_hash::FxHashMap;
-use serde::{de::DeserializeOwned};
-use tokio::sync::{mpsc};
+use serde::de::DeserializeOwned;
+use tokio::sync::mpsc;
 
-use crate::server::helpers::{MethodResponse};
+use crate::server::helpers::MethodResponse;
 
 use super::types::*;
 
