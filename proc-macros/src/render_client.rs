@@ -206,7 +206,10 @@ impl RpcDescription {
 				let param_names = extract_param_names(&signature.sig);
 				// Combine parameter names and values to pass them as parameters.
 				let params_insert = param_names.iter().zip(params).map(|pair| {
-					let name = pair.0;
+					let mut name = pair.0.to_owned();
+					if name.starts_with("r#") {
+						name = name[2..].to_string();
+					}
 					// Throw away the type.
 					let (value, _value_type) = pair.1;
 					quote!(#name, #value)
