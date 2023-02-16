@@ -59,7 +59,7 @@ jobs:
         uses: actions-rs/toolchain@v1.0.7
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: nightly-2023-02-11
           override: true
 
       - name: Check rustdoc
