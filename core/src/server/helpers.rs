@@ -345,7 +345,7 @@ impl BatchResponseBuilder {
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
-	serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap()
+	serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).expect("ErrorResponse Serialize is infallible; qed");
 }
 
 #[cfg(test)]
