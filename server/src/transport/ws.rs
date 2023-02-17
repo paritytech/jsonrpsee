@@ -14,7 +14,7 @@ use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodKind, Methods, SubscriptionAnswered};
+use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodKind, Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -153,12 +153,10 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 	}
 }
 
-pub(crate) async fn process_single_request<L: Logger>(
+pub(crate) async fn process_single_request<'a, L: Logger>(
 	data: Vec<u8>,
 	call: CallData<'_, L>,
 ) -> Option<CallOrSubscription> {
-	tracing::info!("process_request: {:?}", data);
-
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		Some(execute_call_with_tracing(req, call).await)
 	} else if serde_json::from_slice::<Notif>(&data).is_ok() {
@@ -226,8 +224,13 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 
 				if let Some(p) = bounded_subscriptions.acquire() {
 					let conn_state = ConnState { conn_id, id_provider, subscription_permit: p };
-					let response = callback(id.clone(), params, sink.clone(), conn_state).await;
-					CallOrSubscription::Subscription(response)
+					match callback(id, params, sink.clone(), conn_state).await {
+						Ok(r) => CallOrSubscription::Subscription(r),
+						Err(id) => {
+							let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+							CallOrSubscription::Call(response)
+						}
+					}
 				} else {
 					let response =
 						MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
@@ -378,13 +381,10 @@ pub(crate) async fn background_task<L: Logger>(
 
 					if let Some(rp) = process_single_request(data, call).await {
 						match rp {
-							CallOrSubscription::Subscription(SubscriptionAnswered::Yes(r)) => {
+							CallOrSubscription::Subscription(r) => {
 								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 							}
-							CallOrSubscription::Subscription(SubscriptionAnswered::No(r)) => {
-								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-								sink_permit.send_raw(r.result);
-							}
+
 							CallOrSubscription::Call(r) => {
 								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 								sink_permit.send_raw(r.result);

@@ -60,7 +60,7 @@ pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, ConnState) -> BoxFuture<'a, SubscriptionAnswered>>;
+	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, ConnState) -> BoxFuture<'a, Result<MethodResponse, Id<'a>>>>;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
 
@@ -95,18 +95,6 @@ impl std::fmt::Display for TrySendError {
 		};
 		f.write_str(msg)
 	}
-}
-
-#[derive(Debug, Clone)]
-/// Represents whether a subscription was answered or not.
-pub enum SubscriptionAnswered {
-	/// The subscription was already answered and doesn't need to answered again.
-	/// The response is kept to be logged.
-	Yes(MethodResponse),
-	/// The subscription was never answered and needs to be answered.
-	///
-	/// This may occur if a subscription dropped without calling `PendingSubscriptionSink::accept` or `PendingSubscriptionSink::reject`.
-	No(MethodResponse),
 }
 
 /// Error that may occur during `MethodSink::send` or `SubscriptionSink::send`.
@@ -198,7 +186,7 @@ type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Recei
 pub enum CallOrSubscription {
 	/// The subscription callback itself sends back the result
 	/// so it must not be sent back again.
-	Subscription(SubscriptionAnswered),
+	Subscription(MethodResponse),
 
 	/// Treat it as ordinary call.
 	Call(MethodResponse),
@@ -208,21 +196,15 @@ impl CallOrSubscription {
 	/// Extract the JSON-RPC response.
 	pub fn as_response(&self) -> &MethodResponse {
 		match &self {
-			Self::Subscription(r) => match r {
-				SubscriptionAnswered::Yes(r) => r,
-				SubscriptionAnswered::No(r) => r,
-			},
+			Self::Subscription(r) => r,
 			Self::Call(r) => r,
 		}
 	}
 
-	/// Convert the `CallOrSubscription` to JSON-RPC response.
+	/// Extract the JSON-RPC response.
 	pub fn into_response(self) -> MethodResponse {
 		match self {
-			Self::Subscription(r) => match r {
-				SubscriptionAnswered::Yes(r) => r,
-				SubscriptionAnswered::No(r) => r,
-			},
+			Self::Subscription(r) => r,
 			Self::Call(r) => r,
 		}
 	}
@@ -243,6 +225,8 @@ pub struct SubscriptionMessage(pub(crate) SubscriptionMessageInner);
 
 impl SubscriptionMessage {
 	/// Create a new subscription message from JSON.
+	///
+	/// Fails if the value couldn't be serialized.
 	pub fn from_json(t: &impl Serialize) -> Result<Self, serde_json::Error> {
 		serde_json::to_string(t).map(|json| SubscriptionMessage(SubscriptionMessageInner::NeedsData(json)))
 	}
@@ -253,6 +237,12 @@ impl SubscriptionMessage {
 
 	pub(crate) fn empty() -> Self {
 		Self::from_complete_message(String::new())
+	}
+}
+
+impl From<&str> for SubscriptionMessage {
+	fn from(msg: &str) -> Self {
+		SubscriptionMessage(SubscriptionMessageInner::NeedsData(format!("\"{msg}\"")))
 	}
 }
 
@@ -513,7 +503,10 @@ impl Methods {
 			Some(MethodKind::Subscription(cb)) => {
 				let conn_state =
 					ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit: p1 };
-				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await;
+				let res = match (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await {
+					Ok(rp) => rp,
+					Err(id) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
+				};
 
 				// This message is not used because it's used for metrics so we discard in other to
 				// not read once this is used for subscriptions.
@@ -521,10 +514,7 @@ impl Methods {
 				// The same information is part of `res` above.
 				let _ = rx.recv().await.expect("Every call must at least produce one response; qed");
 
-				match res {
-					SubscriptionAnswered::Yes(r) => r,
-					SubscriptionAnswered::No(r) => r,
-				}
+				res
 			}
 			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
@@ -883,17 +873,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					let id = id.clone().into_owned();
 
-					let result = async move {
-						match rx.await {
-							Ok(r) => SubscriptionAnswered::Yes(r),
-							Err(_) => {
-								let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
-								SubscriptionAnswered::No(response)
-							}
-						}
-					};
-
-					Box::pin(result)
+					Box::pin(async move { rx.await.map_err(|_| id) })
 				})),
 			)?
 		};
