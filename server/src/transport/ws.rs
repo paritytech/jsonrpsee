@@ -153,7 +153,7 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 	}
 }
 
-pub(crate) async fn process_single_request<'a, L: Logger>(
+pub(crate) async fn process_single_request<L: Logger>(
 	data: Vec<u8>,
 	call: CallData<'_, L>,
 ) -> Option<CallOrSubscription> {
