@@ -157,8 +157,6 @@ pub(crate) async fn process_single_request<L: Logger>(
 	data: Vec<u8>,
 	call: CallData<'_, L>,
 ) -> Option<CallOrSubscription> {
-	tracing::info!("process_request: {:?}", data);
-
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		Some(execute_call_with_tracing(req, call).await)
 	} else if serde_json::from_slice::<Notif>(&data).is_ok() {
