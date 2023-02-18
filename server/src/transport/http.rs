@@ -9,7 +9,7 @@ use futures_util::stream::{FuturesOrdered, StreamExt};
 use http::Method;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers::read_body;
-use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse};
+use jsonrpsee_core::server::helpers::{batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse};
 use jsonrpsee_core::server::rpc_module::MethodKind;
 use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
@@ -116,8 +116,8 @@ pub(crate) async fn process_validated_request<L: Logger>(
 			},
 		})
 		.await;
-		logger.on_response(&response.result, request_start, TransportProtocol::Http);
-		response::ok_response(response.result)
+		logger.on_response(&response, request_start, TransportProtocol::Http);
+		response::ok_response(response)
 	}
 }
 
@@ -141,7 +141,7 @@ pub(crate) struct CallData<'a, L: Logger> {
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
 #[instrument(name = "batch", skip(b), level = "TRACE")]
-pub(crate) async fn process_batch_request<L>(b: Batch<'_, L>) -> BatchResponse
+pub(crate) async fn process_batch_request<L>(b: Batch<'_, L>) -> String
 where
 	L: Logger,
 {
@@ -181,12 +181,12 @@ where
 		}
 
 		if got_notif && batch_response.is_empty() {
-			BatchResponse { result: String::new(), success: true }
+			String::new()
 		} else {
 			batch_response.finish()
 		}
 	} else {
-		BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError))
+		batch_response_error(Id::Null, ErrorObject::from(ErrorCode::ParseError))
 	}
 }
 

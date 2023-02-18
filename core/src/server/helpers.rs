@@ -312,13 +312,13 @@ impl BatchResponseBuilder {
 	///
 	/// Fails if the max limit is exceeded and returns to error response to
 	/// return early in order to not process method call responses which are thrown away anyway.
-	pub fn append(&mut self, response: &MethodResponse) -> Result<(), BatchResponse> {
+	pub fn append(&mut self, response: &MethodResponse) -> Result<(), String> {
 		// `,` will occupy one extra byte for each entry
 		// on the last item the `,` is replaced by `]`.
 		let len = response.result.len() + self.result.len() + 1;
 
 		if len > self.max_response_size {
-			Err(BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest)))
+			Err(batch_response_error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest)))
 		} else {
 			self.result.push_str(&response.result);
 			self.result.push(',');
@@ -332,32 +332,20 @@ impl BatchResponseBuilder {
 	}
 
 	/// Finish the batch response
-	pub fn finish(mut self) -> BatchResponse {
+	pub fn finish(mut self) -> String {
 		if self.result.len() == 1 {
-			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
+			batch_response_error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
 		} else {
 			self.result.pop();
 			self.result.push(']');
-			BatchResponse { result: self.result, success: true }
+			self.result
 		}
 	}
 }
 
-/// Response to a batch request.
-#[derive(Debug, Clone)]
-pub struct BatchResponse {
-	/// Formatted JSON-RPC response.
-	pub result: String,
-	/// Indicates whether the call was successful or not.
-	pub success: bool,
-}
-
-impl BatchResponse {
-	/// Create a `BatchResponse` from an error.
-	pub fn error(id: Id, err: impl Into<ErrorObject<'static>>) -> Self {
-		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap();
-		Self { result, success: false }
-	}
+/// Create a JSON-RPC error response.
+pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
+	serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).expect("ErrorResponse Serialize is infallible; qed")
 }
 
 #[cfg(test)]
@@ -391,8 +379,7 @@ mod tests {
 		builder.append(&method).unwrap();
 		let batch = builder.finish();
 
-		assert!(batch.success);
-		assert_eq!(batch.result, r#"[{"jsonrpc":"2.0","result":"a","id":1}]"#.to_string())
+		assert_eq!(batch, r#"[{"jsonrpc":"2.0","result":"a","id":1}]"#)
 	}
 
 	#[test]
@@ -408,20 +395,15 @@ mod tests {
 		builder.append(&m1).unwrap();
 		let batch = builder.finish();
 
-		assert!(batch.success);
-		assert_eq!(
-			batch.result,
-			r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#.to_string()
-		)
+		assert_eq!(batch, r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#)
 	}
 
 	#[test]
 	fn batch_empty_err() {
 		let batch = BatchResponseBuilder::new_with_limit(1024).finish();
 
-		assert!(!batch.success);
 		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
-		assert_eq!(batch.result, exp_err);
+		assert_eq!(batch, exp_err);
 	}
 
 	#[test]
@@ -431,8 +413,7 @@ mod tests {
 
 		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
 
-		assert!(!batch.success);
 		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
-		assert_eq!(batch.result, exp_err);
+		assert_eq!(batch, exp_err);
 	}
 }
