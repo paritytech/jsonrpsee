@@ -330,7 +330,8 @@ impl Methods {
 		Self::default()
 	}
 
-	fn verify_method_name(&mut self, name: &'static str) -> Result<(), Error> {
+	/// Verifies that the method name is not already taken, and returns an error if it is.
+	pub fn verify_method_name(&mut self, name: &'static str) -> Result<(), Error> {
 		if self.callbacks.contains_key(name) {
 			return Err(Error::MethodAlreadyRegistered(name.into()));
 		}
@@ -340,7 +341,7 @@ impl Methods {
 
 	/// Inserts the method callback for a given name, or returns an error if the name was already taken.
 	/// On success it returns a mut reference to the [`MethodCallback`] just inserted.
-	fn verify_and_insert(
+	pub fn verify_and_insert(
 		&mut self,
 		name: &'static str,
 		callback: MethodCallback,
