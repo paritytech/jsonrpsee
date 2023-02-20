@@ -265,7 +265,7 @@ struct SubscriptionKey {
 
 /// Callback wrapper that can be either sync or async.
 #[derive(Clone)]
-pub enum MethodKind {
+pub enum MethodCallback {
 	/// Synchronous method handler.
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
@@ -274,12 +274,6 @@ pub enum MethodKind {
 	Subscription(SubscriptionMethod<'static>),
 	/// Unsubscription method handler.
 	Unsubscription(UnsubscriptionMethod),
-}
-
-/// Method callback wrapper that contains a sync or async closure,
-#[derive(Clone, Debug)]
-pub struct MethodCallback {
-	callback: MethodKind,
 }
 
 /// Result of a method, either direct value or a future of one.
@@ -313,30 +307,7 @@ impl<T: Debug> Debug for MethodResult<T> {
 	}
 }
 
-impl MethodCallback {
-	fn new_sync(callback: SyncMethod) -> Self {
-		MethodCallback { callback: MethodKind::Sync(callback) }
-	}
-
-	fn new_async(callback: AsyncMethod<'static>) -> Self {
-		MethodCallback { callback: MethodKind::Async(callback) }
-	}
-
-	fn new_subscription(callback: SubscriptionMethod<'static>) -> Self {
-		MethodCallback { callback: MethodKind::Subscription(callback) }
-	}
-
-	fn new_unsubscription(callback: UnsubscriptionMethod) -> Self {
-		MethodCallback { callback: MethodKind::Unsubscription(callback) }
-	}
-
-	/// Get handle to the callback.
-	pub fn inner(&self) -> &MethodKind {
-		&self.callback
-	}
-}
-
-impl Debug for MethodKind {
+impl Debug for MethodCallback {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Async(_) => write!(f, "Async"),
@@ -506,11 +477,11 @@ impl Methods {
 		let p1 = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 		let p2 = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 
-		let response = match self.method(&req.method).map(|c| &c.callback) {
+		let response = match self.method(&req.method) {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
-			Some(MethodKind::Sync(cb)) => (cb)(id, params, usize::MAX),
-			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
-			Some(MethodKind::Subscription(cb)) => {
+			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX),
+			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
+			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit: p1 };
 				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await;
@@ -526,7 +497,7 @@ impl Methods {
 					SubscriptionAnswered::No(r) => r,
 				}
 			}
-			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
+			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
 
 		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
@@ -658,7 +629,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_sync(Arc::new(move |id, params, max_response_size| match callback(params, &*ctx) {
+			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| match callback(params, &*ctx) {
 				Ok(res) => MethodResponse::response(id, res, max_response_size),
 				Err(err) => MethodResponse::error(id, err),
 			})),
@@ -680,7 +651,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, _, max_response_size| {
+			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size| {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
@@ -711,7 +682,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, _, max_response_size| {
+			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size| {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
@@ -756,13 +727,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     - [`Params`]: JSON-RPC parameters in the subscription call.
 	///     - [`PendingSubscriptionSink`]: A pending subscription waiting to be accepted, in order to send out messages on the subscription
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
-	///  
+	///
 	/// # Returns
 	///
 	/// An async block which returns `Result<(), SubscriptionCallbackError>` the error is simply
 	/// for a more ergonomic API and is not used (except logged for user-related caused errors).
 	/// By default jsonrpsee doesn't send any special close notification,
-	/// it can be a footgun if one wants to send out a "special notification" to indicate that an error occurred.  
+	/// it can be a footgun if one wants to send out a "special notification" to indicate that an error occurred.
 	///
 	/// If you want to a special error notification use `SubscriptionSink::close` or
 	/// `SubscriptionSink::send` before returning from the async block.
@@ -782,7 +753,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     let sink = pending.accept().await?;
 	///
 	///     let sum = x + (*ctx);
-	///     
+	///
 	///     // NOTE: the error handling here is for easy of use
 	///     // and are thrown away
 	///     let msg = SubscriptionMessage::from_json(&sum)?;
@@ -818,7 +789,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
+				MethodCallback::Unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -853,7 +824,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let callback = {
 			self.methods.verify_and_insert(
 				subscribe_method_name,
-				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn| {
+				MethodCallback::Subscription(Arc::new(move |id, params, method_sink, conn| {
 					let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: conn.id_provider.next_id() };
 
 					// response to the subscription call.

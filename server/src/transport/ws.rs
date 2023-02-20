@@ -14,7 +14,7 @@ use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	batch_response_error, prepare_error, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodKind, Methods, SubscriptionAnswered};
+use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodCallback, Methods, SubscriptionAnswered};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -205,12 +205,12 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
 			CallOrSubscription::Call(response)
 		}
-		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => {
+		Some((name, method)) => match method {
+			MethodCallback::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
 				CallOrSubscription::Call((callback)(id, params, max_response_body_size as usize))
 			}
-			MethodKind::Async(callback) => {
+			MethodCallback::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
 
 				let id = id.into_owned();
@@ -219,7 +219,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				let response = (callback)(id, params, conn_id, max_response_body_size as usize).await;
 				CallOrSubscription::Call(response)
 			}
-			MethodKind::Subscription(callback) => {
+			MethodCallback::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 
 				if let Some(p) = bounded_subscriptions.acquire() {
@@ -232,7 +232,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 					CallOrSubscription::Call(response)
 				}
 			}
-			MethodKind::Unsubscription(callback) => {
+			MethodCallback::Unsubscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription, TransportProtocol::WebSocket);
 
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
