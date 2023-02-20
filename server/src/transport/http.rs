@@ -10,7 +10,7 @@ use http::Method;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::server::helpers::{batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse};
-use jsonrpsee_core::server::rpc_module::MethodKind;
+use jsonrpsee_core::server::rpc_module::MethodCallback;
 use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::JsonRawValue;
@@ -223,12 +223,12 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 			logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::Http);
 			MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))
 		}
-		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => {
+		Some((name, method)) => match method {
+			MethodCallback::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::Http);
 				(callback)(id, params, max_response_body_size as usize)
 			}
-			MethodKind::Async(callback) => {
+			MethodCallback::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::Http);
 
 				let id = id.into_owned();
@@ -236,7 +236,7 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 
 				(callback)(id, params, conn_id, max_response_body_size as usize).await
 			}
-			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
+			MethodCallback::Subscription(_) | MethodCallback::Unsubscription(_) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::Http);
 				tracing::error!("Subscriptions not supported on HTTP");
 				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
