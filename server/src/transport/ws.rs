@@ -14,7 +14,9 @@ use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	batch_response_error, prepare_error, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodCallback, Methods, SubscriptionAnswered};
+use jsonrpsee_core::server::rpc_module::{
+	CallOrSubscription, ConnState, MethodCallback, Methods, SubscriptionAnswered,
+};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
