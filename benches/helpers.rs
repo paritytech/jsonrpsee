@@ -152,8 +152,9 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::se
 			UNSUB_METHOD_NAME,
 			|_params, pending, _ctx| async move {
 				let sink = pending.accept().await?;
-				let msg = SubscriptionMessage::from_json(&"Hello")?;
+				let msg = SubscriptionMessage::from("Hello");
 				sink.send(msg).await?;
+
 				Ok(())
 			},
 		)

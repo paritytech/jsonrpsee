@@ -14,9 +14,7 @@ use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	batch_response_error, prepare_error, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::rpc_module::{
-	CallOrSubscription, ConnState, MethodCallback, Methods, SubscriptionAnswered,
-};
+use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodCallback, Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -226,8 +224,13 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 
 				if let Some(p) = bounded_subscriptions.acquire() {
 					let conn_state = ConnState { conn_id, id_provider, subscription_permit: p };
-					let response = callback(id.clone(), params, sink.clone(), conn_state).await;
-					CallOrSubscription::Subscription(response)
+					match callback(id, params, sink.clone(), conn_state).await {
+						Ok(r) => CallOrSubscription::Subscription(r),
+						Err(id) => {
+							let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+							CallOrSubscription::Call(response)
+						}
+					}
 				} else {
 					let response =
 						MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
@@ -378,13 +381,10 @@ pub(crate) async fn background_task<L: Logger>(
 
 					if let Some(rp) = process_single_request(data, call).await {
 						match rp {
-							CallOrSubscription::Subscription(SubscriptionAnswered::Yes(r)) => {
+							CallOrSubscription::Subscription(r) => {
 								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 							}
-							CallOrSubscription::Subscription(SubscriptionAnswered::No(r)) => {
-								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-								sink_permit.send_raw(r.result);
-							}
+
 							CallOrSubscription::Call(r) => {
 								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 								sink_permit.send_raw(r.result);
