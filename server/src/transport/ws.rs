@@ -12,9 +12,9 @@ use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
-	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
+	batch_response_error, prepare_error, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodKind, Methods};
+use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodCallback, Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -107,7 +107,7 @@ where
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
 #[instrument(name = "batch", skip(b), level = "TRACE")]
-pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<BatchResponse> {
+pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<String> {
 	let Batch { data, call } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
@@ -149,7 +149,7 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 			Some(batch_response.finish())
 		}
 	} else {
-		Some(BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError)))
+		Some(batch_response_error(Id::Null, ErrorObject::from(ErrorCode::ParseError)))
 	}
 }
 
@@ -205,12 +205,12 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
 			CallOrSubscription::Call(response)
 		}
-		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => {
+		Some((name, method)) => match method {
+			MethodCallback::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
 				CallOrSubscription::Call((callback)(id, params, max_response_body_size as usize))
 			}
-			MethodKind::Async(callback) => {
+			MethodCallback::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
 
 				let id = id.into_owned();
@@ -219,7 +219,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				let response = (callback)(id, params, conn_id, max_response_body_size as usize).await;
 				CallOrSubscription::Call(response)
 			}
-			MethodKind::Subscription(callback) => {
+			MethodCallback::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 
 				if let Some(p) = bounded_subscriptions.acquire() {
@@ -237,7 +237,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 					CallOrSubscription::Call(response)
 				}
 			}
-			MethodKind::Unsubscription(callback) => {
+			MethodCallback::Unsubscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription, TransportProtocol::WebSocket);
 
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
@@ -430,9 +430,9 @@ pub(crate) async fn background_task<L: Logger>(
 					.await;
 
 					if let Some(response) = response {
-						tx_log_from_str(&response.result, max_log_length);
-						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-						sink_permit.send_raw(response.result);
+						tx_log_from_str(&response, max_log_length);
+						logger.on_response(&response, request_start, TransportProtocol::WebSocket);
+						sink_permit.send_raw(response);
 					}
 				};
 
