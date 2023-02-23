@@ -84,20 +84,20 @@ impl<B, L> Server<B, L> {
 	}
 }
 
-impl<B, U, L> Server<B, L>
+impl<S, B, L> Server<S, L>
 where
 	L: Logger,
-	B: Layer<TowerService<L>> + Send + 'static,
-	<B as Layer<TowerService<L>>>::Service: Send
+	S: Layer<TowerService<L>> + Send + 'static,
+	<S as Layer<TowerService<L>>>::Service: Send
 		+ Service<
 			hyper::Request<hyper::Body>,
-			Response = hyper::Response<U>,
+			Response = hyper::Response<B>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<B as Layer<TowerService<L>>>::Service as Service<hyper::Request<hyper::Body>>>::Future: Send,
-	U: HttpBody + Send + 'static,
-	<U as HttpBody>::Error: Send + Sync + StdError,
-	<U as HttpBody>::Data: Send,
+	<<S as Layer<TowerService<L>>>::Service as Service<hyper::Request<hyper::Body>>>::Future: Send,
+	B: HttpBody + Send + 'static,
+	<B as HttpBody>::Error: Send + Sync + StdError,
+	<B as HttpBody>::Data: Send,
 {
 	/// Start responding to connections requests.
 	///
@@ -824,14 +824,14 @@ fn process_connection<'a, L: Logger, B, U>(
 }
 
 // Attempts to create a HTTP connection from a socket.
-async fn try_accept_connection<S, Bd>(socket: TcpStream, service: S, mut stop_handle: StopHandle)
+async fn try_accept_connection<S, B>(socket: TcpStream, service: S, mut stop_handle: StopHandle)
 where
-	S: Service<hyper::Request<hyper::Body>, Response = hyper::Response<Bd>> + Send + 'static,
+	S: Service<hyper::Request<hyper::Body>, Response = hyper::Response<B>> + Send + 'static,
 	S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
 	S::Future: Send,
-	Bd: HttpBody + Send + 'static,
-	<Bd as HttpBody>::Error: Send + Sync + StdError,
-	<Bd as HttpBody>::Data: Send,
+	B: HttpBody + Send + 'static,
+	<B as HttpBody>::Error: Send + Sync + StdError,
+	<B as HttpBody>::Data: Send,
 {
 	let conn = hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
 
