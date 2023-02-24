@@ -286,12 +286,8 @@ where
 		let fut = self.transport.send_and_read_body(raw);
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
-			Err(_e) => {
-				return Err(Error::RequestTimeout)
-			},
-			Ok(Err(e)) => {
-				return Err(Error::Transport(e.into()))
-			},
+			Err(_e) => return Err(Error::RequestTimeout),
+			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
@@ -366,9 +362,7 @@ where
 						failed_calls += 1;
 						(id, Err(err.error_object().clone().into_owned()))
 					},
-					Err(_) => {
-						return Err(err)
-					},
+					Err(_) => return Err(err),
 				},
 			};
 

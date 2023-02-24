@@ -136,9 +136,7 @@ async fn pipe_from_stream_with_bounded_buffer(
 			},
 
 			// stream is closed or some error, just quit.
-			Either::Right((_, _)) => {
-				break
-			},
+			Either::Right((_, _)) => break,
 		}
 	}
 

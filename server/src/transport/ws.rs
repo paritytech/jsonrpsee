@@ -363,9 +363,7 @@ pub(crate) async fn background_task<L: Logger>(
 						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn_id);
 						break Err(err.into())
 					},
-					MonitoredError::Shutdown => {
-						break Ok(())
-					},
+					MonitoredError::Shutdown => break Ok(()),
 				};
 			};
 		};
@@ -509,9 +507,7 @@ async fn send_task(
 			},
 
 			// Nothing else to receive.
-			Either::Left((None, _)) => {
-				break
-			},
+			Either::Left((None, _)) => break,
 
 			// Handle timer intervals.
 			Either::Right((Either::Left((_, stop)), next_rx)) => {
@@ -524,9 +520,7 @@ async fn send_task(
 			},
 
 			// Server is stopped or closed
-			Either::Right((Either::Right(_), _)) => {
-				break
-			},
+			Either::Right((Either::Right(_), _)) => break,
 		}
 	}
 
