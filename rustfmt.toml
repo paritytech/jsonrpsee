@@ -1,4 +1,11 @@
+# Basic
 hard_tabs = true
 max_width = 120
 use_small_heuristics = "Max"
 edition = "2021"
+# Imports
+imports_granularity = "Crate"
+reorder_imports     = true
+# Format comments
+comment_width = 100
+wrap_comments = true

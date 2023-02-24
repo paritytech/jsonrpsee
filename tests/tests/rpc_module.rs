@@ -26,19 +26,26 @@
 
 mod helpers;
 
-use std::collections::{HashMap, VecDeque};
-use std::time::Duration;
+use std::{
+	collections::{HashMap, VecDeque},
+	time::Duration,
+};
 
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
-use jsonrpsee::core::error::{Error, SubscriptionCallbackError};
-use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::core::EmptyServerParams;
-use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
-use jsonrpsee::types::{ErrorObjectOwned, Params};
+use jsonrpsee::{
+	core::{
+		error::{Error, SubscriptionCallbackError},
+		server::rpc_module::*,
+		EmptyServerParams,
+	},
+	types::{
+		error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE},
+		ErrorObjectOwned, Params,
+	},
+};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
-use tokio::time::interval;
+use tokio::{sync::mpsc, time::interval};
 use tokio_stream::wrappers::IntervalStream;
 
 // Helper macro to assert that a binding is of a specific type.

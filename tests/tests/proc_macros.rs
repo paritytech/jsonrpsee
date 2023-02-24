@@ -31,21 +31,26 @@ mod helpers;
 use std::net::SocketAddr;
 
 use helpers::init_logger;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::{client::SubscriptionClientT, Error};
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::types::error::{CallError, ErrorCode};
+use jsonrpsee::{
+	core::{
+		client::{ClientT, SubscriptionClientT},
+		Error,
+	},
+	http_client::HttpClientBuilder,
+	rpc_params,
+	server::ServerBuilder,
+	types::error::{CallError, ErrorCode},
+};
 
 use jsonrpsee::ws_client::*;
 use serde_json::json;
 
 mod rpc_impl {
-	use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
-	use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
-	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::PendingSubscriptionSink;
+	use jsonrpsee::{
+		core::{async_trait, server::rpc_module::SubscriptionMessage, RpcResult, SubscriptionResult},
+		proc_macros::rpc,
+		PendingSubscriptionSink,
+	};
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {

@@ -6,18 +6,24 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use hyper::body::{Body, HttpBody};
-use hyper::client::{Client, HttpConnector};
-use hyper::http::{HeaderMap, HeaderValue};
-use hyper::Uri;
-use jsonrpsee_core::client::CertificateStore;
-use jsonrpsee_core::error::GenericTransportError;
-use jsonrpsee_core::http_helpers;
-use jsonrpsee_core::tracing::{rx_log_from_bytes, tx_log_from_str};
-use std::error::Error as StdError;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use hyper::{
+	body::{Body, HttpBody},
+	client::{Client, HttpConnector},
+	http::{HeaderMap, HeaderValue},
+	Uri,
+};
+use jsonrpsee_core::{
+	client::CertificateStore,
+	error::GenericTransportError,
+	http_helpers,
+	tracing::{rx_log_from_bytes, tx_log_from_str},
+};
+use std::{
+	error::Error as StdError,
+	future::Future,
+	pin::Pin,
+	task::{Context, Poll},
+};
 use thiserror::Error;
 use tower::{Layer, Service, ServiceExt};
 

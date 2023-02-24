@@ -1,30 +1,41 @@
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::{
+	pin::Pin,
+	task::{Context, Poll},
+	time::Duration,
+};
 
-use crate::future::{FutureDriver, StopHandle};
-use crate::logger::{self, Logger, TransportProtocol};
-use crate::server::ServiceData;
+use crate::{
+	future::{FutureDriver, StopHandle},
+	logger::{self, Logger, TransportProtocol},
+	server::ServiceData,
+};
 
-use futures_util::future::{self, Either};
-use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::FuturesOrdered;
-use futures_util::{Future, FutureExt, StreamExt};
+use futures_util::{
+	future::{self, Either},
+	io::{BufReader, BufWriter},
+	stream::FuturesOrdered,
+	Future, FutureExt, StreamExt,
+};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::server::helpers::{
-	batch_response_error, prepare_error, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
+use jsonrpsee_core::{
+	server::{
+		helpers::{
+			batch_response_error, prepare_error, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
+		},
+		rpc_module::{CallOrSubscription, ConnState, MethodCallback, Methods},
+	},
+	tracing::{rx_log_from_json, tx_log_from_str},
+	traits::IdProvider,
+	Error, JsonRawValue,
 };
-use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodCallback, Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
-use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{Error, JsonRawValue};
-use jsonrpsee_types::error::{
-	reject_too_big_request, reject_too_many_subscriptions, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
-	BATCHES_NOT_SUPPORTED_MSG,
+use jsonrpsee_types::{
+	error::{
+		reject_too_big_request, reject_too_many_subscriptions, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
+		BATCHES_NOT_SUPPORTED_MSG,
+	},
+	ErrorObject, Id, InvalidRequest, Notification, Params, Request,
 };
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
-use soketto::connection::Error as SokettoError;
-use soketto::data::ByteSlice125;
+use soketto::{connection::Error as SokettoError, data::ByteSlice125};
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::Compat;
@@ -69,7 +80,8 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) request_start: L::Instant,
 }
 
-/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
+/// This is a glorified select listening for new messages, while also checking the `stop_receiver`
+/// signal.
 struct Monitored<'a, F> {
 	future: F,
 	stop_monitor: &'a StopHandle,

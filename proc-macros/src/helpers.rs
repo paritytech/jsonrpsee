@@ -62,11 +62,11 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 	}
 }
 
-/// Traverses the RPC trait definition and applies the required bounds for the generic type parameters that are used.
-/// The bounds applied depend on whether the type parameter is used as a parameter, return value or subscription result
-/// and whether it's used in client or server mode.
-/// Type params get `Send + Sync + 'static` bounds and input/output parameters get `Serialize` and/or `DeserializeOwned`
-/// bounds. Inspired by <https://github.com/paritytech/jsonrpc/blob/master/derive/src/to_delegate.rs#L414>
+/// Traverses the RPC trait definition and applies the required bounds for the generic type
+/// parameters that are used. The bounds applied depend on whether the type parameter is used as a
+/// parameter, return value or subscription result and whether it's used in client or server mode.
+/// Type params get `Send + Sync + 'static` bounds and input/output parameters get `Serialize`
+/// and/or `DeserializeOwned` bounds. Inspired by <https://github.com/paritytech/jsonrpc/blob/master/derive/src/to_delegate.rs#L414>
 ///
 /// ### Example
 ///
@@ -84,8 +84,8 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 ///  }
 /// ```
 ///
-/// Because the `item` attribute is not parsed as ordinary rust syntax, the `syn::Type` is traversed to find
-/// each generic parameter of it.
+/// Because the `item` attribute is not parsed as ordinary rust syntax, the `syn::Type` is traversed
+/// to find each generic parameter of it.
 /// This is used as an additional input before traversing the entire trait.
 /// Otherwise, it's not possible to know whether a type parameter is used for subscription result.
 pub(crate) fn generate_where_clause(

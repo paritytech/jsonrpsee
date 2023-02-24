@@ -20,8 +20,7 @@ pub(crate) const SLOW_CALL: Duration = Duration::from_millis(1);
 /// Run jsonrpc HTTP server for benchmarks.
 #[cfg(feature = "jsonrpc-crate")]
 pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_http_server::Server) {
-	use jsonrpc_http_server::jsonrpc_core::*;
-	use jsonrpc_http_server::*;
+	use jsonrpc_http_server::{jsonrpc_core::*, *};
 
 	let mut io = IoHandler::new();
 	io.add_sync_method(SYNC_FAST_CALL, |_| Ok(Value::String("lo".to_string())));
@@ -53,8 +52,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 	use std::sync::atomic::{AtomicU64, Ordering};
 
 	use jsonrpc_pubsub::{PubSubHandler, Session, Subscriber, SubscriptionId};
-	use jsonrpc_ws_server::jsonrpc_core::*;
-	use jsonrpc_ws_server::*;
+	use jsonrpc_ws_server::{jsonrpc_core::*, *};
 
 	const ID: AtomicU64 = AtomicU64::new(0);
 
@@ -200,13 +198,17 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 }
 
 pub mod fixed_client {
-	use jsonrpsee_v0_15::client_transport::ws::{Uri, WsTransportClientBuilder};
-	use jsonrpsee_v0_15::http_client::{HttpClient, HttpClientBuilder};
-	use jsonrpsee_v0_15::ws_client::{WsClient, WsClientBuilder};
+	use jsonrpsee_v0_15::{
+		client_transport::ws::{Uri, WsTransportClientBuilder},
+		http_client::{HttpClient, HttpClientBuilder},
+		ws_client::{WsClient, WsClientBuilder},
+	};
 
-	pub use jsonrpsee_v0_15::core::client::{ClientT, SubscriptionClientT};
-	pub use jsonrpsee_v0_15::http_client::HeaderMap;
-	pub use jsonrpsee_v0_15::rpc_params;
+	pub use jsonrpsee_v0_15::{
+		core::client::{ClientT, SubscriptionClientT},
+		http_client::HeaderMap,
+		rpc_params,
+	};
 
 	pub(crate) fn http_client(url: &str, headers: HeaderMap) -> HttpClient {
 		HttpClientBuilder::default()

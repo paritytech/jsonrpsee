@@ -26,8 +26,10 @@
 
 use std::collections::HashSet;
 
-use syn::visit::{self, Visit};
-use syn::Ident;
+use syn::{
+	visit::{self, Visit},
+	Ident,
+};
 
 /// Visitor that parses generic type parameters from `syn::Type` by traversing the AST.
 /// A `syn::Type` can any type such as `Vec<T>, T, Foo<A<B<V>>>, usize or similar`.

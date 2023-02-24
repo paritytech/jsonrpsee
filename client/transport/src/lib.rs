@@ -28,7 +28,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! # jsonrpsee-client-transports
-//!
 
 /// Websocket transport
 #[cfg(feature = "ws")]

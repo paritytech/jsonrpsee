@@ -26,11 +26,12 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
-use jsonrpsee::core::{async_trait, client::Subscription, Error, SubscriptionResult};
-use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder};
-use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::{
+	core::{async_trait, client::Subscription, server::rpc_module::SubscriptionMessage, Error, SubscriptionResult},
+	proc_macros::rpc,
+	server::{PendingSubscriptionSink, ServerBuilder},
+	ws_client::WsClientBuilder,
+};
 
 type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;

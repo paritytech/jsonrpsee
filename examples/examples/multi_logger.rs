@@ -26,16 +26,19 @@
 
 //! Example showing how to add multiple loggers to the same server.
 
-use std::net::SocketAddr;
-use std::process::Command;
-use std::time::Instant;
+use std::{net::SocketAddr, process::Command, time::Instant};
 
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::logger::{HttpRequest, MethodKind, TransportProtocol};
-use jsonrpsee::server::{logger, RpcModule, ServerBuilder};
-use jsonrpsee::types::Params;
-use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::{
+	core::client::ClientT,
+	rpc_params,
+	server::{
+		logger,
+		logger::{HttpRequest, MethodKind, TransportProtocol},
+		RpcModule, ServerBuilder,
+	},
+	types::Params,
+	ws_client::WsClientBuilder,
+};
 
 /// Example logger to measure call execution time.
 #[derive(Clone)]
@@ -74,8 +77,8 @@ impl logger::Logger for Timings {
 struct ThreadWatcher;
 
 impl ThreadWatcher {
-	// Count the number of threads visible to this process. Counts the lines of `ps -eL` and equivalent minus one (the header).
-	// Cribbed from the `palaver` crate.
+	// Count the number of threads visible to this process. Counts the lines of `ps -eL` and equivalent
+	// minus one (the header). Cribbed from the `palaver` crate.
 	fn count_threads() -> usize {
 		let out = if cfg!(any(target_os = "linux", target_os = "android")) {
 			Command::new("ps").arg("-eL").output().expect("failed to execute process")

@@ -83,7 +83,8 @@ pub mod __reexports {
 pub use beef::Cow;
 pub use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json::{
-	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
+	to_value as to_json_value,
+	value::{to_raw_value as to_json_raw_value, RawValue as JsonRawValue},
 	Value as JsonValue,
 };
 

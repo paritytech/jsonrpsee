@@ -24,15 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::collections::HashSet;
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
 use super::RpcDescription;
 use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
-use syn::punctuated::Punctuated;
-use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType};
+use syn::{parse_quote, punctuated::Punctuated, token, AttrStyle, Attribute, Path, PathSegment, ReturnType};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {

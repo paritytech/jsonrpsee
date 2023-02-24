@@ -2,16 +2,20 @@
 //! RPC method calls.
 
 use crate::transport::http;
-use hyper::header::{ACCEPT, CONTENT_TYPE};
-use hyper::http::HeaderValue;
-use hyper::{Body, Method, Request, Response, Uri};
+use hyper::{
+	header::{ACCEPT, CONTENT_TYPE},
+	http::HeaderValue,
+	Body, Method, Request, Response, Uri,
+};
 use jsonrpsee_core::error::Error as RpcError;
 use jsonrpsee_types::{Id, RequestSer};
-use std::error::Error;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+	error::Error,
+	future::Future,
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+};
 use tower::{Layer, Service};
 
 /// Layer that applies [`ProxyGetRequest`] which proxies the `GET /path` requests to

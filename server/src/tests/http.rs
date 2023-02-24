@@ -26,12 +26,13 @@
 
 use std::net::SocketAddr;
 
-use crate::types::error::CallError;
-use crate::{RpcModule, ServerBuilder, ServerHandle};
+use crate::{types::error::CallError, RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee_core::Error;
-use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
-use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_test_utils::{
+	helpers::*,
+	mocks::{Id, StatusCode, TestContext},
+	TimeoutFutureExt,
+};
 use serde_json::Value as JsonValue;
 
 fn init_logger() {
@@ -373,8 +374,8 @@ async fn invalid_json_id_missing_value() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
-	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
-	// Null.
+	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid
+	// Request), it MUST be Null.
 	assert_eq!(response.body, parse_error(Id::Null));
 }
 

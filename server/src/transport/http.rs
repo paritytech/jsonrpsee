@@ -1,21 +1,26 @@
-use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 use crate::logger::{self, Logger, TransportProtocol};
 
-use futures_util::future::Either;
-use futures_util::stream::{FuturesOrdered, StreamExt};
+use futures_util::{
+	future::Either,
+	stream::{FuturesOrdered, StreamExt},
+};
 use hyper::Method;
-use jsonrpsee_core::error::GenericTransportError;
-use jsonrpsee_core::http_helpers::read_body;
-use jsonrpsee_core::server::helpers::{batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse};
-use jsonrpsee_core::server::rpc_module::MethodCallback;
-use jsonrpsee_core::server::rpc_module::Methods;
-use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
-use jsonrpsee_core::JsonRawValue;
-use jsonrpsee_types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
+use jsonrpsee_core::{
+	error::GenericTransportError,
+	http_helpers::read_body,
+	server::{
+		helpers::{batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse},
+		rpc_module::{MethodCallback, Methods},
+	},
+	tracing::{rx_log_from_json, tx_log_from_str},
+	JsonRawValue,
+};
+use jsonrpsee_types::{
+	error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG},
+	ErrorObject, Id, InvalidRequest, Notification, Params, Request,
+};
 use tokio::sync::OwnedSemaphorePermit;
 use tracing::instrument;
 
@@ -312,9 +317,10 @@ pub(crate) async fn handle_request<L: Logger>(
 }
 
 pub(crate) mod response {
-	use jsonrpsee_types::error::reject_too_big_request;
-	use jsonrpsee_types::error::{ErrorCode, ErrorResponse};
-	use jsonrpsee_types::Id;
+	use jsonrpsee_types::{
+		error::{reject_too_big_request, ErrorCode, ErrorResponse},
+		Id,
+	};
 
 	const JSON: &str = "application/json; charset=utf-8";
 	const TEXT: &str = "text/plain";

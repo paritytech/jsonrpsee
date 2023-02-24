@@ -24,14 +24,21 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::tests::helpers::{deser_call, init_logger, server_with_context};
-use crate::types::SubscriptionId;
-use crate::{RpcModule, ServerBuilder};
-use jsonrpsee_core::server::rpc_module::{SendTimeoutError, SubscriptionMessage};
-use jsonrpsee_core::{traits::IdProvider, Error};
-use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
-use jsonrpsee_test_utils::TimeoutFutureExt;
+use crate::{
+	tests::helpers::{deser_call, init_logger, server_with_context},
+	types::SubscriptionId,
+	RpcModule, ServerBuilder,
+};
+use jsonrpsee_core::{
+	server::rpc_module::{SendTimeoutError, SubscriptionMessage},
+	traits::IdProvider,
+	Error,
+};
+use jsonrpsee_test_utils::{
+	helpers::*,
+	mocks::{Id, WebSocketTestClient, WebSocketTestError},
+	TimeoutFutureExt,
+};
 use jsonrpsee_types::SubscriptionResponse;
 use serde_json::Value as JsonValue;
 
@@ -373,8 +380,8 @@ async fn invalid_json_id_missing_value() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
-	// Null.
+	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid
+	// Request), it MUST be Null.
 	assert_eq!(response, parse_error(Id::Null));
 }
 

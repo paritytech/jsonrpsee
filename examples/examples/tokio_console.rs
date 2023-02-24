@@ -36,9 +36,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::Error;
-use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::RpcModule;
+use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

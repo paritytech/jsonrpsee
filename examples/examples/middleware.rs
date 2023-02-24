@@ -28,22 +28,22 @@
 //!
 //! It works with both `WebSocket` and `HTTP` which is done in the example.
 
-use hyper::body::Bytes;
-use hyper::http::HeaderValue;
-use hyper::Method;
+use hyper::{body::Bytes, http::HeaderValue, Method};
 use jsonrpsee::rpc_params;
-use std::iter::once;
-use std::net::SocketAddr;
-use std::time::Duration;
-use tower_http::cors::CorsLayer;
-use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tower_http::LatencyUnit;
+use std::{iter::once, net::SocketAddr, time::Duration};
+use tower_http::{
+	cors::CorsLayer,
+	sensitive_headers::SetSensitiveRequestHeadersLayer,
+	trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+	LatencyUnit,
+};
 
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
-use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::{
+	core::client::ClientT,
+	http_client::HttpClientBuilder,
+	server::{RpcModule, ServerBuilder},
+	ws_client::WsClientBuilder,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

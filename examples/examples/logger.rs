@@ -24,14 +24,18 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::net::SocketAddr;
-use std::time::Instant;
+use std::{net::SocketAddr, time::Instant};
 
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params, TransportProtocol};
-use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, RpcModule};
+use jsonrpsee::{
+	core::client::ClientT,
+	rpc_params,
+	server::{
+		logger::{self, HttpRequest, MethodKind, Params, TransportProtocol},
+		ServerBuilder,
+	},
+	ws_client::WsClientBuilder,
+	RpcModule,
+};
 
 #[derive(Clone)]
 struct Timings;

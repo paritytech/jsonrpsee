@@ -38,14 +38,14 @@
 //! like to query a certain `URI` path for statistics.
 
 use hyper::{Body, Client, Request};
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::{
+	core::client::ClientT,
+	http_client::HttpClientBuilder,
+	rpc_params,
+	server::{middleware::proxy_get_request::ProxyGetRequestLayer, RpcModule, ServerBuilder},
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

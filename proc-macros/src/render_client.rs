@@ -23,13 +23,14 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-use crate::attributes::ParamKind;
-use crate::helpers::generate_where_clause;
-use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
+use crate::{
+	attributes::ParamKind,
+	helpers::generate_where_clause,
+	rpc_macro::{RpcDescription, RpcMethod, RpcSubscription},
+};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned};
-use syn::spanned::Spanned;
-use syn::{AngleBracketedGenericArguments, FnArg, Pat, PatIdent, PatType, PathArguments, TypeParam};
+use syn::{spanned::Spanned, AngleBracketedGenericArguments, FnArg, Pat, PatIdent, PatType, PathArguments, TypeParam};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -121,7 +122,8 @@ impl RpcDescription {
 		let rpc_method_name = self.rpc_identifier(&method.name);
 
 		// Called method is either `request` or `notification`.
-		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::core::Error`).
+		// `returns` represent the return type of the *rust method* (`Result< <..>,
+		// jsonrpsee::core::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
 			let returns = self.return_result_type(returns.clone());

@@ -27,9 +27,12 @@
 use std::{fmt, iter};
 
 use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
-use syn::parse::{Parse, ParseStream, Parser};
-use syn::punctuated::Punctuated;
-use syn::{spanned::Spanned, Attribute, Error, LitStr, Token};
+use syn::{
+	parse::{Parse, ParseStream, Parser},
+	punctuated::Punctuated,
+	spanned::Spanned,
+	Attribute, Error, LitStr, Token,
+};
 
 pub(crate) struct AttributeMeta {
 	pub path: syn::Path,
@@ -134,7 +137,8 @@ impl AttributeMeta {
 
 	/// Attempt to get a list of `Argument`s from a list of names in order.
 	///
-	/// Errors if there is an argument with a name that's not on the list, or if there is a duplicate definition.
+	/// Errors if there is an argument with a name that's not on the list, or if there is a
+	/// duplicate definition.
 	pub fn retain<const N: usize>(self, allowed: [&str; N]) -> syn::Result<[Result<Argument, MissingArgument>; N]> {
 		assert!(
 			N != 0,

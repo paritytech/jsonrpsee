@@ -28,14 +28,15 @@
 
 use std::borrow::Cow;
 
-use crate::attributes::{
-	optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind,
+use crate::{
+	attributes::{
+		optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind,
+	},
+	helpers::extract_doc_comments,
 };
-use crate::helpers::extract_doc_comments;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::spanned::Spanned;
-use syn::{punctuated::Punctuated, Attribute, Token};
+use syn::{punctuated::Punctuated, spanned::Spanned, Attribute, Token};
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {

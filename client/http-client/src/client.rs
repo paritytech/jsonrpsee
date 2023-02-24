@@ -24,30 +24,26 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::borrow::Cow as StdCow;
-use std::error::Error as StdError;
-use std::fmt;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{borrow::Cow as StdCow, error::Error as StdError, fmt, sync::Arc, time::Duration};
 
-use crate::transport::{self, Error as TransportError, HttpTransportClient};
-use crate::types::{ErrorResponse, NotificationSer, RequestSer, Response};
-use async_trait::async_trait;
-use hyper::body::HttpBody;
-use hyper::http::HeaderMap;
-use hyper::Body;
-use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription,
-	SubscriptionClientT,
+use crate::{
+	transport::{self, Error as TransportError, HttpTransportClient},
+	types::{ErrorResponse, NotificationSer, RequestSer, Response},
 };
-use jsonrpsee_core::params::BatchRequestBuilder;
-use jsonrpsee_core::traits::ToRpcParams;
-use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::{ErrorObject, TwoPointZero};
+use async_trait::async_trait;
+use hyper::{body::HttpBody, http::HeaderMap, Body};
+use jsonrpsee_core::{
+	client::{
+		generate_batch_id_range, BatchResponse, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription,
+		SubscriptionClientT,
+	},
+	params::BatchRequestBuilder,
+	traits::ToRpcParams,
+	Error, JsonRawValue, TEN_MB_SIZE_BYTES,
+};
+use jsonrpsee_types::{error::CallError, ErrorObject, TwoPointZero};
 use serde::de::DeserializeOwned;
-use tower::layer::util::Identity;
-use tower::{Layer, Service};
+use tower::{layer::util::Identity, Layer, Service};
 use tracing::instrument;
 
 /// Http Client Builder.
@@ -55,7 +51,7 @@ use tracing::instrument;
 /// # Examples
 ///
 /// ```no_run
-///
+/// 
 /// use jsonrpsee_http_client::{HttpClientBuilder, HeaderMap, HeaderValue};
 ///
 /// #[tokio::main]
@@ -72,7 +68,6 @@ use tracing::instrument;
 ///
 ///     // use client....
 /// }
-///
 /// ```
 #[derive(Debug)]
 pub struct HttpClientBuilder<L = Identity> {
@@ -400,7 +395,8 @@ where
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
-	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	/// Send a subscription request to the server. Not implemented for HTTP; will always return
+	/// [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscription", fields(method = _subscribe_method), skip(self, _params, _subscribe_method, _unsubscribe_method), level = "trace")]
 	async fn subscribe<'a, N, Params>(
 		&self,
@@ -415,7 +411,8 @@ where
 		Err(Error::HttpNotImplemented)
 	}
 
-	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	/// Subscribe to a specific method. Not implemented for HTTP; will always return
+	/// [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscribe_method", fields(method = _method), skip(self, _method), level = "trace")]
 	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
 	where

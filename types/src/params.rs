@@ -25,16 +25,19 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Types to handle JSON-RPC request parameters according to the [spec](https://www.jsonrpc.org/specification#parameter_structures).
-//! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
+//! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in
+//! the client.
 
 use std::fmt;
 
 use crate::error::CallError;
 use anyhow::anyhow;
 use beef::Cow;
-use serde::de::{self, Deserializer, Unexpected, Visitor};
-use serde::ser::Serializer;
-use serde::{Deserialize, Serialize};
+use serde::{
+	de::{self, Deserializer, Unexpected, Visitor},
+	ser::Serializer,
+	Deserialize, Serialize,
+};
 use serde_json::Value as JsonValue;
 
 /// JSON-RPC v2 marker type.
@@ -81,9 +84,9 @@ impl Serialize for TwoPointZero {
 
 /// Parameters sent with an incoming JSON-RPC request.
 ///
-/// The data containing the params is a `Cow<&str>` and can either be a borrowed `&str` of JSON from an incoming
-/// [`super::request::Request`] (which in turn borrows it from the input buffer that is shared between requests);
-/// or, it can be an owned [`String`].
+/// The data containing the params is a `Cow<&str>` and can either be a borrowed `&str` of JSON from
+/// an incoming [`super::request::Request`] (which in turn borrows it from the input buffer that is
+/// shared between requests); or, it can be an owned [`String`].
 #[derive(Clone, Debug)]
 pub struct Params<'a>(Option<Cow<'a, str>>);
 
@@ -104,8 +107,9 @@ impl<'a> Params<'a> {
 
 	/// Obtain a sequence parser, [`ParamsSequence`].
 	///
-	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC
-	/// request has optional parameters at the tail that may or may not be present.
+	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is
+	/// useful when the RPC request has optional parameters at the tail that may or may not be
+	/// present.
 	pub fn sequence(&self) -> ParamsSequence {
 		let json = match self.0.as_ref() {
 			// It's assumed that params is `[a,b,c]`, if empty regard as no params.
@@ -126,7 +130,8 @@ impl<'a> Params<'a> {
 		serde_json::from_str(params).map_err(|e| CallError::InvalidParams(e.into()))
 	}
 
-	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
+	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that
+	/// value.
 	pub fn one<T>(&'a self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
@@ -152,9 +157,10 @@ impl<'a> Params<'a> {
 
 /// An `Iterator`-like parser for a sequence of [`Params`].
 ///
-/// This will parse the params one at a time, and allows for graceful handling of optional parameters at the tail; other
-/// use cases are likely better served by [`Params::parse`]. The reason this is not an actual [`Iterator`] is that
-/// params parsing (often) yields values of different types.
+/// This will parse the params one at a time, and allows for graceful handling of optional
+/// parameters at the tail; other use cases are likely better served by [`Params::parse`]. The
+/// reason this is not an actual [`Iterator`] is that params parsing (often) yields values of
+/// different types.
 ///
 /// Regards empty array `[]` as no parameters provided.
 #[derive(Debug, Copy, Clone)]
@@ -311,7 +317,8 @@ impl<'a> TryFrom<JsonValue> for SubscriptionId<'a> {
 }
 
 impl<'a> SubscriptionId<'a> {
-	/// Convert `SubscriptionId<'a>` to `SubscriptionId<'static>` so that it can be moved across threads.
+	/// Convert `SubscriptionId<'a>` to `SubscriptionId<'static>` so that it can be moved across
+	/// threads.
 	///
 	/// This can cause an allocation if the id is a string.
 	pub fn into_owned(self) -> SubscriptionId<'static> {

@@ -36,15 +36,17 @@ pub use jsonrpsee_types as types;
 use std::time::Duration;
 
 use jsonrpsee_client_transport::web;
-use jsonrpsee_core::client::{ClientBuilder, IdKind};
-use jsonrpsee_core::Error;
+use jsonrpsee_core::{
+	client::{ClientBuilder, IdKind},
+	Error,
+};
 
 /// Builder for [`Client`].
 ///
 /// # Examples
 ///
 /// ```no_run
-///
+/// 
 /// use jsonrpsee_wasm_client::WasmClientBuilder;
 ///
 /// #[tokio::main]
@@ -57,7 +59,6 @@ use jsonrpsee_core::Error;
 ///
 ///     // use client....
 /// }
-///
 /// ```
 #[derive(Copy, Clone, Debug)]
 pub struct WasmClientBuilder {

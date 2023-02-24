@@ -26,10 +26,12 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
-use jsonrpsee::core::client::{Client, ClientBuilder, ClientT};
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::{
+	client_transport::ws::{Uri, WsTransportClientBuilder},
+	core::client::{Client, ClientBuilder, ClientT},
+	rpc_params,
+	server::{RpcModule, ServerBuilder},
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

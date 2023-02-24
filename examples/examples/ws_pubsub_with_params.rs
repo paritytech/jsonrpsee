@@ -24,17 +24,21 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 use futures::{Stream, StreamExt};
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
-use jsonrpsee::core::{Serialize, SubscriptionResult};
-use jsonrpsee::server::{RpcModule, ServerBuilder};
-use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, PendingSubscriptionSink};
+use jsonrpsee::{
+	core::{
+		client::{Subscription, SubscriptionClientT},
+		server::rpc_module::{SubscriptionMessage, TrySendError},
+		Serialize, SubscriptionResult,
+	},
+	rpc_params,
+	server::{RpcModule, ServerBuilder},
+	types::ErrorObjectOwned,
+	ws_client::WsClientBuilder,
+	PendingSubscriptionSink,
+};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 

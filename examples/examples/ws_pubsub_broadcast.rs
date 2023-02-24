@@ -28,16 +28,22 @@
 
 use std::net::SocketAddr;
 
-use futures::future::{self, Either};
-use futures::StreamExt;
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+use futures::{
+	future::{self, Either},
+	StreamExt,
+};
+use jsonrpsee::core::{
+	client::{Subscription, SubscriptionClientT},
+	server::rpc_module::SubscriptionMessage,
+};
 
-use jsonrpsee::core::SubscriptionResult;
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
-use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::PendingSubscriptionSink;
+use jsonrpsee::{
+	core::SubscriptionResult,
+	rpc_params,
+	server::{RpcModule, ServerBuilder},
+	ws_client::WsClientBuilder,
+	PendingSubscriptionSink,
+};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 

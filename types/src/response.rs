@@ -28,8 +28,10 @@
 
 use std::fmt;
 
-use crate::params::{Id, SubscriptionId, TwoPointZero};
-use crate::request::Notification;
+use crate::{
+	params::{Id, SubscriptionId, TwoPointZero},
+	request::Notification,
+};
 use serde::{Deserialize, Serialize};
 
 /// JSON-RPC successful response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
@@ -72,9 +74,11 @@ pub struct SubscriptionPayload<'a, T> {
 	pub result: T,
 }
 
-/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along with `result` field.
+/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along
+/// with `result` field.
 pub type SubscriptionResponse<'a, T> = Notification<'a, SubscriptionPayload<'a, T>>;
-/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along with `error` field.
+/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along
+/// with `error` field.
 pub type SubscriptionError<'a, T> = Notification<'a, SubscriptionPayloadError<'a, T>>;
 
 /// Error value for subscriptions.

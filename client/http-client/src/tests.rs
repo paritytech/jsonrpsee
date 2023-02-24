@@ -27,13 +27,12 @@
 use crate::types::error::{ErrorCode, ErrorObject};
 
 use crate::HttpClientBuilder;
-use jsonrpsee_core::client::{BatchResponse, ClientT, IdKind};
-use jsonrpsee_core::params::BatchRequestBuilder;
-use jsonrpsee_core::Error;
-use jsonrpsee_core::{rpc_params, DeserializeOwned};
-use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::mocks::Id;
-use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_core::{
+	client::{BatchResponse, ClientT, IdKind},
+	params::BatchRequestBuilder,
+	rpc_params, DeserializeOwned, Error,
+};
+use jsonrpsee_test_utils::{helpers::*, mocks::Id, TimeoutFutureExt};
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
 
 fn init_logger() {

@@ -24,12 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::{convert::Infallible, net::SocketAddr};
 
 use crate::mocks::{Body, HttpResponse, Id, Uri};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Client, Request, Response, Server};
+use hyper::{
+	service::{make_service_fn, service_fn},
+	Client, Request, Response, Server,
+};
 use serde::Serialize;
 use serde_json::Value;
 

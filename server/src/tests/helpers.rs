@@ -1,13 +1,10 @@
-use std::fmt;
-use std::net::SocketAddr;
+use std::{fmt, net::SocketAddr};
 
-use crate::types::error::CallError;
-use crate::{RpcModule, ServerBuilder, ServerHandle};
+use crate::{types::error::CallError, RpcModule, ServerBuilder, ServerHandle};
 
 use anyhow::anyhow;
 use jsonrpsee_core::{DeserializeOwned, Error};
-use jsonrpsee_test_utils::mocks::TestContext;
-use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_test_utils::{mocks::TestContext, TimeoutFutureExt};
 use jsonrpsee_types::Response;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 

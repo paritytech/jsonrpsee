@@ -49,12 +49,14 @@ pub(crate) mod visitor;
 /// type that implements `Client` or `SubscriptionClient` (depending on whether trait has
 /// subscriptions methods or not), namely `HttpClient` and `WsClient`.
 ///
-/// For servers, it will generate a trait mostly equivalent to the input, with the following differences:
+/// For servers, it will generate a trait mostly equivalent to the input, with the following
+/// differences:
 ///
-/// - The trait will have one additional (already implemented) method, `into_rpc`, which turns any object that
-///   implements the server trait into an `RpcModule`.
+/// - The trait will have one additional (already implemented) method, `into_rpc`, which turns any
+///   object that implements the server trait into an `RpcModule`.
 /// - For subscription methods:
-///   - There will be one additional argument inserted right after `&self`: `subscription_sink: SubscriptionSink`.
+///   - There will be one additional argument inserted right after `&self`: `subscription_sink:
+///     SubscriptionSink`.
 ///   It should be used to accept or reject a subscription and send data back to subscribers.
 ///   - The return type of the subscription method is `SubscriptionResult` for improved ergonomics.
 ///
@@ -62,15 +64,16 @@ pub(crate) mod visitor;
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
 /// correspondingly, `FooClient`.
 ///
-/// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait must be implemented
-/// on your type first.
+/// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait
+/// must be implemented on your type first.
 ///
-/// Note: you need to import the `jsonrpsee` façade crate in your code for the macro to work properly.
+/// Note: you need to import the `jsonrpsee` façade crate in your code for the macro to work
+/// properly.
 ///
 /// ## Prerequisites
 ///
-/// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`. If you want to implement this
-///   trait on some type that is not thread-safe, consider using `Arc<RwLock<..>>`.
+/// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`. If you want to
+///   implement this trait on some type that is not thread-safe, consider using `Arc<RwLock<..>>`.
 ///
 /// ## Examples
 ///
@@ -141,14 +144,14 @@ pub(crate) mod visitor;
 /// **Arguments:**
 ///
 /// - `server`: generate `<Trait>Server` trait for the server implementation.
-/// - `client`: generate `<Trait>Client` extension trait that builds RPC clients to invoke a concrete RPC
-///   implementation's methods conveniently.
-/// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
-///   method `spam`, the resulting method name will be `foo_spam`.
-/// - `server_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the server
-///   implementation.
-/// - `client_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the client
-///   implementation.
+/// - `client`: generate `<Trait>Client` extension trait that builds RPC clients to invoke a
+///   concrete RPC implementation's methods conveniently.
+/// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with
+///   namespace `foo` and method `spam`, the resulting method name will be `foo_spam`.
+/// - `server_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the
+///   server implementation.
+/// - `client_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the
+///   client implementation.
 ///
 /// **Trait requirements:**
 ///
@@ -158,7 +161,8 @@ pub(crate) mod visitor;
 /// - have Rust methods not marked with either the `method` or `subscription` attribute;
 /// - be empty.
 ///
-/// At least one of the `server` or `client` flags must be provided, otherwise the compilation will err.
+/// At least one of the `server` or `client` flags must be provided, otherwise the compilation will
+/// err.
 ///
 /// ### `method` attribute
 ///
@@ -166,12 +170,14 @@ pub(crate) mod visitor;
 ///
 /// **Arguments:**
 ///
-/// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
-/// - `aliases`: list of name aliases for the RPC method as a comma separated string.
-///              Aliases are processed ignoring the namespace, so add the complete name, including the
-///              namespace.
-/// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
-/// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
+/// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method
+///   name.
+/// - `aliases`: list of name aliases for the RPC method as a comma separated string. Aliases are
+///   processed ignoring the namespace, so add the complete name, including the namespace.
+/// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable
+///   with non-`async` methods.
+/// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map",
+///   defaults to "array".
 ///
 /// **Method requirements:**
 ///
@@ -187,14 +193,18 @@ pub(crate) mod visitor;
 ///
 /// **Arguments:**
 ///
-/// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
-/// - `unsubscribe` (optional): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
-///                             This is generated for you if the subscription name starts with `subscribe`.
-/// - `aliases` (optional): aliases for `name`. Aliases are processed ignoring the namespace,
-///                         so add the complete name, including the namespace.
+/// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method
+///   name.
+/// - `unsubscribe` (optional): name of the RPC method to unsubscribe from the subscription. Must
+///   not be the same as `name`. This is generated for you if the subscription name starts with
+///   `subscribe`.
+/// - `aliases` (optional): aliases for `name`. Aliases are processed ignoring the namespace, so add
+///   the complete name, including the namespace.
 /// - `unsubscribe_aliases` (optional): Similar to `aliases` but for `unsubscribe`.
-/// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
-/// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
+/// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type,
+///   not string.
+/// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map",
+///   defaults to "array".
 ///
 /// **Method requirements:**
 ///

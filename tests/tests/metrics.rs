@@ -26,21 +26,27 @@
 
 mod helpers;
 
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::{
+	collections::HashMap,
+	net::SocketAddr,
+	sync::{Arc, Mutex},
+	time::Duration,
+};
 
 use helpers::init_logger;
-use jsonrpsee::core::{client::ClientT, Error};
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, TransportProtocol};
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
-use jsonrpsee::types::Params;
-use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::RpcModule;
+use jsonrpsee::{
+	core::{client::ClientT, Error},
+	http_client::HttpClientBuilder,
+	proc_macros::rpc,
+	rpc_params,
+	server::{
+		logger::{HttpRequest, Logger, MethodKind, TransportProtocol},
+		ServerBuilder, ServerHandle,
+	},
+	types::Params,
+	ws_client::WsClientBuilder,
+	RpcModule,
+};
 use tokio::time::sleep;
 
 #[derive(Clone, Default)]

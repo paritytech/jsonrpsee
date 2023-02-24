@@ -30,8 +30,7 @@ use std::net::SocketAddr;
 
 /// HTTP request.
 pub type HttpRequest = hyper::http::Request<Body>;
-pub use hyper::http::HeaderMap as Headers;
-pub use hyper::Body;
+pub use hyper::{http::HeaderMap as Headers, Body};
 pub use jsonrpsee_types::Params;
 
 /// The type JSON-RPC v2 call, it can be a subscription, method call or unknown.
@@ -80,11 +79,12 @@ impl std::fmt::Display for TransportProtocol {
 	}
 }
 
-/// Defines a logger specifically for WebSocket connections with callbacks during the RPC request life-cycle.
-/// The primary use case for this is to collect timings for a larger metrics collection solution.
+/// Defines a logger specifically for WebSocket connections with callbacks during the RPC request
+/// life-cycle. The primary use case for this is to collect timings for a larger metrics collection
+/// solution.
 ///
-/// See the [`ServerBuilder::set_logger`](../../jsonrpsee_server/struct.ServerBuilder.html#method.set_logger)
-/// for examples.
+/// See the [`ServerBuilder::set_logger`](../../jsonrpsee_server/struct.ServerBuilder.html#method.
+/// set_logger) for examples.
 pub trait Logger: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the trait
 	/// measures time, if at all, is entirely up to the implementation.
@@ -99,7 +99,8 @@ pub trait Logger: Send + Sync + Clone + 'static {
 	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
 	fn on_call(&self, method_name: &str, params: Params, kind: MethodKind, transport: TransportProtocol);
 
-	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple times.
+	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple
+	/// times.
 	fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant, transport: TransportProtocol);
 
 	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.

@@ -35,8 +35,8 @@ use serde_json::value::RawValue;
 ///
 /// # Note
 ///
-/// Please consider using the [`crate::params::ArrayParams`] and [`crate::params::ObjectParams`] than
-/// implementing this trait.
+/// Please consider using the [`crate::params::ArrayParams`] and [`crate::params::ObjectParams`]
+/// than implementing this trait.
 ///
 /// # Examples
 ///

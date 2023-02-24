@@ -24,17 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::io;
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{io, net::SocketAddr, time::Duration};
 
-use futures_channel::mpsc;
-use futures_channel::oneshot;
-use futures_util::future::FutureExt;
-use futures_util::io::{BufReader, BufWriter};
-use futures_util::sink::SinkExt;
-use futures_util::stream::{self, StreamExt};
-use futures_util::{pin_mut, select};
+use futures_channel::{mpsc, oneshot};
+use futures_util::{
+	future::FutureExt,
+	io::{BufReader, BufWriter},
+	pin_mut, select,
+	sink::SinkExt,
+	stream::{self, StreamExt},
+};
 use serde::{Deserialize, Serialize};
 use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
 use tokio::net::TcpStream;
@@ -163,8 +162,8 @@ pub struct WebSocketTestServer {
 }
 
 impl WebSocketTestServer {
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every
-	// connection.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response`
+	// for every connection.
 	pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
 		let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
@@ -174,8 +173,8 @@ impl WebSocketTestServer {
 		Self { local_addr, exit: tx }
 	}
 
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every
-	// connection.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded
+	// notification` for every connection.
 	pub async fn with_hardcoded_notification(sockaddr: SocketAddr, notification: String) -> Self {
 		let (tx, rx) = mpsc::unbounded();
 		let (addr_tx, addr_rx) = oneshot::channel();
@@ -193,8 +192,8 @@ impl WebSocketTestServer {
 		Self { local_addr, exit: tx }
 	}
 
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription
-	// response.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and
+	// subscription response.
 	//
 	// NOTE: ignores the actual subscription and unsubscription method.
 	pub async fn with_hardcoded_subscription(
@@ -328,7 +327,8 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 }
 
 // Run a WebSocket server running on localhost that redirects requests for testing.
-// Requests to any url except for `/myblock/two` will redirect one or two times (HTTP 301) and eventually end up in `/myblock/two`.
+// Requests to any url except for `/myblock/two` will redirect one or two times (HTTP 301) and
+// eventually end up in `/myblock/two`.
 pub fn ws_server_with_redirect(other_server: String) -> String {
 	let addr = ([127, 0, 0, 1], 0).into();
 

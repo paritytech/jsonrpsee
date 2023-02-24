@@ -26,18 +26,21 @@
 
 #![cfg(test)]
 
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::core::server::host_filtering::AllowHosts;
-use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
-use jsonrpsee::core::{Error, SubscriptionResult};
-use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
-use jsonrpsee::types::error::ErrorObject;
-use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::{PendingSubscriptionSink, RpcModule};
+use jsonrpsee::{
+	core::{
+		server::{
+			host_filtering::AllowHosts,
+			rpc_module::{SubscriptionMessage, TrySendError},
+		},
+		Error, SubscriptionResult,
+	},
+	server::{middleware::proxy_get_request::ProxyGetRequestLayer, ServerBuilder, ServerHandle},
+	types::{error::ErrorObject, ErrorObjectOwned},
+	PendingSubscriptionSink, RpcModule,
+};
 use serde::Serialize;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;

@@ -1,11 +1,14 @@
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use criterion::*;
-use futures_util::future::{join_all, FutureExt};
-use futures_util::stream::FuturesUnordered;
-use helpers::fixed_client::{http_client, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT};
-use helpers::{KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
+use futures_util::{
+	future::{join_all, FutureExt},
+	stream::FuturesUnordered,
+};
+use helpers::{
+	fixed_client::{http_client, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT},
+	KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME,
+};
 use jsonrpsee::types::{Id, RequestSer};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
@@ -265,10 +268,10 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 			},
 			|mut sub| async move {
 				black_box(sub.next().await.transpose().unwrap());
-				// Note that this benchmark will include costs for measuring `drop` for subscription,
-				// since it's not possible to combine both `iter_with_setup` and `iter_with_large_drop`.
-				// To estimate pure cost of method, one should subtract the result of `unsub` bench
-				// from this one.
+				// Note that this benchmark will include costs for measuring `drop` for
+				// subscription, since it's not possible to combine both `iter_with_setup` and
+				// `iter_with_large_drop`. To estimate pure cost of method, one should subtract the
+				// result of `unsub` bench from this one.
 			},
 		)
 	});

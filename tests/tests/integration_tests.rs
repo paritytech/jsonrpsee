@@ -29,8 +29,7 @@
 
 mod helpers;
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
@@ -38,14 +37,18 @@ use helpers::{
 	server_with_subscription, server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
-use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
-use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
-use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
-use jsonrpsee::core::{Error, JsonValue};
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::rpc_params;
-use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
-use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::{
+	core::{
+		client::{ClientT, IdKind, Subscription, SubscriptionClientT},
+		params::{ArrayParams, BatchRequestBuilder},
+		server::rpc_module::SubscriptionMessage,
+		Error, JsonValue,
+	},
+	http_client::HttpClientBuilder,
+	rpc_params,
+	types::error::{ErrorObject, UNKNOWN_ERROR_CODE},
+	ws_client::WsClientBuilder,
+};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
@@ -81,8 +84,8 @@ async fn ws_unsubscription_works() {
 	let mut sub: Subscription<usize> =
 		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 
-	// It's technically possible to have race-conditions between the notifications and the unsubscribe message.
-	// So let's wait for the first notification and then unsubscribe.
+	// It's technically possible to have race-conditions between the notifications and the unsubscribe
+	// message. So let's wait for the first notification and then unsubscribe.
 	let _item = sub.next().await.unwrap().unwrap();
 
 	sub.unsubscribe().await.unwrap();
@@ -236,9 +239,9 @@ async fn ws_subscription_several_clients_with_drop() {
 		drop(client);
 	}
 
-	// make sure nothing weird happened after dropping half of the clients (should be `unsubscribed` in the server)
-	// would be good to know that subscriptions actually were removed but not possible to verify at
-	// this layer.
+	// make sure nothing weird happened after dropping half of the clients (should be `unsubscribed` in
+	// the server) would be good to know that subscriptions actually were removed but not possible to
+	// verify at this layer.
 	for _ in 0..10 {
 		for (client, hello_sub, foo_sub) in &mut clients {
 			assert!(client.is_connected());
@@ -732,8 +735,11 @@ async fn http_batch_works() {
 #[tokio::test]
 async fn ws_server_limit_subs_per_conn_works() {
 	use futures::StreamExt;
-	use jsonrpsee::types::error::{CallError, TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{
+		server::ServerBuilder,
+		types::error::{CallError, TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG},
+		RpcModule,
+	};
 
 	init_logger();
 
@@ -787,8 +793,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 #[tokio::test]
 async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	use futures::StreamExt;
-	use jsonrpsee::core::client::SubscriptionKind;
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{core::client::SubscriptionKind, server::ServerBuilder, RpcModule};
 
 	init_logger();
 
@@ -945,16 +950,17 @@ async fn http_cors_preflight_works() {
 	let allow_methods = comma_separated_header_values(preflight_headers, "access-control-allow-methods");
 	let allow_headers = comma_separated_header_values(preflight_headers, "access-control-allow-headers");
 
-	// We expect the preflight response to tell us that our origin, methods and headers are all OK to use.
-	// If they aren't, the browser will not make the actual request. Note that if these `access-control-*`
-	// headers aren't return, the default is that the origin/method/headers are not allowed, I think.
+	// We expect the preflight response to tell us that our origin, methods and headers are all OK to
+	// use. If they aren't, the browser will not make the actual request. Note that if these
+	// `access-control-*` headers aren't return, the default is that the origin/method/headers are not
+	// allowed, I think.
 	assert!(preflight_res.status().is_success());
 	assert!(has(&allow_origins, "https://foo.com") || has(&allow_origins, "*"));
 	assert!(has(&allow_methods, "post") || has(&allow_methods, "*"));
 	assert!(has(&allow_headers, "content-type") || has(&allow_headers, "*"));
 
-	// Assuming that that was successful, we now make the actual request. No CORS headers are needed here
-	// as the browser checked their validity in the preflight request.
+	// Assuming that that was successful, we now make the actual request. No CORS headers are needed
+	// here as the browser checked their validity in the preflight request.
 	let req = Request::builder()
 		.method(Method::POST)
 		.uri(&uri)

@@ -27,12 +27,9 @@
 use std::fmt;
 
 use crate::params::{Id, TwoPointZero};
-use serde::de::Deserializer;
-use serde::ser::Serializer;
-use serde::{Deserialize, Serialize};
+use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::borrow::Borrow;
-use std::borrow::Cow as StdCow;
+use std::borrow::{Borrow, Cow as StdCow};
 use thiserror::Error;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
@@ -332,7 +329,8 @@ impl CallError {
 	}
 }
 
-/// Helper to get a `JSON-RPC` error object when the maximum number of subscriptions have been exceeded.
+/// Helper to get a `JSON-RPC` error object when the maximum number of subscriptions have been
+/// exceeded.
 pub fn reject_too_many_subscriptions(limit: u32) -> ErrorObject<'static> {
 	ErrorObjectOwned::owned(
 		TOO_MANY_SUBSCRIPTIONS_CODE,

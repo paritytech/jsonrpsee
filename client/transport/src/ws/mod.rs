@@ -26,18 +26,25 @@
 
 mod stream;
 
-use std::io;
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::time::Duration;
+use std::{
+	io,
+	net::{SocketAddr, ToSocketAddrs},
+	time::Duration,
+};
 
 use futures_util::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT};
-use jsonrpsee_core::TEN_MB_SIZE_BYTES;
-use jsonrpsee_core::{async_trait, Cow};
-use soketto::connection::Error::Utf8;
-use soketto::data::ByteSlice125;
-use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use soketto::{connection, Data, Incoming};
+use jsonrpsee_core::{
+	async_trait,
+	client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT},
+	Cow, TEN_MB_SIZE_BYTES,
+};
+use soketto::{
+	connection,
+	connection::Error::Utf8,
+	data::ByteSlice125,
+	handshake::client::{Client as WsHandshakeClient, ServerResponse},
+	Data, Incoming,
+};
 use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -492,7 +499,8 @@ pub struct Target {
 	sockaddrs: Vec<SocketAddr>,
 	/// The host name (domain or IP address).
 	host: String,
-	/// The Host request header specifies the host and port number of the server to which the request is being sent.
+	/// The Host request header specifies the host and port number of the server to which the
+	/// request is being sent.
 	host_header: String,
 	/// WebSocket stream mode, see [`Mode`] for further documentation.
 	_mode: Mode,

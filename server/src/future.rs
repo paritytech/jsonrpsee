@@ -26,15 +26,19 @@
 
 //! Utilities for handling async code.
 
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::{
+	future::Future,
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+};
 
 use futures_util::future::FutureExt;
 use jsonrpsee_core::Error;
-use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
-use tokio::time::{self, Duration, Interval};
+use tokio::{
+	sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError},
+	time::{self, Duration, Interval},
+};
 
 /// Polling for server stop monitor interval in milliseconds.
 const STOP_MONITOR_POLLING_INTERVAL: Duration = Duration::from_millis(1000);

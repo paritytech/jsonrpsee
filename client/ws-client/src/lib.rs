@@ -45,15 +45,17 @@ pub use http::{HeaderMap, HeaderValue};
 use std::time::Duration;
 
 use jsonrpsee_client_transport::ws::{InvalidUri, Uri, WsTransportClientBuilder};
-use jsonrpsee_core::client::{CertificateStore, ClientBuilder, IdKind};
-use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{
+	client::{CertificateStore, ClientBuilder, IdKind},
+	Error, TEN_MB_SIZE_BYTES,
+};
 
 /// Builder for [`WsClient`].
 ///
 /// # Examples
 ///
 /// ```no_run
-///
+/// 
 /// use jsonrpsee_ws_client::{WsClientBuilder, HeaderMap, HeaderValue};
 ///
 /// #[tokio::main]
@@ -71,7 +73,6 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 ///
 ///     // use client....
 /// }
-///
 /// ```
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder {

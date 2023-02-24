@@ -24,16 +24,19 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 use hyper::body::Bytes;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tower_http::LatencyUnit;
+use jsonrpsee::{
+	core::client::ClientT,
+	http_client::HttpClientBuilder,
+	rpc_params,
+	server::{RpcModule, ServerBuilder},
+};
+use tower_http::{
+	trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+	LatencyUnit,
+};
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
