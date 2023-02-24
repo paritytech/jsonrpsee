@@ -83,8 +83,8 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 					Ok(count) => count,
 					Err(e) => {
 						let _ = pending.reject(ErrorObjectOwned::from(e)).await;
-						return Ok(());
-					}
+						return Ok(())
+					},
 				};
 
 				let wrapping_counter = futures::stream::iter((count..).cycle());
@@ -147,7 +147,9 @@ pub async fn server() -> SocketAddr {
 		})
 		.unwrap();
 
-	module.register_async_method("err", |_, _| async { Err::<(), _>(Error::Custom("err".to_string())) }).unwrap();
+	module
+		.register_async_method("err", |_, _| async { Err::<(), _>(Error::Custom("err".to_string())) })
+		.unwrap();
 
 	let addr = server.local_addr().unwrap();
 
@@ -209,7 +211,9 @@ pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLay
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 	module.register_method("notif", |_, _| Ok("")).unwrap();
 
-	module.register_method("system_health", |_, _| Ok(serde_json::json!({ "health": true }))).unwrap();
+	module
+		.register_method("system_health", |_, _| Ok(serde_json::json!({ "health": true })))
+		.unwrap();
 
 	let handle = server.start(module).unwrap();
 	(addr, handle)

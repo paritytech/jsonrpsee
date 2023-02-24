@@ -64,8 +64,12 @@ async fn main() -> anyhow::Result<()> {
 	let sub1: Subscription<i32> = client1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 	let sub2: Subscription<i32> = client2.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 
-	let fut1 = sub1.take(NUM_SUBSCRIPTION_RESPONSES).for_each(|r| async move { tracing::info!("sub1 rx: {:?}", r) });
-	let fut2 = sub2.take(NUM_SUBSCRIPTION_RESPONSES).for_each(|r| async move { tracing::info!("sub2 rx: {:?}", r) });
+	let fut1 = sub1
+		.take(NUM_SUBSCRIPTION_RESPONSES)
+		.for_each(|r| async move { tracing::info!("sub1 rx: {:?}", r) });
+	let fut2 = sub2
+		.take(NUM_SUBSCRIPTION_RESPONSES)
+		.for_each(|r| async move { tracing::info!("sub2 rx: {:?}", r) });
 
 	future::join(fut1, fut2).await;
 
@@ -74,7 +78,10 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	// let's configure the server only hold 5 messages in memory.
-	let server = ServerBuilder::default().set_message_buffer_capacity(5).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default()
+		.set_message_buffer_capacity(5)
+		.build("127.0.0.1:0")
+		.await?;
 	let (tx, _rx) = broadcast::channel::<usize>(16);
 
 	let mut module = RpcModule::new(tx.clone());
@@ -122,16 +129,16 @@ async fn pipe_from_stream_with_bounded_buffer(
 				// and you might want to do something smarter if it's
 				// critical that "the most recent item" must be sent when it is produced.
 				if sink.send(notif).await.is_err() {
-					break;
+					break
 				}
 
 				closed = c;
-			}
+			},
 
 			// stream is closed or some error, just quit.
 			Either::Right((_, _)) => {
-				break;
-			}
+				break
+			},
 		}
 	}
 

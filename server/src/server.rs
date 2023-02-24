@@ -165,10 +165,10 @@ where
 					};
 					process_connection(&self.service_builder, &connection_guard, data, socket, &mut connections);
 					id = id.wrapping_add(1);
-				}
+				},
 				Err(MonitoredError::Selector(err)) => {
 					tracing::error!("Error while awaiting a new connection: {:?}", err);
-				}
+				},
 				Err(MonitoredError::Shutdown) => break,
 			}
 		}
@@ -614,7 +614,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 		if let Err(e) = self.inner.allow_hosts.verify(host) {
 			tracing::warn!("Denied request: {}", e);
-			return async { Ok(http::response::host_not_allowed()) }.boxed();
+			return async { Ok(http::response::host_not_allowed()) }.boxed()
 		}
 
 		let is_upgrade_request = is_upgrade_request(&request);
@@ -624,7 +624,9 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::WebSocket);
+					self.inner
+						.logger
+						.on_connect(self.inner.remote_addr, &request, TransportProtocol::WebSocket);
 					let data = self.inner.clone();
 
 					tokio::spawn(
@@ -633,8 +635,8 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 								Ok(u) => u,
 								Err(e) => {
 									tracing::warn!("Could not upgrade connection: {}", e);
-									return;
-								}
+									return
+								},
 							};
 
 							let stream = BufReader::new(BufWriter::new(upgraded.compat()));
@@ -648,11 +650,11 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 					);
 
 					response.map(|()| hyper::Body::empty())
-				}
+				},
 				Err(e) => {
 					tracing::error!("Could not upgrade connection: {}", e);
 					hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}")))
-				}
+				},
 			};
 
 			async { Ok(response) }.boxed()
@@ -669,7 +671,9 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 				remote_addr: self.inner.remote_addr,
 			};
 
-			self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::Http);
+			self.inner
+				.logger
+				.on_connect(self.inner.remote_addr, &request, TransportProtocol::Http);
 
 			Box::pin(http::handle_request(request, data).map(Ok))
 		} else {
@@ -705,7 +709,7 @@ impl<'a> Future for Monitored<'a, Incoming> {
 		let this = Pin::into_inner(self);
 
 		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
+			return Poll::Ready(Err(MonitoredError::Shutdown))
 		}
 
 		this.future.0.poll_accept(cx).map_err(MonitoredError::Selector)
@@ -722,7 +726,7 @@ where
 		let this = Pin::into_inner(self);
 
 		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
+			return Poll::Ready(Err(MonitoredError::Shutdown))
 		}
 
 		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
@@ -790,7 +794,7 @@ fn process_connection<'a, L: Logger, B, U>(
 {
 	if let Err(e) = socket.set_nodelay(true) {
 		tracing::warn!("Could not set NODELAY on socket: {:?}", e);
-		return;
+		return
 	}
 
 	let conn = match connection_guard.try_acquire() {
@@ -798,8 +802,8 @@ fn process_connection<'a, L: Logger, B, U>(
 		None => {
 			tracing::warn!("Too many connections. Please try again later.");
 			connections.add(http::reject_connection(socket).in_current_span().boxed());
-			return;
-		}
+			return
+		},
 	};
 
 	let max_conns = cfg.max_connections as usize;
@@ -843,7 +847,9 @@ where
 	<B as HttpBody>::Error: Send + Sync + StdError,
 	<B as HttpBody>::Data: Send,
 {
-	let conn = hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
+	let conn = hyper::server::conn::Http::new()
+		.serve_connection(socket, service)
+		.with_upgrades();
 
 	tokio::pin!(conn);
 

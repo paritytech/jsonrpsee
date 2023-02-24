@@ -252,7 +252,12 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 	let mut group = crit.benchmark_group(name);
 	group.bench_function("subscribe", |b| {
 		b.to_async(rt).iter_with_large_drop(|| async {
-			black_box(client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).await.unwrap());
+			black_box(
+				client
+					.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME)
+					.await
+					.unwrap(),
+			);
 		})
 	});
 	group.bench_function("subscribe_response", |b| {
@@ -262,7 +267,10 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 				// runtime context and simply calling `block_on` here will cause the code to panic.
 				tokio::task::block_in_place(|| {
 					tokio::runtime::Handle::current().block_on(async {
-						client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).await.unwrap()
+						client
+							.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME)
+							.await
+							.unwrap()
 					})
 				})
 			},
@@ -279,7 +287,10 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 		b.iter_with_setup(
 			|| {
 				rt.block_on(async {
-					client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).await.unwrap()
+					client
+						.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME)
+						.await
+						.unwrap()
 				})
 			},
 			|sub| {
@@ -310,7 +321,8 @@ fn batch_round_trip(
 
 		group.throughput(Throughput::Elements(*batch_size as u64));
 		group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
-			b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
+			b.to_async(rt)
+				.iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
 		});
 	}
 	group.finish();

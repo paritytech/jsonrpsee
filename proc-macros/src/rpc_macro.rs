@@ -69,7 +69,7 @@ impl RpcMethod {
 		};
 
 		if blocking && sig.asyncness.is_some() {
-			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
+			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"))
 		}
 
 		let params: Vec<_> = sig
@@ -215,31 +215,31 @@ impl RpcDescription {
 		let server_bounds = optional(server_bounds, Argument::group)?;
 
 		if !needs_server && !needs_client {
-			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
+			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"))
 		}
 
 		if client_bounds.is_some() && !needs_client {
 			return Err(syn::Error::new_spanned(
 				&item.ident,
 				"Attribute 'client' must be specified with 'client_bounds'",
-			));
+			))
 		}
 
 		if server_bounds.is_some() && !needs_server {
 			return Err(syn::Error::new_spanned(
 				&item.ident,
 				"Attribute 'server' must be specified with 'server_bounds'",
-			));
+			))
 		}
 
 		let jsonrpsee_client_path = crate::helpers::find_jsonrpsee_client_crate().ok();
 		let jsonrpsee_server_path = crate::helpers::find_jsonrpsee_server_crate().ok();
 
 		if needs_client && jsonrpsee_client_path.is_none() {
-			return Err(syn::Error::new_spanned(&item.ident, "Unable to locate 'jsonrpsee' client dependency"));
+			return Err(syn::Error::new_spanned(&item.ident, "Unable to locate 'jsonrpsee' client dependency"))
 		}
 		if needs_server && jsonrpsee_server_path.is_none() {
-			return Err(syn::Error::new_spanned(&item.ident, "Unable to locate 'jsonrpsee' server dependency"));
+			return Err(syn::Error::new_spanned(&item.ident, "Unable to locate 'jsonrpsee' server dependency"))
 		}
 
 		item.attrs.clear(); // Remove RPC attributes.
@@ -252,7 +252,7 @@ impl RpcDescription {
 		for entry in item.items.iter() {
 			if let syn::TraitItem::Method(method) = entry {
 				if method.sig.receiver().is_none() {
-					return Err(syn::Error::new_spanned(&method.sig, "First argument of the trait must be '&self'"));
+					return Err(syn::Error::new_spanned(&method.sig, "First argument of the trait must be '&self'"))
 				}
 
 				let mut is_method = false;
@@ -269,15 +269,15 @@ impl RpcDescription {
 						return Err(syn::Error::new_spanned(
 							method,
 							"Element cannot be both subscription and method at the same time",
-						));
+						))
 					}
 
 					if !matches!(method.sig.output, syn::ReturnType::Default) {
-						return Err(syn::Error::new_spanned(method, "Subscription methods must not return anything"));
+						return Err(syn::Error::new_spanned(method, "Subscription methods must not return anything"))
 					}
 
 					if method.sig.asyncness.is_none() {
-						return Err(syn::Error::new_spanned(method, "Subscription methods must be `async`"));
+						return Err(syn::Error::new_spanned(method, "Subscription methods must be `async`"))
 					}
 
 					let sub_data = RpcSubscription::from_item(attr.clone(), method.clone())?;
@@ -288,15 +288,15 @@ impl RpcDescription {
 					return Err(syn::Error::new_spanned(
 						method,
 						"Methods must have either 'method' or 'subscription' attribute",
-					));
+					))
 				}
 			} else {
-				return Err(syn::Error::new_spanned(entry, "Only methods allowed in RPC traits"));
+				return Err(syn::Error::new_spanned(entry, "Only methods allowed in RPC traits"))
 			}
 		}
 
 		if methods.is_empty() && subscriptions.is_empty() {
-			return Err(syn::Error::new_spanned(&item, "RPC cannot be empty"));
+			return Err(syn::Error::new_spanned(&item, "RPC cannot be empty"))
 		}
 
 		Ok(Self {
@@ -353,7 +353,9 @@ impl RpcDescription {
 fn parse_aliases(arg: Result<Argument, MissingArgument>) -> syn::Result<Vec<String>> {
 	let aliases = optional(arg, Argument::value::<Aliases>)?;
 
-	Ok(aliases.map(|a| a.list.into_iter().map(|lit| lit.value()).collect()).unwrap_or_default())
+	Ok(aliases
+		.map(|a| a.list.into_iter().map(|lit| lit.value()).collect())
+		.unwrap_or_default())
 }
 
 fn parse_subscribe(arg: Result<Argument, MissingArgument>) -> syn::Result<Option<String>> {

@@ -178,14 +178,14 @@ impl<'a> ParamsSequence<'a> {
 				self.0 = "";
 
 				tracing::trace!("[next_inner] Reached end of sequence.");
-				return None;
-			}
+				return None
+			},
 			b'[' | b',' => json = &json[1..],
 			_ => {
 				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {json:?}");
 				tracing::error!("[next_inner] {}", errmsg);
-				return Some(Err(CallError::InvalidParams(anyhow!(errmsg))));
-			}
+				return Some(Err(CallError::InvalidParams(anyhow!(errmsg))))
+			},
 		}
 
 		let mut iter = serde_json::Deserializer::from_str(json).into_iter::<T>();
@@ -195,7 +195,7 @@ impl<'a> ParamsSequence<'a> {
 				self.0 = json[iter.byte_offset()..].trim_start();
 
 				Some(Ok(value))
-			}
+			},
 			Err(e) => {
 				tracing::error!(
 					"[next_inner] Deserialization to {:?} failed. Error: {:?}, input JSON: {:?}",
@@ -206,7 +206,7 @@ impl<'a> ParamsSequence<'a> {
 				self.0 = "";
 
 				Some(Err(CallError::InvalidParams(e.into())))
-			}
+			},
 		}
 	}
 
@@ -304,13 +304,12 @@ impl<'a> TryFrom<JsonValue> for SubscriptionId<'a> {
 	fn try_from(json: JsonValue) -> Result<SubscriptionId<'a>, ()> {
 		match json {
 			JsonValue::String(s) => Ok(SubscriptionId::Str(s.into())),
-			JsonValue::Number(n) => {
+			JsonValue::Number(n) =>
 				if let Some(n) = n.as_u64() {
 					Ok(SubscriptionId::Num(n))
 				} else {
 					Err(())
-				}
-			}
+				},
 			_ => Err(()),
 		}
 	}
@@ -402,7 +401,7 @@ mod test {
 			Id::Str(ref cow) => {
 				assert!(cow.is_borrowed());
 				assert_eq!(cow, "2");
-			}
+			},
 			_ => panic!("Expected Id::Str"),
 		}
 

@@ -47,16 +47,16 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 		Ok(FoundCrate::Name(name)) => {
 			let ident = syn::Ident::new(&name, Span::call_site());
 			Ok(quote!(#ident))
-		}
+		},
 		Ok(FoundCrate::Itself) => panic!("Deriving RPC methods in any of the `jsonrpsee` crates is not supported"),
 		Err(_) => match (crate_name(http_name), crate_name(ws_name)) {
 			(Ok(FoundCrate::Name(name)), _) | (_, Ok(FoundCrate::Name(name))) => {
 				let ident = syn::Ident::new(&name, Span::call_site());
 				Ok(quote!(#ident))
-			}
+			},
 			(Ok(FoundCrate::Itself), _) | (_, Ok(FoundCrate::Itself)) => {
 				panic!("Deriving RPC methods in any of the `jsonrpsee` crates is not supported")
-			}
+			},
 			(_, Err(e)) => Err(syn::Error::new(Span::call_site(), &e)),
 		},
 	}
@@ -104,7 +104,7 @@ pub(crate) fn generate_where_clause(
 
 		bounds.extend(custom_bounds.iter().cloned());
 
-		return bounds;
+		return bounds
 	}
 
 	item_trait
@@ -170,7 +170,7 @@ pub(crate) fn is_option(ty: &syn::Type) -> bool {
 		while let Some(seg) = it.next() {
 			// The leaf segment should be `Option` with or without angled brackets.
 			if seg.ident == "Option" && it.peek().is_none() {
-				return true;
+				return true
 			}
 		}
 	}
@@ -184,8 +184,8 @@ pub(crate) fn is_option(ty: &syn::Type) -> bool {
 /// Thus, if the attribute starts with `doc` => it's regarded as a doc comment.
 pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
 	let docs = attrs.iter().filter(|attr| {
-		attr.path.is_ident("doc")
-			&& match attr.parse_meta() {
+		attr.path.is_ident("doc") &&
+			match attr.parse_meta() {
 				Ok(syn::Meta::NameValue(meta)) => matches!(&meta.lit, syn::Lit::Str(_)),
 				_ => false,
 			}

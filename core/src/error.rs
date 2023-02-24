@@ -134,12 +134,10 @@ impl From<Error> for ErrorObjectOwned {
 	fn from(err: Error) -> Self {
 		match err {
 			Error::Call(CallError::Custom(err)) => err,
-			Error::Call(CallError::InvalidParams(e)) => {
-				ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>)
-			}
-			Error::Call(CallError::Failed(e)) => {
-				ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>)
-			}
+			Error::Call(CallError::InvalidParams(e)) =>
+				ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>),
+			Error::Call(CallError::Failed(e)) =>
+				ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>),
 			_ => ErrorObject::owned(UNKNOWN_ERROR_CODE, err.to_string(), None::<()>),
 		}
 	}

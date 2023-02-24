@@ -281,7 +281,7 @@ impl RpcDescription {
 		sub: Option<proc_macro2::Ident>,
 	) -> (TokenStream2, TokenStream2) {
 		if params.is_empty() {
-			return (TokenStream2::default(), TokenStream2::default());
+			return (TokenStream2::default(), TokenStream2::default())
 		}
 
 		let params_fields_seq = params.iter().map(|(name, _)| name);
@@ -308,7 +308,7 @@ impl RpcDescription {
 							}
 						};
 					}
-				}
+				},
 				(true, None) => {
 					quote! {
 						let #name: #ty = match seq.optional_next() {
@@ -319,7 +319,7 @@ impl RpcDescription {
 							}
 						};
 					}
-				}
+				},
 				(false, Some(pending)) => {
 					quote! {
 						let #name: #ty = match seq.next() {
@@ -334,7 +334,7 @@ impl RpcDescription {
 							}
 						};
 					}
-				}
+				},
 				(false, None) => {
 					quote! {
 						let #name: #ty = match seq.next() {
@@ -345,7 +345,7 @@ impl RpcDescription {
 							}
 						};
 					}
-				}
+				},
 			});
 
 			quote! {

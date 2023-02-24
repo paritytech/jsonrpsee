@@ -359,7 +359,12 @@ async fn single_method_send_binary() {
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-	let response = client.send_request_binary(req.as_bytes()).with_default_timeout().await.unwrap().unwrap();
+	let response = client
+		.send_request_binary(req.as_bytes())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
 
@@ -440,7 +445,12 @@ async fn parse_error_request_should_not_close_connection() {
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let invalid_request = r#"{"jsonrpc":"2.0","method":"bar","params":[1,"id":99}"#;
-	let response1 = client.send_request_text(invalid_request).with_default_timeout().await.unwrap().unwrap();
+	let response1 = client
+		.send_request_text(invalid_request)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response1, parse_error(Id::Null));
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
 	let response2 = client.send_request_text(request).with_default_timeout().await.unwrap().unwrap();
@@ -529,8 +539,12 @@ async fn unsubscribe_wrong_sub_id_type() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-	let unsub: bool =
-		deser_call(client.send_request_text(call("unsubscribe_hello", vec![13.99_f64], Id::Num(0))).await.unwrap());
+	let unsub: bool = deser_call(
+		client
+			.send_request_text(call("unsubscribe_hello", vec![13.99_f64], Id::Num(0)))
+			.await
+			.unwrap(),
+	);
 	assert!(!unsub);
 }
 
@@ -571,9 +585,15 @@ async fn custom_subscription_id_works() {
 
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-	let sub = client.send_request_text(call("subscribe_hello", Vec::<()>::new(), Id::Num(0))).await.unwrap();
+	let sub = client
+		.send_request_text(call("subscribe_hello", Vec::<()>::new(), Id::Num(0)))
+		.await
+		.unwrap();
 	assert_eq!(&sub, r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":0}"#);
-	let unsub = client.send_request_text(call("unsubscribe_hello", vec!["0xdeadbeef"], Id::Num(1))).await.unwrap();
+	let unsub = client
+		.send_request_text(call("unsubscribe_hello", vec!["0xdeadbeef"], Id::Num(1)))
+		.await
+		.unwrap();
 	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 }
 
@@ -652,7 +672,12 @@ async fn batch_with_mixed_calls() {
 			{"jsonrpc": "2.0", "method": "foo.get", "params": {"name": "myself"}, "id": "5"}
 		]"#;
 	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":"5"}]"#;
-	let response = client.send_request_text(req.to_string()).with_default_timeout().await.unwrap().unwrap();
+	let response = client
+		.send_request_text(req.to_string())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response, res);
 }
 
@@ -668,7 +693,12 @@ async fn batch_notif_without_params_works() {
 			{"jsonrpc": "2.0", "method": "add"}
 		]"#;
 	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"}]"#;
-	let response = client.send_request_text(req.to_string()).with_default_timeout().await.unwrap().unwrap();
+	let response = client
+		.send_request_text(req.to_string())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response, res);
 }
 
@@ -755,11 +785,11 @@ async fn ws_server_backpressure_works() {
 			match sub_notif.params.result {
 				1 if seen_backpressure_item => {
 					seen_item_after_backpressure = true;
-					break;
-				}
+					break
+				},
 				2 => {
 					seen_backpressure_item = true;
-				}
+				},
 				_ => (),
 			}
 		}
@@ -776,5 +806,9 @@ async fn notif_is_ignored() {
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	// This call should not be answered and a timeout is regarded as "not answered"
-	assert!(client.send_request_text(r#"{"jsonrpc":"2.0","method":"bar"}"#).with_default_timeout().await.is_err());
+	assert!(client
+		.send_request_text(r#"{"jsonrpc":"2.0","method":"bar"}"#)
+		.with_default_timeout()
+		.await
+		.is_err());
 }

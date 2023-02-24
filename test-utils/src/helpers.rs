@@ -51,7 +51,12 @@ pub fn to_ws_uri_string(addr: SocketAddr) -> String {
 /// Converts a sockaddress to a HTTP URI.
 pub fn to_http_uri(sockaddr: SocketAddr) -> Uri {
 	let s = sockaddr.to_string();
-	Uri::builder().scheme("http").authority(s.as_str()).path_and_query("/").build().unwrap()
+	Uri::builder()
+		.scheme("http")
+		.authority(s.as_str())
+		.path_and_query("/")
+		.build()
+		.unwrap()
 }
 
 pub fn ok_response(result: Value, id: Id) -> String {

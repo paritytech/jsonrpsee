@@ -60,10 +60,14 @@ async fn ws_subscription_works() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut hello_sub: Subscription<String> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-	let mut foo_sub: Subscription<u64> =
-		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
+	let mut hello_sub: Subscription<String> = client
+		.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+		.await
+		.unwrap();
+	let mut foo_sub: Subscription<u64> = client
+		.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo")
+		.await
+		.unwrap();
 
 	for _ in 0..10 {
 		let hello = hello_sub.next().await.unwrap().unwrap();
@@ -79,10 +83,16 @@ async fn ws_unsubscription_works() {
 
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
-	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
+	let client = WsClientBuilder::default()
+		.max_concurrent_requests(1)
+		.build(&server_url)
+		.await
+		.unwrap();
 
-	let mut sub: Subscription<usize> =
-		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
+	let mut sub: Subscription<usize> = client
+		.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo")
+		.await
+		.unwrap();
 
 	// It's technically possible to have race-conditions between the notifications and the unsubscribe
 	// message. So let's wait for the first notification and then unsubscribe.
@@ -98,7 +108,7 @@ async fn ws_unsubscription_works() {
 		let res: Result<String, _> = client.request("say_hello", rpc_params![]).await;
 		if res.is_ok() {
 			success = true;
-			break;
+			break
 		}
 		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 	}
@@ -113,8 +123,10 @@ async fn ws_subscription_with_input_works() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut add_one: Subscription<u64> =
-		client.subscribe("subscribe_add_one", rpc_params![1], "unsubscribe_add_one").await.unwrap();
+	let mut add_one: Subscription<u64> = client
+		.subscribe("subscribe_add_one", rpc_params![1], "unsubscribe_add_one")
+		.await
+		.unwrap();
 
 	for i in 2..4 {
 		let next = add_one.next().await.unwrap().unwrap();
@@ -139,7 +151,11 @@ async fn ws_method_call_str_id_works() {
 
 	let server_addr = server().await;
 	let server_url = format!("ws://{}", server_addr);
-	let client = WsClientBuilder::default().id_format(IdKind::String).build(&server_url).await.unwrap();
+	let client = WsClientBuilder::default()
+		.id_format(IdKind::String)
+		.build(&server_url)
+		.await
+		.unwrap();
 	let response: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "hello");
 }
@@ -193,10 +209,14 @@ async fn ws_subscription_several_clients() {
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
 		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-		let hello_sub: Subscription<JsonValue> =
-			client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-		let foo_sub: Subscription<JsonValue> =
-			client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
+		let hello_sub: Subscription<JsonValue> = client
+			.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+			.await
+			.unwrap();
+		let foo_sub: Subscription<JsonValue> = client
+			.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo")
+			.await
+			.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
 }
@@ -215,10 +235,14 @@ async fn ws_subscription_several_clients_with_drop() {
 			.build(&server_url)
 			.await
 			.unwrap();
-		let hello_sub: Subscription<String> =
-			client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-		let foo_sub: Subscription<u64> =
-			client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
+		let hello_sub: Subscription<String> = client
+			.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+			.await
+			.unwrap();
+		let foo_sub: Subscription<u64> = client
+			.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo")
+			.await
+			.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
 
@@ -260,9 +284,15 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let client = WsClientBuilder::default().max_buffer_capacity_per_subscription(4).build(&server_url).await.unwrap();
-	let mut hello_sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+	let client = WsClientBuilder::default()
+		.max_buffer_capacity_per_subscription(4)
+		.build(&server_url)
+		.await
+		.unwrap();
+	let mut hello_sub: Subscription<JsonValue> = client
+		.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+		.await
+		.unwrap();
 
 	// don't poll the subscription stream for 2 seconds, should be full now.
 	tokio::time::sleep(Duration::from_secs(2)).await;
@@ -278,8 +308,10 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let _hello_req: JsonValue = client.request("say_hello", rpc_params![]).await.unwrap();
 
 	// The same subscription should be possible to register again.
-	let mut other_sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+	let mut other_sub: Subscription<JsonValue> = client
+		.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+		.await
+		.unwrap();
 
 	other_sub.next().await.unwrap().unwrap();
 }
@@ -290,7 +322,13 @@ async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 
 	let server_addr = server().await;
 	let server_url = format!("ws://{}", server_addr);
-	let client = Arc::new(WsClientBuilder::default().max_concurrent_requests(2).build(&server_url).await.unwrap());
+	let client = Arc::new(
+		WsClientBuilder::default()
+			.max_concurrent_requests(2)
+			.build(&server_url)
+			.await
+			.unwrap(),
+	);
 
 	let mut requests = Vec::new();
 
@@ -310,7 +348,10 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 
 	let server_addr = server().await;
 	let server_url = format!("http://{}", server_addr);
-	let client = HttpClientBuilder::default().max_concurrent_requests(2).build(&server_url).unwrap();
+	let client = HttpClientBuilder::default()
+		.max_concurrent_requests(2)
+		.build(&server_url)
+		.unwrap();
 	let client = Arc::new(client);
 
 	let mut requests = Vec::new();
@@ -329,7 +370,9 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 async fn https_works() {
 	init_logger();
 
-	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io:443").unwrap();
+	let client = HttpClientBuilder::default()
+		.build("https://kusama-rpc.polkadot.io:443")
+		.unwrap();
 	let response: String = client.request("system_chain", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
@@ -338,7 +381,10 @@ async fn https_works() {
 async fn wss_works() {
 	init_logger();
 
-	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io:443").await.unwrap();
+	let client = WsClientBuilder::default()
+		.build("wss://kusama-rpc.polkadot.io:443")
+		.await
+		.unwrap();
 	let response: String = client.request("system_chain", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
@@ -366,13 +412,21 @@ async fn ws_unsubscribe_releases_request_slots() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
+	let client = WsClientBuilder::default()
+		.max_concurrent_requests(1)
+		.build(&server_url)
+		.await
+		.unwrap();
 
-	let sub1: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+	let sub1: Subscription<JsonValue> = client
+		.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+		.await
+		.unwrap();
 	drop(sub1);
-	let _: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+	let _: Subscription<JsonValue> = client
+		.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+		.await
+		.unwrap();
 }
 
 #[tokio::test]
@@ -384,8 +438,10 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<String> =
-		client.subscribe("subscribe_noop", rpc_params![], "unsubscribe_noop").await.unwrap();
+	let mut sub: Subscription<String> = client
+		.subscribe("subscribe_noop", rpc_params![], "unsubscribe_noop")
+		.await
+		.unwrap();
 
 	assert!(sub.next().await.is_none());
 }
@@ -399,8 +455,10 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<String> =
-		c1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+	let mut sub: Subscription<String> = c1
+		.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+		.await
+		.unwrap();
 
 	assert!(matches!(sub.next().await, Some(Ok(_))));
 
@@ -461,8 +519,10 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<usize> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+	let mut sub: Subscription<usize> = client
+		.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+		.await
+		.unwrap();
 
 	let res = sub.next().await.unwrap().unwrap();
 
@@ -492,7 +552,10 @@ async fn ws_server_stop_subscription_when_dropped() {
 	let _handle = server.start(module).unwrap();
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	assert!(client.subscribe::<String, ArrayParams>("subscribe_nop", rpc_params![], "unsubscribe_nop").await.is_err());
+	assert!(client
+		.subscribe::<String, ArrayParams>("subscribe_nop", rpc_params![], "unsubscribe_nop")
+		.await
+		.is_err());
 }
 
 #[tokio::test]
@@ -604,10 +667,14 @@ async fn ws_server_subscribe_with_stream() {
 	let server_url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub1: Subscription<usize> =
-		client.subscribe("subscribe_5_ints", rpc_params![], "unsubscribe_5_ints").await.unwrap();
-	let mut sub2: Subscription<usize> =
-		client.subscribe("subscribe_5_ints", rpc_params![], "unsubscribe_5_ints").await.unwrap();
+	let mut sub1: Subscription<usize> = client
+		.subscribe("subscribe_5_ints", rpc_params![], "unsubscribe_5_ints")
+		.await
+		.unwrap();
+	let mut sub2: Subscription<usize> = client
+		.subscribe("subscribe_5_ints", rpc_params![], "unsubscribe_5_ints")
+		.await
+		.unwrap();
 
 	let (r1, r2) = futures::future::try_join(
 		sub1.by_ref().take(2).try_collect::<Vec<_>>(),
@@ -640,7 +707,10 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 
 	for _ in 0..10 {
 		subs.push(
-			client.subscribe::<i32, ArrayParams>("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap(),
+			client
+				.subscribe::<i32, ArrayParams>("subscribe_sleep", rpc_params![], "unsubscribe_sleep")
+				.await
+				.unwrap(),
 		)
 	}
 
@@ -743,7 +813,11 @@ async fn ws_server_limit_subs_per_conn_works() {
 
 	init_logger();
 
-	let server = ServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.max_subscriptions_per_connection(10)
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());
@@ -777,8 +851,12 @@ async fn ws_server_limit_subs_per_conn_works() {
 		);
 	}
 
-	let err1 = c1.subscribe::<usize, ArrayParams>("subscribe_forever", rpc_params![], "unsubscribe_forever").await;
-	let err2 = c1.subscribe::<usize, ArrayParams>("subscribe_forever", rpc_params![], "unsubscribe_forever").await;
+	let err1 = c1
+		.subscribe::<usize, ArrayParams>("subscribe_forever", rpc_params![], "unsubscribe_forever")
+		.await;
+	let err2 = c1
+		.subscribe::<usize, ArrayParams>("subscribe_forever", rpc_params![], "unsubscribe_forever")
+		.await;
 
 	let data = "\"Exceeded max limit of 10\"";
 
@@ -797,7 +875,11 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 	init_logger();
 
-	let server = ServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.max_subscriptions_per_connection(10)
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());
@@ -1010,7 +1092,11 @@ async fn http_health_api_works() {
 	let http_client = Client::new();
 	let uri = format!("http://{}/health", server_addr);
 
-	let req = Request::builder().method("GET").uri(&uri).body(Body::empty()).expect("request builder");
+	let req = Request::builder()
+		.method("GET")
+		.uri(&uri)
+		.body(Body::empty())
+		.expect("request builder");
 	let res = http_client.request(req).await.unwrap();
 
 	assert!(res.status().is_success());
@@ -1028,7 +1114,11 @@ async fn ws_host_filtering_wildcard_works() {
 
 	let acl = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
 
-	let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.set_host_filtering(acl)
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -1049,7 +1139,11 @@ async fn http_host_filtering_wildcard_works() {
 
 	let allowed_hosts = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
 
-	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.set_host_filtering(allowed_hosts)
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -1070,7 +1164,11 @@ async fn deny_invalid_host() {
 
 	let allowed_hosts = AllowHosts::Only(vec!["http://example.com".into()]);
 
-	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.set_host_filtering(allowed_hosts)
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

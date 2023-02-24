@@ -46,7 +46,7 @@ pub fn rx_log_from_bytes(bytes: &[u8], max: u32) {
 /// Find the next char boundary to truncate at.
 fn truncate_at_char_boundary(s: &str, max: usize) -> &str {
 	if s.len() < max {
-		return s;
+		return s
 	}
 
 	match s.char_indices().nth(max) {

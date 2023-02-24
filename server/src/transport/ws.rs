@@ -108,7 +108,7 @@ where
 		let this = Pin::into_inner(self);
 
 		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
+			return Poll::Ready(Err(MonitoredError::Shutdown))
 		}
 
 		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
@@ -151,7 +151,7 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 
 		while let Some(response) = pending_calls.next().await {
 			if let Err(too_large) = batch_response.append(&response) {
-				return Some(too_large);
+				return Some(too_large)
 			}
 		}
 
@@ -216,12 +216,12 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 			logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::WebSocket);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
 			CallOrSubscription::Call(response)
-		}
+		},
 		Some((name, method)) => match method {
 			MethodCallback::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
 				CallOrSubscription::Call((callback)(id, params, max_response_body_size as usize))
-			}
+			},
 			MethodCallback::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::WebSocket);
 
@@ -230,7 +230,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 
 				let response = (callback)(id, params, conn_id, max_response_body_size as usize).await;
 				CallOrSubscription::Call(response)
-			}
+			},
 			MethodCallback::Subscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 
@@ -241,21 +241,21 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 						Err(id) => {
 							let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
 							CallOrSubscription::Call(response)
-						}
+						},
 					}
 				} else {
 					let response =
 						MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
 					CallOrSubscription::Call(response)
 				}
-			}
+			},
 			MethodCallback::Unsubscription(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription, TransportProtocol::WebSocket);
 
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);
 				CallOrSubscription::Call(result)
-			}
+			},
 		},
 	};
 
@@ -314,7 +314,10 @@ pub(crate) async fn background_task<L: Logger>(
 		//
 		// This will force the client to read socket on the other side
 		// otherwise the socket will not be read again.
-		let sink_permit = match method_executors.select_with(Monitored::new(sink_permit_fut, &stop_handle)).await {
+		let sink_permit = match method_executors
+			.select_with(Monitored::new(sink_permit_fut, &stop_handle))
+			.await
+		{
 			Ok(permit) => permit,
 			Err(_) => break Ok(()),
 		};
@@ -330,8 +333,8 @@ pub(crate) async fn background_task<L: Logger>(
 						soketto::Incoming::Closed(_) => {
 							// The closing reason is already logged by `soketto` trace log level.
 							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
-							break Err(SokettoError::Closed);
-						}
+							break Err(SokettoError::Closed)
+						},
 					}
 				}
 			};
@@ -342,8 +345,8 @@ pub(crate) async fn background_task<L: Logger>(
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
 						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
-						break Ok(());
-					}
+						break Ok(())
+					},
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
 						tracing::debug!(
 							"WS transport error: request length: {} exceeded max limit: {} bytes",
@@ -352,17 +355,17 @@ pub(crate) async fn background_task<L: Logger>(
 						);
 						sink_permit.send_error(Id::Null, reject_too_big_request(max_request_body_size));
 
-						continue;
-					}
+						continue
+					},
 
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
 						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn_id);
-						break Err(err.into());
-					}
+						break Err(err.into())
+					},
 					MonitoredError::Shutdown => {
-						break Ok(());
-					}
+						break Ok(())
+					},
 				};
 			};
 		};
@@ -395,19 +398,19 @@ pub(crate) async fn background_task<L: Logger>(
 						match rp {
 							CallOrSubscription::Subscription(r) => {
 								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-							}
+							},
 
 							CallOrSubscription::Call(r) => {
 								logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 								sink_permit.send_raw(r.result);
-							}
+							},
 						}
 					};
 				}
 				.boxed();
 
 				method_executors.add(fut);
-			}
+			},
 			Some(b'[') if !batch_requests_supported => {
 				let response = MethodResponse::error(
 					Id::Null,
@@ -415,7 +418,7 @@ pub(crate) async fn background_task<L: Logger>(
 				);
 				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
 				sink_permit.send_raw(response.result);
-			}
+			},
 			Some(b'[') => {
 				// Make sure the following variables are not moved into async closure below.
 				let methods = &methods;
@@ -449,10 +452,10 @@ pub(crate) async fn background_task<L: Logger>(
 				};
 
 				method_executors.add(Box::pin(fut));
-			}
+			},
 			_ => {
 				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
-			}
+			},
 		}
 	};
 
@@ -498,32 +501,32 @@ async fn send_task(
 				// If websocket message send fail then terminate the connection.
 				if let Err(err) = send_message(&mut ws_sender, response).await {
 					tracing::debug!("WS transport error: send failed: {}", err);
-					break;
+					break
 				}
 
 				rx_item = rx.next();
 				futs = not_ready;
-			}
+			},
 
 			// Nothing else to receive.
 			Either::Left((None, _)) => {
-				break;
-			}
+				break
+			},
 
 			// Handle timer intervals.
 			Either::Right((Either::Left((_, stop)), next_rx)) => {
 				if let Err(err) = send_ping(&mut ws_sender).await {
 					tracing::debug!("WS transport error: send ping failed: {}", err);
-					break;
+					break
 				}
 				rx_item = next_rx;
 				futs = future::select(ping_interval.next(), stop);
-			}
+			},
 
 			// Server is stopped or closed
 			Either::Right((Either::Right(_), _)) => {
-				break;
-			}
+				break
+			},
 		}
 	}
 

@@ -87,14 +87,18 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
 		.timeout(Duration::from_secs(2));
 
-	let server =
-		ServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let server = ServerBuilder::new()
+		.set_middleware(service_builder)
+		.build("127.0.0.1:0".parse::<SocketAddr>()?)
+		.await?;
 
 	let addr = server.local_addr()?;
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
-	module.register_method("system_health", |_, _| Ok(serde_json::json!({ "health": true }))).unwrap();
+	module
+		.register_method("system_health", |_, _| Ok(serde_json::json!({ "health": true })))
+		.unwrap();
 
 	let handle = server.start(module)?;
 

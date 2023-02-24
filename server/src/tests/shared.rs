@@ -45,8 +45,13 @@ async fn run_forever() {
 async fn http_only_works() {
 	use crate::{RpcModule, ServerBuilder};
 
-	let server =
-		ServerBuilder::default().http_only().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let server = ServerBuilder::default()
+		.http_only()
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _| {
@@ -59,11 +64,19 @@ async fn http_only_works() {
 	let _server_handle = server.start(module).unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
-	let response = http_request(req.into(), to_http_uri(addr)).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), to_http_uri(addr))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, ok_response("hello".to_string().into(), Id::Num(1)));
 
-	let err = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap_err();
+	let err = WebSocketTestClient::new(addr)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert!(matches!(err, WebSocketTestError::RejectedWithStatusCode(code) if code == 403));
 }
 
@@ -71,7 +84,13 @@ async fn http_only_works() {
 async fn ws_only_works() {
 	use crate::{RpcModule, ServerBuilder};
 
-	let server = ServerBuilder::default().ws_only().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let server = ServerBuilder::default()
+		.ws_only()
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _| {
@@ -84,7 +103,11 @@ async fn ws_only_works() {
 	let _server_handle = server.start(module).unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
-	let response = http_request(req.into(), to_http_uri(addr)).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), to_http_uri(addr))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::FORBIDDEN);
 
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();

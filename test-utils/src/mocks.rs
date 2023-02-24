@@ -107,11 +107,10 @@ impl WebSocketTestClient {
 			Ok(handshake::ServerResponse::Accepted { .. }) => {
 				let (tx, rx) = client.into_builder().finish();
 				Ok(Self { tx, rx })
-			}
+			},
 			Ok(handshake::ServerResponse::Redirect { .. }) => Err(WebSocketTestError::Redirect),
-			Ok(handshake::ServerResponse::Rejected { status_code }) => {
-				Err(WebSocketTestError::RejectedWithStatusCode(status_code))
-			}
+			Ok(handshake::ServerResponse::Rejected { status_code }) =>
+				Err(WebSocketTestError::RejectedWithStatusCode(status_code)),
 			Err(err) => Err(WebSocketTestError::Soketto(err)),
 		}
 	}
@@ -258,7 +257,7 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 	let accept = server.send_response(&Response::Accept { key, protocol: None }).await;
 
 	if accept.is_err() {
-		return;
+		return
 	}
 
 	let (mut sender, receiver) = server.into_builder().finish();
@@ -364,12 +363,15 @@ async fn handler(
 					.body(Body::empty())
 					.unwrap();
 				Ok(response)
-			}
+			},
 			"/myblock/one" => {
-				let response =
-					hyper::Response::builder().status(301).header("Location", "two").body(Body::empty()).unwrap();
+				let response = hyper::Response::builder()
+					.status(301)
+					.header("Location", "two")
+					.body(Body::empty())
+					.unwrap();
 				Ok(response)
-			}
+			},
 			_ => {
 				let response = hyper::Response::builder()
 					.status(301)
@@ -377,7 +379,7 @@ async fn handler(
 					.body(Body::empty())
 					.unwrap();
 				Ok(response)
-			}
+			},
 		}
 	} else {
 		panic!("expect upgrade to WS");

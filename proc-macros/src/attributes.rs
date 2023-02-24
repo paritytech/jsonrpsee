@@ -72,7 +72,7 @@ impl Parse for Argument {
 		// inside angle brackets.
 		let tokens = iter::from_fn(move || {
 			if scope == 0 && input.peek(Token![,]) {
-				return None;
+				return None
 			}
 
 			if input.peek(Token![<]) {
@@ -152,7 +152,7 @@ impl AttributeMeta {
 				// If this position in the `result` array already contains an argument,
 				// it means we got a duplicate definition
 				if let Ok(old) = &result[idx] {
-					return Err(Error::new(old.label.span(), format!("Duplicate argument `{}`", old.label)));
+					return Err(Error::new(old.label.span(), format!("Duplicate argument `{}`", old.label)))
 				}
 
 				result[idx] = Ok(argument);
@@ -163,7 +163,7 @@ impl AttributeMeta {
 				err_str.extend(allowed[1..].iter().flat_map(|&label| ["`, `", label]));
 				err_str.push('`');
 
-				return Err(Error::new(argument.label.span(), err_str));
+				return Err(Error::new(argument.label.span(), err_str))
 			}
 		}
 

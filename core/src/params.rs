@@ -110,7 +110,7 @@ mod params_builder {
 		/// Finish the building process and return a JSON compatible string.
 		pub(crate) fn build(mut self) -> Option<String> {
 			if self.bytes.is_empty() {
-				return None;
+				return None
 			}
 
 			let idx = self.bytes.len() - 1;

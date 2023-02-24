@@ -60,8 +60,9 @@ async fn main() -> anyhow::Result<()> {
 	tracing::info!("subscription with one param: {:?}", sub_params_one.next().await);
 
 	// Subscription with multiple parameters
-	let mut sub_params_two: Subscription<String> =
-		client.subscribe("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
+	let mut sub_params_two: Subscription<String> = client
+		.subscribe("sub_params_two", rpc_params![2, 5], "unsub_params_two")
+		.await?;
 	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
@@ -69,7 +70,10 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-	let server = ServerBuilder::default().set_message_buffer_capacity(10).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default()
+		.set_message_buffer_capacity(10)
+		.build("127.0.0.1:0")
+		.await?;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| async move {
@@ -78,8 +82,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 				Ok(p) => p,
 				Err(e) => {
 					let _ = pending.reject(ErrorObjectOwned::from(e)).await;
-					return Ok(());
-				}
+					return Ok(())
+				},
 			};
 
 			let item = LETTERS.chars().nth(idx);

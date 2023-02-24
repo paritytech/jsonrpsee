@@ -270,7 +270,10 @@ async fn macro_optional_param_parsing() {
 	assert_eq!(&res, "Called with: 42, Some(70), None");
 
 	// Optional param using `null`
-	let res: String = module.call("foo_optional_params", [json!(42_u64), json!(null), json!(70_u64)]).await.unwrap();
+	let res: String = module
+		.call("foo_optional_params", [json!(42_u64), json!(null), json!(70_u64)])
+		.await
+		.unwrap();
 
 	assert_eq!(&res, "Called with: 42, None, Some(70)");
 
@@ -367,7 +370,10 @@ async fn calls_with_bad_params() {
 	);
 
 	// Call with faulty params as array.
-	let err: Error = client.request::<String, ArrayParams>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
+	let err: Error = client
+		.request::<String, ArrayParams>("foo_foo", rpc_params!["faulty", "ok"])
+		.await
+		.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"faulty\", expected u8") && err.code() == ErrorCode::InvalidParams.code())
 	);
@@ -376,8 +382,10 @@ async fn calls_with_bad_params() {
 	let mut params = ObjectParams::new();
 	params.insert("val", "0x0").unwrap();
 
-	let err: Error =
-		client.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
+	let err: Error = client
+		.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo")
+		.await
+		.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);

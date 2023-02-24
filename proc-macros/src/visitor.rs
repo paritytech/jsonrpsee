@@ -139,13 +139,12 @@ impl FindSubscriptionParams {
 					self.visit_type(&arg.ty);
 				}
 				self.visit_return_type(&ty.output);
-			}
+			},
 			syn::Type::Group(ty) => self.visit_type(&ty.elem),
-			syn::Type::ImplTrait(ty) => {
+			syn::Type::ImplTrait(ty) =>
 				for bound in &ty.bounds {
 					self.visit_type_param_bound(bound);
-				}
-			}
+				},
 			syn::Type::Macro(ty) => self.visit_macro(&ty.mac),
 			syn::Type::Paren(ty) => self.visit_type(&ty.elem),
 			syn::Type::Path(ty) => {
@@ -153,25 +152,23 @@ impl FindSubscriptionParams {
 					self.visit_type(&qself.ty);
 				}
 				self.visit_path(&ty.path);
-			}
+			},
 			syn::Type::Ptr(ty) => self.visit_type(&ty.elem),
 			syn::Type::Reference(ty) => self.visit_type(&ty.elem),
 			syn::Type::Slice(ty) => self.visit_type(&ty.elem),
-			syn::Type::TraitObject(ty) => {
+			syn::Type::TraitObject(ty) =>
 				for bound in &ty.bounds {
 					self.visit_type_param_bound(bound);
-				}
-			}
-			syn::Type::Tuple(ty) => {
+				},
+			syn::Type::Tuple(ty) =>
 				for elem in &ty.elems {
 					self.visit_type(elem);
-				}
-			}
+				},
 
-			syn::Type::Infer(_) | syn::Type::Never(_) | syn::Type::Verbatim(_) => {}
+			syn::Type::Infer(_) | syn::Type::Never(_) | syn::Type::Verbatim(_) => {},
 
 			#[cfg_attr(all(test, exhaustive), deny(non_exhaustive_omitted_patterns))]
-			_ => {}
+			_ => {},
 		}
 	}
 
@@ -183,31 +180,30 @@ impl FindSubscriptionParams {
 	/// Traverse syntax tree.
 	fn visit_path_arguments(&mut self, arguments: &syn::PathArguments) {
 		match arguments {
-			syn::PathArguments::None => {}
-			syn::PathArguments::AngleBracketed(arguments) => {
+			syn::PathArguments::None => {},
+			syn::PathArguments::AngleBracketed(arguments) =>
 				for arg in &arguments.args {
 					match arg {
 						syn::GenericArgument::Type(arg) => self.visit_type(arg),
 						syn::GenericArgument::Binding(arg) => self.visit_type(&arg.ty),
-						syn::GenericArgument::Lifetime(_)
-						| syn::GenericArgument::Constraint(_)
-						| syn::GenericArgument::Const(_) => {}
+						syn::GenericArgument::Lifetime(_) |
+						syn::GenericArgument::Constraint(_) |
+						syn::GenericArgument::Const(_) => {},
 					}
-				}
-			}
+				},
 			syn::PathArguments::Parenthesized(arguments) => {
 				for argument in &arguments.inputs {
 					self.visit_type(argument);
 				}
 				self.visit_return_type(&arguments.output);
-			}
+			},
 		}
 	}
 
 	/// Traverse syntax tree.
 	fn visit_return_type(&mut self, return_type: &syn::ReturnType) {
 		match return_type {
-			syn::ReturnType::Default => {}
+			syn::ReturnType::Default => {},
 			syn::ReturnType::Type(_, output) => self.visit_type(output),
 		}
 	}
@@ -216,7 +212,7 @@ impl FindSubscriptionParams {
 	fn visit_type_param_bound(&mut self, bound: &syn::TypeParamBound) {
 		match bound {
 			syn::TypeParamBound::Trait(bound) => self.visit_path(&bound.path),
-			syn::TypeParamBound::Lifetime(_) => {}
+			syn::TypeParamBound::Lifetime(_) => {},
 		}
 	}
 

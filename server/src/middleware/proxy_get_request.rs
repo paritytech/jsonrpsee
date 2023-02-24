@@ -35,7 +35,7 @@ impl ProxyGetRequestLayer {
 	pub fn new(path: impl Into<String>, method: impl Into<String>) -> Result<Self, RpcError> {
 		let path = path.into();
 		if !path.starts_with('/') {
-			return Err(RpcError::Custom("ProxyGetRequestLayer path must start with `/`".to_string()));
+			return Err(RpcError::Custom("ProxyGetRequestLayer path must start with `/`".to_string()))
 		}
 
 		Ok(Self { path, method: method.into() })
@@ -76,7 +76,7 @@ impl<S> ProxyGetRequest<S> {
 	/// Fails if the path does not start with `/`.
 	pub fn new(inner: S, path: &str, method: &str) -> Result<Self, RpcError> {
 		if !path.starts_with('/') {
-			return Err(RpcError::Custom(format!("ProxyGetRequest path must start with `/`, got: {path}")));
+			return Err(RpcError::Custom(format!("ProxyGetRequest path must start with `/`, got: {path}")))
 		}
 
 		Ok(Self { inner, path: Arc::from(path), method: Arc::from(method) })
@@ -110,7 +110,8 @@ where
 			*req.uri_mut() = Uri::from_static("/");
 
 			// Requests must have the following headers:
-			req.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+			req.headers_mut()
+				.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 			req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
 
 			// Adjust the body to reflect the method call.
@@ -130,7 +131,7 @@ where
 
 			// Nothing to modify: return the response as is.
 			if !modify {
-				return Ok(res);
+				return Ok(res)
 			}
 
 			let body = res.into_body();

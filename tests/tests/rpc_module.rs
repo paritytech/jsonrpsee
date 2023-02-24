@@ -81,7 +81,9 @@ fn flatten_rpc_modules() {
 #[test]
 fn rpc_context_modules_can_register_subscriptions() {
 	let mut cxmodule = RpcModule::new(());
-	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| async { Ok(()) }).unwrap();
+	cxmodule
+		.register_subscription("hi", "hi", "goodbye", |_, _, _| async { Ok(()) })
+		.unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -208,17 +210,26 @@ async fn calling_method_without_server_using_proc_macro() {
 	assert!(!res);
 
 	// Call sync method with params
-	let res: String = module.call("rebel", (Gun { shoots: true }, HashMap::<u8, u8>::default())).await.unwrap();
+	let res: String = module
+		.call("rebel", (Gun { shoots: true }, HashMap::<u8, u8>::default()))
+		.await
+		.unwrap();
 	assert_eq!(&res, "0 Gun { shoots: true }");
 
 	// Call sync method with bad params
-	let err = module.call::<_, EmptyServerParams>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
+	let err = module
+		.call::<_, EmptyServerParams>("rebel", (Gun { shoots: true }, false))
+		.await
+		.unwrap_err();
 	assert!(matches!(err,
 		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected a map at line 1 column 5"
 	));
 
 	// Call async method with params and context
-	let result: String = module.call("revolution", (Beverage { ice: true }, vec![1, 2, 3])).await.unwrap();
+	let result: String = module
+		.call("revolution", (Beverage { ice: true }, vec![1, 2, 3]))
+		.await
+		.unwrap();
 	assert_eq!(&result, "drink: Beverage { ice: true }, phases: [1, 2, 3]");
 
 	// Call async method with option which is `Some`
@@ -287,7 +298,7 @@ async fn close_test_subscribing_without_server() {
 
 			match sink.send(msg).await {
 				Ok(_) => panic!("The sink should be closed"),
-				Err(DisconnectError(_)) => {}
+				Err(DisconnectError(_)) => {},
 			}
 			Ok(())
 		})
@@ -328,8 +339,8 @@ async fn subscribing_without_server_bad_params() {
 				Err(e) => {
 					let err: ErrorObjectOwned = e.into();
 					let _ = pending.reject(err).await;
-					return Err(SubscriptionCallbackError::None);
-				}
+					return Err(SubscriptionCallbackError::None)
+				},
 			};
 
 			let sink = pending.accept().await.unwrap();
@@ -340,7 +351,10 @@ async fn subscribing_without_server_bad_params() {
 		})
 		.unwrap();
 
-	let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
+	let sub = module
+		.subscribe_unbounded("my_sub", EmptyServerParams::new())
+		.await
+		.unwrap_err();
 
 	assert!(
 		matches!(sub, Error::Call(CallError::Custom(e)) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
@@ -419,7 +433,10 @@ async fn rejected_subscription_without_server() {
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
+	let sub_err = module
+		.subscribe_unbounded("my_sub", EmptyServerParams::new())
+		.await
+		.unwrap_err();
 	assert!(
 		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
 	);
@@ -438,7 +455,10 @@ async fn reject_works() {
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
+	let sub_err = module
+		.subscribe_unbounded("my_sub", EmptyServerParams::new())
+		.await
+		.unwrap_err();
 	assert!(
 		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
 	);
@@ -470,7 +490,7 @@ async fn bounded_subscription_works() {
 					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
 					Err(TrySendError::Full(m)) => {
 						buf.push_back(m);
-					}
+					},
 					Ok(_) => (),
 				}
 			}
@@ -484,7 +504,7 @@ async fn bounded_subscription_works() {
 					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
 					Err(TrySendError::Full(m)) => {
 						buf.push_front(m);
-					}
+					},
 					Ok(_) => (),
 				}
 

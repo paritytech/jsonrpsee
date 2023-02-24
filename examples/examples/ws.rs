@@ -34,7 +34,10 @@ async fn main() -> anyhow::Result<()> {
 	let filter = tracing_subscriber::EnvFilter::try_from_default_env()?
 		.add_directive("jsonrpsee[method_call{name = \"say_hello\"}]=trace".parse()?);
 
-	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(filter)
+		.finish()
+		.try_init()?;
 
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);

@@ -287,11 +287,11 @@ where
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => {
-				return Err(Error::RequestTimeout);
-			}
+				return Err(Error::RequestTimeout)
+			},
 			Ok(Err(e)) => {
-				return Err(Error::Transport(e.into()));
-			}
+				return Err(Error::Transport(e.into()))
+			},
 		};
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
@@ -300,8 +300,8 @@ where
 			Ok(response) => response,
 			Err(_) => {
 				let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-				return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
-			}
+				return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())))
+			},
 		};
 
 		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
@@ -333,7 +333,9 @@ where
 			});
 		}
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+		let fut = self
+			.transport
+			.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
 
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
@@ -357,16 +359,16 @@ where
 					let id = r.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
 					successful_calls += 1;
 					(id, Ok(r.result))
-				}
+				},
 				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
 					Ok(err) => {
 						let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
 						failed_calls += 1;
 						(id, Err(err.error_object().clone().into_owned()))
-					}
+					},
 					Err(_) => {
-						return Err(err);
-					}
+						return Err(err)
+					},
 				},
 			};
 
@@ -378,7 +380,7 @@ where
 			if let Some(elem) = maybe_elem {
 				*elem = res;
 			} else {
-				return Err(Error::InvalidRequestId);
+				return Err(Error::InvalidRequestId)
 			}
 		}
 

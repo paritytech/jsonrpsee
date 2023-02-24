@@ -27,7 +27,12 @@ pub(crate) async fn server() -> SocketAddr {
 ///
 /// Returns the address together with handle for the server.
 pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
-	let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let server = ServerBuilder::default()
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	module
@@ -70,7 +75,9 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 	module
 		.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams(anyhow!("buh!")).into()))
 		.unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
+	module
+		.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError)))
+		.unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
@@ -118,7 +125,12 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 
 /// Run server with user provided context.
 pub(crate) async fn server_with_context() -> SocketAddr {
-	let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let server = ServerBuilder::default()
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 
 	let ctx = TestContext;
 	let mut rpc_module = RpcModule::new(ctx);
@@ -161,7 +173,9 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 }
 
 pub(crate) fn init_logger() {
-	let _ = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env()).try_init();
+	let _ = FmtSubscriber::builder()
+		.with_env_filter(EnvFilter::from_default_env())
+		.try_init();
 }
 
 pub(crate) fn deser_call<T: DeserializeOwned>(raw: String) -> T {

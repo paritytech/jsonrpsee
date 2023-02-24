@@ -34,9 +34,9 @@ pub(crate) fn content_type_is_json(request: &hyper::Request<hyper::Body>) -> boo
 /// Returns true if the `content_type` header indicates a valid JSON message.
 pub(crate) fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 	content_type.and_then(|val| val.to_str().ok()).map_or(false, |content| {
-		content.eq_ignore_ascii_case("application/json")
-			|| content.eq_ignore_ascii_case("application/json; charset=utf-8")
-			|| content.eq_ignore_ascii_case("application/json;charset=utf-8")
+		content.eq_ignore_ascii_case("application/json") ||
+			content.eq_ignore_ascii_case("application/json; charset=utf-8") ||
+			content.eq_ignore_ascii_case("application/json;charset=utf-8")
 	})
 }
 
@@ -45,7 +45,9 @@ pub(crate) async fn reject_connection(socket: tokio::net::TcpStream) {
 		Ok(response::too_many_requests())
 	}
 
-	if let Err(e) = hyper::server::conn::Http::new().serve_connection(socket, hyper::service::service_fn(reject)).await
+	if let Err(e) = hyper::server::conn::Http::new()
+		.serve_connection(socket, hyper::service::service_fn(reject))
+		.await
 	{
 		tracing::warn!("Error when trying to deny connection: {:?}", e);
 	}
@@ -86,8 +88,8 @@ pub(crate) async fn process_validated_request<L: Logger>(
 		Err(GenericTransportError::Malformed) => return response::malformed(),
 		Err(GenericTransportError::Inner(e)) => {
 			tracing::error!("Internal error reading request body: {}", e);
-			return response::internal_error();
-		}
+			return response::internal_error()
+		},
 	};
 
 	// Single request or notification
@@ -181,7 +183,7 @@ where
 
 		while let Some(response) = pending_calls.next().await {
 			if let Err(too_large) = batch_response.append(&response) {
-				return too_large;
+				return too_large
 			}
 		}
 
@@ -227,12 +229,12 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 		None => {
 			logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::Http);
 			MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))
-		}
+		},
 		Some((name, method)) => match method {
 			MethodCallback::Sync(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::Http);
 				(callback)(id, params, max_response_body_size as usize)
-			}
+			},
 			MethodCallback::Async(callback) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::Http);
 
@@ -240,12 +242,12 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 				let params = params.into_owned();
 
 				(callback)(id, params, conn_id, max_response_body_size as usize).await
-			}
+			},
 			MethodCallback::Subscription(_) | MethodCallback::Unsubscription(_) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::Http);
 				tracing::error!("Subscriptions not supported on HTTP");
 				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
-			}
+			},
 		},
 	};
 
@@ -292,7 +294,7 @@ pub(crate) async fn handle_request<L: Logger>(
 
 	// Only the `POST` method is allowed.
 	let res = match *request.method() {
-		Method::POST if content_type_is_json(&request) => {
+		Method::POST if content_type_is_json(&request) =>
 			process_validated_request(ProcessValidatedRequest {
 				request,
 				methods,
@@ -303,8 +305,7 @@ pub(crate) async fn handle_request<L: Logger>(
 				logger: &logger,
 				request_start,
 			})
-			.await
-		}
+			.await,
 		// Error scenarios:
 		Method::POST => response::unsupported_content_type(),
 		_ => response::method_not_allowed(),

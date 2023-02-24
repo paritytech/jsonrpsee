@@ -48,9 +48,16 @@ impl RpcDescription {
 			quote! { #jsonrpsee::core::client::SubscriptionClientT }
 		};
 
-		let method_impls =
-			self.methods.iter().map(|method| self.render_method(method)).collect::<Result<Vec<_>, _>>()?;
-		let sub_impls = self.subscriptions.iter().map(|sub| self.render_sub(sub)).collect::<Result<Vec<_>, _>>()?;
+		let method_impls = self
+			.methods
+			.iter()
+			.map(|method| self.render_method(method))
+			.collect::<Result<Vec<_>, _>>()?;
+		let sub_impls = self
+			.subscriptions
+			.iter()
+			.map(|sub| self.render_sub(sub))
+			.collect::<Result<Vec<_>, _>>()?;
 
 		let async_trait = self.jrps_client_item(quote! { core::__reexports::async_trait });
 
@@ -90,7 +97,7 @@ impl RpcDescription {
 		if type_name.ident == "Result" {
 			// Result<T, E> should have 2 generic args.
 			if args.len() != 2 {
-				return quote_spanned!(args.span() => compile_error!("Result must be have two arguments"));
+				return quote_spanned!(args.span() => compile_error!("Result must be have two arguments"))
 			}
 
 			// Force the last argument to be `jsonrpsee::core::Error`:
@@ -101,7 +108,7 @@ impl RpcDescription {
 		} else if type_name.ident == "RpcResult" {
 			// RpcResult<T> (an alias we export) should have 1 generic arg.
 			if args.len() != 1 {
-				return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"));
+				return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"))
 			}
 			quote!(#ty)
 		} else {
@@ -199,7 +206,7 @@ impl RpcDescription {
 		if params.is_empty() {
 			return quote!({
 				#jsonrpsee::core::params::ArrayParams::new()
-			});
+			})
 		}
 
 		match param_kind {
@@ -222,7 +229,7 @@ impl RpcDescription {
 					)*
 					params
 				})
-			}
+			},
 			ParamKind::Array => {
 				// Throw away the type.
 				let params = params.iter().map(|(param, _param_type)| param);
@@ -235,7 +242,7 @@ impl RpcDescription {
 					)*
 					params
 				})
-			}
+			},
 		}
 	}
 }

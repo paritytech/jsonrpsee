@@ -233,7 +233,7 @@ impl TransportSenderT for Sender {
 	/// successfully sent.
 	async fn send(&mut self, body: String) -> Result<(), Self::Error> {
 		if body.len() > self.max_request_size as usize {
-			return Err(WsError::MessageTooLarge);
+			return Err(WsError::MessageTooLarge)
 		}
 
 		tracing::trace!("send: {}", body);
@@ -275,8 +275,8 @@ impl TransportReceiverT for Receiver {
 			match recv {
 				Incoming::Data(Data::Text(_)) => {
 					let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
-					break Ok(ReceivedMessage::Text(s));
-				}
+					break Ok(ReceivedMessage::Text(s))
+				},
 				Incoming::Data(Data::Binary(_)) => break Ok(ReceivedMessage::Bytes(message)),
 				Incoming::Pong(_) => break Ok(ReceivedMessage::Pong),
 				_ => continue,
@@ -314,8 +314,8 @@ impl WsTransportClientBuilder {
 					Err(e) => {
 						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
-						continue;
-					}
+						continue
+					},
 				};
 
 				#[cfg(not(feature = "__tls"))]
@@ -324,8 +324,8 @@ impl WsTransportClientBuilder {
 					Err(e) => {
 						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
-						continue;
-					}
+						continue
+					},
 				};
 
 				let mut client = WsHandshakeClient::new(
@@ -351,13 +351,13 @@ impl WsTransportClientBuilder {
 						return Ok((
 							Sender { inner: sender, max_request_size: self.max_request_size },
 							Receiver { inner: receiver },
-						));
-					}
+						))
+					},
 
 					Ok(ServerResponse::Rejected { status_code }) => {
 						tracing::debug!("Connection rejected: {:?}", status_code);
 						err = Some(Err(WsHandshakeError::Rejected { status_code }));
-					}
+					},
 					Ok(ServerResponse::Redirect { status_code, location }) => {
 						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
 						match location.parse::<Uri>() {
@@ -375,12 +375,12 @@ impl WsTransportClientBuilder {
 									match target._mode {
 										Mode::Tls if connector.is_none() => {
 											connector = Some(build_tls_config(&self.certificate_store)?);
-										}
+										},
 										Mode::Tls => (),
 										// Drop connector if it was configured previously.
 										Mode::Plain => {
 											connector = None;
-										}
+										},
 									};
 								}
 								// Relative URI.
@@ -390,9 +390,8 @@ impl WsTransportClientBuilder {
 										target.path_and_query = location;
 									} else {
 										match target.path_and_query.rfind('/') {
-											Some(offset) => {
-												target.path_and_query.replace_range(offset + 1.., &location)
-											}
+											Some(offset) =>
+												target.path_and_query.replace_range(offset + 1.., &location),
 											None => {
 												err = Some(Err(WsHandshakeError::Url(
 													format!(
@@ -400,22 +399,22 @@ impl WsTransportClientBuilder {
 													)
 													.into(),
 												)));
-												continue;
-											}
+												continue
+											},
 										};
 									}
 									target.sockaddrs = sockaddrs;
 								}
-								break;
-							}
+								break
+							},
 							Err(e) => {
 								err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
-							}
+							},
 						};
-					}
+					},
 					Err(e) => {
 						err = Some(Err(e.into()));
-					}
+					},
 				};
 			}
 		}
@@ -522,16 +521,21 @@ impl TryFrom<Uri> for Target {
 				let err = format!("`{scheme}` not supported, expects 'ws' or 'wss'");
 				#[cfg(not(feature = "__tls"))]
 				let err = format!("`{}` not supported, expects 'ws' ('wss' requires the tls feature)", scheme);
-				return Err(WsHandshakeError::Url(err.into()));
-			}
+				return Err(WsHandshakeError::Url(err.into()))
+			},
 		};
-		let host = uri.host().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
+		let host = uri
+			.host()
+			.map(ToOwned::to_owned)
+			.ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
 		let port = uri
 			.port_u16()
 			.ok_or_else(|| WsHandshakeError::Url("No port number in URL (default port is not supported)".into()))?;
 		let host_header = format!("{host}:{port}");
 		let parts = uri.into_parts();
-		let path_and_query = parts.path_and_query.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
+		let path_and_query = parts
+			.path_and_query
+			.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
 		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
 		Ok(Self {
 			sockaddrs: sockaddrs.collect(),
@@ -564,23 +568,25 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 			if roots.is_empty() {
 				let err = first_error
 					.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No valid certificate found"));
-				return Err(WsHandshakeError::CertificateStore(err));
+				return Err(WsHandshakeError::CertificateStore(err))
 			}
-		}
+		},
 		#[cfg(feature = "webpki-tls")]
 		CertificateStore::WebPki => {
 			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
 				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
 			}));
-		}
+		},
 		_ => {
 			let err = io::Error::new(io::ErrorKind::NotFound, "Invalid certificate store");
-			return Err(WsHandshakeError::CertificateStore(err));
-		}
+			return Err(WsHandshakeError::CertificateStore(err))
+		},
 	};
 
-	let config =
-		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(roots).with_no_client_auth();
+	let config = rustls::ClientConfig::builder()
+		.with_safe_defaults()
+		.with_root_certificates(roots)
+		.with_no_client_auth();
 
 	Ok(std::sync::Arc::new(config).into())
 }
@@ -598,7 +604,9 @@ mod tests {
 	}
 
 	fn parse_target(uri: &str) -> Result<Target, WsHandshakeError> {
-		uri.parse::<Uri>().map_err(|e: InvalidUri| WsHandshakeError::Url(e.to_string().into()))?.try_into()
+		uri.parse::<Uri>()
+			.map_err(|e: InvalidUri| WsHandshakeError::Url(e.to_string().into()))?
+			.try_into()
 	}
 
 	#[test]

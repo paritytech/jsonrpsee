@@ -54,8 +54,10 @@ async fn method_call_works() {
 #[tokio::test]
 async fn method_call_with_wrong_id_kind() {
 	let exp = "id as string";
-	let server_addr =
-		http_server_with_hardcoded_response(ok_response(exp.into(), Id::Num(0))).with_default_timeout().await.unwrap();
+	let server_addr = http_server_with_hardcoded_response(ok_response(exp.into(), Id::Num(0)))
+		.with_default_timeout()
+		.await
+		.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
 	let res: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
@@ -71,13 +73,21 @@ async fn method_call_with_id_str() {
 		.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
-	let response: String = client.request("o", rpc_params![]).with_default_timeout().await.unwrap().unwrap();
+	let response: String = client
+		.request("o", rpc_params![])
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(&response, exp);
 }
 
 #[tokio::test]
 async fn notification_works() {
-	let server_addr = http_server_with_hardcoded_response(String::new()).with_default_timeout().await.unwrap();
+	let server_addr = http_server_with_hardcoded_response(String::new())
+		.with_default_timeout()
+		.await
+		.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client
@@ -100,42 +110,62 @@ async fn response_with_wrong_id() {
 
 #[tokio::test]
 async fn response_method_not_found() {
-	let err =
-		run_request_with_response(method_not_found(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(method_not_found(Id::Num(0)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_jsonrpc_error_response(err, ErrorObject::from(ErrorCode::MethodNotFound).into_owned());
 }
 
 #[tokio::test]
 async fn response_parse_error() {
-	let err = run_request_with_response(parse_error(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(parse_error(Id::Num(0)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_jsonrpc_error_response(err, ErrorObject::from(ErrorCode::ParseError).into_owned());
 }
 
 #[tokio::test]
 async fn invalid_request_works() {
-	let err =
-		run_request_with_response(invalid_request(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(invalid_request(Id::Num(0_u64)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_jsonrpc_error_response(err, ErrorObject::from(ErrorCode::InvalidRequest).into_owned());
 }
 
 #[tokio::test]
 async fn invalid_params_works() {
-	let err =
-		run_request_with_response(invalid_params(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(invalid_params(Id::Num(0_u64)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_jsonrpc_error_response(err, ErrorObject::from(ErrorCode::InvalidParams).into_owned());
 }
 
 #[tokio::test]
 async fn internal_error_works() {
-	let err =
-		run_request_with_response(internal_error(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(internal_error(Id::Num(0_u64)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_jsonrpc_error_response(err, ErrorObject::from(ErrorCode::InternalError).into_owned());
 }
 
 #[tokio::test]
 async fn subscription_response_to_request() {
 	let req = r#"{"jsonrpc":"2.0","method":"subscribe_hello","params":{"subscription":"3px4FrtxSYQ1zBKW154NoVnrDhrq764yQNCXEgZyM6Mu","result":"hello my friend"}}"#.to_string();
-	let err = run_request_with_response(req).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(req)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert!(matches!(err, Error::ParseError(_)));
 }
 
@@ -261,14 +291,20 @@ async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::
 	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> Result<BatchResponse<T>, Error> {
-	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
+	let server_addr = http_server_with_hardcoded_response(response)
+		.with_default_timeout()
+		.await
+		.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client.batch_request(batch).with_default_timeout().await.unwrap()
 }
 
 async fn run_request_with_response(response: String) -> Result<String, Error> {
-	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
+	let server_addr = http_server_with_hardcoded_response(response)
+		.with_default_timeout()
+		.await
+		.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap()
@@ -279,7 +315,7 @@ fn assert_jsonrpc_error_response(err: Error, exp: ErrorObjectOwned) {
 	match &err {
 		Error::Call(err) => {
 			assert_eq!(err.to_string(), exp.to_string());
-		}
+		},
 		e => panic!("Expected error: \"{err}\", got: {e:?}"),
 	};
 }

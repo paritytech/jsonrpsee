@@ -68,8 +68,13 @@ async fn method_call_with_wrong_id_kind() {
 	.await
 	.unwrap();
 	let uri = format!("ws://{}", server.local_addr());
-	let client =
-		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
+	let client = WsClientBuilder::default()
+		.id_format(IdKind::String)
+		.build(&uri)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 
 	let err: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
 	assert!(matches!(err, Err(Error::RestartNeeded(e)) if e == "Invalid request ID"));
@@ -86,9 +91,19 @@ async fn method_call_with_id_str() {
 	.await
 	.unwrap();
 	let uri = format!("ws://{}", server.local_addr());
-	let client =
-		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
-	let response: String = client.request("o", rpc_params![]).with_default_timeout().await.unwrap().unwrap();
+	let client = WsClientBuilder::default()
+		.id_format(IdKind::String)
+		.build(&uri)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let response: String = client
+		.request("o", rpc_params![])
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(&response, exp);
 }
 
@@ -100,8 +115,18 @@ async fn notif_works() {
 		.await
 		.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
-	assert!(client.notification("notif", rpc_params![]).with_default_timeout().await.unwrap().is_ok());
+	let client = WsClientBuilder::default()
+		.build(&uri)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	assert!(client
+		.notification("notif", rpc_params![])
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.is_ok());
 }
 
 #[tokio::test]
@@ -116,35 +141,51 @@ async fn response_with_wrong_id() {
 
 #[tokio::test]
 async fn response_method_not_found() {
-	let err =
-		run_request_with_response(method_not_found(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(method_not_found(Id::Num(0)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_error_response(err, ErrorObject::from(ErrorCode::MethodNotFound).into_owned());
 }
 
 #[tokio::test]
 async fn parse_error_works() {
-	let err = run_request_with_response(parse_error(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(parse_error(Id::Num(0)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_error_response(err, ErrorObject::from(ErrorCode::ParseError).into_owned());
 }
 
 #[tokio::test]
 async fn invalid_request_works() {
-	let err =
-		run_request_with_response(invalid_request(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(invalid_request(Id::Num(0_u64)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_error_response(err, ErrorObject::from(ErrorCode::InvalidRequest).into_owned());
 }
 
 #[tokio::test]
 async fn invalid_params_works() {
-	let err =
-		run_request_with_response(invalid_params(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(invalid_params(Id::Num(0_u64)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_error_response(err, ErrorObject::from(ErrorCode::InvalidParams).into_owned());
 }
 
 #[tokio::test]
 async fn internal_error_works() {
-	let err =
-		run_request_with_response(internal_error(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
+	let err = run_request_with_response(internal_error(Id::Num(0_u64)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
 	assert_error_response(err, ErrorObject::from(ErrorCode::InternalError).into_owned());
 }
 
@@ -159,7 +200,12 @@ async fn subscription_works() {
 	.await
 	.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+	let client = WsClientBuilder::default()
+		.build(&uri)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	{
 		let mut sub: Subscription<String> = client
 			.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
@@ -183,10 +229,19 @@ async fn notification_handler_works() {
 	.unwrap();
 
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+	let client = WsClientBuilder::default()
+		.build(&uri)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	{
-		let mut nh: Subscription<String> =
-			client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+		let mut nh: Subscription<String> = client
+			.subscribe_to_method("test")
+			.with_default_timeout()
+			.await
+			.unwrap()
+			.unwrap();
 		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
 		assert_eq!("server originated notification works".to_owned(), response);
 	}
@@ -210,8 +265,12 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 		.await
 		.unwrap()
 		.unwrap();
-	let mut nh: Subscription<String> =
-		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+	let mut nh: Subscription<String> = client
+		.subscribe_to_method("test")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 
 	// don't poll the notification stream for 2 seconds, should be full now.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -224,8 +283,12 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 	assert!(nh.next().with_default_timeout().await.unwrap().is_none());
 
 	// The same subscription should be possible to register again.
-	let mut other_nh: Subscription<String> =
-		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+	let mut other_nh: Subscription<String> = client
+		.subscribe_to_method("test")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 
 	// check that the new subscription works.
 	assert!(other_nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
@@ -361,7 +424,12 @@ async fn is_connected_works() {
 	.await
 	.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+	let client = WsClientBuilder::default()
+		.build(&uri)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert!(client.is_connected());
 
 	let res: Result<String, Error> = client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap();
@@ -381,7 +449,12 @@ async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::
 		.await
 		.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+	let client = WsClientBuilder::default()
+		.build(&uri)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	client.batch_request(batch).with_default_timeout().await.unwrap()
 }
 
@@ -391,7 +464,12 @@ async fn run_request_with_response(response: String) -> Result<String, Error> {
 		.await
 		.unwrap();
 	let uri = format!("ws://{}", server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+	let client = WsClientBuilder::default()
+		.build(&uri)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap()
 }
 
@@ -400,7 +478,7 @@ fn assert_error_response(err: Error, exp: ErrorObjectOwned) {
 	match &err {
 		Error::Call(e) => {
 			assert_eq!(e.to_string(), exp.to_string());
-		}
+		},
 		e => panic!("Expected error: \"{err}\", got: {e:?}"),
 	};
 }
@@ -431,6 +509,11 @@ async fn redirections() {
 	// It's connected
 	assert!(client.is_connected());
 	// It works
-	let response: String = client.request("anything", rpc_params![]).with_default_timeout().await.unwrap().unwrap();
+	let response: String = client
+		.request("anything", rpc_params![])
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response, String::from(expected));
 }

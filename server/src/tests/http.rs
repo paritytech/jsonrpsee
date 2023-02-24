@@ -47,7 +47,9 @@ async fn server() -> (SocketAddr, ServerHandle) {
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
-	module.register_async_method("say_hello_async", |_, _| async move { Result::<_, Error>::Ok("lo") }).unwrap();
+	module
+		.register_async_method("say_hello_async", |_, _| async move { Result::<_, Error>::Ok("lo") })
+		.unwrap();
 	module
 		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
@@ -95,7 +97,11 @@ async fn single_method_call_works() {
 
 	for i in 0..10 {
 		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{i}}}"#);
-		let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+		let response = http_request(req.into(), uri.clone())
+			.with_default_timeout()
+			.await
+			.unwrap()
+			.unwrap();
 		assert_eq!(response.status, StatusCode::OK);
 		assert_eq!(response.body, ok_response(JsonValue::String("lo".to_owned()), Id::Num(i)));
 	}
@@ -122,7 +128,11 @@ async fn invalid_single_method_call() {
 	let uri = to_http_uri(addr);
 
 	let req = r#"{"jsonrpc":"2.0","method":1, "params": "bar"}"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, parse_error(Id::Null));
 }
@@ -238,19 +248,31 @@ async fn invalid_batch_calls() {
 
 	// batch with no requests
 	let req = r#"[]"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, invalid_request(Id::Null));
 
 	// batch with invalid request
 	let req = r#"[123]"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, invalid_batch(vec![Id::Null]));
 
 	// batch with invalid request
 	let req = r#"[1, 2, 3]"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, invalid_batch(vec![Id::Null, Id::Null, Id::Null]));
 
@@ -259,7 +281,11 @@ async fn invalid_batch_calls() {
 		{"jsonrpc": "2.0", "method": "sum", "params": [1,2,4], "id": "1"},
 		{"jsonrpc": "2.0", "method"
 	  ]"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, parse_error(Id::Null));
 }
@@ -278,7 +304,11 @@ async fn batch_with_mixed_calls() {
 			{"jsonrpc": "2.0", "method": "foo.get", "params": {"name": "myself"}, "id": "5"}
 		]"#;
 	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":"5"}]"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, res);
 }
@@ -295,7 +325,11 @@ async fn batch_notif_without_params_works() {
 			{"jsonrpc": "2.0", "method": "add"}
 		]"#;
 	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"}]"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, res);
 }
@@ -450,12 +484,20 @@ async fn can_set_the_max_request_body_size() {
 
 	// Invalid: too long
 	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.body, oversized_request(100));
 
 	// Max request body size should not override the max response size
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.body, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
 	handle.stop().unwrap();
@@ -475,7 +517,11 @@ async fn can_set_the_max_response_size() {
 
 	// Oversized response.
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.body, oversized_response(Id::Num(1), 100));
 
 	handle.stop().unwrap();
@@ -495,7 +541,11 @@ async fn can_set_the_max_response_size_to_batch() {
 
 	// Two response will end up in a response of 102 bytes which is too big.
 	let req = r#"[{"jsonrpc":"2.0", "method":"anything", "id":1},{"jsonrpc":"2.0", "method":"anything", "id":2}]"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.body, invalid_request(Id::Null));
 
 	handle.stop().unwrap();
@@ -506,7 +556,11 @@ async fn can_set_the_max_response_size_to_batch() {
 async fn disabled_batches() {
 	let addr = "127.0.0.1:0";
 	// Disable batches support.
-	let server = ServerBuilder::default().batch_requests_supported(false).build(addr).await.unwrap();
+	let server = ServerBuilder::default()
+		.batch_requests_supported(false)
+		.build(addr)
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -518,7 +572,11 @@ async fn disabled_batches() {
 		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1},
 		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":2}
 	]"#;
-	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	let response = http_request(req.into(), uri.clone())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 	assert_eq!(response.body, batches_not_supported());
 
 	handle.stop().unwrap();

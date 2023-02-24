@@ -138,14 +138,14 @@ where
 					_ => return Err(Error::InvalidCertficateStore),
 				};
 				HttpBackend::Https(Client::builder().build::<_, hyper::Body>(connector))
-			}
+			},
 			_ => {
 				#[cfg(feature = "__tls")]
 				let err = "URL scheme not supported, expects 'http' or 'https'";
 				#[cfg(not(feature = "__tls"))]
 				let err = "URL scheme not supported, expects 'http'";
-				return Err(Error::Url(err.into()));
-			}
+				return Err(Error::Url(err.into()))
+			},
 		};
 
 		// Cache request headers: 2 default headers, followed by user custom headers.
@@ -174,7 +174,7 @@ where
 		tx_log_from_str(&body, self.max_log_length);
 
 		if body.len() > self.max_request_size as usize {
-			return Err(Error::RequestTooLarge);
+			return Err(Error::RequestTooLarge)
 		}
 
 		let mut req = hyper::Request::post(&self.target.0);
