@@ -29,8 +29,8 @@
 use std::net::SocketAddr;
 
 /// HTTP request.
-pub type HttpRequest = http::Request<Body>;
-pub use http::HeaderMap as Headers;
+pub type HttpRequest = hyper::http::Request<Body>;
+pub use hyper::http::HeaderMap as Headers;
 pub use hyper::Body;
 pub use jsonrpsee_types::Params;
 
