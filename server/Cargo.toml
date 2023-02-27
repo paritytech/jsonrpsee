@@ -31,4 +31,4 @@ jsonrpsee-test-utils = { path = "../test-utils" }
 rand = "0.8"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tower = { version = "0.4.13", features = ["timeout"] }
-socket2 = "0.4.7"
+socket2 = "0.5.1"
