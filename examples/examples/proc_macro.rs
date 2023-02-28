@@ -68,9 +68,13 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> SubscriptionResult {
 		let sink = pending.accept().await?;
-		let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
-		sink.send(msg).await?;
-		Ok(())
+		let msg = match SubscriptionMessage::from_json(&vec![[0; 32]]) {
+			Ok(msg) => msg,
+			Err(e) => return Some(Err(SubscriptionMessage::from(e.to_string().as_str()))),
+		};
+		sink.send(msg).await.ok()?;
+
+		None
 	}
 }
 

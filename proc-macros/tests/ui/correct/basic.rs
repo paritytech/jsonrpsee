@@ -68,32 +68,37 @@ impl RpcServer for RpcServerImpl {
 	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		let msg1 = SubscriptionMessage::from_json(&"Response_A").unwrap();
-		let msg2 = SubscriptionMessage::from_json(&"Response_B").unwrap();
+		sink.send("Response_A".into()).await.ok()?;
+		sink.send("Response_B".into()).await.ok()?;
 
-		sink.send(msg1).await.unwrap();
-		sink.send(msg2).await.unwrap();
-
-		Ok(())
+		None
 	}
 
 	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		let msg = SubscriptionMessage::from_json(&val).unwrap();
+		let msg = match SubscriptionMessage::from_json(&val) {
+			Ok(msg) => msg,
+			Err(e) => return Some(Err(e.to_string().as_str().into())),
+		};
 
-		sink.send(msg.clone()).await.unwrap();
-		sink.send(msg).await.unwrap();
+		sink.send(msg.clone()).await.ok()?;
+		sink.send(msg).await.ok()?;
 
-		Ok(())
+		None
 	}
 
 	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
-		let msg = SubscriptionMessage::from_json(&1).unwrap();
-		sink.send(msg).await.unwrap();
 
-		Ok(())
+		let msg = match SubscriptionMessage::from_json(&1) {
+			Ok(msg) => msg,
+			Err(e) => return Some(Err(e.to_string().as_str().into())),
+		};
+
+		sink.send(msg).await.ok()?;
+
+		None
 	}
 }
 

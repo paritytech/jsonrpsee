@@ -294,24 +294,22 @@ pub(crate) mod visitor;
 ///         // as subscription responses.
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
-///
-///             let msg = SubscriptionMessage::from_json(&"Response_A")?;
-///             sink.send(msg).await?;
-///
-///             Ok(())
+///             sink.send("Response_A".into()).await.ok()?;
+///             None
 ///         }
 ///
 ///         // Send out two values on the subscription.
 ///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
-///             let msg1 = SubscriptionMessage::from_json(&"Response_A")?;
-///             let msg2 = SubscriptionMessage::from_json(&"Response_B")?;
+///             let msg1 = SubscriptionMessage::from_json(&"Response_A").expect("Infallible");
+///             // As &str is quite common and the serialization is infallible this is also possible to use.
+///             let msg2 = SubscriptionMessage::from("Response_B");
 ///
-///             sink.send(msg1).await?;
-///             sink.send(msg2).await?;
+///             sink.send(msg1).await.ok()?;
+///             sink.send(msg2).await.ok()?;
 ///
-///             Ok(())
+///             None
 ///         }
 ///     }
 /// }

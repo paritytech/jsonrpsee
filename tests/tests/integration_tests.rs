@@ -449,7 +449,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed("Subscription terminated by remote peer").await.unwrap();
 
-				Ok(())
+				None
 			},
 		)
 		.unwrap();
@@ -483,7 +483,7 @@ async fn ws_server_stop_subscription_when_dropped() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
+		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { None })
 		.unwrap();
 
 	let _handle = server.start(module).unwrap();

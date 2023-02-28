@@ -290,7 +290,6 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let err = self.jrps_server_item(quote! { core::Error });
-		let sub_err = self.jrps_server_item(quote! { core::SubscriptionCallbackError::None });
 		let tokio = self.jrps_server_item(quote! { tokio });
 
 		// Code to decode sequence of parameters from a JSON array.
@@ -306,7 +305,7 @@ impl RpcDescription {
 								#tokio::spawn(async move {
 									let _ = #pending.reject(_e).await;
 								});
-								return Err(#sub_err);
+								return None;
 							}
 						};
 					}
@@ -332,7 +331,7 @@ impl RpcDescription {
 								#tokio::spawn(async move {
 									let _ = #pending.reject(_e).await;
 								});
-								return Err(#sub_err);
+								return None;
 							}
 						};
 					}
@@ -413,7 +412,7 @@ impl RpcDescription {
 							#tokio::spawn(async move {
 								let _ = #pending.reject(_e).await;
 							});
-							return Err(#sub_err);
+							return None;
 						}
 					};
 

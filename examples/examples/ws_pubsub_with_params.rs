@@ -74,7 +74,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 				Ok(p) => p,
 				Err(e) => {
 					let _ = pending.reject(ErrorObjectOwned::from(e)).await;
-					return Ok(());
+					return None;
 				}
 			};
 
@@ -83,21 +83,17 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
-			pipe_from_stream_and_drop(pending, stream).await?;
-
-			Ok(())
+			pipe_from_stream_and_drop(pending, stream).await
 		})
 		.unwrap();
 	module
 		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| async move {
-			let (one, two) = params.parse::<(usize, usize)>()?;
+			let (one, two) = params.parse::<(usize, usize)>().ok()?;
 
 			let item = &LETTERS[one..two];
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
-			pipe_from_stream_and_drop(pending, stream).await?;
-
-			Ok(())
+			pipe_from_stream_and_drop(pending, stream).await
 		})
 		.unwrap();
 
@@ -119,20 +115,20 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 
 	let msg = loop {
 		tokio::select! {
-			_ = sink.closed() => break "Subscription was closed".to_string(),
+			_ = sink.closed() => break "Subscription was closed".into(),
 			maybe_item = stream.next() => {
 				let item = match maybe_item {
 					Some(item) => item,
-					None => break "Subscription executed successful".to_string(),
+					None => break "Subscription executed successful".into(),
 				};
 				let msg = match SubscriptionMessage::from_json(&item) {
 					Ok(msg) => msg,
-					Err(e) => break e.to_string(),
+					Err(e) => break SubscriptionMessage::from(e.to_string().as_ref()),
 				};
 
 				match sink.try_send(msg) {
 					Ok(_) => (),
-					Err(TrySendError::Closed(_)) => break "Subscription was closed".to_string(),
+					Err(TrySendError::Closed(_)) => break "Subscription was closed".into(),
 					// channel is full, let's be naive an just drop the message.
 					Err(TrySendError::Full(_)) => (),
 				}
@@ -140,13 +136,5 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 		}
 	};
 
-	// NOTE: we are using `close_with_error` for the jsonrpsee client to terminate the subscription
-	// when the "close message" is received without any custom logic.
-	//
-	// Otherwise, the subscription would need custom logic on the client side
-	// for example with dedicate states/different messages to know whether the
-	// server closed just the particular subscription.
-	sink.close_with_error(SubscriptionMessage::from_json(&msg).unwrap()).await;
-
-	Ok(())
+	Some(Err(msg))
 }

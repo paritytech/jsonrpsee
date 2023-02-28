@@ -32,8 +32,8 @@ use futures::future::{self, Either};
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
-
 use jsonrpsee::core::SubscriptionResult;
+
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -79,9 +79,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, pending, tx| async move {
 			let rx = tx.subscribe();
 			let stream = BroadcastStream::new(rx);
-			pipe_from_stream_with_bounded_buffer(pending, stream).await?;
-
-			Ok(())
+			pipe_from_stream_with_bounded_buffer(pending, stream).await
 		})
 		.unwrap();
 	let addr = server.local_addr()?;
@@ -106,30 +104,32 @@ async fn pipe_from_stream_with_bounded_buffer(
 	loop {
 		match future::select(closed, stream.next()).await {
 			// subscription closed.
-			Either::Left((_, _)) => break,
+			Either::Left((_, _)) => break None,
 
 			// received new item from the stream.
 			Either::Right((Some(Ok(item)), c)) => {
-				let notif = SubscriptionMessage::from_json(&item)?;
+				let notif = match SubscriptionMessage::from_json(&item) {
+					Ok(n) => n,
+					Err(e) => break Some(Err(SubscriptionMessage::from(e.to_string().as_str()))),
+				};
 
 				// NOTE: this will block until there a spot in the queue
 				// and you might want to do something smarter if it's
 				// critical that "the most recent item" must be sent when it is produced.
 				if sink.send(notif).await.is_err() {
-					break;
+					break None;
 				}
 
 				closed = c;
 			}
 
-			// stream is closed or some error, just quit.
-			Either::Right((_, _)) => {
-				break;
-			}
+			// Send back back the error.
+			Either::Right((Some(Err(e)), _)) => break Some(Err(SubscriptionMessage::from(e.to_string().as_str()))),
+
+			// Stream is closed.
+			Either::Right((None, _)) => break None,
 		}
 	}
-
-	Ok(())
 }
 
 // Naive example that broadcasts the produced values to all active subscribers.

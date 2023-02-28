@@ -169,22 +169,24 @@ mod rpc_impl {
 		}
 
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-			let sink = pending.accept().await.unwrap();
+			let sink = pending.accept().await?;
+			sink.send("Response_A".into()).await.ok()?;
+			sink.send("Response_B".into()).await.ok()?;
 
-			let _ = sink.send(SubscriptionMessage::from_json(&"Response_A").unwrap()).await;
-			let _ = sink.send(SubscriptionMessage::from_json(&"Response_B").unwrap()).await;
-
-			Ok(())
+			None
 		}
 
 		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
-			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&val).unwrap();
+			let sink = pending.accept().await?;
+			let msg = match SubscriptionMessage::from_json(&val) {
+				Ok(msg) => msg,
+				Err(e) => return Some(Err(e.to_string().as_str().into())),
+			};
 
-			let _ = sink.send(msg.clone()).await;
-			let _ = sink.send(msg).await;
+			sink.send(msg.clone()).await.ok()?;
+			sink.send(msg).await.ok()?;
 
-			Ok(())
+			None
 		}
 	}
 
@@ -198,11 +200,11 @@ mod rpc_impl {
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
 		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
-			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&"hello").unwrap();
-			let _ = sink.send(msg).await.unwrap();
+			let sink = pending.accept().await?;
+			let msg = SubscriptionMessage::from("hello");
+			sink.send(msg).await.ok()?;
 
-			Ok(())
+			None
 		}
 	}
 }
@@ -348,6 +350,8 @@ async fn subscriptions_do_not_work_for_http_servers() {
 
 #[tokio::test]
 async fn calls_with_bad_params() {
+	init_logger();
+
 	let server_addr = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -357,6 +361,7 @@ async fn calls_with_bad_params() {
 		.subscribe::<String, ArrayParams>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
 		.await
 		.unwrap_err();
+
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);

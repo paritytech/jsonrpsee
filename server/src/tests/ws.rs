@@ -404,11 +404,11 @@ async fn register_methods_works() {
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
 	assert!(module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async { Ok(()) })
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async { None })
 		.is_ok());
 	assert!(module
 		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| async {
-			Ok(())
+			None
 		})
 		.is_err());
 	assert!(
@@ -421,8 +421,7 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module
-			.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { Ok(()) }),
+		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { None }),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -698,7 +697,7 @@ async fn ws_server_backpressure_works() {
 						biased;
 						_ = sink.closed() => {
 							// User closed connection.
-							break;
+							break None
 						},
 						res = sink.send_timeout(msg.clone(), std::time::Duration::from_millis(100)) => {
 							match res {
@@ -706,7 +705,7 @@ async fn ws_server_backpressure_works() {
 								Ok(_) => {
 									msg = n.clone();
 								}
-								Err(SendTimeoutError::Closed(_)) => break,
+								Err(SendTimeoutError::Closed(_)) => break None,
 								// msg == 2
 								Err(SendTimeoutError::Timeout(_)) => {
 									let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);
@@ -717,7 +716,6 @@ async fn ws_server_backpressure_works() {
 						},
 					}
 				}
-				Ok(())
 			},
 		)
 		.unwrap();
