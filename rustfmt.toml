@@ -2,3 +2,8 @@ hard_tabs = true
 max_width = 120
 use_small_heuristics = "Max"
 edition = "2021"
+# Consistency
+newline_style = "Unix"
+# Format comments
+comment_width = 100
+wrap_comments = true
