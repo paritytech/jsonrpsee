@@ -373,8 +373,8 @@ async fn invalid_json_id_missing_value() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
-	// Null.
+	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid
+	// Request), it MUST be Null.
 	assert_eq!(response, parse_error(Id::Null));
 }
 

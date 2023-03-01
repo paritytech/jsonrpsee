@@ -265,10 +265,10 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 			},
 			|mut sub| async move {
 				black_box(sub.next().await.transpose().unwrap());
-				// Note that this benchmark will include costs for measuring `drop` for subscription,
-				// since it's not possible to combine both `iter_with_setup` and `iter_with_large_drop`.
-				// To estimate pure cost of method, one should subtract the result of `unsub` bench
-				// from this one.
+				// Note that this benchmark will include costs for measuring `drop` for
+				// subscription, since it's not possible to combine both `iter_with_setup` and
+				// `iter_with_large_drop`. To estimate pure cost of method, one should subtract the
+				// result of `unsub` bench from this one.
 			},
 		)
 	});

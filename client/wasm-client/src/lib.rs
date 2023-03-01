@@ -44,7 +44,7 @@ use jsonrpsee_core::Error;
 /// # Examples
 ///
 /// ```no_run
-///
+/// 
 /// use jsonrpsee_wasm_client::WasmClientBuilder;
 ///
 /// #[tokio::main]
@@ -57,7 +57,6 @@ use jsonrpsee_core::Error;
 ///
 ///     // use client....
 /// }
-///
 /// ```
 #[derive(Copy, Clone, Debug)]
 pub struct WasmClientBuilder {

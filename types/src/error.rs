@@ -332,7 +332,8 @@ impl CallError {
 	}
 }
 
-/// Helper to get a `JSON-RPC` error object when the maximum number of subscriptions have been exceeded.
+/// Helper to get a `JSON-RPC` error object when the maximum number of subscriptions have been
+/// exceeded.
 pub fn reject_too_many_subscriptions(limit: u32) -> ErrorObject<'static> {
 	ErrorObjectOwned::owned(
 		TOO_MANY_SUBSCRIPTIONS_CODE,

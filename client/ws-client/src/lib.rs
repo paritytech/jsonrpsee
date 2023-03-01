@@ -53,7 +53,7 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 /// # Examples
 ///
 /// ```no_run
-///
+/// 
 /// use jsonrpsee_ws_client::{WsClientBuilder, HeaderMap, HeaderValue};
 ///
 /// #[tokio::main]
@@ -71,7 +71,6 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 ///
 ///     // use client....
 /// }
-///
 /// ```
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder {

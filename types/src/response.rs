@@ -72,9 +72,11 @@ pub struct SubscriptionPayload<'a, T> {
 	pub result: T,
 }
 
-/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along with `result` field.
+/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along
+/// with `result` field.
 pub type SubscriptionResponse<'a, T> = Notification<'a, SubscriptionPayload<'a, T>>;
-/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along with `error` field.
+/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along
+/// with `error` field.
 pub type SubscriptionError<'a, T> = Notification<'a, SubscriptionPayloadError<'a, T>>;
 
 /// Error value for subscriptions.

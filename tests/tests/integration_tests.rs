@@ -81,8 +81,8 @@ async fn ws_unsubscription_works() {
 	let mut sub: Subscription<usize> =
 		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 
-	// It's technically possible to have race-conditions between the notifications and the unsubscribe message.
-	// So let's wait for the first notification and then unsubscribe.
+	// It's technically possible to have race-conditions between the notifications and the unsubscribe
+	// message. So let's wait for the first notification and then unsubscribe.
 	let _item = sub.next().await.unwrap().unwrap();
 
 	sub.unsubscribe().await.unwrap();
@@ -236,9 +236,9 @@ async fn ws_subscription_several_clients_with_drop() {
 		drop(client);
 	}
 
-	// make sure nothing weird happened after dropping half of the clients (should be `unsubscribed` in the server)
-	// would be good to know that subscriptions actually were removed but not possible to verify at
-	// this layer.
+	// make sure nothing weird happened after dropping half of the clients (should be `unsubscribed` in
+	// the server) would be good to know that subscriptions actually were removed but not possible to
+	// verify at this layer.
 	for _ in 0..10 {
 		for (client, hello_sub, foo_sub) in &mut clients {
 			assert!(client.is_connected());
@@ -945,16 +945,17 @@ async fn http_cors_preflight_works() {
 	let allow_methods = comma_separated_header_values(preflight_headers, "access-control-allow-methods");
 	let allow_headers = comma_separated_header_values(preflight_headers, "access-control-allow-headers");
 
-	// We expect the preflight response to tell us that our origin, methods and headers are all OK to use.
-	// If they aren't, the browser will not make the actual request. Note that if these `access-control-*`
-	// headers aren't return, the default is that the origin/method/headers are not allowed, I think.
+	// We expect the preflight response to tell us that our origin, methods and headers are all OK to
+	// use. If they aren't, the browser will not make the actual request. Note that if these
+	// `access-control-*` headers aren't return, the default is that the origin/method/headers are not
+	// allowed, I think.
 	assert!(preflight_res.status().is_success());
 	assert!(has(&allow_origins, "https://foo.com") || has(&allow_origins, "*"));
 	assert!(has(&allow_methods, "post") || has(&allow_methods, "*"));
 	assert!(has(&allow_headers, "content-type") || has(&allow_headers, "*"));
 
-	// Assuming that that was successful, we now make the actual request. No CORS headers are needed here
-	// as the browser checked their validity in the preflight request.
+	// Assuming that that was successful, we now make the actual request. No CORS headers are needed
+	// here as the browser checked their validity in the preflight request.
 	let req = Request::builder()
 		.method(Method::POST)
 		.uri(&uri)

@@ -69,7 +69,8 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) request_start: L::Instant,
 }
 
-/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
+/// This is a glorified select listening for new messages, while also checking the `stop_receiver`
+/// signal.
 struct Monitored<'a, F> {
 	future: F,
 	stop_monitor: &'a StopHandle,

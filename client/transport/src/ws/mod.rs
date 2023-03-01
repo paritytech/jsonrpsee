@@ -492,7 +492,8 @@ pub struct Target {
 	sockaddrs: Vec<SocketAddr>,
 	/// The host name (domain or IP address).
 	host: String,
-	/// The Host request header specifies the host and port number of the server to which the request is being sent.
+	/// The Host request header specifies the host and port number of the server to which the
+	/// request is being sent.
 	host_header: String,
 	/// WebSocket stream mode, see [`Mode`] for further documentation.
 	_mode: Mode,

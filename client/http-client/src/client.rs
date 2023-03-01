@@ -55,7 +55,7 @@ use tracing::instrument;
 /// # Examples
 ///
 /// ```no_run
-///
+/// 
 /// use jsonrpsee_http_client::{HttpClientBuilder, HeaderMap, HeaderValue};
 ///
 /// #[tokio::main]
@@ -72,7 +72,6 @@ use tracing::instrument;
 ///
 ///     // use client....
 /// }
-///
 /// ```
 #[derive(Debug)]
 pub struct HttpClientBuilder<L = Identity> {
@@ -400,7 +399,8 @@ where
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
-	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	/// Send a subscription request to the server. Not implemented for HTTP; will always return
+	/// [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscription", fields(method = _subscribe_method), skip(self, _params, _subscribe_method, _unsubscribe_method), level = "trace")]
 	async fn subscribe<'a, N, Params>(
 		&self,
@@ -415,7 +415,8 @@ where
 		Err(Error::HttpNotImplemented)
 	}
 
-	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	/// Subscribe to a specific method. Not implemented for HTTP; will always return
+	/// [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscribe_method", fields(method = _method), skip(self, _method), level = "trace")]
 	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
 	where

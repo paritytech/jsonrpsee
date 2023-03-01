@@ -60,7 +60,8 @@ mod params_builder {
 			ParamsBuilder { bytes: Vec::new(), start, end }
 		}
 
-		/// Construct a new [`ParamsBuilder`] for positional parameters equivalent to a JSON array object.
+		/// Construct a new [`ParamsBuilder`] for positional parameters equivalent to a JSON array
+		/// object.
 		pub(crate) fn positional() -> Self {
 			Self::new('[', ']')
 		}
@@ -132,7 +133,7 @@ mod params_builder {
 /// # Examples
 ///
 /// ```rust
-///
+/// 
 /// use jsonrpsee_core::params::ObjectParams;
 ///
 /// let mut builder = ObjectParams::new();
@@ -179,7 +180,7 @@ impl ToRpcParams for ObjectParams {
 /// # Examples
 ///
 /// ```rust
-///
+/// 
 /// use jsonrpsee_core::params::ArrayParams;
 ///
 /// let mut builder = ArrayParams::new();

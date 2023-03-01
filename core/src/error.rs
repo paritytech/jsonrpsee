@@ -45,8 +45,8 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 	}
 }
 
-// NOTE(niklasad1): this `From` impl is a bit opinionated to regard all generic errors as `CallError`.
-// In practice this should be the most common use case for users of this library.
+// NOTE(niklasad1): this `From` impl is a bit opinionated to regard all generic errors as
+// `CallError`. In practice this should be the most common use case for users of this library.
 impl From<anyhow::Error> for Error {
 	fn from(err: anyhow::Error) -> Self {
 		Error::Call(CallError::Failed(err))

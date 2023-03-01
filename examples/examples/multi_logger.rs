@@ -74,8 +74,8 @@ impl logger::Logger for Timings {
 struct ThreadWatcher;
 
 impl ThreadWatcher {
-	// Count the number of threads visible to this process. Counts the lines of `ps -eL` and equivalent minus one (the header).
-	// Cribbed from the `palaver` crate.
+	// Count the number of threads visible to this process. Counts the lines of `ps -eL` and equivalent
+	// minus one (the header). Cribbed from the `palaver` crate.
 	fn count_threads() -> usize {
 		let out = if cfg!(any(target_os = "linux", target_os = "android")) {
 			Command::new("ps").arg("-eL").output().expect("failed to execute process")

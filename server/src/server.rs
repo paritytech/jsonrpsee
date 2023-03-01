@@ -101,7 +101,8 @@ where
 {
 	/// Start responding to connections requests.
 	///
-	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
+	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is
+	/// dropped.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let methods = methods.into();
 		let (stop_tx, stop_rx) = watch::channel(());
@@ -374,7 +375,6 @@ impl<B, L> Builder<B, L> {
 	/// // or dynamic dispatch
 	/// let builder2 = ServerBuilder::default().set_id_provider(Box::new(RandomStringIdProvider::new(16)));
 	/// ```
-	///
 	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
 		self.id_provider = Arc::new(id_provider);
 		self
@@ -386,14 +386,15 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Configure a custom [`tower::ServiceBuilder`] middleware for composing layers to be applied to the RPC service.
+	/// Configure a custom [`tower::ServiceBuilder`] middleware for composing layers to be applied
+	/// to the RPC service.
 	///
 	/// Default: No tower layers are applied to the RPC service.
 	///
 	/// # Examples
 	///
 	/// ```rust
-	///
+	/// 
 	/// use std::time::Duration;
 	/// use std::net::SocketAddr;
 	///
@@ -449,7 +450,6 @@ impl<B, L> Builder<B, L> {
 	/// # Panics
 	///
 	/// Panics if the buffer capacity is 0.
-	///
 	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
 		self.settings.message_buffer_capacity = c;
 		self
@@ -478,7 +478,6 @@ impl<B, L> Builder<B, L> {
 	///   assert!(jsonrpsee_server::ServerBuilder::default().build(addrs).await.is_ok());
 	/// }
 	/// ```
-	///
 	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
 
@@ -581,7 +580,8 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 	type Response = hyper::Response<hyper::Body>;
 
 	// The following associated type is required by the `impl<B, U, L: Logger> Server<B, L>` bounds.
-	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B: Identity`).
+	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B:
+	// Identity`).
 	type Error = Box<dyn StdError + Send + Sync + 'static>;
 
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -669,7 +669,8 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 	}
 }
 
-/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
+/// This is a glorified select listening for new messages, while also checking the `stop_receiver`
+/// signal.
 struct Monitored<'a, F> {
 	future: F,
 	stop_monitor: &'a StopHandle,
