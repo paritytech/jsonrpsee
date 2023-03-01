@@ -1,11 +1,9 @@
 use crate::tests::helpers::{init_logger, server_with_handles};
-use http::StatusCode;
+use hyper::StatusCode;
 use jsonrpsee_core::Error;
-use jsonrpsee_test_utils::{
-	helpers::{http_request, ok_response, to_http_uri},
-	mocks::{Id, WebSocketTestClient, WebSocketTestError},
-	TimeoutFutureExt,
-};
+use jsonrpsee_test_utils::helpers::{http_request, ok_response, to_http_uri};
+use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
+use jsonrpsee_test_utils::TimeoutFutureExt;
 use std::time::Duration;
 
 #[tokio::test]
