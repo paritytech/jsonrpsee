@@ -32,6 +32,7 @@ use futures::future::{self, Either};
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+use jsonrpsee::core::server::MapSubscriptionError;
 use jsonrpsee::core::SubscriptionResult;
 
 use jsonrpsee::rpc_params;
@@ -96,7 +97,7 @@ async fn pipe_from_stream_with_bounded_buffer(
 	pending: PendingSubscriptionSink,
 	stream: BroadcastStream<usize>,
 ) -> SubscriptionResult {
-	let sink = pending.accept().await?;
+	let sink = pending.accept().await.map_sub_err()?;
 	let closed = sink.closed();
 
 	futures::pin_mut!(closed, stream);
@@ -104,30 +105,27 @@ async fn pipe_from_stream_with_bounded_buffer(
 	loop {
 		match future::select(closed, stream.next()).await {
 			// subscription closed.
-			Either::Left((_, _)) => break None,
+			Either::Left((_, _)) => break Ok(()),
 
 			// received new item from the stream.
 			Either::Right((Some(Ok(item)), c)) => {
-				let notif = match SubscriptionMessage::from_json(&item) {
-					Ok(n) => n,
-					Err(e) => break Some(Err(SubscriptionMessage::from(e.to_string().as_str()))),
-				};
+				let notif = SubscriptionMessage::from_json(&item).map_sub_err()?;
 
 				// NOTE: this will block until there a spot in the queue
 				// and you might want to do something smarter if it's
 				// critical that "the most recent item" must be sent when it is produced.
 				if sink.send(notif).await.is_err() {
-					break None;
+					break Ok(());
 				}
 
 				closed = c;
 			}
 
 			// Send back back the error.
-			Either::Right((Some(Err(e)), _)) => break Some(Err(SubscriptionMessage::from(e.to_string().as_str()))),
+			Either::Right((Some(Err(e)), _)) => break Err(Some(SubscriptionMessage::from(e.to_string().as_str()))),
 
 			// Stream is closed.
-			Either::Right((None, _)) => break None,
+			Either::Right((None, _)) => break Ok(()),
 		}
 	}
 }

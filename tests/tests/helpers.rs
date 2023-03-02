@@ -32,6 +32,7 @@ use std::time::Duration;
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
 use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
+use jsonrpsee::core::server::MapSubscriptionError;
 use jsonrpsee::core::{Error, SubscriptionResult};
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -75,7 +76,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 					Ok(count) => count,
 					Err(e) => {
 						let _ = pending.reject(ErrorObjectOwned::from(e)).await;
-						return None;
+						return Ok(());
 					}
 				};
 
@@ -91,7 +92,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
 			let _sink = pending.accept().await.unwrap();
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			Some(Err(SubscriptionMessage::from("Server closed the stream because it was lazy")))
+			Err(Some(SubscriptionMessage::from("Server closed the stream because it was lazy")))
 		})
 		.unwrap();
 
@@ -210,30 +211,25 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 	pending: PendingSubscriptionSink,
 	mut stream: impl Stream<Item = T> + Unpin,
 ) -> SubscriptionResult {
-	let mut sink = pending.accept().await?;
+	let mut sink = pending.accept().await.map_sub_err()?;
 
-	let msg: SubscriptionMessage = loop {
+	loop {
 		tokio::select! {
-			_ = sink.closed() => break "Subscription was closed".into(),
+			_ = sink.closed() => break Err(Some("Subscription was closed".into())),
 			maybe_item = stream.next() => {
 				let item = match maybe_item {
 					Some(item) => item,
-					None => break "Subscription executed successful".into(),
+					None => break Err(Some("Subscription executed successful".into())),
 				};
-				let msg = match SubscriptionMessage::from_json(&item) {
-					Ok(msg) => msg,
-					Err(e) => break e.to_string().as_str().into(),
-				};
+				let msg = SubscriptionMessage::from_json(&item).map_sub_err()?;
 
 				match sink.try_send(msg) {
 					Ok(_) => (),
-					Err(TrySendError::Closed(_)) => break "Subscription was closed".into(),
+					Err(TrySendError::Closed(_)) => break Err(Some("Subscription was closed".into())),
 					// channel is full, let's be naive an just drop the message.
 					Err(TrySendError::Full(_)) => (),
 				}
 			}
 		}
-	};
-
-	Some(Err(msg))
+	}
 }

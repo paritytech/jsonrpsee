@@ -32,3 +32,60 @@ pub mod helpers;
 pub mod host_filtering;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 pub mod rpc_module;
+
+use jsonrpsee_types::error::CallError;
+use rpc_module::SubscriptionMessage;
+
+use crate::error::SubscriptionAcceptRejectError;
+
+use self::rpc_module::{DisconnectError, SendTimeoutError};
+
+type SubscriptionCloseResponse = Option<SubscriptionMessage>;
+
+/// Extension trait that converts errors into an optional error message.
+///
+/// Internally it converts an `Result<T, Error>` into `Result<T, Option<Error>`
+/// which forces users to convert `Error` to `Option<SubscriptionMessage>`
+/// where `Some(msg)` represents that the message is sent as subscription notification error
+/// and `None` doesn't do anything.
+///
+/// This is implemented for the most common types with default behavior in jsonrpsee but can be implemented for custom
+/// types as well.
+pub trait MapSubscriptionError<T> {
+	/// Convert an error to an optional subscription error.
+	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse>;
+}
+
+impl<T> MapSubscriptionError<T> for Result<T, DisconnectError> {
+	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse> {
+		self.map_err(|_| None)
+	}
+}
+
+impl<T> MapSubscriptionError<T> for Result<T, SendTimeoutError> {
+	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse> {
+		match self {
+			Ok(r) => Ok(r),
+			Err(SendTimeoutError::Closed(_)) => Err(None),
+			Err(SendTimeoutError::Timeout(e)) => Err(Some(SendTimeoutError::Timeout(e).to_string().as_str().into())),
+		}
+	}
+}
+
+impl<T> MapSubscriptionError<T> for Result<T, SubscriptionAcceptRejectError> {
+	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse> {
+		self.map_err(|_| None)
+	}
+}
+
+impl<T> MapSubscriptionError<T> for Result<T, serde_json::Error> {
+	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse> {
+		self.map_err(|e| Some(e.to_string().as_str().into()))
+	}
+}
+
+impl<T> MapSubscriptionError<T> for Result<T, CallError> {
+	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse> {
+		self.map_err(|_| None)
+	}
+}

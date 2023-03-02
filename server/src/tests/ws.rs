@@ -28,6 +28,7 @@ use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::rpc_module::{SendTimeoutError, SubscriptionMessage};
+use jsonrpsee_core::server::MapSubscriptionError;
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
@@ -404,11 +405,11 @@ async fn register_methods_works() {
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
 	assert!(module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async { None })
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async { Ok(()) })
 		.is_ok());
 	assert!(module
 		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| async {
-			None
+			Ok(())
 		})
 		.is_err());
 	assert!(
@@ -421,7 +422,8 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { None }),
+		module
+			.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { Ok(()) }),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -686,9 +688,9 @@ async fn ws_server_backpressure_works() {
 			"n",
 			"unsubscribe_with_backpressure_aggregation",
 			move |_, pending, mut backpressure_tx| async move {
-				let sink = pending.accept().await?;
-				let n = SubscriptionMessage::from_json(&1).unwrap();
-				let bp = SubscriptionMessage::from_json(&2).unwrap();
+				let sink = pending.accept().await.map_sub_err()?;
+				let n = SubscriptionMessage::from_json(&1).map_sub_err()?;
+				let bp = SubscriptionMessage::from_json(&2).map_sub_err()?;
 
 				let mut msg = n.clone();
 
@@ -697,7 +699,7 @@ async fn ws_server_backpressure_works() {
 						biased;
 						_ = sink.closed() => {
 							// User closed connection.
-							break None
+							break Ok(())
 						},
 						res = sink.send_timeout(msg.clone(), std::time::Duration::from_millis(100)) => {
 							match res {
@@ -705,7 +707,7 @@ async fn ws_server_backpressure_works() {
 								Ok(_) => {
 									msg = n.clone();
 								}
-								Err(SendTimeoutError::Closed(_)) => break None,
+								Err(SendTimeoutError::Closed(_)) => break Ok(()),
 								// msg == 2
 								Err(SendTimeoutError::Timeout(_)) => {
 									let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);

@@ -32,7 +32,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
 use jsonrpsee::core::error::Error;
-use jsonrpsee::core::server::rpc_module::*;
+use jsonrpsee::core::server::{rpc_module::*, MapSubscriptionError};
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Params};
@@ -74,7 +74,7 @@ fn flatten_rpc_modules() {
 #[test]
 fn rpc_context_modules_can_register_subscriptions() {
 	let mut cxmodule = RpcModule::new(());
-	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| async { None }).unwrap();
+	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| async { Ok(()) }).unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -247,7 +247,7 @@ async fn subscribing_without_server() {
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
 
-			Some(Err("closed successfully".into()))
+			Err(Some("closed successfully".into()))
 		})
 		.unwrap();
 
@@ -269,18 +269,18 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&"lo").unwrap();
+			let sink = pending.accept().await.map_sub_err()?;
+			let msg = SubscriptionMessage::from_json(&"lo").map_sub_err()?;
 
 			// make sure to only send one item
-			sink.send(msg.clone()).await.unwrap();
+			sink.send(msg.clone()).await.map_sub_err()?;
 			sink.closed().await;
 
 			match sink.send(msg).await {
 				Ok(_) => panic!("The sink should be closed"),
 				Err(DisconnectError(_)) => {}
 			}
-			None
+			Ok(())
 		})
 		.unwrap();
 
@@ -319,7 +319,7 @@ async fn subscribing_without_server_bad_params() {
 				Err(e) => {
 					let err: ErrorObjectOwned = e.into();
 					let _ = pending.reject(err).await;
-					return None;
+					return Ok(());
 				}
 			};
 
@@ -327,7 +327,7 @@ async fn subscribing_without_server_bad_params() {
 			let msg = SubscriptionMessage::from_json(&p).unwrap();
 			sink.send(msg).await.unwrap();
 
-			None
+			Ok(())
 		})
 		.unwrap();
 
@@ -343,14 +343,14 @@ async fn subscribing_without_server_indicates_close() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let sink = pending.accept().await.unwrap();
+			let sink = pending.accept().await.map_sub_err()?;
 
 			for m in 0..5 {
 				let msg = SubscriptionMessage::from_json(&m).unwrap();
-				sink.send(msg).await.unwrap();
+				sink.send(msg).await.map_sub_err()?;
 			}
 
-			None
+			Ok(())
 		})
 		.unwrap();
 
@@ -403,7 +403,7 @@ async fn rejected_subscription_without_server() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
 			let _ = pending.reject(err.into_owned()).await;
-			None
+			Ok(())
 		})
 		.unwrap();
 
@@ -420,7 +420,7 @@ async fn reject_works() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
 			pending.reject(err.into_owned()).await;
-			None
+			Ok(())
 		})
 		.unwrap();
 
@@ -440,7 +440,7 @@ async fn bounded_subscription_works() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx| async move {
 			println!("accept");
-			let mut sink = pending.accept().await?;
+			let mut sink = pending.accept().await.map_sub_err()?;
 
 			let mut stream = IntervalStream::new(interval(std::time::Duration::from_millis(100)))
 				.enumerate()
@@ -477,7 +477,7 @@ async fn bounded_subscription_works() {
 				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 			}
 
-			None
+			Ok(())
 		})
 		.unwrap();
 

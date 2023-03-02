@@ -51,7 +51,7 @@ cfg_server! {
 	pub mod server;
 
 	/// The return type of the subscription's method for the rpc server implementation.
-	pub type SubscriptionResult = Option<Result<server::rpc_module::SubscriptionMessage, server::rpc_module::SubscriptionMessage>>;
+	pub type SubscriptionResult = Result<(), Option<server::rpc_module::SubscriptionMessage>>;
 }
 
 cfg_client! {

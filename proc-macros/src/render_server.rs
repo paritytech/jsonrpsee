@@ -305,7 +305,7 @@ impl RpcDescription {
 								#tokio::spawn(async move {
 									let _ = #pending.reject(_e).await;
 								});
-								return None;
+								return Ok(());
 							}
 						};
 					}
@@ -331,7 +331,7 @@ impl RpcDescription {
 								#tokio::spawn(async move {
 									let _ = #pending.reject(_e).await;
 								});
-								return None;
+								return Ok(());
 							}
 						};
 					}
@@ -412,7 +412,7 @@ impl RpcDescription {
 							#tokio::spawn(async move {
 								let _ = #pending.reject(_e).await;
 							});
-							return None;
+							return Ok(());
 						}
 					};
 

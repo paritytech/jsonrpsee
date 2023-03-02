@@ -43,6 +43,7 @@ use serde_json::json;
 
 mod rpc_impl {
 	use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+	use jsonrpsee::core::server::MapSubscriptionError;
 	use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::PendingSubscriptionSink;
@@ -169,24 +170,20 @@ mod rpc_impl {
 		}
 
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-			let sink = pending.accept().await?;
-			sink.send("Response_A".into()).await.ok()?;
-			sink.send("Response_B".into()).await.ok()?;
+			let sink = pending.accept().await.map_sub_err()?;
+			sink.send("Response_A".into()).await.map_sub_err()?;
+			sink.send("Response_B".into()).await.map_sub_err()?;
 
-			None
+			Ok(())
 		}
 
 		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
-			let sink = pending.accept().await?;
-			let msg = match SubscriptionMessage::from_json(&val) {
-				Ok(msg) => msg,
-				Err(e) => return Some(Err(e.to_string().as_str().into())),
-			};
+			let sink = pending.accept().await.map_sub_err()?;
+			let msg = SubscriptionMessage::from_json(&val).map_sub_err()?;
+			sink.send(msg.clone()).await.map_sub_err()?;
+			sink.send(msg).await.map_sub_err()?;
 
-			sink.send(msg.clone()).await.ok()?;
-			sink.send(msg).await.ok()?;
-
-			None
+			Ok(())
 		}
 	}
 
@@ -200,11 +197,11 @@ mod rpc_impl {
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
 		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
-			let sink = pending.accept().await?;
+			let sink = pending.accept().await.map_sub_err()?;
 			let msg = SubscriptionMessage::from("hello");
-			sink.send(msg).await.ok()?;
+			sink.send(msg).await.map_sub_err()?;
 
-			None
+			Ok(())
 		}
 	}
 }

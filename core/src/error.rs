@@ -185,3 +185,14 @@ impl From<hyper::Error> for Error {
 		Error::Transport(hyper_err.into())
 	}
 }
+
+/// The error returned while accepting or rejecting a subscription.
+#[derive(Debug, Copy, Clone)]
+pub enum SubscriptionAcceptRejectError {
+	/// The method was already called.
+	AlreadyCalled,
+	/// The remote peer closed the connection or called the unsubscribe method.
+	RemotePeerAborted,
+	/// The subscription response message was too large.
+	MessageTooLarge,
+}

@@ -31,7 +31,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::error::Error;
+use crate::error::{Error, SubscriptionAcceptRejectError};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::{BoundedSubscriptions, MethodSink};
 use crate::traits::{IdProvider, ToRpcParams};
@@ -867,15 +867,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					tokio::spawn(async move {
 						match sub_fut.await {
-							Some(Err(msg)) if tx.is_closed() => {
+							Err(Some(msg)) if tx.is_closed() => {
 								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
 								_ = method_sink.send(json).await;
 							}
-							Some(Ok(msg)) if tx.is_closed() => {
-								let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &sub_id, method);
-								_ = method_sink.send(json).await;
-							}
-							// The subscription call hasn't been answered or no close message should be sent.
 							_ => (),
 						}
 					});
@@ -978,17 +973,17 @@ impl PendingSubscriptionSink {
 	/// # Panics
 	///
 	/// Panics if the subscription response exceeded the `max_response_size`.
-	pub async fn accept(self) -> Option<SubscriptionSink> {
+	pub async fn accept(self) -> Result<SubscriptionSink, SubscriptionAcceptRejectError> {
 		let response =
 			MethodResponse::response(self.id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
-		self.inner.send(response.result.clone()).await.ok()?;
-		self.subscribe.send(response).await.ok()?;
+		self.inner.send(response.result.clone()).await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
+		self.subscribe.send(response).await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
 
 		if success {
 			let (tx, rx) = mpsc::channel(1);
 			self.subscribers.lock().insert(self.uniq_sub.clone(), (self.inner.clone(), rx));
-			Some(SubscriptionSink {
+			Ok(SubscriptionSink {
 				inner: self.inner,
 				method: self.method,
 				subscribers: self.subscribers,
@@ -997,7 +992,7 @@ impl PendingSubscriptionSink {
 				_permit: Arc::new(self.permit),
 			})
 		} else {
-			panic!("Subscription response message too large fit in message; adjust the limit by ServerBuilder::max_response_size")
+			Err(SubscriptionAcceptRejectError::MessageTooLarge)
 		}
 	}
 }
