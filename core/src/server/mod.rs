@@ -33,12 +33,10 @@ pub mod host_filtering;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 pub mod rpc_module;
 
+use self::rpc_module::DisconnectError;
+use crate::error::SubscriptionAcceptRejectError;
 use jsonrpsee_types::error::CallError;
 use rpc_module::SubscriptionMessage;
-
-use crate::error::SubscriptionAcceptRejectError;
-
-use self::rpc_module::{DisconnectError, SendTimeoutError};
 
 type SubscriptionCloseResponse = Option<SubscriptionMessage>;
 
@@ -49,8 +47,8 @@ type SubscriptionCloseResponse = Option<SubscriptionMessage>;
 /// where `Some(msg)` represents that the message is sent as subscription notification error
 /// and `None` doesn't do anything.
 ///
-/// This is implemented for the most common types with default behavior in jsonrpsee but can be implemented for custom
-/// types as well.
+/// This is implemented for the types in jsonrpsee where the behavior is not application dependent.
+/// For other types you have to implement this trait or deal with it manually.
 pub trait MapSubscriptionError<T> {
 	/// Convert an error to an optional subscription error.
 	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse>;
@@ -59,16 +57,6 @@ pub trait MapSubscriptionError<T> {
 impl<T> MapSubscriptionError<T> for Result<T, DisconnectError> {
 	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse> {
 		self.map_err(|_| None)
-	}
-}
-
-impl<T> MapSubscriptionError<T> for Result<T, SendTimeoutError> {
-	fn map_sub_err(self) -> Result<T, SubscriptionCloseResponse> {
-		match self {
-			Ok(r) => Ok(r),
-			Err(SendTimeoutError::Closed(_)) => Err(None),
-			Err(SendTimeoutError::Timeout(e)) => Err(Some(SendTimeoutError::Timeout(e).to_string().as_str().into())),
-		}
 	}
 }
 
