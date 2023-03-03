@@ -4,7 +4,6 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::core::server::MapSubscriptionError;
 use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, SubscriptionMessage};
@@ -67,29 +66,29 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-		let sink = pending.accept().await.map_sub_err()?;
+		let sink = pending.accept().await.map_err(|_| None)?;
 
-		sink.send("Response_A".into()).await.map_sub_err()?;
-		sink.send("Response_B".into()).await.map_sub_err()?;
+		sink.send("Response_A".into()).await.map_err(|_| None)?;
+		sink.send("Response_B".into()).await.map_err(|_| None)?;
 
 		Ok(())
 	}
 
 	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
-		let sink = pending.accept().await.map_sub_err()?;
-		let msg = SubscriptionMessage::from_json(&val).map_sub_err()?;
+		let sink = pending.accept().await.map_err(|_| None)?;
+		let msg = SubscriptionMessage::from_json(&val).map_err(|e| Some(e.to_string().into()))?;
 
-		sink.send(msg.clone()).await.map_sub_err()?;
-		sink.send(msg).await.map_sub_err()?;
+		sink.send(msg.clone()).await.map_err(|_| None)?;
+		sink.send(msg).await.map_err(|_| None)?;
 
 		Ok(())
 	}
 
 	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-		let sink = pending.accept().await.map_sub_err()?;
+		let sink = pending.accept().await.map_err(|_| None)?;
 
-		let msg = SubscriptionMessage::from_json(&1).map_sub_err()?;
-		sink.send(msg).await.map_sub_err()?;
+		let msg = SubscriptionMessage::from_json(&1).map_err(|e| Some(e.to_string().into()))?;
+		sink.send(msg).await.map_err(|_| None)?;
 
 		Ok(())
 	}

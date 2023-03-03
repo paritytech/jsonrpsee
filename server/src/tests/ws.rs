@@ -28,7 +28,6 @@ use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::rpc_module::{SendTimeoutError, SubscriptionMessage};
-use jsonrpsee_core::server::MapSubscriptionError;
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
@@ -688,9 +687,9 @@ async fn ws_server_backpressure_works() {
 			"n",
 			"unsubscribe_with_backpressure_aggregation",
 			move |_, pending, mut backpressure_tx| async move {
-				let sink = pending.accept().await.map_sub_err()?;
-				let n = SubscriptionMessage::from_json(&1).map_sub_err()?;
-				let bp = SubscriptionMessage::from_json(&2).map_sub_err()?;
+				let sink = pending.accept().await.map_err(|_| None)?;
+				let n = SubscriptionMessage::from_json(&1).unwrap();
+				let bp = SubscriptionMessage::from_json(&2).unwrap();
 
 				let mut msg = n.clone();
 

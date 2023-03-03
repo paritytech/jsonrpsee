@@ -32,7 +32,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
 use jsonrpsee::core::error::Error;
-use jsonrpsee::core::server::{rpc_module::*, MapSubscriptionError};
+use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Params};
@@ -269,11 +269,11 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let sink = pending.accept().await.map_sub_err()?;
-			let msg = SubscriptionMessage::from_json(&"lo").map_sub_err()?;
+			let sink = pending.accept().await.map_err(|_| None)?;
+			let msg = SubscriptionMessage::from_json(&"lo").map_err(|e| Some(e.to_string().into()))?;
 
 			// make sure to only send one item
-			sink.send(msg.clone()).await.map_sub_err()?;
+			sink.send(msg.clone()).await.map_err(|_| None)?;
 			sink.closed().await;
 
 			match sink.send(msg).await {
@@ -343,11 +343,11 @@ async fn subscribing_without_server_indicates_close() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let sink = pending.accept().await.map_sub_err()?;
+			let sink = pending.accept().await.map_err(|_| None)?;
 
 			for m in 0..5 {
 				let msg = SubscriptionMessage::from_json(&m).unwrap();
-				sink.send(msg).await.map_sub_err()?;
+				sink.send(msg).await.map_err(|_| None)?;
 			}
 
 			Ok(())
@@ -440,7 +440,7 @@ async fn bounded_subscription_works() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx| async move {
 			println!("accept");
-			let mut sink = pending.accept().await.map_sub_err()?;
+			let mut sink = pending.accept().await.map_err(|_| None)?;
 
 			let mut stream = IntervalStream::new(interval(std::time::Duration::from_millis(100)))
 				.enumerate()

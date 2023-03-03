@@ -32,7 +32,6 @@ use std::time::Duration;
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
 use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
-use jsonrpsee::core::server::MapSubscriptionError;
 use jsonrpsee::core::{Error, SubscriptionResult};
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -211,7 +210,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 	pending: PendingSubscriptionSink,
 	mut stream: impl Stream<Item = T> + Unpin,
 ) -> SubscriptionResult {
-	let mut sink = pending.accept().await.map_sub_err()?;
+	let mut sink = pending.accept().await.map_err(|_| None)?;
 
 	loop {
 		tokio::select! {
@@ -221,7 +220,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 					Some(item) => item,
 					None => break Err(Some("Subscription executed successful".into())),
 				};
-				let msg = SubscriptionMessage::from_json(&item).map_sub_err()?;
+				let msg = SubscriptionMessage::from_json(&item).map_err(|e| Some(e.to_string().into()))?;
 
 				match sink.try_send(msg) {
 					Ok(_) => (),

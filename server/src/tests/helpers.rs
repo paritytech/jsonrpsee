@@ -5,7 +5,6 @@ use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 
 use anyhow::anyhow;
-use jsonrpsee_core::server::MapSubscriptionError;
 use jsonrpsee_core::{DeserializeOwned, Error};
 use jsonrpsee_test_utils::mocks::TestContext;
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -84,7 +83,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		.unwrap();
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async move {
-			let sink = pending.accept().await.map_sub_err()?;
+			let sink = pending.accept().await.map_err(|_| None)?;
 
 			loop {
 				let _ = &sink;

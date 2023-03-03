@@ -41,7 +41,6 @@ use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
-use jsonrpsee::core::server::MapSubscriptionError;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -443,9 +442,9 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			"subscribe_hello",
 			"unsubscribe_hello",
 			|_, pending, mut tx| async move {
-				let sink = pending.accept().await.map_sub_err()?;
-				let msg = SubscriptionMessage::from_json(&1).map_sub_err()?;
-				sink.send(msg).await.map_sub_err()?;
+				let sink = pending.accept().await.map_err(|_| None)?;
+				let msg = SubscriptionMessage::from_json(&1).unwrap();
+				sink.send(msg).await.map_err(|_| None)?;
 				sink.closed().await;
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed("Subscription terminated by remote peer").await.unwrap();

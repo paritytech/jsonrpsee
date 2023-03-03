@@ -220,7 +220,7 @@ pub(crate) mod visitor;
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
 ///     use jsonrpsee::{proc_macros::rpc, server::PendingSubscriptionSink, server::SubscriptionMessage};
-///     use jsonrpsee::core::{async_trait, SubscriptionResult, RpcResult, server::MapSubscriptionError};
+///     use jsonrpsee::core::{async_trait, SubscriptionResult, RpcResult};
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
 ///     #[rpc(client, server, namespace = "foo")]
@@ -293,21 +293,21 @@ pub(crate) mod visitor;
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-///             let mut sink = pending.accept().await.map_sub_err()?;
-///             sink.send("Response_A".into()).await.map_sub_err()?;
+///             let mut sink = pending.accept().await.map_err(|_| None)?;
+///             sink.send("Response_A".into()).await.map_err(|_| None)?;
 ///             Ok(())
 ///         }
 ///
 ///         // Send out two values on the subscription.
 ///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-///             let sink = pending.accept().await.map_sub_err()?;
+///             let sink = pending.accept().await.map_err(|_| None)?;
 ///
 ///             let msg1 = SubscriptionMessage::from_json(&"Response_A").expect("Infallible");
 ///             // As &str is quite common and the serialization is infallible this is also possible to use.
 ///             let msg2 = SubscriptionMessage::from("Response_B");
 ///
-///             sink.send(msg1).await.map_sub_err()?;
-///             sink.send(msg2).await.map_sub_err()?;
+///             sink.send(msg1).await.map_err(|_| None)?;
+///             sink.send(msg2).await.map_err(|_| None)?;
 ///
 ///             Ok(())
 ///         }

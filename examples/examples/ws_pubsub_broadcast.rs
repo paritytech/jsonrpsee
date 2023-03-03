@@ -32,7 +32,6 @@ use futures::future::{self, Either};
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
-use jsonrpsee::core::server::MapSubscriptionError;
 use jsonrpsee::core::SubscriptionResult;
 
 use jsonrpsee::rpc_params;
@@ -97,7 +96,7 @@ async fn pipe_from_stream_with_bounded_buffer(
 	pending: PendingSubscriptionSink,
 	stream: BroadcastStream<usize>,
 ) -> SubscriptionResult {
-	let sink = pending.accept().await.map_sub_err()?;
+	let sink = pending.accept().await.map_err(|_| None)?;
 	let closed = sink.closed();
 
 	futures::pin_mut!(closed, stream);
@@ -109,7 +108,7 @@ async fn pipe_from_stream_with_bounded_buffer(
 
 			// received new item from the stream.
 			Either::Right((Some(Ok(item)), c)) => {
-				let notif = SubscriptionMessage::from_json(&item).map_sub_err()?;
+				let notif = SubscriptionMessage::from_json(&item).map_err(|e| Some(e.to_string().into()))?;
 
 				// NOTE: this will block until there a spot in the queue
 				// and you might want to do something smarter if it's
@@ -122,7 +121,7 @@ async fn pipe_from_stream_with_bounded_buffer(
 			}
 
 			// Send back back the error.
-			Either::Right((Some(Err(e)), _)) => break Err(Some(SubscriptionMessage::from(e.to_string().as_str()))),
+			Either::Right((Some(Err(e)), _)) => break Err(Some(e.to_string().into())),
 
 			// Stream is closed.
 			Either::Right((None, _)) => break Ok(()),
