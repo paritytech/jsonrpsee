@@ -2,9 +2,10 @@
 
 use std::net::SocketAddr;
 
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::core::SubscriptionResult;
-use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
+use jsonrpsee::core::server::MapSubscriptionError;
+use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, SubscriptionMessage};
 use jsonrpsee::ws_client::*;
@@ -66,39 +67,31 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-		let sink = pending.accept().await?;
+		let sink = pending.accept().await.map_sub_err()?;
 
-		sink.send("Response_A".into()).await.ok()?;
-		sink.send("Response_B".into()).await.ok()?;
+		sink.send("Response_A".into()).await.map_sub_err()?;
+		sink.send("Response_B".into()).await.map_sub_err()?;
 
-		None
+		Ok(())
 	}
 
 	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
-		let sink = pending.accept().await?;
+		let sink = pending.accept().await.map_sub_err()?;
+		let msg = SubscriptionMessage::from_json(&val).map_sub_err()?;
 
-		let msg = match SubscriptionMessage::from_json(&val) {
-			Ok(msg) => msg,
-			Err(e) => return Some(Err(e.to_string().as_str().into())),
-		};
+		sink.send(msg.clone()).await.map_sub_err()?;
+		sink.send(msg).await.map_sub_err()?;
 
-		sink.send(msg.clone()).await.ok()?;
-		sink.send(msg).await.ok()?;
-
-		None
+		Ok(())
 	}
 
 	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-		let sink = pending.accept().await?;
+		let sink = pending.accept().await.map_sub_err()?;
 
-		let msg = match SubscriptionMessage::from_json(&1) {
-			Ok(msg) => msg,
-			Err(e) => return Some(Err(e.to_string().as_str().into())),
-		};
+		let msg = SubscriptionMessage::from_json(&1).map_sub_err()?;
+		sink.send(msg).await.map_sub_err()?;
 
-		sink.send(msg).await.ok()?;
-
-		None
+		Ok(())
 	}
 }
 
