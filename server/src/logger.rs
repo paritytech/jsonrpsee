@@ -29,9 +29,8 @@
 use std::net::SocketAddr;
 
 /// HTTP request.
-pub type HttpRequest = http::Request<Body>;
-pub use http::HeaderMap as Headers;
-pub use hyper::Body;
+pub type HttpRequest = hyper::Request<Body>;
+pub use hyper::{Body, HeaderMap as Headers};
 pub use jsonrpsee_types::Params;
 
 /// The type JSON-RPC v2 call, it can be a subscription, method call or unknown.
