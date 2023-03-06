@@ -10,20 +10,17 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-client-transport"
 
 [dependencies]
-jsonrpsee-types = { path = "../../types", version = "0.16.2", optional = true }
 jsonrpsee-core = { path = "../../core", version = "0.16.2", features = ["client"] }
 tracing = "0.1.34"
 
 # optional
 thiserror = { version = "1", optional = true }
-anyhow = { version = "1", optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, features = ["alloc"], optional = true }
 http = { version = "0.2", optional = true }
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 tokio = { version = "1.16", features = ["net", "time", "macros"], optional = true }
 pin-project = { version = "1", optional = true }
-futures-timer = { version = "3", optional = true }
 
 # tls
 rustls-native-certs = { version = "0.6", optional = true }
@@ -51,15 +48,12 @@ ws = [
     "tokio-util",
     "soketto",
     "pin-project",
-    "jsonrpsee-types",
     "thiserror",
 ]
 web = [
     "gloo-net",
     "futures-channel",
-    "futures-timer",
     "futures-util",
-    "anyhow",
     "thiserror",
 ]
 
