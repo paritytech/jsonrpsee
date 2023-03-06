@@ -85,11 +85,20 @@ jobs:
           crate: cargo-hack
           version: 0.5
 
+      - name: Install cargo-machete
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-machete
+          version: 0.5
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.2.1
 
       - name: Cargo check all targets and features
         run: cargo hack check --workspace --each-feature --all-targets
+
+      - name: Check unused dependencies
+        run: cargo machete
 
   tests_ubuntu:
     name: Run tests Ubuntu
