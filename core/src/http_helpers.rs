@@ -30,6 +30,7 @@ use crate::error::GenericTransportError;
 use anyhow::anyhow;
 use hyper::body::{Buf, HttpBody};
 use std::error::Error as StdError;
+use tokio as _;
 
 /// Read a data from [`hyper::body::HttpBody`] and return the data if it is valid JSON and within the allowed size range.
 ///
@@ -152,7 +153,7 @@ mod tests {
 		let mut headers = hyper::header::HeaderMap::new();
 		headers.insert(hyper::header::CONTENT_LENGTH, "177".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), Some(177));
-	
+
 		headers.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), None);
 	}
