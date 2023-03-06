@@ -25,10 +25,9 @@ rand = { version = "0.8", optional = true }
 soketto = { version = "0.7.1", optional = true }
 parking_lot = { version = "0.12", optional = true }
 tokio = { version = "1.16", optional = true }
-wasm-bindgen-futures = { version = "0.4.19", optional = true }
+# wasm-bindgen-futures = { version = "0.4.19", optional = true }
 futures-timer = { version = "3", optional = true }
 globset = { version = "0.4", optional = true }
-http = { version = "0.2.7", optional = true }
 tokio-stream = { version = "0.1", optional = true }
 
 [features]
@@ -58,7 +57,7 @@ async-client = [
 async-wasm-client = [
 	"async-lock",
 	"client",
-	"wasm-bindgen-futures",
+	# "wasm-bindgen-futures",
 	"rustc-hash/std",
 	"futures-timer/wasm-bindgen",
 	"tokio-stream",

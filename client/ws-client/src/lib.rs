@@ -33,6 +33,7 @@
 //! This library uses `tokio` as the runtime and does not support other runtimes.
 
 #![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
+#![deny(unused_crate_dependencies)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(test)]
