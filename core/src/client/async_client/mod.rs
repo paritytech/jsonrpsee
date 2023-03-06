@@ -195,7 +195,7 @@ impl ClientBuilder {
 	}
 
 	/// Build the client with given transport.
-	#[cfg(all(feature = "async-wasm-client", target_arch = "wasm32"))]
+	#[cfg(feature = "async-wasm-client")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "async-wasm-client")))]
 	pub fn build_with_wasm<S, R>(self, sender: S, receiver: R) -> Client
 	where

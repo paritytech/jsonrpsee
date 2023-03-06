@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
+// #![deny(unused_crate_dependencies)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! # jsonrpsee-client-transports
@@ -36,6 +37,7 @@
 pub mod ws;
 
 /// Websocket transport via web-sys.
-#[cfg(all(feature = "web", target_arch = "wasm32"))]
+// #[cfg(all(feature = "web", target_arch = "wasm32"))]
+#[cfg(feature = "web")]
 #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 pub mod web;
