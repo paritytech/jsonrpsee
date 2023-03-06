@@ -136,26 +136,31 @@ pub fn read_header_values<'a>(
 	headers.get_all(header_name)
 }
 
-#[tokio::test]
-async fn body_to_bytes_size_limit_works() {
-	let headers = hyper::header::HeaderMap::new();
-	let body = hyper::Body::from(vec![0; 128]);
-	assert!(read_body(&headers, body, 127).await.is_err());
-}
-
-#[test]
-fn read_content_length_works() {
-	let mut headers = hyper::header::HeaderMap::new();
-	headers.insert(hyper::header::CONTENT_LENGTH, "177".parse().unwrap());
-	assert_eq!(read_header_content_length(&headers), Some(177));
-
-	headers.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
-	assert_eq!(read_header_content_length(&headers), None);
-}
-
-#[test]
-fn read_content_length_too_big_value() {
-	let mut headers = hyper::header::HeaderMap::new();
-	headers.insert(hyper::header::CONTENT_LENGTH, "18446744073709551616".parse().unwrap());
-	assert_eq!(read_header_content_length(&headers), None);
+#[cfg(test)]
+mod tests {
+	use super::{read_body, read_header_content_length};
+	
+	#[tokio::test]
+	async fn body_to_bytes_size_limit_works() {
+		let headers = hyper::header::HeaderMap::new();
+		let body = hyper::Body::from(vec![0; 128]);
+		assert!(read_body(&headers, body, 127).await.is_err());
+	}
+	
+	#[test]
+	fn read_content_length_works() {
+		let mut headers = hyper::header::HeaderMap::new();
+		headers.insert(hyper::header::CONTENT_LENGTH, "177".parse().unwrap());
+		assert_eq!(read_header_content_length(&headers), Some(177));
+	
+		headers.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
+		assert_eq!(read_header_content_length(&headers), None);
+	}
+	
+	#[test]
+	fn read_content_length_too_big_value() {
+		let mut headers = hyper::header::HeaderMap::new();
+		headers.insert(hyper::header::CONTENT_LENGTH, "18446744073709551616".parse().unwrap());
+		assert_eq!(read_header_content_length(&headers), None);
+	}
 }
