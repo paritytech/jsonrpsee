@@ -33,6 +33,7 @@
 //! [`async-std`](https://docs.rs/async-std/), [`smol`](https://docs.rs/smol) and similar.
 
 #![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
+#![deny(unused_crate_dependencies)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod client;
