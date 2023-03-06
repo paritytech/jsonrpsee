@@ -32,7 +32,7 @@ tokio-stream = { version = "0.1", optional = true }
 
 [features]
 default = []
-http-helpers = ["hyper", "futures-util"]
+http-helpers = ["hyper", "futures-util", "tokio/rt", "tokio/macros"]
 server = [
 	"futures-util/alloc",
 	"globset",
@@ -65,8 +65,6 @@ async-wasm-client = [
 
 [dev-dependencies]
 serde_json = "1.0"
-tokio = { version = "1.16", features = ["macros", "rt"] }
-jsonrpsee = { path = "../jsonrpsee", features = ["server", "macros"] }
 
 [package.metadata.docs.rs]
 all-features = true
