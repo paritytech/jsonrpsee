@@ -442,14 +442,14 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			"subscribe_hello",
 			"unsubscribe_hello",
 			|_, pending, mut tx| async move {
-				let sink = pending.accept().await.map_err(|_| None)?;
-				let msg = SubscriptionMessage::from_json(&1).unwrap();
-				sink.send(msg).await.map_err(|_| None)?;
+				let sink = pending.accept().await.map_err(|e| Error::Custom(format!("{:?}", e)))?;
+				let msg = SubscriptionMessage::from_json(&1)?;
+				sink.send(msg).await.map_err(|e| Error::Custom(format!("{:?}", e)))?;
 				sink.closed().await;
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed("Subscription terminated by remote peer").await.unwrap();
 
-				Ok(())
+				Ok::<_, Error>(())
 			},
 		)
 		.unwrap();
@@ -483,7 +483,9 @@ async fn ws_server_stop_subscription_when_dropped() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
+		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async {
+			Ok::<_, String>(())
+		})
 		.unwrap();
 
 	let _handle = server.start(module).unwrap();

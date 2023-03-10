@@ -27,7 +27,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
-use jsonrpsee::core::{async_trait, client::Subscription, Error, SubscriptionResult};
+use jsonrpsee::core::{async_trait, client::Subscription, Error};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -46,7 +46,7 @@ where
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
-	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
+	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> Result<(), Error>;
 }
 
 pub struct RpcServerImpl;
@@ -66,10 +66,10 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		&self,
 		pending: PendingSubscriptionSink,
 		_keys: Option<Vec<ExampleStorageKey>>,
-	) -> SubscriptionResult {
-		let sink = pending.accept().await.map_err(|_| None)?;
-		let msg = SubscriptionMessage::from_json(&vec![[0; 32]]).map_err(|e| Some(e.to_string().into()))?;
-		sink.send(msg).await.map_err(|_| None)?;
+	) -> Result<(), Error> {
+		let sink = pending.accept().await.map_err(|e| Error::Custom(format!("{:?}", e)))?;
+		let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
+		sink.send(msg).await.map_err(|e| Error::Custom(format!("{:?}", e)))?;
 
 		Ok(())
 	}

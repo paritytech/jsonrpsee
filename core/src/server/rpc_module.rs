@@ -35,7 +35,6 @@ use crate::error::{Error, SubscriptionAcceptRejectError};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::{BoundedSubscriptions, MethodSink};
 use crate::traits::{IdProvider, ToRpcParams};
-use crate::SubscriptionResult;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned};
 use jsonrpsee_types::response::SubscriptionError;
@@ -48,6 +47,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::mpsc;
 
 use super::helpers::{MethodResponse, SubscriptionPermit};
+use super::{IntoSubscriptionResponse, SubscriptionCloseResponse};
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -789,7 +789,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     Ok(())
 	/// });
 	/// ```
-	pub fn register_subscription<F, Fut>(
+	pub fn register_subscription<F, Fut, R>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		notif_method_name: &'static str,
@@ -799,7 +799,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>) -> Fut) + Send + Sync + Clone + 'static,
-		Fut: Future<Output = SubscriptionResult> + Send + 'static,
+		Fut: Future<Output = R> + Send + 'static,
+		R: IntoSubscriptionResponse + Send,
 	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
@@ -877,8 +878,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let sub_fut = callback(params.into_owned(), sink, ctx.clone());
 
 					tokio::spawn(async move {
-						match sub_fut.await {
-							Err(Some(msg)) if tx.is_closed() => {
+						match sub_fut.await.into_response() {
+							SubscriptionCloseResponse::Some(msg) if tx.is_closed() => {
+								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
+								_ = method_sink.send(json).await;
+							}
+							SubscriptionCloseResponse::Err(msg) if tx.is_closed() => {
 								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
 								_ = method_sink.send(json).await;
 							}

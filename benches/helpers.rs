@@ -151,11 +151,11 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::se
 			SUB_METHOD_NAME,
 			UNSUB_METHOD_NAME,
 			|_params, pending, _ctx| async move {
-				let sink = pending.accept().await.map_err(|_| None)?;
+				let sink = pending.accept().await.unwrap();
 				let msg = SubscriptionMessage::from("Hello");
-				sink.send(msg).await.map_err(|_| None)?;
+				sink.send(msg).await.unwrap();
 
-				Ok(())
+				Ok::<_, jsonrpsee::core::Error>(())
 			},
 		)
 		.unwrap();

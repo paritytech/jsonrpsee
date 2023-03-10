@@ -32,7 +32,7 @@ use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType};
+use syn::{token, AttrStyle, Attribute, Path, PathSegment};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -75,11 +75,6 @@ impl RpcDescription {
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
-
-			// For ergonomic reasons, the server's subscription method should return `SubscriptionResult`.
-			let return_ty = self.jrps_server_item(quote! { core::SubscriptionResult });
-			let output: ReturnType = parse_quote! { -> #return_ty };
-			sub_sig.sig.output = output;
 
 			sub_sig.sig.inputs.insert(1, subscription_sink);
 			quote! {
