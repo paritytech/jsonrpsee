@@ -695,7 +695,7 @@ async fn ws_server_backpressure_works() {
 			"n",
 			"unsubscribe_with_backpressure_aggregation",
 			move |_, pending, mut backpressure_tx| async move {
-				let sink = pending.accept().await.map_err(|e| anyhow::anyhow!("{:?}", e))?;
+				let sink = pending.accept().await?;
 				let n = SubscriptionMessage::from_json(&1)?;
 				let bp = SubscriptionMessage::from_json(&2)?;
 
