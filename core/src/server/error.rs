@@ -3,11 +3,13 @@ use std::fmt;
 use tokio::sync::mpsc;
 
 /// Error that may occur during [`SubscriptionSink::try_send`].
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum TrySendError {
 	/// The channel is closed.
+	#[error("Closed")]
 	Closed(SubscriptionMessage),
 	/// The channel is full.
+	#[error("Full")]
 	Full(SubscriptionMessage),
 }
 
@@ -16,12 +18,14 @@ pub enum TrySendError {
 pub struct DisconnectError(pub SubscriptionMessage);
 
 /// Error that may occur during `SubscriptionSink::send_timeout`.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SendTimeoutError {
 	/// The data could not be sent because the timeout elapsed
 	/// which most likely is that the channel is full.
+	#[error("Timed out waiting on send operation")]
 	Timeout(SubscriptionMessage),
 	/// The channel is full.
+	#[error("Closed")]
 	Closed(SubscriptionMessage),
 }
 
@@ -42,23 +46,9 @@ impl std::fmt::Display for DisconnectError {
 	}
 }
 
-impl std::fmt::Display for TrySendError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let msg = match self {
-			Self::Closed(_) => "closed",
-			Self::Full(_) => "full",
-		};
-		f.write_str(msg)
-	}
-}
-
-impl std::fmt::Display for SendTimeoutError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let msg = match self {
-			Self::Timeout(_) => "timed out waiting on send operation",
-			Self::Closed(_) => "closed",
-		};
-		f.write_str(msg)
+impl std::error::Error for DisconnectError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		None
 	}
 }
 
