@@ -111,7 +111,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 	pending: PendingSubscriptionSink,
 	mut stream: impl Stream<Item = T> + Unpin,
 ) -> Result<(), anyhow::Error> {
-	let mut sink = pending.accept().await.map_err(|e| anyhow::anyhow!("{:?}", e))?;
+	let mut sink = pending.accept().await?;
 
 	loop {
 		tokio::select! {

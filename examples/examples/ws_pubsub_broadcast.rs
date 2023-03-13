@@ -32,7 +32,6 @@ use futures::future::{self, Either};
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::server::SubscriptionMessage;
-
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -95,7 +94,7 @@ async fn pipe_from_stream_with_bounded_buffer(
 	pending: PendingSubscriptionSink,
 	stream: BroadcastStream<usize>,
 ) -> Result<(), anyhow::Error> {
-	let sink = pending.accept().await.map_err(|e| anyhow::anyhow!("{:?}", e))?;
+	let sink = pending.accept().await?;
 	let closed = sink.closed();
 
 	futures::pin_mut!(closed, stream);

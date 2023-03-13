@@ -72,7 +72,7 @@ pub type MaxResponseSize = usize;
 /// A 3-tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
+///   - a [`crate::server::SubscriptionPermit`] to allow subscribers to notify their [`crate::server::SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, SubscriptionPermit);
 
 /// Outcome of a successful terminated subscription.

@@ -38,5 +38,7 @@ pub mod rpc_module;
 pub mod subscription;
 
 pub use error::*;
+pub use helpers::*;
+pub use host_filtering::*;
 pub use rpc_module::*;
 pub use subscription::*;

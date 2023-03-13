@@ -82,12 +82,12 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_subscription::<_, _, Result<(), anyhow::Error>>(
+		.register_subscription::<_, _, Result<(), Error>>(
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",
 			|_, pending, _| async move {
-				let sink = pending.accept().await.map_err(|e| anyhow::anyhow!("{:?}", e))?;
+				let sink = pending.accept().await?;
 
 				loop {
 					let _ = &sink;
