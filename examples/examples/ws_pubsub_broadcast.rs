@@ -31,7 +31,7 @@ use std::net::SocketAddr;
 use futures::future::{self, Either};
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+use jsonrpsee::core::server::SubscriptionMessage;
 
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};

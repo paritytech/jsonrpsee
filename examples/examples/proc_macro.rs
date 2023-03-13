@@ -26,7 +26,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{async_trait, client::Subscription, Error};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder};
@@ -67,9 +67,9 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		pending: PendingSubscriptionSink,
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> Result<(), Error> {
-		let sink = pending.accept().await.map_err(|e| Error::Custom(format!("{:?}", e)))?;
+		let sink = pending.accept().await?;
 		let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
-		sink.send(msg).await.map_err(|e| Error::Custom(format!("{:?}", e)))?;
+		sink.send(msg).await?;
 
 		Ok(())
 	}

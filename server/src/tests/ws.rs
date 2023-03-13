@@ -27,7 +27,7 @@
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
-use jsonrpsee_core::server::rpc_module::{SendTimeoutError, SubscriptionMessage};
+use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};

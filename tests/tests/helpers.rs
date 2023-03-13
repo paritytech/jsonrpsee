@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::server::host_filtering::AllowHosts;
-use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
+use jsonrpsee::core::server::{SubscriptionMessage, TrySendError};
 use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};

@@ -26,59 +26,17 @@
 
 //! Shared modules for the JSON-RPC servers.
 
+/// Error types.
+pub mod error;
 /// Helpers.
 pub mod helpers;
 /// Host filtering.
 pub mod host_filtering;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 pub mod rpc_module;
+/// Subscription related types.
+pub mod subscription;
 
-use self::rpc_module::SubscriptionMessage;
-
-/// Represents what action that will sent when a subscription callback returns.
-#[derive(Debug)]
-pub enum SubscriptionCloseResponse {
-	/// No further message will be sent.
-	None,
-	/// Send a ordinary subscription response.
-	Some(SubscriptionMessage),
-	/// Send a subscription error response.
-	Err(SubscriptionMessage),
-}
-
-/// Convert something into a response.
-pub trait IntoSubscriptionResponse {
-	/// Convert something into a response.
-	fn into_response(self) -> SubscriptionCloseResponse;
-}
-
-impl<T> IntoSubscriptionResponse for Option<T>
-where
-	T: serde::Serialize,
-{
-	fn into_response(self) -> SubscriptionCloseResponse {
-		match self {
-			Some(msg) => match SubscriptionMessage::from_json(&msg) {
-				Ok(m) => SubscriptionCloseResponse::Some(m),
-				Err(e) => SubscriptionCloseResponse::Err(e.to_string().into()),
-			},
-			None => SubscriptionCloseResponse::None,
-		}
-	}
-}
-
-impl<T, E> IntoSubscriptionResponse for Result<T, E>
-where
-	T: serde::Serialize,
-	E: ToString,
-{
-	fn into_response(self) -> SubscriptionCloseResponse {
-		match self {
-			Ok(msg) => match SubscriptionMessage::from_json(&msg) {
-				Ok(m) => SubscriptionCloseResponse::Some(m),
-				Err(e) => SubscriptionCloseResponse::Err(e.to_string().into()),
-			},
-			Err(e) => SubscriptionCloseResponse::Err(e.to_string().into()),
-		}
-	}
-}
+pub use error::*;
+pub use rpc_module::*;
+pub use subscription::*;

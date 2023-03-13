@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::io;
-use std::sync::Arc;
 use std::time::Duration;
 
 use crate::tracing::tx_log_from_str;
@@ -34,9 +33,8 @@ use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RE
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Permit};
-use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
-use super::rpc_module::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
+use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -188,59 +186,6 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	match serde_json::from_slice::<InvalidRequest>(data) {
 		Ok(InvalidRequest { id }) => (id, ErrorCode::InvalidRequest),
 		Err(_) => (Id::Null, ErrorCode::ParseError),
-	}
-}
-
-/// A permitted subscription.
-#[derive(Debug)]
-pub struct SubscriptionPermit {
-	_permit: OwnedSemaphorePermit,
-	resource: Arc<Notify>,
-}
-
-impl SubscriptionPermit {
-	/// Get the handle to [`tokio::sync::Notify`].
-	pub fn handle(&self) -> Arc<Notify> {
-		self.resource.clone()
-	}
-}
-
-/// Wrapper over [`tokio::sync::Notify`] with bounds check.
-#[derive(Debug, Clone)]
-pub struct BoundedSubscriptions {
-	resource: Arc<Notify>,
-	guard: Arc<Semaphore>,
-	max: u32,
-}
-
-impl BoundedSubscriptions {
-	/// Create a new bounded subscription.
-	pub fn new(max_subscriptions: u32) -> Self {
-		Self {
-			resource: Arc::new(Notify::new()),
-			guard: Arc::new(Semaphore::new(max_subscriptions as usize)),
-			max: max_subscriptions,
-		}
-	}
-
-	/// Attempts to acquire a subscription slot.
-	///
-	/// Fails if `max_subscriptions` have been exceeded.
-	pub fn acquire(&self) -> Option<SubscriptionPermit> {
-		Arc::clone(&self.guard)
-			.try_acquire_owned()
-			.ok()
-			.map(|p| SubscriptionPermit { _permit: p, resource: self.resource.clone() })
-	}
-
-	/// Get the maximum number of permitted subscriptions.
-	pub const fn max(&self) -> u32 {
-		self.max
-	}
-
-	/// Close all subscriptions.
-	pub fn close(&self) {
-		self.resource.notify_waiters();
 	}
 }
 

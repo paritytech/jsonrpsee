@@ -29,25 +29,22 @@ use std::fmt::{self, Debug};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use std::time::Duration;
 
-use crate::error::{Error, SubscriptionAcceptRejectError};
+use crate::error::Error;
 use crate::id_providers::RandomIntegerIdProvider;
-use crate::server::helpers::{BoundedSubscriptions, MethodSink};
-use crate::traits::{IdProvider, ToRpcParams};
-use futures_util::{future::BoxFuture, FutureExt};
-use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned};
-use jsonrpsee_types::response::SubscriptionError;
-use jsonrpsee_types::{
-	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionResponse,
+use crate::server::helpers::{MethodResponse, MethodSink};
+use crate::server::subscription::{
+	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionResponse, PendingSubscriptionSink,
+	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
+	SubscriptionState,
 };
-use parking_lot::Mutex;
+use crate::traits::ToRpcParams;
+use futures_util::{future::BoxFuture, FutureExt};
+use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
+use jsonrpsee_types::{ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId};
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::mpsc;
-
-use super::helpers::{MethodResponse, SubscriptionPermit};
-use super::{IntoSubscriptionResponse, SubscriptionCloseResponse};
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -58,8 +55,9 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
-pub type SubscriptionMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, ConnState) -> BoxFuture<'a, Result<MethodResponse, Id<'a>>>>;
+pub type SubscriptionMethod<'a> = Arc<
+	dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, Result<MethodResponse, Id<'a>>>,
+>;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
 
@@ -77,65 +75,6 @@ pub type MaxResponseSize = usize;
 ///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, SubscriptionPermit);
 
-/// Error that may occur during [`SubscriptionSink::try_send`].
-#[derive(Debug)]
-pub enum TrySendError {
-	/// The channel is closed.
-	Closed(SubscriptionMessage),
-	/// The channel is full.
-	Full(SubscriptionMessage),
-}
-
-impl std::fmt::Display for TrySendError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let msg = match self {
-			Self::Closed(_) => "closed",
-			Self::Full(_) => "full",
-		};
-		f.write_str(msg)
-	}
-}
-
-/// Error that may occur during `MethodSink::send` or `SubscriptionSink::send`.
-#[derive(Debug)]
-pub struct DisconnectError(pub SubscriptionMessage);
-
-impl std::fmt::Display for DisconnectError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str("closed")
-	}
-}
-
-/// Error that may occur during `SubscriptionSink::send_timeout`.
-#[derive(Debug)]
-pub enum SendTimeoutError {
-	/// The data could not be sent because the timeout elapsed
-	/// which most likely is that the channel is full.
-	Timeout(SubscriptionMessage),
-	/// The channel is full.
-	Closed(SubscriptionMessage),
-}
-
-impl std::fmt::Display for SendTimeoutError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let msg = match self {
-			Self::Timeout(_) => "timed out waiting on send operation",
-			Self::Closed(_) => "closed",
-		};
-		f.write_str(msg)
-	}
-}
-
-/// Helper struct to manage subscriptions.
-pub struct ConnState<'a> {
-	/// Connection ID
-	pub conn_id: ConnectionId,
-	/// ID provider.
-	pub id_provider: &'a dyn IdProvider,
-	/// Subscription limit
-	pub subscription_permit: SubscriptionPermit,
-}
-
 /// Outcome of a successful terminated subscription.
 #[derive(Debug, Copy, Clone)]
 pub enum InnerSubscriptionResult {
@@ -144,38 +83,6 @@ pub enum InnerSubscriptionResult {
 	/// The subscription was aborted by the remote peer.
 	Aborted,
 }
-
-impl From<mpsc::error::SendError<String>> for DisconnectError {
-	fn from(e: mpsc::error::SendError<String>) -> Self {
-		DisconnectError(SubscriptionMessage::from_complete_message(e.0))
-	}
-}
-
-impl From<mpsc::error::TrySendError<String>> for TrySendError {
-	fn from(e: mpsc::error::TrySendError<String>) -> Self {
-		match e {
-			mpsc::error::TrySendError::Closed(m) => Self::Closed(SubscriptionMessage::from_complete_message(m)),
-			mpsc::error::TrySendError::Full(m) => Self::Full(SubscriptionMessage::from_complete_message(m)),
-		}
-	}
-}
-
-impl From<mpsc::error::SendTimeoutError<String>> for SendTimeoutError {
-	fn from(e: mpsc::error::SendTimeoutError<String>) -> Self {
-		match e {
-			mpsc::error::SendTimeoutError::Closed(m) => Self::Closed(SubscriptionMessage::from_complete_message(m)),
-			mpsc::error::SendTimeoutError::Timeout(m) => Self::Timeout(SubscriptionMessage::from_complete_message(m)),
-		}
-	}
-}
-
-impl<'a> std::fmt::Debug for ConnState<'a> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("ConnState").field("conn_id", &self.conn_id).finish()
-	}
-}
-
-type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Receiver<()>)>>>;
 
 /// This represent a response to a RPC call
 /// and `Subscribe` calls are handled differently
@@ -209,52 +116,6 @@ impl CallOrSubscription {
 	}
 }
 
-/// A complete subscription message or partial subscription message.
-#[derive(Debug, Clone)]
-pub enum SubscriptionMessageInner {
-	/// Complete JSON message.
-	Complete(String),
-	/// Need subscription ID and method name.
-	NeedsData(String),
-}
-
-/// Subscription message.
-#[derive(Debug, Clone)]
-pub struct SubscriptionMessage(pub(crate) SubscriptionMessageInner);
-
-impl SubscriptionMessage {
-	/// Create a new subscription message from JSON.
-	///
-	/// Fails if the value couldn't be serialized.
-	pub fn from_json(t: &impl Serialize) -> Result<Self, serde_json::Error> {
-		serde_json::to_string(t).map(|json| SubscriptionMessage(SubscriptionMessageInner::NeedsData(json)))
-	}
-
-	pub(crate) fn from_complete_message(msg: String) -> Self {
-		SubscriptionMessage(SubscriptionMessageInner::Complete(msg))
-	}
-
-	pub(crate) fn empty() -> Self {
-		Self::from_complete_message(String::new())
-	}
-}
-
-impl<T> From<T> for SubscriptionMessage
-where
-	T: AsRef<str>,
-{
-	fn from(msg: T) -> Self {
-		SubscriptionMessage(SubscriptionMessageInner::NeedsData(format!("\"{}\"", msg.as_ref())))
-	}
-}
-
-/// Represent a unique subscription entry based on [`RpcSubscriptionId`] and [`ConnectionId`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct SubscriptionKey {
-	conn_id: ConnectionId,
-	sub_id: RpcSubscriptionId<'static>,
-}
-
 /// Callback wrapper that can be either sync or async.
 #[derive(Clone)]
 pub enum MethodCallback {
@@ -274,20 +135,6 @@ pub enum MethodResult<T> {
 	Sync(T),
 	/// Future of a value
 	Async(BoxFuture<'static, T>),
-}
-
-enum SubNotifResultOrError {
-	Result,
-	Error,
-}
-
-impl SubNotifResultOrError {
-	const fn as_str(&self) -> &str {
-		match self {
-			Self::Result => "result",
-			Self::Error => "error",
-		}
-	}
 }
 
 impl<T: Debug> Debug for MethodResult<T> {
@@ -480,7 +327,7 @@ impl Methods {
 			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
-					ConnState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit: p1 };
+					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit: p1 };
 				let res = match (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await {
 					Ok(rp) => rp,
 					Err(id) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
@@ -918,265 +765,5 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods.mut_callbacks().insert(alias, callback);
 
 		Ok(())
-	}
-}
-
-/// Represents a subscription until it is unsubscribed.
-///
-// NOTE: The reason why we use `mpsc` here is because it allows `IsUnsubscribed::unsubscribed`
-// to be &self instead of &mut self.
-#[derive(Debug, Clone)]
-struct IsUnsubscribed(mpsc::Sender<()>);
-
-impl IsUnsubscribed {
-	/// Returns true if the unsubscribe method has been invoked or the subscription has been canceled.
-	///
-	/// This can be called multiple times as the element in the channel is never
-	/// removed.
-	fn is_unsubscribed(&self) -> bool {
-		self.0.is_closed()
-	}
-
-	/// Wrapper over [`tokio::sync::mpsc::Sender::closed`]
-	///
-	/// # Cancel safety
-	///
-	/// This method is cancel safe. Once the channel is closed,
-	/// it stays closed forever and all future calls to closed will return immediately.
-	async fn unsubscribed(&self) {
-		self.0.closed().await;
-	}
-}
-
-/// Represents a single subscription that is waiting to be accepted or rejected.
-///
-/// If this is dropped without calling `PendingSubscription::reject` or `PendingSubscriptionSink::accept`
-/// a default error is sent out as response to the subscription call.
-///
-/// Thus, if you want a customized error message then `PendingSubscription::reject` must be called.
-#[derive(Debug)]
-#[must_use = "PendningSubscriptionSink does nothing unless `accept` or `reject` is called"]
-pub struct PendingSubscriptionSink {
-	/// Sink.
-	inner: MethodSink,
-	/// MethodCallback.
-	method: &'static str,
-	/// Shared Mutex of subscriptions for this method.
-	subscribers: Subscribers,
-	/// Unique subscription.
-	uniq_sub: SubscriptionKey,
-	/// ID of the `subscription call` (i.e. not the same as subscription id) which is used
-	/// to reply to subscription method call and must only be used once.
-	id: Id<'static>,
-	/// Sender to answer the subscribe call.
-	subscribe: mpsc::Sender<MethodResponse>,
-	/// Subscription permit.
-	permit: SubscriptionPermit,
-}
-
-impl PendingSubscriptionSink {
-	/// Reject the subscription call with the error from [`ErrorObject`].
-	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
-		let err = MethodResponse::error(self.id, err.into());
-		_ = self.inner.send(err.result.clone()).await;
-		_ = self.subscribe.send(err).await;
-	}
-
-	/// Attempt to accept the subscription and respond the subscription method call.
-	///
-	/// Returns `None` if the connection is already closed, `Some(SubscriptionSink)` otherwise.
-	///
-	/// # Panics
-	///
-	/// Panics if the subscription response exceeded the `max_response_size`.
-	pub async fn accept(self) -> Result<SubscriptionSink, SubscriptionAcceptRejectError> {
-		let response =
-			MethodResponse::response(self.id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
-		let success = response.success;
-		self.inner.send(response.result.clone()).await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
-		self.subscribe.send(response).await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
-
-		if success {
-			let (tx, rx) = mpsc::channel(1);
-			self.subscribers.lock().insert(self.uniq_sub.clone(), (self.inner.clone(), rx));
-			Ok(SubscriptionSink {
-				inner: self.inner,
-				method: self.method,
-				subscribers: self.subscribers,
-				uniq_sub: self.uniq_sub,
-				unsubscribe: IsUnsubscribed(tx),
-				_permit: Arc::new(self.permit),
-			})
-		} else {
-			Err(SubscriptionAcceptRejectError::MessageTooLarge)
-		}
-	}
-}
-
-/// Represents a single subscription that hasn't been processed yet.
-#[derive(Debug, Clone)]
-pub struct SubscriptionSink {
-	/// Sink.
-	inner: MethodSink,
-	/// MethodCallback.
-	method: &'static str,
-	/// Shared Mutex of subscriptions for this method.
-	subscribers: Subscribers,
-	/// Unique subscription.
-	uniq_sub: SubscriptionKey,
-	/// A future to that fires once the unsubscribe method has been called.
-	unsubscribe: IsUnsubscribed,
-	/// Subscription permit
-	_permit: Arc<SubscriptionPermit>,
-}
-
-impl SubscriptionSink {
-	/// Get the subscription ID.
-	pub fn subscription_id(&self) -> RpcSubscriptionId<'static> {
-		self.uniq_sub.sub_id.clone()
-	}
-
-	/// Get the method name.
-	pub fn method_name(&self) -> &str {
-		self.method
-	}
-
-	/// Send out a response on the subscription and wait until there is capacity.
-	///
-	///
-	/// Returns
-	/// - `Ok(())` if the message could be sent.
-	/// - `Err(err)` if the connection or subscription was closed.
-	///
-	/// # Cancel safety
-	///
-	/// This method is cancel-safe and dropping a future loses its spot in the waiting queue.
-	pub async fn send(&self, msg: SubscriptionMessage) -> Result<(), DisconnectError> {
-		// Only possible to trigger when the connection is dropped.
-		if self.is_closed() {
-			return Err(DisconnectError(msg));
-		}
-
-		let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &self.uniq_sub.sub_id, self.method);
-		self.inner.send(json).await.map_err(Into::into)
-	}
-
-	/// Similar to to `SubscriptionSink::send` but only waits for a limited time.
-	pub async fn send_timeout(&self, msg: SubscriptionMessage, timeout: Duration) -> Result<(), SendTimeoutError> {
-		// Only possible to trigger when the connection is dropped.
-		if self.is_closed() {
-			return Err(SendTimeoutError::Closed(msg));
-		}
-
-		let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &self.uniq_sub.sub_id, self.method);
-		self.inner.send_timeout(json, timeout).await.map_err(Into::into)
-	}
-
-	/// Attempts to immediately send out the message as JSON string to the subscribers but fails if the
-	/// channel is full or the connection/subscription is closed
-	///
-	///
-	/// This differs from [`SubscriptionSink::send`] where it will until there is capacity
-	/// in the channel.
-	pub fn try_send(&mut self, msg: SubscriptionMessage) -> Result<(), TrySendError> {
-		// Only possible to trigger when the connection is dropped.
-		if self.is_closed() {
-			return Err(TrySendError::Closed(msg));
-		}
-
-		let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &self.uniq_sub.sub_id, self.method);
-		self.inner.try_send(json).map_err(Into::into)
-	}
-
-	/// Returns whether the subscription is closed.
-	pub fn is_closed(&self) -> bool {
-		self.inner.is_closed() || !self.is_active_subscription()
-	}
-
-	/// Completes when the subscription has been closed.
-	pub async fn closed(&self) {
-		// Both are cancel-safe thus ok to use select here.
-		tokio::select! {
-			_ = self.inner.closed() => (),
-			_ = self.unsubscribe.unsubscribed() => (),
-		}
-	}
-
-	fn is_active_subscription(&self) -> bool {
-		!self.unsubscribe.is_unsubscribed()
-	}
-}
-
-impl Drop for SubscriptionSink {
-	fn drop(&mut self) {
-		if self.is_active_subscription() {
-			self.subscribers.lock().remove(&self.uniq_sub);
-		}
-	}
-}
-
-/// Wrapper struct that maintains a subscription "mainly" for testing.
-#[derive(Debug)]
-pub struct Subscription {
-	rx: mpsc::Receiver<String>,
-	sub_id: RpcSubscriptionId<'static>,
-	_permit: SubscriptionPermit,
-}
-
-impl Subscription {
-	/// Close the subscription channel.
-	pub fn close(&mut self) {
-		tracing::trace!("[Subscription::close] Notifying");
-		self.rx.close();
-	}
-
-	/// Get the subscription ID
-	pub fn subscription_id(&self) -> &RpcSubscriptionId {
-		&self.sub_id
-	}
-
-	/// Returns `Some((val, sub_id))` for the next element of type T from the underlying stream,
-	/// otherwise `None` if the subscription was closed.
-	///
-	/// # Panics
-	///
-	/// If the decoding the value as `T` fails.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, RpcSubscriptionId<'static>), Error>> {
-		let raw = self.rx.recv().await?;
-
-		tracing::debug!("[Subscription::next]: rx {}", raw);
-		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
-			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
-			Err(e) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {
-				Ok(_) => None,
-				Err(_) => Some(Err(e.into())),
-			},
-		};
-		res
-	}
-}
-
-impl Drop for Subscription {
-	fn drop(&mut self) {
-		self.close();
-	}
-}
-
-fn sub_message_to_json(
-	msg: SubscriptionMessage,
-	result_or_err: SubNotifResultOrError,
-	sub_id: &RpcSubscriptionId,
-	method: &str,
-) -> String {
-	let result_or_err = result_or_err.as_str();
-
-	match msg.0 {
-		SubscriptionMessageInner::Complete(msg) => msg,
-		SubscriptionMessageInner::NeedsData(result) => {
-			let sub_id = serde_json::to_string(&sub_id).expect("valid JSON; qed");
-			format!(
-				r#"{{"jsonrpc":"2.0","method":"{method}","params":{{"subscription":{sub_id},"{result_or_err}":{result}}}}}"#,
-			)
-		}
 	}
 }

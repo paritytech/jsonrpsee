@@ -116,6 +116,9 @@ pub enum Error {
 	/// Empty batch request.
 	#[error("Empty batch request is not allowed")]
 	EmptyBatchRequest,
+	/// Subscription error that can occur during a subscription callback.
+	#[error("{0}")]
+	SubscriptionCallbackError(String),
 }
 
 impl Error {
@@ -186,13 +189,30 @@ impl From<hyper::Error> for Error {
 	}
 }
 
-/// The error returned while accepting or rejecting a subscription.
-#[derive(Debug, Copy, Clone)]
-pub enum SubscriptionAcceptRejectError {
-	/// The method was already called.
-	AlreadyCalled,
-	/// The remote peer closed the connection or called the unsubscribe method.
-	RemotePeerAborted,
-	/// The subscription response message was too large.
-	MessageTooLarge,
+#[cfg(feature = "server")]
+impl From<crate::server::error::SubscriptionAcceptRejectError> for Error {
+	fn from(err: crate::server::error::SubscriptionAcceptRejectError) -> Self {
+		Self::SubscriptionCallbackError(err.to_string())
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::error::TrySendError> for Error {
+	fn from(err: crate::server::TrySendError) -> Self {
+		Self::SubscriptionCallbackError(err.to_string())
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::DisconnectError> for Error {
+	fn from(err: crate::server::DisconnectError) -> Self {
+		Self::SubscriptionCallbackError(err.to_string())
+	}
+}
+
+#[cfg(feature = "server")]
+impl From<crate::server::SendTimeoutError> for Error {
+	fn from(err: crate::server::SendTimeoutError) -> Self {
+		Self::SubscriptionCallbackError(err.to_string())
+	}
 }
