@@ -75,15 +75,6 @@ pub type MaxResponseSize = usize;
 ///   - a [`crate::server::SubscriptionPermit`] to allow subscribers to notify their [`crate::server::SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>, SubscriptionPermit);
 
-/// Outcome of a successful terminated subscription.
-#[derive(Debug, Copy, Clone)]
-pub enum InnerSubscriptionResult {
-	/// The subscription stream was executed successfully.
-	Success,
-	/// The subscription was aborted by the remote peer.
-	Aborted,
-}
-
 /// This represent a response to a RPC call
 /// and `Subscribe` calls are handled differently
 /// because we want to prevent subscriptions to start
@@ -276,20 +267,18 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
+	///     use jsonrpsee::{RpcModule, SubscriptionMessage, core::Error};
 	///     use jsonrpsee::types::Response;
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async {
-	///         // Here we can choose whether to ignore the error or send out an actual
-	///         // error notification when this fails.
-	///         let sink = pending.accept().await.map_err(|_| None)?;
+	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
-	///         sink.send("one answer".into()).await.map_err(|_| None)?;
+	///         sink.send("one answer".into()).await?;
 	///
-	///         Ok(())
+	///         Ok::<_, Error>(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
 	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
@@ -361,13 +350,13 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::core::EmptyServerParams;
+	///     use jsonrpsee::core::{Error, EmptyServerParams};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
-	///         let sink = pending.accept().await.map_err(|_| None)?;
-	///         sink.send("one answer".into()).await.map_err(|_| None)?;
-	///         Ok(())
+	///         let sink = pending.accept().await?;
+	///         sink.send("one answer".into()).await?;
+	///         Ok::<_, Error>(())
 	///     }).unwrap();
 	///
 	///     let mut sub = module.subscribe_unbounded("hi", EmptyServerParams::new()).await.unwrap();
@@ -572,13 +561,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///
 	/// # Returns
 	///
-	/// An async block which returns `Result<(), Option<SubscriptionMessage>>` which forces
-	/// users to handle the error i.e, whether to propagate the error to the client or not.
+	/// An async block which returns something that implements [`crate::server::IntoSubscriptionResponse`] which
+	/// decides what action to take once the subscription callback returns i.e, whether to sent out another message
+	/// on the subscription stream before closing down it.
 	///
-	/// Ok(())           - no more message is sent.
-	/// Err(None)        - no more message is sent.
-	/// Err(Some(msg))   - send close message as an error notification such if some error occurred
-	///                    that needs to propagated the client.
+	/// This is implemented for `Result<T, E>` and `Option<T>`.
+	///
+	/// It's recommended to use `Result` if you want to propagate the error as special error notification
+	/// and `Option` if no error's should be propagated.
+	///
+	/// Another option is to implement [`crate::server::IntoSubscriptionResponse`] if you want customized behaviour.
 	///
 	/// The error notification has the following format:
 	///
@@ -598,7 +590,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///
 	/// ```no_run
 	///
-	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink, SubscriptionMessage};
+	/// use jsonrpsee_core::server::{RpcModule, SubscriptionSink, SubscriptionMessage};
 	/// use jsonrpsee_core::Error;
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
@@ -613,25 +605,24 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///            // the return value will be "ignored" as it's not
 	///            // allowed to send out any further notifications on
 	///            // on the subscription.
-	///            return Ok(());
+	///            return Ok::<_, Error>(());
 	///         }
 	///     };
 	///
 	///     // Mark the subscription is accepted after the params has been parsed successful.
 	///     // This is actually responds the underlying RPC method call and may fail if the
 	///     // connection is closed.
-	///     let sink = pending.accept().await.map_err(|_| None)?;
+	///     let sink = pending.accept().await?;
 	///     let sum = x + (*ctx);
 	///
 	///     // This will send out an error notification if it fails.
 	///     //
 	///     // If you need some other behavior implement or custom format of the error field
 	///     // you need to manually handle that.
-	///     let msg = SubscriptionMessage::from_json(&sum).map_err(|e| Some(e.to_string().into()))?;
+	///     let msg = SubscriptionMessage::from_json(&sum)?;
 	///
-	///     // This fails only if the connection is closed, thus it doesn't matter
-	///     // what action that we take here i.e, sending further messages won't work.
-	///     sink.send(msg).await.map_err(|_| None)?;
+	///     // This fails only if the connection is closed
+	///     sink.send(msg).await?;
 	///
 	///     Ok(())
 	/// });

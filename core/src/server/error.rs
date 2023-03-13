@@ -40,7 +40,7 @@ pub enum TrySendError {
 }
 
 /// Error that may occur during [`crate::server::MethodSink::send`] or [`crate::server::SubscriptionSink::send`].
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub struct DisconnectError(pub SubscriptionMessage);
 
 /// Error that may occur during [`crate::server::SubscriptionSink::send_timeout`].
@@ -57,24 +57,17 @@ pub enum SendTimeoutError {
 
 /// The error returned while accepting or rejecting a subscription.
 #[derive(Debug, Copy, Clone, thiserror::Error)]
-pub enum SubscriptionAcceptRejectError {
-	/// The remote peer closed the connection or called the unsubscribe method.
-	#[error("The remote peer closed the connection or called the unsubscribe method")]
-	RemotePeerAborted,
-	/// The subscription response message was too large.
-	#[error("The subscription response message was too large")]
-	MessageTooLarge,
+pub struct SubscriptionAcceptRejectError;
+
+impl std::fmt::Display for SubscriptionAcceptRejectError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str("The remote peer closed the connection")
+	}
 }
 
 impl std::fmt::Display for DisconnectError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str("closed")
-	}
-}
-
-impl std::error::Error for DisconnectError {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		None
+		f.write_str("Closed")
 	}
 }
 

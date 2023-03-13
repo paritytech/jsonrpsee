@@ -222,8 +222,8 @@ impl PendingSubscriptionSink {
 		let response =
 			MethodResponse::response(self.id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
-		self.inner.send(response.result.clone()).await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
-		self.subscribe.send(response).await.map_err(|_| SubscriptionAcceptRejectError::RemotePeerAborted)?;
+		self.inner.send(response.result.clone()).await.map_err(|_| SubscriptionAcceptRejectError)?;
+		self.subscribe.send(response).await.map_err(|_| SubscriptionAcceptRejectError)?;
 
 		if success {
 			let (tx, rx) = mpsc::channel(1);
@@ -237,7 +237,7 @@ impl PendingSubscriptionSink {
 				_permit: Arc::new(self.permit),
 			})
 		} else {
-			Err(SubscriptionAcceptRejectError::MessageTooLarge)
+			panic!("The subscription response was too big; adjust the `max_response_size` or change Subscription ID generation");
 		}
 	}
 }
