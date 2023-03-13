@@ -727,7 +727,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					tokio::spawn(async move {
 						match sub_fut.await.into_response() {
 							SubscriptionCloseResponse::Some(msg) if tx.is_closed() => {
-								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
+								let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &sub_id, method);
 								_ = method_sink.send(json).await;
 							}
 							SubscriptionCloseResponse::Err(msg) if tx.is_closed() => {

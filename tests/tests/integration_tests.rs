@@ -46,6 +46,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee_test_utils::TimeoutFutureExt;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
@@ -1088,4 +1089,39 @@ async fn deny_invalid_host() {
 			matches!(err, Error::Transport(e) if e.to_string().contains("Connection rejected with status code: 403"))
 		)
 	}
+}
+
+#[tokio::test]
+async fn subscription_option_err_is_not_sent() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub = client
+		.subscribe::<serde_json::Value, ArrayParams>("subscribe_option", rpc_params![], "unsubscribe_option")
+		.await
+		.unwrap();
+
+	// the subscription never gets a special notification so the client doesn't know
+	// that it has been closed.
+	assert!(sub.next().with_timeout(std::time::Duration::from_secs(10)).await.is_err());
+}
+
+#[tokio::test]
+async fn subscription_err_is_sent() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub = client
+		.subscribe::<serde_json::Value, ArrayParams>("subscribe_noop", rpc_params![], "unsubscribe_noop")
+		.await
+		.unwrap();
+
+	// the subscription is closed once the error notification comes.
+	assert!(sub.next().await.is_none());
 }

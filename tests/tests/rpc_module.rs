@@ -500,22 +500,3 @@ async fn bounded_subscription_works() {
 		assert_eq!(item, exp);
 	}
 }
-
-#[tokio::test]
-async fn subscription_returns_option_works() {
-	init_logger();
-
-	let mut module = RpcModule::new(());
-
-	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let _sink = pending.accept().await.ok()?;
-			None::<()>
-		})
-		.unwrap();
-
-	let mut sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
-
-	// assert that nothing is sent close.
-	assert!(sub.next::<usize>().await.is_none());
-}

@@ -89,7 +89,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 
 	module
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
-			let _sink = pending.accept().await.map_err(|e| anyhow::anyhow!("{:?}", e))?;
+			let _sink = pending.accept().await?;
 			tokio::time::sleep(Duration::from_secs(1)).await;
 			Err::<(), _>(anyhow::anyhow!("Server closed the stream because it was lazy"))
 		})
@@ -101,6 +101,13 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 			tracing::info!("pipe_from_stream");
 			pipe_from_stream_and_drop(pending, stream).await
+		})
+		.unwrap();
+
+	module
+		.register_subscription("subscribe_option", "n", "unsubscribe_option", |_, pending, _| async move {
+			let _sink = pending.accept().await.ok()?;
+			None::<()>
 		})
 		.unwrap();
 
