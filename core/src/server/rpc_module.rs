@@ -69,10 +69,9 @@ pub type ConnectionId = usize;
 pub type MaxResponseSize = usize;
 
 /// Raw response from an RPC
-/// A 3-tuple containing:
+/// A tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-///   - a [`crate::server::SubscriptionPermit`] to allow subscribers to notify their [`crate::server::SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>);
 
 /// This represent a response to a RPC call
@@ -252,7 +251,7 @@ impl Methods {
 			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
 		} else {
 			match serde_json::from_str::<ErrorResponse>(&resp.result) {
-				Ok(err) => Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))),
+				Ok(err) => Err(Error::Call(CallError::Custom(err.into_error_object()))),
 				Err(e) => Err(e.into()),
 			}
 		}
@@ -371,7 +370,8 @@ impl Methods {
 		self.subscribe(sub_method, params, u32::MAX as usize).await
 	}
 
-	/// Similar to [`Methods::subscribe_unbounded`] but it's using a bounded channel and the buffer capacity must be provided.
+	/// Similar to [`Methods::subscribe_unbounded`] but it's using a bounded channel and the buffer capacity must be
+	/// provided.
 	pub async fn subscribe(
 		&self,
 		sub_method: &str,
@@ -388,7 +388,7 @@ impl Methods {
 		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result) {
 			Ok(r) => r,
 			Err(_) => match serde_json::from_str::<ErrorResponse>(&resp.result) {
-				Ok(err) => return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))),
+				Ok(err) => return Err(Error::Call(CallError::Custom(err.into_error_object()))),
 				Err(err) => return Err(err.into()),
 			},
 		};
@@ -500,7 +500,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 
 	/// Register a new **blocking** synchronous RPC method, which computes the response with the given callback.
-	/// Unlike the regular [`register_method`](RpcModule::register_method), this method can block its thread and perform expensive computations.
+	/// Unlike the regular [`register_method`](RpcModule::register_method), this method can block its thread and perform
+	/// expensive computations.
 	pub fn register_blocking_method<R, E, F>(
 		&mut self,
 		method_name: &'static str,
@@ -554,11 +555,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// # Arguments
 	///
 	/// * `subscription_method_name` - name of the method to call to initiate a subscription
-	/// * `notif_method_name` - name of method to be used in the subscription payload (technically a JSON-RPC notification)
+	/// * `notif_method_name` - name of method to be used in the subscription payload (technically a JSON-RPC
+	///   notification)
 	/// * `unsubscription_method` - name of the method to call to terminate a subscription
 	/// * `callback` - A callback to invoke on each subscription; it takes three parameters:
 	///     - [`Params`]: JSON-RPC parameters in the subscription call.
-	///     - [`PendingSubscriptionSink`]: A pending subscription waiting to be accepted, in order to send out messages on the subscription
+	///     - [`PendingSubscriptionSink`]: A pending subscription waiting to be accepted, in order to send out messages
+	///       on the subscription
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
 	/// # Returns

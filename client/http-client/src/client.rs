@@ -72,7 +72,6 @@ use tracing::instrument;
 ///
 ///     // use client....
 /// }
-///
 /// ```
 #[derive(Debug)]
 pub struct HttpClientBuilder<L = Identity> {
@@ -305,7 +304,7 @@ where
 			Ok(response) => response,
 			Err(_) => {
 				let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-				return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
+				return Err(Error::Call(CallError::Custom(err.into_error_object())));
 			}
 		};
 
@@ -367,7 +366,7 @@ where
 					Ok(err) => {
 						let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
 						failed_calls += 1;
-						(id, Err(err.error_object().clone().into_owned()))
+						(id, Err(err.into_error_object()))
 					}
 					Err(_) => {
 						return Err(err);
@@ -400,7 +399,8 @@ where
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
-	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	/// Send a subscription request to the server. Not implemented for HTTP; will always return
+	/// [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscription", fields(method = _subscribe_method), skip(self, _params, _subscribe_method, _unsubscribe_method), level = "trace")]
 	async fn subscribe<'a, N, Params>(
 		&self,
