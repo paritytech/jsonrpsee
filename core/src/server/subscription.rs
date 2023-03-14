@@ -35,10 +35,12 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{mpsc, Notify, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 
 /// Type-alias for subscribers.
 pub type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Receiver<()>)>>>;
+/// Subscription permit
+pub type SubscriptionPermit = OwnedSemaphorePermit;
 
 /// Convert something into a subscription close notification
 /// before a subscription is terminated.
@@ -200,7 +202,7 @@ pub struct PendingSubscriptionSink {
 	/// Sender to answer the subscribe call.
 	pub(crate) subscribe: mpsc::Sender<MethodResponse>,
 	/// Subscription permit.
-	pub(crate) permit: SubscriptionPermit,
+	pub(crate) permit: OwnedSemaphorePermit,
 }
 
 impl PendingSubscriptionSink {
@@ -212,8 +214,6 @@ impl PendingSubscriptionSink {
 	}
 
 	/// Attempt to accept the subscription and respond the subscription method call.
-	///
-	/// Returns `None` if the connection is already closed, `Some(SubscriptionSink)` otherwise.
 	///
 	/// # Panics
 	///
@@ -390,24 +390,9 @@ impl Drop for Subscription {
 	}
 }
 
-/// A permitted subscription.
-#[derive(Debug)]
-pub struct SubscriptionPermit {
-	_permit: OwnedSemaphorePermit,
-	resource: Arc<Notify>,
-}
-
-impl SubscriptionPermit {
-	/// Get the handle to [`tokio::sync::Notify`].
-	pub fn handle(&self) -> Arc<Notify> {
-		self.resource.clone()
-	}
-}
-
-/// Wrapper over [`tokio::sync::Notify`] with bounds check.
+/// Wrapper [`tokio::sync::Semaphore`] for subscriptions.
 #[derive(Debug, Clone)]
 pub struct BoundedSubscriptions {
-	resource: Arc<Notify>,
 	guard: Arc<Semaphore>,
 	max: u32,
 }
@@ -415,31 +400,19 @@ pub struct BoundedSubscriptions {
 impl BoundedSubscriptions {
 	/// Create a new bounded subscription.
 	pub fn new(max_subscriptions: u32) -> Self {
-		Self {
-			resource: Arc::new(Notify::new()),
-			guard: Arc::new(Semaphore::new(max_subscriptions as usize)),
-			max: max_subscriptions,
-		}
+		Self { guard: Arc::new(Semaphore::new(max_subscriptions as usize)), max: max_subscriptions }
 	}
 
 	/// Attempts to acquire a subscription slot.
 	///
 	/// Fails if `max_subscriptions` have been exceeded.
 	pub fn acquire(&self) -> Option<SubscriptionPermit> {
-		Arc::clone(&self.guard)
-			.try_acquire_owned()
-			.ok()
-			.map(|p| SubscriptionPermit { _permit: p, resource: self.resource.clone() })
+		Arc::clone(&self.guard).try_acquire_owned().ok()
 	}
 
 	/// Get the maximum number of permitted subscriptions.
 	pub const fn max(&self) -> u32 {
 		self.max
-	}
-
-	/// Close all subscriptions.
-	pub fn close(&self) {
-		self.resource.notify_waiters();
 	}
 }
 
