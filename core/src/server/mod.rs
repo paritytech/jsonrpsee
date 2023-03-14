@@ -38,6 +38,7 @@ mod rpc_module;
 mod subscription;
 
 pub use error::*;
+pub use helpers::{BatchResponseBuilder, BoundedWriter, MethodResponse, MethodSink, MethodSinkPermit};
 pub use host_filtering::*;
 pub use rpc_module::*;
 pub use subscription::*;
