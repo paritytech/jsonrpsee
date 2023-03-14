@@ -31,8 +31,7 @@ use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::borrow::Borrow;
-use std::borrow::Cow as StdCow;
+use std::borrow::{Borrow, Cow as StdCow};
 use thiserror::Error;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
@@ -63,9 +62,14 @@ impl<'a> ErrorResponse<'a> {
 		ErrorResponse { jsonrpc: self.jsonrpc, error: self.error.into_owned(), id: self.id.into_owned() }
 	}
 
-	/// Get the [`ErrorObject`] of the error response.
-	pub fn error_object(&self) -> &ErrorObject {
-		&self.error
+	/// Get a reference to the [`ErrorObject`] of the error response.
+	pub fn as_error_object(&self) -> ErrorObject<'_> {
+		self.error.borrow()
+	}
+
+	/// Consume the error response and extract the [`ErrorObject`].
+	pub fn into_error_object(self) -> ErrorObjectOwned {
+		self.error.into_owned()
 	}
 
 	/// Get the [`Id`] of the error response.
@@ -319,7 +323,7 @@ pub enum CallError {
 	Failed(#[from] anyhow::Error),
 	/// Custom error with specific JSON-RPC error code, message and data.
 	#[error("RPC call failed: {0:?}")]
-	Custom(ErrorObject<'static>),
+	Custom(ErrorObjectOwned),
 }
 
 impl CallError {
@@ -333,7 +337,7 @@ impl CallError {
 }
 
 /// Helper to get a `JSON-RPC` error object when the maximum number of subscriptions have been exceeded.
-pub fn reject_too_many_subscriptions(limit: u32) -> ErrorObject<'static> {
+pub fn reject_too_many_subscriptions(limit: u32) -> ErrorObjectOwned {
 	ErrorObjectOwned::owned(
 		TOO_MANY_SUBSCRIPTIONS_CODE,
 		TOO_MANY_SUBSCRIPTIONS_MSG,
@@ -342,7 +346,7 @@ pub fn reject_too_many_subscriptions(limit: u32) -> ErrorObject<'static> {
 }
 
 /// Helper to get a `JSON-RPC` error object when the maximum request size limit have been exceeded.
-pub fn reject_too_big_request(limit: u32) -> ErrorObject<'static> {
+pub fn reject_too_big_request(limit: u32) -> ErrorObjectOwned {
 	ErrorObjectOwned::owned(
 		OVERSIZED_REQUEST_CODE,
 		OVERSIZED_REQUEST_MSG,
