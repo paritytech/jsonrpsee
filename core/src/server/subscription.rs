@@ -27,7 +27,7 @@
 //! Subscription related types and traits for server implementations.
 
 use super::helpers::{MethodResponse, MethodSink};
-use crate::server::error::{DisconnectError, SendTimeoutError, SubscriptionAcceptRejectError, TrySendError};
+use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
 use crate::{traits::IdProvider, Error};
 use jsonrpsee_types::{response::SubscriptionError, ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse};
@@ -218,12 +218,12 @@ impl PendingSubscriptionSink {
 	/// # Panics
 	///
 	/// Panics if the subscription response exceeded the `max_response_size`.
-	pub async fn accept(self) -> Result<SubscriptionSink, SubscriptionAcceptRejectError> {
+	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
 		let response =
 			MethodResponse::response(self.id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
-		self.inner.send(response.result.clone()).await.map_err(|_| SubscriptionAcceptRejectError)?;
-		self.subscribe.send(response).await.map_err(|_| SubscriptionAcceptRejectError)?;
+		self.inner.send(response.result.clone()).await.map_err(|_| PendingSubscriptionAcceptError)?;
+		self.subscribe.send(response).await.map_err(|_| PendingSubscriptionAcceptError)?;
 
 		if success {
 			let (tx, rx) = mpsc::channel(1);

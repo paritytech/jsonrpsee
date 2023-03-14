@@ -57,13 +57,8 @@ pub enum SendTimeoutError {
 
 /// The error returned while accepting or rejecting a subscription.
 #[derive(Debug, Copy, Clone, thiserror::Error)]
-pub struct SubscriptionAcceptRejectError;
-
-impl std::fmt::Display for SubscriptionAcceptRejectError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str("The remote peer closed the connection")
-	}
-}
+#[error("The remote peer closed the connection")]
+pub struct PendingSubscriptionAcceptError;
 
 impl std::fmt::Display for DisconnectError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

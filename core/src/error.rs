@@ -190,8 +190,8 @@ impl From<hyper::Error> for Error {
 }
 
 #[cfg(feature = "server")]
-impl From<crate::server::SubscriptionAcceptRejectError> for Error {
-	fn from(err: crate::server::SubscriptionAcceptRejectError) -> Self {
+impl From<crate::server::PendingSubscriptionAcceptError> for Error {
+	fn from(err: crate::server::PendingSubscriptionAcceptError) -> Self {
 		Self::SubscriptionCallbackError(err.to_string())
 	}
 }
