@@ -3,11 +3,10 @@
 mod helpers;
 mod manager;
 
-use crate::client::async_client::helpers::InnerBatchResponse;
+use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
 use crate::client::{
-	async_client::helpers::process_subscription_close_response, BatchMessage, BatchResponse, ClientT, ReceivedMessage,
-	RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind,
-	SubscriptionMessage, TransportReceiverT, TransportSenderT,
+	BatchMessage, BatchResponse, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage, Subscription,
+	SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
 };
 use crate::error::Error;
 use crate::params::BatchRequestBuilder;
@@ -30,10 +29,8 @@ use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
-use jsonrpsee_types::{
-	response::SubscriptionError, ErrorResponse, Notification, NotificationSer, RequestSer, Response,
-	SubscriptionResponse,
-};
+use jsonrpsee_types::response::SubscriptionError;
+use jsonrpsee_types::{ErrorResponse, Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
@@ -567,7 +564,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 							id
 						} else if let Ok(err) = serde_json::from_str::<ErrorResponse>(r.get()) {
 							let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(InnerBatchResponse { id, result: Err(err.error_object().clone().into_owned()) });
+							batch.push(InnerBatchResponse { id, result: Err(err.into_error_object().into_owned()) });
 							id
 						} else {
 							return Err(unparse_error(raw));
