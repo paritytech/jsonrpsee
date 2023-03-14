@@ -49,9 +49,6 @@ cfg_http_helpers! {
 cfg_server! {
 	pub mod id_providers;
 	pub mod server;
-
-	/// The return type of the subscription's method for the rpc server implementation.
-	pub type SubscriptionResult = Result<(), Option<server::SubscriptionMessage>>;
 }
 
 cfg_client! {

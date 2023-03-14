@@ -27,18 +27,17 @@
 //! Shared modules for the JSON-RPC servers.
 
 /// Error types.
-pub mod error;
+mod error;
 /// Helpers.
 pub mod helpers;
 /// Host filtering.
-pub mod host_filtering;
+mod host_filtering;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
-pub mod rpc_module;
+mod rpc_module;
 /// Subscription related types.
-pub mod subscription;
+mod subscription;
 
 pub use error::*;
-pub use helpers::*;
 pub use host_filtering::*;
 pub use rpc_module::*;
 pub use subscription::*;

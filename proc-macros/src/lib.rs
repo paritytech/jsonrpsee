@@ -56,7 +56,7 @@ pub(crate) mod visitor;
 /// - For subscription methods:
 ///   - There will be one additional argument inserted right after `&self`: `subscription_sink: SubscriptionSink`.
 ///   It should be used to accept or reject a subscription and send data back to subscribers.
-///   - The return type of the subscription method is `SubscriptionResult` for improved ergonomics.
+///   - The return type of the subscription method must implement`IntoSubscriptionResponse`.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
@@ -86,7 +86,7 @@ pub(crate) mod visitor;
 ///     fn sync_method(&self) -> String;
 ///
 ///     #[subscription(name = "subscribe", item = "String")]
-///     async fn sub(&self);
+///     async fn sub(&self) -> Result<(), Error>;
 /// }
 /// ```
 ///
@@ -99,8 +99,8 @@ pub(crate) mod visitor;
 ///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
 ///     fn sync_method(&self) -> String;
 ///
-///     // Note that `pending_subscription_sink` and `SubscriptionResult` were added automatically.
-///     async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult;
+///     // Note that `pending_subscription_sink` was added automatically.
+///     async fn sub(&self, pending: PendingSubscriptionSink) -> Result<(), Error>;
 ///
 ///     fn into_rpc(self) -> Result<Self, jsonrpsee::core::Error> {
 ///         // Actual implementation stripped, but inside we will create
@@ -292,22 +292,21 @@ pub(crate) mod visitor;
 ///
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
-///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> Result<(), Error> {
 ///             let mut sink = pending.accept().await.map_err(|_| None)?;
 ///             sink.send("Response_A".into()).await.map_err(|_| None)?;
 ///             Ok(())
 ///         }
 ///
 ///         // Send out two values on the subscription.
-///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-///             let sink = pending.accept().await.map_err(|_| None)?;
+///         async fn sub(&self, pending: PendingSubscriptionSink) -> Result<(), Error> {
+///             let sink = pending.accept().await?;
 ///
-///             let msg1 = SubscriptionMessage::from_json(&"Response_A").expect("Infallible");
-///             // As &str is quite common and the serialization is infallible this is also possible to use.
+///             let msg1 = SubscriptionMessage::from("Response_A");
 ///             let msg2 = SubscriptionMessage::from("Response_B");
 ///
-///             sink.send(msg1).await.map_err(|_| None)?;
-///             sink.send(msg2).await.map_err(|_| None)?;
+///             sink.send(msg1).await?;
+///             sink.send(msg2).await?;
 ///
 ///             Ok(())
 ///         }

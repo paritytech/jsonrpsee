@@ -61,7 +61,6 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		Ok(vec![storage_key])
 	}
 
-	// Note that the server's subscription method must return `SubscriptionResult`.
 	async fn subscribe_storage(
 		&self,
 		pending: PendingSubscriptionSink,

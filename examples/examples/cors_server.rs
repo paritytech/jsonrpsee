@@ -32,7 +32,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 
 use jsonrpsee::{
-	core::server::host_filtering::AllowHosts,
+	core::server::AllowHosts,
 	server::{RpcModule, ServerBuilder},
 };
 

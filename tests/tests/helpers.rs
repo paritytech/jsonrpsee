@@ -30,13 +30,12 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::core::server::host_filtering::AllowHosts;
-use jsonrpsee::core::server::{SubscriptionMessage, TrySendError};
 use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
+use jsonrpsee::server::{
+	AllowHosts, PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
+};
 use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::{PendingSubscriptionSink, RpcModule};
 use serde::Serialize;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
