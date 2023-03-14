@@ -349,7 +349,6 @@ impl Drop for SubscriptionSink {
 pub struct Subscription {
 	pub(crate) rx: mpsc::Receiver<String>,
 	pub(crate) sub_id: SubscriptionId<'static>,
-	pub(crate) _permit: SubscriptionPermit,
 }
 
 impl Subscription {
