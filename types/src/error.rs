@@ -63,13 +63,13 @@ impl<'a> ErrorResponse<'a> {
 	}
 
 	/// Get a reference to the [`ErrorObject`] of the error response.
-	pub fn as_error_object(&self) -> &ErrorObject {
-		&self.error
+	pub fn as_error_object(&self) -> ErrorObject<'_> {
+		self.error.borrow()
 	}
 
 	/// Consume the error response and extract the [`ErrorObject`].
-	pub fn into_error_object(self) -> ErrorObject<'a> {
-		self.error
+	pub fn into_error_object(self) -> ErrorObjectOwned {
+		self.error.into_owned()
 	}
 
 	/// Get the [`Id`] of the error response.

@@ -414,7 +414,7 @@ impl Methods {
 			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
 		} else {
 			match serde_json::from_str::<ErrorResponse>(&resp.result) {
-				Ok(err) => Err(Error::Call(CallError::Custom(err.into_error_object().into_owned()))),
+				Ok(err) => Err(Error::Call(CallError::Custom(err.into_error_object()))),
 				Err(e) => Err(e.into()),
 			}
 		}
@@ -549,7 +549,7 @@ impl Methods {
 		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result) {
 			Ok(r) => r,
 			Err(_) => match serde_json::from_str::<ErrorResponse>(&resp.result) {
-				Ok(err) => return Err(Error::Call(CallError::Custom(err.into_error_object().into_owned()))),
+				Ok(err) => return Err(Error::Call(CallError::Custom(err.into_error_object()))),
 				Err(err) => return Err(err.into()),
 			},
 		};
@@ -738,7 +738,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// # Examples
 	///
 	/// ```no_run
-	/// 
+	///
 	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink, SubscriptionMessage};
 	/// use jsonrpsee_core::Error;
 	///

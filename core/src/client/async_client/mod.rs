@@ -564,7 +564,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 							id
 						} else if let Ok(err) = serde_json::from_str::<ErrorResponse>(r.get()) {
 							let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(InnerBatchResponse { id, result: Err(err.into_error_object().into_owned()) });
+							batch.push(InnerBatchResponse { id, result: Err(err.into_error_object()) });
 							id
 						} else {
 							return Err(unparse_error(raw));
