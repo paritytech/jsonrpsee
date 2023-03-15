@@ -36,6 +36,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response<'a, T> {
 	/// JSON-RPC version.
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub jsonrpc: Option<TwoPointZero>,
 	/// Result.
 	pub result: T,
@@ -102,7 +103,7 @@ mod tests {
 	#[test]
 	fn serialize_call_response_missing_version_field() {
 		let ser = serde_json::to_string(&Response { jsonrpc: None, result: "ok", id: Id::Number(1) }).unwrap();
-		let exp = r#"{"jsonrpc":null,"result":"ok","id":1}"#;
+		let exp = r#"{"result":"ok","id":1}"#;
 		assert_eq!(ser, exp);
 	}
 
