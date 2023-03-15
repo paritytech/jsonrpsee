@@ -1,4 +1,4 @@
-use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 fn main() {
 	#[rpc(server)]
@@ -12,6 +12,6 @@ fn main() {
 			// angle braces need to be accounted for manually.
 			item = TransactionStatus<Hash, BlockHash>,
 		)]
-		async fn dummy_subscription(&self);
+		async fn dummy_subscription(&self) -> RpcResult<()>;
 	}
 }
