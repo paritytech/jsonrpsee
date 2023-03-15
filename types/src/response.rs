@@ -99,9 +99,25 @@ mod tests {
 	}
 
 	#[test]
+	fn serialize_call_response_missing_version_field() {
+		let ser = serde_json::to_string(&Response { jsonrpc: None, result: "ok", id: Id::Number(1) }).unwrap();
+		let exp = r#"{"jsonrpc":null,"result":"ok","id":1}"#;
+		assert_eq!(ser, exp);
+	}
+
+	#[test]
 	fn deserialize_call() {
 		let exp = Response { jsonrpc: Some(TwoPointZero), result: 99_u64, id: Id::Number(11) };
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
+		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
+		assert_eq!(dsr.result, exp.result);
+		assert_eq!(dsr.id, exp.id);
+	}
+
+	#[test]
+	fn deserialize_call_missing_version_field() {
+		let exp = Response { jsonrpc: None, result: 99_u64, id: Id::Number(11) };
+		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":null, "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.result, exp.result);
 		assert_eq!(dsr.id, exp.id);
