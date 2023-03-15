@@ -44,7 +44,7 @@ pub type SubscriptionPermit = OwnedSemaphorePermit;
 
 /// Convert something into a subscription close notification
 /// before a subscription is terminated.
-pub trait IntoSubscriptionResponse {
+pub trait IntoSubscriptionCloseResponse {
 	/// Convert something into a subscription response
 	fn into_response(self) -> SubscriptionCloseResponse;
 }
@@ -60,22 +60,7 @@ pub enum SubscriptionCloseResponse {
 	Err(SubscriptionMessage),
 }
 
-impl<T> IntoSubscriptionResponse for Option<T>
-where
-	T: serde::Serialize,
-{
-	fn into_response(self) -> SubscriptionCloseResponse {
-		match self {
-			Some(msg) => match SubscriptionMessage::from_json(&msg) {
-				Ok(m) => SubscriptionCloseResponse::Some(m),
-				Err(e) => SubscriptionCloseResponse::Err(e.to_string().into()),
-			},
-			None => SubscriptionCloseResponse::None,
-		}
-	}
-}
-
-impl<T, E> IntoSubscriptionResponse for Result<T, E>
+impl<T, E> IntoSubscriptionCloseResponse for Result<T, E>
 where
 	T: serde::Serialize,
 	E: ToString,

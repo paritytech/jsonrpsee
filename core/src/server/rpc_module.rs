@@ -34,7 +34,7 @@ use crate::error::Error;
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::{MethodResponse, MethodSink};
 use crate::server::subscription::{
-	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionResponse, PendingSubscriptionSink,
+	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
@@ -643,7 +643,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Context: Send + Sync + 'static,
 		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>) -> Fut) + Send + Sync + Clone + 'static,
 		Fut: Future<Output = R> + Send + 'static,
-		R: IntoSubscriptionResponse + Send,
+		R: IntoSubscriptionCloseResponse + Send,
 	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
