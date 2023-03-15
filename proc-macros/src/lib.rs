@@ -56,7 +56,7 @@ pub(crate) mod visitor;
 /// - For subscription methods:
 ///   - There will be one additional argument inserted right after `&self`: `subscription_sink: SubscriptionSink`.
 ///   It should be used to accept or reject a subscription and send data back to subscribers.
-///   - The return type of the subscription method must implement`IntoSubscriptionResponse`.
+///   - The return type of the subscription method must implement `IntoSubscriptionCloseResponse`.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,

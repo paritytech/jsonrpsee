@@ -271,13 +271,6 @@ impl RpcDescription {
 						));
 					}
 
-					if matches!(method.sig.output, syn::ReturnType::Default) {
-						return Err(syn::Error::new_spanned(
-							method,
-							"Subscription methods must return something that implements `IntoSubscriptionResponse`",
-						));
-					}
-
 					if method.sig.asyncness.is_none() {
 						return Err(syn::Error::new_spanned(method, "Subscription methods must be `async`"));
 					}

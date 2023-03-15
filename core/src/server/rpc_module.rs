@@ -566,7 +566,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///
 	/// # Returns
 	///
-	/// An async block which returns something that implements [`crate::server::IntoSubscriptionResponse`] which
+	/// An async block which returns something that implements [`crate::server::IntoSubscriptionCloseResponse`] which
 	/// decides what action to take once the subscription callback returns i.e, whether to sent out another message
 	/// on the subscription stream before closing down it.
 	///
@@ -575,7 +575,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// It's recommended to use `Result` if you want to propagate the error as special error notification
 	/// and `Option` if no error's should be propagated.
 	///
-	/// Another option is to implement [`crate::server::IntoSubscriptionResponse`] if you want customized behaviour.
+	/// Another option is to implement [`crate::server::IntoSubscriptionCloseResponse`] if you want customized behaviour.
 	///
 	/// The error notification has the following format:
 	///

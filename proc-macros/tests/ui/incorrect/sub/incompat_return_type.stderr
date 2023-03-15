@@ -1,0 +1,13 @@
+error[E0277]: the trait bound `R: IntoSubscriptionCloseResponse` is not satisfied
+ --> tests/ui/incorrect/sub/incompat_return_type.rs:6:1
+  |
+6 | #[rpc(client, server)]
+  | ^^^^^^^^^^^^^^^^^^^^^^ the trait `IntoSubscriptionCloseResponse` is not implemented for `R`
+  |
+  = help: the trait `IntoSubscriptionCloseResponse` is implemented for `Result<T, E>`
+note: required by a bound in `RpcModule::<Context>::register_subscription`
+ --> $WORKSPACE/core/src/server/rpc_module.rs
+  |
+  |         R: IntoSubscriptionCloseResponse + Send,
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `RpcModule::<Context>::register_subscription`
+  = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
