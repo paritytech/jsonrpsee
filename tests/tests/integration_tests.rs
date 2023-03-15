@@ -35,7 +35,7 @@ use std::time::Duration;
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
 	init_logger, pipe_from_stream_and_drop, server, server_with_access_control, server_with_health_api,
-	server_with_subscription, server_with_subscription_and_handle,
+	server_with_subscription, server_with_subscription_and_handle, SubscriptionResult,
 };
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
@@ -438,7 +438,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription(
+		.register_subscription::<_, _, SubscriptionResult>(
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",
@@ -450,7 +450,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed("Subscription terminated by remote peer").await.unwrap();
 
-				Ok::<_, Error>(())
+				Ok(())
 			},
 		)
 		.unwrap();
@@ -484,9 +484,12 @@ async fn ws_server_stop_subscription_when_dropped() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async {
-			Ok::<_, String>(())
-		})
+		.register_subscription::<_, _, SubscriptionResult>(
+			"subscribe_nop",
+			"h",
+			"unsubscribe_nop",
+			|_params, _pending, _ctx| async { Ok(()) },
+		)
 		.unwrap();
 
 	let _handle = server.start(module).unwrap();
@@ -812,7 +815,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	// Add 10 subscriptions (this should fill our subscrition limit for this connection):
+	// Add 10 subscriptions (this should fill our subscription limit for this connection):
 	let mut subs = Vec::new();
 	for _ in 0..10 {
 		subs.push(

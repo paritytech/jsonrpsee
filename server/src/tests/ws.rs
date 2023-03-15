@@ -37,6 +37,8 @@ use serde_json::Value as JsonValue;
 
 use super::helpers::server;
 
+type SubscriptionResult = Result<(), Error>;
+
 #[tokio::test]
 async fn can_set_the_max_request_body_size() {
 	init_logger();
@@ -404,14 +406,20 @@ async fn register_methods_works() {
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
 	assert!(module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async {
-			Ok::<_, String>(())
-		})
+		.register_subscription::<_, _, SubscriptionResult>(
+			"subscribe_hello",
+			"subscribe_hello",
+			"unsubscribe_hello",
+			|_, _, _| async { Ok(()) }
+		)
 		.is_ok());
 	assert!(module
-		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| async {
-			Ok::<_, String>(())
-		})
+		.register_subscription::<_, _, SubscriptionResult>(
+			"subscribe_hello_again",
+			"subscribe_hello_again",
+			"unsubscribe_hello",
+			|_, _, _| async { Ok(()) }
+		)
 		.is_err());
 	assert!(
 		module.register_method("subscribe_hello_again", |_, _| Ok("lo")).is_ok(),
@@ -423,9 +431,12 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async {
-			Ok::<_, anyhow::Error>(())
-		}),
+		module.register_subscription::<_, _, SubscriptionResult>(
+			"subscribe_hello",
+			"subscribe_hello",
+			"subscribe_hello",
+			|_, _, _| async { Ok(()) }
+		),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }

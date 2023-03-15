@@ -30,7 +30,7 @@ use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 
 use futures::StreamExt;
-use helpers::{init_logger, pipe_from_stream_and_drop};
+use helpers::{init_logger, pipe_from_stream_and_drop, SubscriptionResult};
 use jsonrpsee::core::error::Error;
 use jsonrpsee::core::server::*;
 use jsonrpsee::core::EmptyServerParams;
@@ -75,7 +75,9 @@ fn flatten_rpc_modules() {
 #[test]
 fn rpc_context_modules_can_register_subscriptions() {
 	let mut cxmodule = RpcModule::new(());
-	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| async { Ok::<_, String>(()) }).unwrap();
+	cxmodule
+		.register_subscription::<_, _, SubscriptionResult>("hi", "hi", "goodbye", |_, _, _| async { Ok(()) })
+		.unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -236,7 +238,7 @@ async fn subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription::<_, _, SubscriptionResult>("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let mut stream_data = vec!['0', '1', '2'];
 
 			let sink = pending.accept().await.unwrap();
@@ -248,7 +250,7 @@ async fn subscribing_without_server() {
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
 
-			Err::<(), _>(Error::Custom("closed successfully".into()))
+			Err(Error::Custom("closed successfully".into()))
 		})
 		.unwrap();
 
@@ -269,7 +271,7 @@ async fn close_test_subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription::<_, _, SubscriptionResult>("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let sink = pending.accept().await?;
 			let msg = SubscriptionMessage::from_json(&"lo")?;
 
@@ -281,7 +283,7 @@ async fn close_test_subscribing_without_server() {
 				Ok(_) => panic!("The sink should be closed"),
 				Err(DisconnectError(_)) => {}
 			}
-			Ok::<_, Error>(())
+			Ok(())
 		})
 		.unwrap();
 
@@ -314,7 +316,7 @@ async fn close_test_subscribing_without_server() {
 async fn subscribing_without_server_bad_params() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription::<_, _, Result<(), Error>>(
+		.register_subscription::<_, _, SubscriptionResult>(
 			"my_sub",
 			"my_sub",
 			"my_unsub",
@@ -348,15 +350,15 @@ async fn subscribing_without_server_bad_params() {
 async fn subscribing_without_server_indicates_close() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription::<_, _, SubscriptionResult>("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let sink = pending.accept().await?;
 
 			for m in 0..5 {
-				let msg = SubscriptionMessage::from_json(&m).unwrap();
+				let msg = SubscriptionMessage::from_json(&m)?;
 				sink.send(msg).await?;
 			}
 
-			Ok::<_, Error>(())
+			Ok(())
 		})
 		.unwrap();
 
@@ -406,10 +408,10 @@ async fn subscribe_unsubscribe_without_server() {
 async fn rejected_subscription_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription::<_, _, SubscriptionResult>("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
 			let _ = pending.reject(err.into_owned()).await;
-			Ok::<_, Error>(())
+			Ok(())
 		})
 		.unwrap();
 
@@ -423,10 +425,10 @@ async fn rejected_subscription_without_server() {
 async fn reject_works() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription::<_, _, SubscriptionResult>("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
 			pending.reject(err.into_owned()).await;
-			Ok::<_, Error>(())
+			Ok(())
 		})
 		.unwrap();
 
@@ -444,46 +446,51 @@ async fn bounded_subscription_works() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx| async move {
-			let mut sink = pending.accept().await?;
+		.register_subscription::<_, _, SubscriptionResult>(
+			"my_sub",
+			"my_sub",
+			"my_unsub",
+			|_, pending, mut ctx| async move {
+				let mut sink = pending.accept().await?;
 
-			let mut stream = IntervalStream::new(interval(std::time::Duration::from_millis(100)))
-				.enumerate()
-				.map(|(n, _)| n)
-				.take(6);
-			let fail = std::sync::Arc::make_mut(&mut ctx);
-			let mut buf = VecDeque::new();
+				let mut stream = IntervalStream::new(interval(std::time::Duration::from_millis(100)))
+					.enumerate()
+					.map(|(n, _)| n)
+					.take(6);
+				let fail = std::sync::Arc::make_mut(&mut ctx);
+				let mut buf = VecDeque::new();
 
-			while let Some(n) = stream.next().await {
-				let msg = SubscriptionMessage::from_json(&n).expect("usize infallible; qed");
+				while let Some(n) = stream.next().await {
+					let msg = SubscriptionMessage::from_json(&n).expect("usize infallible; qed");
 
-				match sink.try_send(msg) {
-					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
-					Err(TrySendError::Full(m)) => {
-						buf.push_back(m);
+					match sink.try_send(msg) {
+						Err(TrySendError::Closed(_)) => panic!("This is a bug"),
+						Err(TrySendError::Full(m)) => {
+							buf.push_back(m);
+						}
+						Ok(_) => (),
 					}
-					Ok(_) => (),
-				}
-			}
-
-			if !buf.is_empty() {
-				fail.send("Full".to_string()).unwrap();
-			}
-
-			while let Some(m) = buf.pop_front() {
-				match sink.try_send(m) {
-					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
-					Err(TrySendError::Full(m)) => {
-						buf.push_front(m);
-					}
-					Ok(_) => (),
 				}
 
-				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-			}
+				if !buf.is_empty() {
+					fail.send("Full".to_string()).unwrap();
+				}
 
-			Ok::<_, Error>(())
-		})
+				while let Some(m) = buf.pop_front() {
+					match sink.try_send(m) {
+						Err(TrySendError::Closed(_)) => panic!("This is a bug"),
+						Err(TrySendError::Full(m)) => {
+							buf.push_front(m);
+						}
+						Ok(_) => (),
+					}
+
+					tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+				}
+
+				Ok(())
+			},
+		)
 		.unwrap();
 
 	// create a bounded subscription and don't poll it

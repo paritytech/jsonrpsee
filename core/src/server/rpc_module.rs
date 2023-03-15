@@ -271,13 +271,13 @@ impl Methods {
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async {
+	///     module.register_subscription::<_, _, Result<(), Error>>("hi", "hi", "goodbye", |_, pending, _| async {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
 	///         sink.send("one answer".into()).await?;
 	///
-	///         Ok::<_, Error>(())
+	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
 	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
@@ -600,7 +600,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| async move {
+	/// ctx.register_subscription::<_, _, Result<(), Error>>("sub", "notif_name", "unsub", |params, pending, ctx| async move {
 	///
 	///     let x = match params.one::<usize>() {
 	///         Ok(x) => x,
@@ -610,7 +610,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///            // the return value will be "ignored" as it's not
 	///            // allowed to send out any further notifications on
 	///            // on the subscription.
-	///            return Ok::<_, Error>(());
+	///            return Ok(());
 	///         }
 	///     };
 	///

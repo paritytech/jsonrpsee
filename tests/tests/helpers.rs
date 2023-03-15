@@ -41,6 +41,8 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
+pub type SubscriptionResult = Result<(), Error>;
+
 #[allow(dead_code)]
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
@@ -87,18 +89,22 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
-			let _sink = pending.accept().await?;
-			tokio::time::sleep(Duration::from_secs(1)).await;
-			Err::<(), _>(anyhow::anyhow!("Server closed the stream because it was lazy"))
-		})
+		.register_subscription::<_, _, SubscriptionResult>(
+			"subscribe_noop",
+			"subscribe_noop",
+			"unsubscribe_noop",
+			|_, pending, _| async {
+				let _sink = pending.accept().await?;
+				tokio::time::sleep(Duration::from_secs(1)).await;
+				Err(Error::Custom("Server closed the stream because it was lazy".to_string()))
+			},
+		)
 		.unwrap();
 
 	module
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
-			tracing::info!("pipe_from_stream");
 			pipe_from_stream_and_drop(pending, stream).await
 		})
 		.unwrap();
@@ -216,7 +222,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 	pending: PendingSubscriptionSink,
 	mut stream: impl Stream<Item = T> + Unpin,
 ) -> Result<(), anyhow::Error> {
-	let mut sink = pending.accept().await.unwrap();
+	let mut sink = pending.accept().await?;
 
 	loop {
 		tokio::select! {
