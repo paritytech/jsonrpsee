@@ -36,7 +36,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response<'a, T> {
 	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
+	pub jsonrpc: Option<TwoPointZero>,
 	/// Result.
 	pub result: T,
 	/// Request ID
@@ -47,7 +47,7 @@ pub struct Response<'a, T> {
 impl<'a, T> Response<'a, T> {
 	/// Create a new [`Response`].
 	pub fn new(result: T, id: Id<'a>) -> Response<'a, T> {
-		Response { jsonrpc: TwoPointZero, result, id }
+		Response { jsonrpc: Some(TwoPointZero), result, id }
 	}
 
 	/// Create an owned [`Response`].
@@ -93,14 +93,14 @@ mod tests {
 
 	#[test]
 	fn serialize_call_response() {
-		let ser = serde_json::to_string(&Response { jsonrpc: TwoPointZero, result: "ok", id: Id::Number(1) }).unwrap();
+		let ser = serde_json::to_string(&Response { jsonrpc: Some(TwoPointZero), result: "ok", id: Id::Number(1) }).unwrap();
 		let exp = r#"{"jsonrpc":"2.0","result":"ok","id":1}"#;
 		assert_eq!(ser, exp);
 	}
 
 	#[test]
 	fn deserialize_call() {
-		let exp = Response { jsonrpc: TwoPointZero, result: 99_u64, id: Id::Number(11) };
+		let exp = Response { jsonrpc: Some(TwoPointZero), result: 99_u64, id: Id::Number(11) };
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.result, exp.result);
