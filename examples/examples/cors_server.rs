@@ -31,10 +31,7 @@ use hyper::Method;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 
-use jsonrpsee::{
-	core::server::AllowHosts,
-	server::{RpcModule, ServerBuilder},
-};
+use jsonrpsee::server::{AllowHosts, RpcModule, ServerBuilder};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
