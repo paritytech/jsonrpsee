@@ -76,6 +76,12 @@ where
 	}
 }
 
+impl IntoSubscriptionCloseResponse for () {
+	fn into_response(self) -> SubscriptionCloseResponse {
+		SubscriptionCloseResponse::None
+	}
+}
+
 /// A complete subscription message or partial subscription message.
 #[derive(Debug, Clone)]
 pub enum SubscriptionMessageInner {
