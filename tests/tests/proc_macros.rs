@@ -61,6 +61,9 @@ mod rpc_impl {
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
 		async fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 
+		#[subscription(name = "not-result", unsubscribe = "unsubscribe-not-result", item = String)]
+		async fn sub_not_result(&self);
+
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
 			Ok(format!("Called with: {}, {}", a, b))
@@ -183,6 +186,11 @@ mod rpc_impl {
 			sink.send(msg).await?;
 
 			Ok(())
+		}
+
+		async fn sub_not_result(&self, pending: PendingSubscriptionSink) {
+			let sink = pending.accept().await.unwrap();
+			sink.send("lo".into()).await.unwrap();
 		}
 	}
 
