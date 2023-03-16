@@ -438,7 +438,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription::<_, _, SubscriptionResult>(
+		.register_subscription::<SubscriptionResult, _, _>(
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",
@@ -484,7 +484,7 @@ async fn ws_server_stop_subscription_when_dropped() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription::<_, _, SubscriptionResult>(
+		.register_subscription::<SubscriptionResult, _, _>(
 			"subscribe_nop",
 			"h",
 			"unsubscribe_nop",

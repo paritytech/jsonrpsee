@@ -266,12 +266,12 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::{RpcModule, SubscriptionMessage, core::Error};
+	///     use jsonrpsee::{RpcModule, SubscriptionMessage, core::RpcResult};
 	///     use jsonrpsee::types::Response;
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription::<_, _, Result<(), Error>>("hi", "hi", "goodbye", |_, pending, _| async {
+	///     module.register_subscription::<RpcResult<()>, _, _>("hi", "hi", "goodbye", |_, pending, _| async {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
@@ -351,13 +351,13 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::core::{Error, EmptyServerParams};
+	///     use jsonrpsee::core::{Error, EmptyServerParams, RpcResult};
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
+	///     module.register_subscription::<RpcResult<()>, _, _>("hi", "hi", "goodbye", |_, pending, _| async move {
 	///         let sink = pending.accept().await?;
 	///         sink.send("one answer".into()).await?;
-	///         Ok::<_, Error>(())
+	///         Ok(())
 	///     }).unwrap();
 	///
 	///     let mut sub = module.subscribe_unbounded("hi", EmptyServerParams::new()).await.unwrap();
@@ -567,14 +567,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// # Returns
 	///
 	/// An async block which returns something that implements [`crate::server::IntoSubscriptionCloseResponse`] which
-	/// decides what action to take once the subscription callback returns i.e, whether to sent out another message
+	/// decides what action to take when the subscription ends whether such as to sent out another message
 	/// on the subscription stream before closing down it.
 	///
-	/// This is implemented for `Result<T, E>` and `Option<T>`.
+	/// NOTE: The return value is ignored if [`PendingSubscription::accept`] hasn't been called or is unsuccessful, as the subscription
+	/// is not allowed to send out subscription notifications before the actual subscription has been established.
+	///
+	/// This is implemented for `Result<T, E>` and `()`.
 	///
 	/// It's recommended to use `Result` if you want to propagate the error as special error notification
-	/// and `Option` if no error's should be propagated.
-	///
 	/// Another option is to implement [`crate::server::IntoSubscriptionCloseResponse`] if you want customized behaviour.
 	///
 	/// The error notification has the following format:
@@ -596,11 +597,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// ```no_run
 	///
 	/// use jsonrpsee_core::server::{RpcModule, SubscriptionSink, SubscriptionMessage};
-	/// use jsonrpsee_core::Error;
+	/// use jsonrpsee_core::RpcResult;
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription::<_, _, Result<(), Error>>("sub", "notif_name", "unsub", |params, pending, ctx| async move {
+	/// ctx.register_subscription::<RpcResult<()>, _, _, >("sub", "notif_name", "unsub", |params, pending, ctx| async move {
 	///
 	///     let x = match params.one::<usize>() {
 	///         Ok(x) => x,
@@ -632,7 +633,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     Ok(())
 	/// });
 	/// ```
-	pub fn register_subscription<F, Fut, R>(
+	pub fn register_subscription<R, F, Fut>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		notif_method_name: &'static str,

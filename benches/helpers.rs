@@ -147,7 +147,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::se
 	let mut module = gen_rpc_module();
 
 	module
-		.register_subscription::<_, _, RpcResult<()>>(
+		.register_subscription::<RpcResult<()>, _, _>(
 			SUB_METHOD_NAME,
 			SUB_METHOD_NAME,
 			UNSUB_METHOD_NAME,

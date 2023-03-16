@@ -90,7 +90,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.unwrap();
 
 	module
-		.register_subscription::<_, _, SubscriptionResult>(
+		.register_subscription::<SubscriptionResult, _, _>(
 			"subscribe_noop",
 			"subscribe_noop",
 			"unsubscribe_noop",
