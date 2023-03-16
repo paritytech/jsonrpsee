@@ -570,7 +570,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// decides what action to take when the subscription ends whether such as to sent out another message
 	/// on the subscription stream before closing down it.
 	///
-	/// NOTE: The return value is ignored if [`PendingSubscription::accept`] hasn't been called or is unsuccessful, as the subscription
+	/// NOTE: The return value is ignored if [`PendingSubscriptionSink`] hasn't been called or is unsuccessful, as the subscription
 	/// is not allowed to send out subscription notifications before the actual subscription has been established.
 	///
 	/// This is implemented for `Result<T, E>` and `()`.
