@@ -55,7 +55,7 @@ pub enum SendTimeoutError {
 	Closed(SubscriptionMessage),
 }
 
-/// The error returned while accepting or rejecting a subscription.
+/// The error returned while accepting a subscription.
 #[derive(Debug, Copy, Clone, thiserror::Error)]
 #[error("The remote peer closed the connection")]
 pub struct PendingSubscriptionAcceptError;
