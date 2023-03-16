@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::subscription::SubscriptionMessage;
+use crate::server::SubscriptionMessage;
 use std::fmt;
 use tokio::sync::mpsc;
 
