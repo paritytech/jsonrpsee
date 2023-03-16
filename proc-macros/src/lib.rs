@@ -334,7 +334,7 @@ pub(crate) mod visitor;
 ///         }
 ///
 ///         // If one doesn't want sent out a close message when a subscription terminates or treat
-///         // error as subscription error notifications then it's possible to implement
+///         // errors as subscription error notifications then it's possible to implement
 ///         // `IntoSubscriptionCloseResponse` for customized behavior.
 ///         async fn sub_custom_close_msg(&self, pending: PendingSubscriptionSink) -> CloseResponse {
 ///             let Ok(sink) = pending.accept().await else {
