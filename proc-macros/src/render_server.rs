@@ -285,7 +285,6 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let err = self.jrps_server_item(quote! { core::Error });
-		let tokio = self.jrps_server_item(quote! { tokio });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -295,12 +294,11 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								let _e: #err = e.into();
-								#tokio::spawn(async move {
-									let _ = #pending.reject(_e).await;
-								});
-								return Ok(());
+								let msg = format!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::warn!("{}", msg);
+								let e: #err = e.into();
+								#pending.reject(e).await;
+								panic!("{}", msg);
 							}
 						};
 					}
@@ -321,12 +319,11 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::warn!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								let _e: #err = e.into();
-								#tokio::spawn(async move {
-									let _ = #pending.reject(_e).await;
-								});
-								return Ok(());
+								let msg = format!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::warn!("{}", msg);
+								let e: #err = e.into();
+								#pending.reject(e).await;
+								panic!("{}", msg);
 							}
 						};
 					}
@@ -402,12 +399,11 @@ impl RpcDescription {
 					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
 						Ok(p) => p,
 						Err(e) => {
-							#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
-							let _e: #err = e.into();
-							#tokio::spawn(async move {
-								let _ = #pending.reject(_e).await;
-							});
-							return Ok(());
+							let msg = format!("Failed to parse JSON-RPC params as object: {}", e);
+							#tracing::warn!("{}", msg);
+							let e: #err = e.into();
+							#pending.reject(e).await;
+							panic!("{}", msg);
 						}
 					};
 
