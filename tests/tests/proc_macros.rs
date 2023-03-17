@@ -42,10 +42,26 @@ use jsonrpsee::ws_client::*;
 use serde_json::json;
 
 mod rpc_impl {
-	use jsonrpsee::core::server::SubscriptionMessage;
+	use jsonrpsee::core::server::{
+		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubscriptionCloseResponse, SubscriptionMessage,
+	};
 	use jsonrpsee::core::{async_trait, RpcResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::PendingSubscriptionSink;
+	use jsonrpsee::SubscriptionParamsError;
+
+	pub struct CustomSubscriptionRet;
+
+	impl IntoSubscriptionCloseResponse for CustomSubscriptionRet {
+		fn into_response(self) -> SubscriptionCloseResponse {
+			SubscriptionCloseResponse::None
+		}
+	}
+
+	impl SubscriptionParamsError for CustomSubscriptionRet {
+		fn default() -> Self {
+			CustomSubscriptionRet
+		}
+	}
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
@@ -63,6 +79,9 @@ mod rpc_impl {
 
 		#[subscription(name = "not-result", unsubscribe = "unsubscribe-not-result", item = String)]
 		async fn sub_not_result(&self);
+
+		#[subscription(name = "custom", unsubscribe = "unsubscribe-custom", item = String)]
+		async fn sub_custom_ret(&self, x: usize) -> CustomSubscriptionRet;
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
@@ -191,6 +210,10 @@ mod rpc_impl {
 		async fn sub_not_result(&self, pending: PendingSubscriptionSink) {
 			let sink = pending.accept().await.unwrap();
 			sink.send("lo".into()).await.unwrap();
+		}
+
+		async fn sub_custom_ret(&self, _pending: PendingSubscriptionSink, _x: usize) -> CustomSubscriptionRet {
+			CustomSubscriptionRet
 		}
 	}
 

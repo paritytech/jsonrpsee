@@ -285,6 +285,7 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let err = self.jrps_server_item(quote! { core::Error });
+		let sub_params_err = self.jrps_server_item(quote! { SubscriptionParamsError });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -294,11 +295,10 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								let msg = format!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								#tracing::warn!("{}", msg);
+								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let e: #err = e.into();
 								#pending.reject(e).await;
-								panic!("{}", msg);
+								return #sub_params_err::default();
 							}
 						};
 					}
@@ -319,11 +319,10 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								let msg = format!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								#tracing::warn!("{}", msg);
+								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let e: #err = e.into();
 								#pending.reject(e).await;
-								panic!("{}", msg);
+								return #sub_params_err::default();
 							}
 						};
 					}
@@ -399,11 +398,10 @@ impl RpcDescription {
 					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
 						Ok(p) => p,
 						Err(e) => {
-							let msg = format!("Failed to parse JSON-RPC params as object: {}", e);
-							#tracing::warn!("{}", msg);
+							#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
 							let e: #err = e.into();
 							#pending.reject(e).await;
-							panic!("{}", msg);
+							return #sub_params_err::default();
 						}
 					};
 

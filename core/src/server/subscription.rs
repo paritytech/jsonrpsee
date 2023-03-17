@@ -49,6 +49,33 @@ pub trait IntoSubscriptionCloseResponse {
 	fn into_response(self) -> SubscriptionCloseResponse;
 }
 
+/// A hack to make it possible to return a default value when parsing the params
+/// in a subscription failed
+///
+/// Used by the `proc macro API`.
+pub trait SubscriptionParamsError {
+	/// Provide a default value.
+	fn default() -> Self;
+}
+
+impl<T> SubscriptionParamsError for Option<T> {
+	fn default() -> Self {
+		None
+	}
+}
+
+impl<T: Default, E> SubscriptionParamsError for Result<T, E> {
+	fn default() -> Self {
+		Ok(T::default())
+	}
+}
+
+impl SubscriptionParamsError for () {
+	fn default() -> Self {
+		()
+	}
+}
+
 /// Represents what action that will sent when a subscription callback returns.
 #[derive(Debug)]
 pub enum SubscriptionCloseResponse {
