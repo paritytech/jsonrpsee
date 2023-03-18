@@ -47,19 +47,12 @@ mod rpc_impl {
 	};
 	use jsonrpsee::core::{async_trait, RpcResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::SubscriptionParamsError;
 
 	pub struct CustomSubscriptionRet;
 
 	impl IntoSubscriptionCloseResponse for CustomSubscriptionRet {
 		fn into_response(self) -> SubscriptionCloseResponse {
 			SubscriptionCloseResponse::None
-		}
-	}
-
-	impl SubscriptionParamsError for CustomSubscriptionRet {
-		fn default() -> Self {
-			CustomSubscriptionRet
 		}
 	}
 
