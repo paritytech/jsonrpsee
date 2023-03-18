@@ -58,7 +58,10 @@ fn find_jsonrpsee_crate(crate_names: &[&str]) -> Result<proc_macro2::TokenStream
 						return Ok(quote!(#ident));
 					}
 					Ok(FoundCrate::Itself) => {
-						err = Some(Err(syn::Error::new(Span::call_site(), "Deriving rpc methods in any of the `jsonrpsee` crates is not supported")));
+						err = Some(Err(syn::Error::new(
+							Span::call_site(),
+							"Deriving rpc methods in any of the `jsonrpsee` crates is not supported",
+						)));
 					}
 					Err(e) => {
 						err = Some(Err(syn::Error::new(Span::call_site(), &e)));
