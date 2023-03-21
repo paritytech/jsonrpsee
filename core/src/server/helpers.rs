@@ -38,6 +38,9 @@ use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
 use super::rpc_module::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
+/// Subscription permit.
+pub type SubscriptionPermit = OwnedSemaphorePermit;
+
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
 /// ```
@@ -191,20 +194,6 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	}
 }
 
-/// A permitted subscription.
-#[derive(Debug)]
-pub struct SubscriptionPermit {
-	_permit: OwnedSemaphorePermit,
-	resource: Arc<Notify>,
-}
-
-impl SubscriptionPermit {
-	/// Get the handle to [`tokio::sync::Notify`].
-	pub fn handle(&self) -> Arc<Notify> {
-		self.resource.clone()
-	}
-}
-
 /// Wrapper over [`tokio::sync::Notify`] with bounds check.
 #[derive(Debug, Clone)]
 pub struct BoundedSubscriptions {
@@ -227,10 +216,7 @@ impl BoundedSubscriptions {
 	///
 	/// Fails if `max_subscriptions` have been exceeded.
 	pub fn acquire(&self) -> Option<SubscriptionPermit> {
-		Arc::clone(&self.guard)
-			.try_acquire_owned()
-			.ok()
-			.map(|p| SubscriptionPermit { _permit: p, resource: self.resource.clone() })
+		Arc::clone(&self.guard).try_acquire_owned().ok()
 	}
 
 	/// Get the maximum number of permitted subscriptions.
