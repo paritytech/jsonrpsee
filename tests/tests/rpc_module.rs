@@ -35,7 +35,7 @@ use jsonrpsee::core::error::Error;
 use jsonrpsee::core::server::*;
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
-use jsonrpsee::types::{ErrorObjectOwned, Params};
+use jsonrpsee::types::{ErrorObjectOwned, Params, Response};
 use jsonrpsee::SubscriptionMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -506,4 +506,37 @@ async fn bounded_subscription_works() {
 		let (item, _) = sub.next::<usize>().await.unwrap().unwrap();
 		assert_eq!(item, exp);
 	}
+}
+
+#[tokio::test]
+async fn serialize_sub_error_works() {
+	#[derive(Serialize)]
+	struct MyError {
+		number: u32,
+		address: String,
+	}
+
+	init_logger();
+
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+			let err = serde_json::to_string(&MyError { number: 11, address: "State street 1337".into() }).unwrap();
+			let _ = pending.accept().await.map_err(|_| err.clone())?;
+			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+			Err(err)
+		})
+		.unwrap();
+
+	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
+	let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
+	let sub_resp = stream.recv().await.unwrap();
+	assert_eq!(
+		format!(
+			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":{{"number":11,"address":"State street 1337"}}}}}}"#,
+			resp.result
+		),
+		sub_resp
+	);
 }
