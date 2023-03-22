@@ -235,7 +235,7 @@ pub(crate) mod visitor;
 ///                CloseResponse::None => SubscriptionCloseResponse::None,
 ///                // Send a close response as an ordinary subscription notification
 ///                // when the subscription is terminated.
-///                CloseResponse::Failed => SubscriptionCloseResponse::Some("failed".into()),
+///                CloseResponse::Failed => SubscriptionCloseResponse::Notif("failed".into()),
 ///            }
 ///         }
 ///     }
