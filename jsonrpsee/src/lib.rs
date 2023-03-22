@@ -91,7 +91,6 @@ cfg_types! {
 
 cfg_server! {
 	pub use jsonrpsee_core::server::*;
-	pub use tokio;
 }
 
 cfg_client_or_server! {
