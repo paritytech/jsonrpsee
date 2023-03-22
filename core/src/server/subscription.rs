@@ -429,7 +429,7 @@ impl Drop for Subscription {
 	}
 }
 
-/// Wrapper [`tokio::sync::Semaphore`] for subscriptions.
+/// This wraps [`tokio::sync::Semaphore`] and is used to limit the number of subscriptions per connection.
 #[derive(Debug, Clone)]
 pub struct BoundedSubscriptions {
 	guard: Arc<Semaphore>,
