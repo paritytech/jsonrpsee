@@ -49,6 +49,16 @@ pub trait IntoSubscriptionCloseResponse {
 	fn into_response(self) -> SubscriptionCloseResponse;
 }
 
+/// A type that serializes as String.
+#[derive(Debug)]
+pub struct SerializeAsString(String);
+
+impl<T: ToString> From<T> for SerializeAsString {
+	fn from(val: T) -> Self {
+		SerializeAsString(val.to_string())
+	}
+}
+
 /// Represents what action that will sent when a subscription callback returns.
 #[derive(Debug)]
 pub enum SubscriptionCloseResponse {
@@ -88,14 +98,11 @@ pub enum SubscriptionCloseResponse {
 	NotifErr(SubscriptionMessage),
 }
 
-impl<E> IntoSubscriptionCloseResponse for Result<(), E>
-where
-	E: ToString,
-{
+impl IntoSubscriptionCloseResponse for Result<(), SerializeAsString> {
 	fn into_response(self) -> SubscriptionCloseResponse {
 		match self {
 			Ok(()) => SubscriptionCloseResponse::None,
-			Err(e) => SubscriptionCloseResponse::NotifErr(e.to_string().into()),
+			Err(e) => SubscriptionCloseResponse::NotifErr(e.0.into()),
 		}
 	}
 }

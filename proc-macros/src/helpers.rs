@@ -30,7 +30,10 @@ use crate::visitor::{FindAllParams, FindSubscriptionParams};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use syn::{parse_quote, punctuated::Punctuated, token::Comma, visit::Visit, Token, WherePredicate};
+use syn::{
+	parse_quote, punctuated::Punctuated, token::Comma, visit::Visit, AngleBracketedGenericArguments, PathArguments,
+	Token, WherePredicate,
+};
 
 /// Search for client-side `jsonrpsee` in `Cargo.toml`.
 pub(crate) fn find_jsonrpsee_client_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
@@ -203,6 +206,45 @@ pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
 			}
 	});
 	quote! ( #(#docs)* )
+}
+
+/// Verify and rewrite the return type (for methods).
+pub(crate) fn ty_is_result(ty: syn::ReturnType) -> bool {
+	let syn::ReturnType::Type(_, mut ty,) = ty else {
+		return false;
+	};
+
+	// We expect a valid type path.
+	let syn::Type::Path(ref mut type_path) = *ty else  {
+		return false
+	};
+
+	// The path (eg std::result::Result) should have a final segment like 'Result'.
+	let Some(type_name) = type_path.path.segments.last_mut() else {
+		return false
+	};
+
+	// Get the generic args eg the <T, E> in Result<T, E>.
+	let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &mut type_name.arguments else {
+		return false;
+	};
+
+	if type_name.ident == "Result" {
+		// Result<T, E> should have 2 generic args.
+		if args.len() != 2 {
+			panic!("Result must be have two arguments");
+		}
+
+		true
+	} else if type_name.ident == "RpcResult" {
+		// RpcResult<T> (an alias we export) should have 1 generic arg.
+		if args.len() != 1 {
+			panic!("RpcResult must have one argument");
+		}
+		true
+	} else {
+		false
+	}
 }
 
 #[cfg(test)]

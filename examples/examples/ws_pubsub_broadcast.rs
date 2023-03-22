@@ -77,7 +77,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, pending, tx| async move {
 			let rx = tx.subscribe();
 			let stream = BroadcastStream::new(rx);
-			pipe_from_stream_with_bounded_buffer(pending, stream).await
+			pipe_from_stream_with_bounded_buffer(pending, stream).await?;
+			Ok(())
 		})
 		.unwrap();
 	let addr = server.local_addr()?;

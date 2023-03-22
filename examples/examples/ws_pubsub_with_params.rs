@@ -82,7 +82,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 	module
@@ -92,7 +92,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let item = &LETTERS[one..two];
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 

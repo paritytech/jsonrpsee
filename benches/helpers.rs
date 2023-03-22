@@ -132,7 +132,6 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 /// Run jsonrpsee WebSocket server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
 pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::server::ServerHandle) {
-	use jsonrpsee::core::RpcResult;
 	use jsonrpsee::server::{ServerBuilder, SubscriptionMessage};
 
 	let server = ServerBuilder::default()
@@ -147,7 +146,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::se
 	let mut module = gen_rpc_module();
 
 	module
-		.register_subscription::<RpcResult<()>, _, _>(
+		.register_subscription(
 			SUB_METHOD_NAME,
 			SUB_METHOD_NAME,
 			UNSUB_METHOD_NAME,

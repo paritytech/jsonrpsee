@@ -35,7 +35,7 @@ use std::time::Duration;
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
 	init_logger, pipe_from_stream_and_drop, server, server_with_access_control, server_with_health_api,
-	server_with_subscription, server_with_subscription_and_handle, SubscriptionResult,
+	server_with_subscription, server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
@@ -438,7 +438,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription::<SubscriptionResult, _, _>(
+		.register_subscription(
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",
@@ -484,12 +484,7 @@ async fn ws_server_stop_subscription_when_dropped() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription::<SubscriptionResult, _, _>(
-			"subscribe_nop",
-			"h",
-			"unsubscribe_nop",
-			|_params, _pending, _ctx| async { Ok(()) },
-		)
+		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
 		.unwrap();
 
 	let _handle = server.start(module).unwrap();
@@ -753,7 +748,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 	let _handle = server.start(module).unwrap();
@@ -808,7 +803,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 	let _handle = server.start(module).unwrap();

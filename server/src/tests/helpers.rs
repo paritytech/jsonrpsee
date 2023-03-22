@@ -5,7 +5,8 @@ use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 
 use anyhow::anyhow;
-use jsonrpsee_core::{DeserializeOwned, Error, RpcResult};
+use jsonrpsee_core::server::SerializeAsString;
+use jsonrpsee_core::{DeserializeOwned, Error};
 use jsonrpsee_test_utils::mocks::TestContext;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::Response;
@@ -82,7 +83,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_subscription::<RpcResult<()>, _, _>(
+		.register_subscription::<Result<(), SerializeAsString>, _, _>(
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",

@@ -28,7 +28,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use super::RpcDescription;
-use crate::helpers::{generate_where_clause, is_option};
+use crate::helpers::{generate_where_clause, is_option, ty_is_result};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
@@ -156,6 +156,7 @@ impl RpcDescription {
 			.subscriptions
 			.iter()
 			.map(|sub| {
+				let ret_ty = sub.signature.sig.output.clone();
 				// Rust method to invoke (e.g. `self.<foo>(...)`).
 				let rust_method_name = &sub.signature.sig.ident;
 				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
@@ -169,7 +170,7 @@ impl RpcDescription {
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let pending = proc_macro2::Ident::new("subscription_sink", rust_method_name.span());
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params, Some(pending));
-				let into_response = self.jrps_server_item(quote! { IntoSubscriptionCloseResponse });
+				let into_sub_response = self.jrps_server_item(quote! { IntoSubscriptionCloseResponse });
 
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
@@ -182,12 +183,21 @@ impl RpcDescription {
 					None => rpc_sub_name.clone(),
 				};
 
-				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
-						#parsing
-						#into_response::into_response(context.as_ref().#rust_method_name(subscription_sink, #params_seq).await)
+				if ty_is_result(ret_ty) {
+					handle_register_result(quote! {
+						rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
+							#parsing
+							#into_sub_response::into_response(context.as_ref().#rust_method_name(subscription_sink, #params_seq).await.map_err(Into::into))
+						})
 					})
-				})
+				} else {
+					handle_register_result(quote! {
+						rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
+							#parsing
+							#into_sub_response::into_response(context.as_ref().#rust_method_name(subscription_sink, #params_seq).await)
+						})
+					})
+				}			
 			})
 			.collect::<Vec<_>>();
 

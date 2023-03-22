@@ -42,8 +42,6 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
-pub type SubscriptionResult = Result<(), Error>;
-
 #[allow(dead_code)]
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
@@ -55,7 +53,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| &"hello from subscription");
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 
@@ -63,7 +61,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| async {
 			let interval = interval(Duration::from_millis(100));
 			let stream = IntervalStream::new(interval).map(move |_| 1337_usize);
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 
@@ -84,29 +82,24 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 				let wrapping_counter = futures::stream::iter((count..).cycle());
 				let interval = interval(Duration::from_millis(100));
 				let stream = IntervalStream::new(interval).zip(wrapping_counter).map(move |(_, c)| c);
-				pipe_from_stream_and_drop(pending, stream).await
+				pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 			},
 		)
 		.unwrap();
 
 	module
-		.register_subscription::<SubscriptionResult, _, _>(
-			"subscribe_noop",
-			"subscribe_noop",
-			"unsubscribe_noop",
-			|_, pending, _| async {
-				let _sink = pending.accept().await?;
-				tokio::time::sleep(Duration::from_secs(1)).await;
-				Err(Error::Custom("Server closed the stream because it was lazy".to_string()))
-			},
-		)
+		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
+			let _sink = pending.accept().await?;
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			Err(Error::Custom("Server closed the stream because it was lazy".to_string()).into())
+		})
 		.unwrap();
 
 	module
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 
@@ -138,7 +131,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_unit", "n", "unubscribe_unit", |_, pending, _| async move {
 			let _sink = pending.accept().await?;
 			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-			SubscriptionResult::Ok(())
+			Ok(())
 		})
 		.unwrap();
 
@@ -199,7 +192,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 			let send_back = std::sync::Arc::make_mut(&mut tx);
 			send_back.send(()).await.unwrap();
 
-			res
+			res.map_err(Into::into)
 		})
 		.unwrap();
 	let handle = server.start(module).unwrap();
