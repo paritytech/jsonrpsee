@@ -108,7 +108,7 @@ impl IntoSubscriptionCloseResponse for () {
 
 impl IntoSubscriptionCloseResponse for SubscriptionCloseResponse {
 	fn into_response(self) -> Self {
-		Self::None
+		self
 	}
 }
 
