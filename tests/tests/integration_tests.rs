@@ -1128,3 +1128,21 @@ async fn subscription_err_is_sent() {
 	// the subscription is closed once the error notification comes.
 	assert!(sub.next().await.is_none());
 }
+
+#[tokio::test]
+async fn subscription_ok_unit_is_sent_as_null() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub = client
+		.subscribe::<serde_json::Value, ArrayParams>("subscribe_unit", rpc_params![], "unsubscribe_unit")
+		.await
+		.unwrap();
+
+	// The subscription should get a `null` notification.
+	let val = sub.next().with_timeout(std::time::Duration::from_secs(10)).await.unwrap().unwrap().unwrap();
+	assert_eq!(val, serde_json::Value::Null);
+}

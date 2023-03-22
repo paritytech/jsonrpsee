@@ -134,6 +134,14 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		})
 		.unwrap();
 
+	module
+		.register_subscription("subscribe_unit", "n", "unubscribe_unit", |_, pending, _| async move {
+			let _sink = pending.accept().await?;
+			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+			SubscriptionResult::Ok(())
+		})
+		.unwrap();
+
 	let addr = server.local_addr().unwrap();
 	let server_handle = server.start(module).unwrap();
 
