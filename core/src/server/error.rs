@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::SubscriptionMessage;
-use std::fmt;
 use tokio::sync::mpsc;
 
 /// Error that may occur during [`crate::server::SubscriptionSink::try_send`].
@@ -41,6 +40,7 @@ pub enum TrySendError {
 
 /// Error that may occur during [`crate::server::MethodSink::send`] or [`crate::server::SubscriptionSink::send`].
 #[derive(Debug, thiserror::Error)]
+#[error("Closed")]
 pub struct DisconnectError(pub SubscriptionMessage);
 
 /// Error that may occur during [`crate::server::SubscriptionSink::send_timeout`].
@@ -59,12 +59,6 @@ pub enum SendTimeoutError {
 #[derive(Debug, Copy, Clone, thiserror::Error)]
 #[error("The remote peer closed the connection")]
 pub struct PendingSubscriptionAcceptError;
-
-impl std::fmt::Display for DisconnectError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str("Closed")
-	}
-}
 
 impl From<mpsc::error::SendError<String>> for DisconnectError {
 	fn from(e: mpsc::error::SendError<String>) -> Self {

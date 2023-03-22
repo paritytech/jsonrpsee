@@ -121,7 +121,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 				fn into_response(self) -> jsonrpsee::SubscriptionCloseResponse {
 					match self {
 						Response::Nothing => SubscriptionCloseResponse::None,
-						Response::Closed => SubscriptionCloseResponse::Some("close".into()),
+						Response::Closed => SubscriptionCloseResponse::Notif("close".into()),
 					}
 				}
 			}

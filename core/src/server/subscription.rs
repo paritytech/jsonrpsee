@@ -54,10 +54,38 @@ pub trait IntoSubscriptionCloseResponse {
 pub enum SubscriptionCloseResponse {
 	/// No further message will be sent.
 	None,
-	/// Send a ordinary subscription response.
-	Some(SubscriptionMessage),
-	/// Send a subscription error response.
-	Err(SubscriptionMessage),
+	/// Send a subscription notification.
+	///
+	/// The subscription notification has the following format:
+	///
+	/// ```json
+	/// {
+	///  "jsonrpc": "2.0",
+	///  "method": "<method>",
+	///  "params": {
+	///    "subscription": "<subscriptionID>",
+	///    "result": <your msg>
+	///    }
+	///  }
+	/// }
+	/// ```
+	Notif(SubscriptionMessage),
+	/// Send a subscription error notification
+	///
+	/// The error notification has the following format:
+	///
+	/// ```json
+	/// {
+	///  "jsonrpc": "2.0",
+	///  "method": "<method>",
+	///  "params": {
+	///    "subscription": "<subscriptionID>",
+	///    "error": <your msg>
+	///    }
+	///  }
+	/// }
+	/// ```
+	NotifErr(SubscriptionMessage),
 }
 
 impl<T, E> IntoSubscriptionCloseResponse for Result<T, E>
@@ -68,10 +96,17 @@ where
 	fn into_response(self) -> SubscriptionCloseResponse {
 		match self {
 			Ok(msg) => match SubscriptionMessage::from_json(&msg) {
-				Ok(m) => SubscriptionCloseResponse::Some(m),
-				Err(e) => SubscriptionCloseResponse::Err(e.to_string().into()),
+				Ok(m) => SubscriptionCloseResponse::Notif(m),
+				Err(e) => {
+					tracing::error!(
+						"IntoSubscriptionCloseResponse failed; could not serialize `{}` {:?}",
+						std::any::type_name::<T>(),
+						e,
+					);
+					SubscriptionCloseResponse::None
+				}
 			},
-			Err(e) => SubscriptionCloseResponse::Err(e.to_string().into()),
+			Err(e) => SubscriptionCloseResponse::NotifErr(e.to_string().into()),
 		}
 	}
 }
@@ -83,7 +118,7 @@ impl IntoSubscriptionCloseResponse for () {
 }
 
 impl IntoSubscriptionCloseResponse for SubscriptionCloseResponse {
-	fn into_response(self) -> SubscriptionCloseResponse {
+	fn into_response(self) -> Self {
 		SubscriptionCloseResponse::None
 	}
 }
@@ -219,6 +254,13 @@ impl PendingSubscriptionSink {
 		let response =
 			MethodResponse::response(self.id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
+
+		// TODO: #1052
+		//
+		// Ideally the message should be sent only once.
+		//
+		// The same message is sent twice here because one is sent directly to the transport layer and
+		// the other one is sent internally to accept the subscription and register it in the RPC logger.
 		self.inner.send(response.result.clone()).await.map_err(|_| PendingSubscriptionAcceptError)?;
 		self.subscribe.send(response).await.map_err(|_| PendingSubscriptionAcceptError)?;
 
