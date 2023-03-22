@@ -73,8 +73,11 @@ mod rpc_impl {
 		#[subscription(name = "not-result", unsubscribe = "unsubscribe-not-result", item = String)]
 		async fn sub_not_result(&self);
 
-		#[subscription(name = "custom", unsubscribe = "unsubscribe-custom", item = String)]
+		#[subscription(name = "custom", unsubscribe = "unsubscribe_custom", item = String)]
 		async fn sub_custom_ret(&self, x: usize) -> CustomSubscriptionRet;
+
+		#[subscription(name = "unit_type", unsubscribe = "unsubscribe_unit_type", item = String)]
+		async fn sub_unit_type(&self, x: usize);
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
@@ -208,6 +211,8 @@ mod rpc_impl {
 		async fn sub_custom_ret(&self, _pending: PendingSubscriptionSink, _x: usize) -> CustomSubscriptionRet {
 			CustomSubscriptionRet
 		}
+
+		async fn sub_unit_type(&self, _pending: PendingSubscriptionSink, _x: usize) {}
 	}
 
 	#[async_trait]
