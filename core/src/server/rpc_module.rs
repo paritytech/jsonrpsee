@@ -765,7 +765,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 }
 
-// Mock subscription permit to be able to make a call.
 fn mock_subscription_permit() -> SubscriptionPermit {
 	BoundedSubscriptions::new(1).acquire().expect("1 permit should exist; qed")
 }
