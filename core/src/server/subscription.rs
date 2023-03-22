@@ -391,12 +391,7 @@ impl Subscription {
 		&self.sub_id
 	}
 
-	/// Returns `Some((val, sub_id))` for the next element of type T from the underlying stream,
-	/// otherwise `None` if the subscription was closed.
-	///
-	/// # Panics
-	///
-	/// If the decoding the value as `T` fails.
+	/// Receives the next value on the subscription if value could be decoded as T.
 	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), Error>> {
 		let raw = self.rx.recv().await?;
 
