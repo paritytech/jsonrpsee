@@ -13,7 +13,7 @@ pub trait ApiWithDocumentation {
 
 	/// Subscription docs.
 	#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-	async fn sub(&self) -> RpcResult<()>;
+	async fn sub(&self);
 }
 
 fn main() {}

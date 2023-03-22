@@ -4,7 +4,7 @@ use jsonrpsee::proc_macros::rpc;
 #[rpc(client, server)]
 pub trait NoSubName {
 	#[subscription(item = String)]
-	async fn async_method(&self) -> RpcResult<()>;
+	async fn async_method(&self);
 }
 
 fn main() {}
