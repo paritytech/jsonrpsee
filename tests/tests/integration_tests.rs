@@ -1130,7 +1130,7 @@ async fn subscription_err_is_sent() {
 }
 
 #[tokio::test]
-async fn subscription_ok_unit_is_sent_as_null() {
+async fn subscription_ok_unit_not_sent() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
@@ -1142,7 +1142,6 @@ async fn subscription_ok_unit_is_sent_as_null() {
 		.await
 		.unwrap();
 
-	// The subscription should get a `null` notification.
-	let val = sub.next().with_timeout(std::time::Duration::from_secs(10)).await.unwrap().unwrap().unwrap();
-	assert_eq!(val, serde_json::Value::Null);
+	// Assert that `result: null` is not sent.
+	assert!(sub.next().with_timeout(std::time::Duration::from_secs(10)).await.is_err());
 }

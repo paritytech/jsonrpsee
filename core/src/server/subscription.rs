@@ -88,24 +88,13 @@ pub enum SubscriptionCloseResponse {
 	NotifErr(SubscriptionMessage),
 }
 
-impl<T, E> IntoSubscriptionCloseResponse for Result<T, E>
+impl<E> IntoSubscriptionCloseResponse for Result<(), E>
 where
-	T: serde::Serialize,
 	E: ToString,
 {
 	fn into_response(self) -> SubscriptionCloseResponse {
 		match self {
-			Ok(msg) => match SubscriptionMessage::from_json(&msg) {
-				Ok(m) => SubscriptionCloseResponse::Notif(m),
-				Err(e) => {
-					tracing::error!(
-						"IntoSubscriptionCloseResponse failed; could not serialize `{}` {:?}",
-						std::any::type_name::<T>(),
-						e,
-					);
-					SubscriptionCloseResponse::None
-				}
-			},
+			Ok(()) => SubscriptionCloseResponse::None,
 			Err(e) => SubscriptionCloseResponse::NotifErr(e.to_string().into()),
 		}
 	}
@@ -119,7 +108,7 @@ impl IntoSubscriptionCloseResponse for () {
 
 impl IntoSubscriptionCloseResponse for SubscriptionCloseResponse {
 	fn into_response(self) -> Self {
-		SubscriptionCloseResponse::None
+		Self::None
 	}
 }
 
