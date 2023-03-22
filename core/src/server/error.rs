@@ -27,31 +27,31 @@
 use crate::server::SubscriptionMessage;
 use tokio::sync::mpsc;
 
-/// Error that may occur during [`crate::server::SubscriptionSink::try_send`].
+/// Error that may occur during [`crate::server::MethodSink::try_send`] or [`crate::server::SubscriptionSink::try_send`].
 #[derive(Debug, thiserror::Error)]
 pub enum TrySendError {
-	/// The channel is closed.
-	#[error("Closed")]
+	/// The connection channel is closed.
+	#[error("The connection channel is closed")]
 	Closed(SubscriptionMessage),
-	/// The channel is full.
-	#[error("Full")]
+	/// The connection channel is full.
+	#[error("The connection channel is full")]
 	Full(SubscriptionMessage),
 }
 
 /// Error that may occur during [`crate::server::MethodSink::send`] or [`crate::server::SubscriptionSink::send`].
 #[derive(Debug, thiserror::Error)]
-#[error("Closed")]
+#[error("The connection channel is closed")]
 pub struct DisconnectError(pub SubscriptionMessage);
 
-/// Error that may occur during [`crate::server::SubscriptionSink::send_timeout`].
+/// Error that may occur during [`crate::server::MethodSink::send_timeout`] or [`crate::server::SubscriptionSink::send_timeout`].
 #[derive(Debug, thiserror::Error)]
 pub enum SendTimeoutError {
 	/// The data could not be sent because the timeout elapsed
 	/// which most likely is that the channel is full.
-	#[error("Timed out waiting on send operation")]
+	#[error("The connection channel timed out waiting on send operation")]
 	Timeout(SubscriptionMessage),
-	/// The channel is full.
-	#[error("Closed")]
+	/// The connection channel is closed.
+	#[error("The connection channel is closed")]
 	Closed(SubscriptionMessage),
 }
 
