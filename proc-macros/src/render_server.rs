@@ -28,7 +28,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use super::RpcDescription;
-use crate::helpers::{generate_where_clause, is_option, ty_is_result};
+use crate::helpers::{generate_where_clause, is_option, is_result};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
@@ -183,7 +183,7 @@ impl RpcDescription {
 					None => rpc_sub_name.clone(),
 				};
 
-				if ty_is_result(ret_ty) {
+				if is_result(ret_ty) {
 					handle_register_result(quote! {
 						rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
 							#parsing

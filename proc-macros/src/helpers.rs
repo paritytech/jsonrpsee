@@ -208,8 +208,12 @@ pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
 	quote! ( #(#docs)* )
 }
 
-/// Verify and rewrite the return type (for methods).
-pub(crate) fn ty_is_result(ty: syn::ReturnType) -> bool {
+/// Verify and rewrite the return type.
+///
+/// # Panics
+///
+/// Panics if a `Result/RpcResult` ident is found with wrong arity.
+pub(crate) fn is_result(ty: syn::ReturnType) -> bool {
 	let syn::ReturnType::Type(_, mut ty,) = ty else {
 		return false;
 	};
@@ -232,14 +236,14 @@ pub(crate) fn ty_is_result(ty: syn::ReturnType) -> bool {
 	if type_name.ident == "Result" {
 		// Result<T, E> should have 2 generic args.
 		if args.len() != 2 {
-			panic!("Result must be have two arguments");
+			panic!("Result type aliases are not allowed only `std::result::Result<T, E>` and `jsonrpsee::core::RpcResult` are supported");
 		}
 
 		true
 	} else if type_name.ident == "RpcResult" {
 		// RpcResult<T> (an alias we export) should have 1 generic arg.
 		if args.len() != 1 {
-			panic!("RpcResult must have one argument");
+			panic!("RpcResult<T> must have exactly one argument");
 		}
 		true
 	} else {
@@ -249,7 +253,7 @@ pub(crate) fn ty_is_result(ty: syn::ReturnType) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use super::is_option;
+	use super::{is_option, is_result};
 	use syn::parse_quote;
 
 	#[test]
@@ -259,5 +263,26 @@ mod tests {
 		assert!(is_option(&parse_quote!(Option)));
 		assert!(is_option(&parse_quote!(std::option::Option<R>)));
 		assert!(!is_option(&parse_quote!(foo::bar::Option::Booyah)));
+	}
+
+	#[test]
+	fn is_result_works() {
+		assert!(is_result(parse_quote!(-> Result<T, E>)));
+		assert!(is_result(parse_quote!(-> RpcResult<T>)));
+		assert!(!is_result(parse_quote!(-> Option<T>)));
+	}
+
+	#[test]
+	#[should_panic(
+		expected = "Result type aliases are not allowed only `std::result::Result<T, E>` and `jsonrpsee::core::RpcResult` are supported"
+	)]
+	fn is_result_wrong_arity() {
+		assert!(is_result(parse_quote!(-> Result<T>)));
+	}
+
+	#[test]
+	#[should_panic(expected = "RpcResult<T> must have exactly one argument")]
+	fn is_result_rpcresult_wrong_arity() {
+		assert!(is_result(parse_quote!(-> RpcResult<T, E>)));
 	}
 }
