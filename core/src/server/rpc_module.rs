@@ -266,12 +266,12 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::{RpcModule, SubscriptionMessage, core::RpcResult};
+	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
 	///     use jsonrpsee::types::Response;
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription::<RpcResult<()>, _, _>("hi", "hi", "goodbye", |_, pending, _| async {
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
@@ -354,7 +354,7 @@ impl Methods {
 	///     use jsonrpsee::core::{Error, EmptyServerParams, RpcResult};
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription::<RpcResult<()>, _, _>("hi", "hi", "goodbye", |_, pending, _| async move {
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
 	///         let sink = pending.accept().await?;
 	///         sink.send("one answer".into()).await?;
 	///         Ok(())
@@ -597,11 +597,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// ```no_run
 	///
 	/// use jsonrpsee_core::server::{RpcModule, SubscriptionSink, SubscriptionMessage};
-	/// use jsonrpsee_core::RpcResult;
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription::<RpcResult<()>, _, _, >("sub", "notif_name", "unsub", |params, pending, ctx| async move {
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| async move {
 	///
 	///     let x = match params.one::<usize>() {
 	///         Ok(x) => x,
