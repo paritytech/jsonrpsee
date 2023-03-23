@@ -509,7 +509,7 @@ async fn bounded_subscription_works() {
 }
 
 #[tokio::test]
-async fn serialize_sub_error_works() {
+async fn serialize_sub_error_adds_extra_string_quotes() {
 	#[derive(Serialize)]
 	struct MyError {
 		number: u32,
@@ -534,7 +534,7 @@ async fn serialize_sub_error_works() {
 	let sub_resp = stream.recv().await.unwrap();
 	assert_eq!(
 		format!(
-			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":{{"number":11,"address":"State street 1337"}}}}}}"#,
+			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":"{{"number":11,"address":"State street 1337"}}"}}}}"#,
 			resp.result
 		),
 		sub_resp

@@ -146,12 +146,18 @@ impl<T> From<T> for SubscriptionMessage
 where
 	T: AsRef<str>,
 {
-	fn from(msg: T) -> Self {
-		let s = msg.as_ref().trim();
-		let is_json = s.as_bytes().first() == Some(&b'{') && s.as_bytes().last() == Some(&b'}');
+	fn from(s: T) -> Self {
+		// Add "<s.as_ref()>"
+		let json_str = {
+			let s = s.as_ref();
+			let mut res = String::with_capacity(s.len());
+			res.push('"');
+			res.push_str(s);
+			res.push('"');
+			res
+		};
 
-		let res = if is_json { s.to_string() } else { format!("\"{}\"", s) };
-		SubscriptionMessage(SubscriptionMessageInner::NeedsData(res))
+		SubscriptionMessage(SubscriptionMessageInner::NeedsData(json_str))
 	}
 }
 
