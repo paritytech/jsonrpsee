@@ -162,6 +162,16 @@ pub enum GenericTransportError {
 	Inner(anyhow::Error),
 }
 
+/// A type that returns the error as a `String` from `SubscriptionCallback`.
+#[derive(Debug)]
+pub struct StringError(pub(crate) String);
+
+impl<T: ToString> From<T> for StringError {
+	fn from(val: T) -> Self {
+		StringError(val.to_string())
+	}
+}
+
 impl From<std::io::Error> for Error {
 	fn from(io_err: std::io::Error) -> Error {
 		Error::Transport(io_err.into())

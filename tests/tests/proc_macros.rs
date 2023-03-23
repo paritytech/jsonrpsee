@@ -45,7 +45,7 @@ mod rpc_impl {
 	use jsonrpsee::core::server::{
 		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubscriptionCloseResponse, SubscriptionMessage,
 	};
-	use jsonrpsee::core::{async_trait, RpcResult};
+	use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
 
 	pub struct CustomSubscriptionRet;
@@ -65,10 +65,9 @@ mod rpc_impl {
 		fn sync_method(&self) -> RpcResult<u16>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-		async fn sub(&self) -> RpcResult<()>;
-
+		async fn sub(&self) -> SubscriptionResult;
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
-		async fn sub_with_params(&self, val: u32) -> RpcResult<()>;
+		async fn sub_with_params(&self, val: u32) -> SubscriptionResult;
 
 		#[subscription(name = "not-result", unsubscribe = "unsubscribe-not-result", item = String)]
 		async fn sub_not_result(&self);
@@ -134,7 +133,7 @@ mod rpc_impl {
 
 		/// All head subscription
 		#[subscription(name = "subscribeAllHeads", item = Header)]
-		async fn subscribe_all_heads(&self, hash: Hash) -> RpcResult<()>;
+		async fn subscribe_all_heads(&self, hash: Hash) -> SubscriptionResult;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -149,7 +148,7 @@ mod rpc_impl {
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
 		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
-		async fn sub(&self, hash: Input) -> RpcResult<()>;
+		async fn sub(&self, hash: Input) -> SubscriptionResult;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -186,7 +185,7 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		async fn sub(&self, pending: PendingSubscriptionSink) -> RpcResult<()> {
+		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 			let sink = pending.accept().await?;
 			sink.send("Response_A".into()).await?;
 			sink.send("Response_B".into()).await?;
@@ -194,7 +193,7 @@ mod rpc_impl {
 			Ok(())
 		}
 
-		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> RpcResult<()> {
+		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
 			let sink = pending.accept().await?;
 			let msg = SubscriptionMessage::from_json(&val)?;
 			sink.send(msg.clone()).await?;
@@ -224,7 +223,7 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> RpcResult<()> {
+		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
 			let sink = pending.accept().await?;
 			let msg = SubscriptionMessage::from("hello");
 			sink.send(msg).await?;

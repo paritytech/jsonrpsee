@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::core::{async_trait, Error, RpcResult};
+use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, SubscriptionMessage};
 use jsonrpsee::ws_client::*;
@@ -28,15 +28,15 @@ pub trait Rpc {
 	fn sync_method(&self) -> RpcResult<u16>;
 
 	#[subscription(name = "subscribe", item = String)]
-	async fn sub(&self) -> Result<(), Error>;
+	async fn sub(&self) -> SubscriptionResult;
 
 	#[subscription(name = "echo", unsubscribe = "unsubscribeEcho", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
-	async fn sub_with_params(&self, val: u32) -> Result<(), Error>;
+	async fn sub_with_params(&self, val: u32) -> SubscriptionResult;
 
 	// This will send data to subscribers with the `method` field in the JSON payload set to `foo_subscribe_override`
 	// because it's in the `foo` namespace.
 	#[subscription(name = "subscribe_method" => "subscribe_override", item = u32)]
-	async fn sub_with_override_notif_method(&self) -> Result<(), Error>;
+	async fn sub_with_override_notif_method(&self) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl;
@@ -65,7 +65,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	async fn sub(&self, pending: PendingSubscriptionSink) -> Result<(), Error> {
+	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
 		sink.send("Response_A".into()).await?;
@@ -74,7 +74,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(())
 	}
 
-	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> Result<(), Error> {
+	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 		let msg = SubscriptionMessage::from_json(&val)?;
 
@@ -84,7 +84,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(())
 	}
 
-	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> Result<(), Error> {
+	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
 		let msg = SubscriptionMessage::from_json(&1)?;

@@ -29,7 +29,7 @@
 use super::helpers::{MethodResponse, MethodSink};
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{traits::IdProvider, Error};
+use crate::{traits::IdProvider, Error, StringError};
 use jsonrpsee_types::{response::SubscriptionError, ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -47,16 +47,6 @@ pub type SubscriptionPermit = OwnedSemaphorePermit;
 pub trait IntoSubscriptionCloseResponse {
 	/// Convert something into a subscription response
 	fn into_response(self) -> SubscriptionCloseResponse;
-}
-
-/// A type that serializes as String.
-#[derive(Debug)]
-pub struct SerializeAsString(String);
-
-impl<T: ToString> From<T> for SerializeAsString {
-	fn from(val: T) -> Self {
-		SerializeAsString(val.to_string())
-	}
 }
 
 /// Represents what action that will sent when a subscription callback returns.
@@ -98,7 +88,7 @@ pub enum SubscriptionCloseResponse {
 	NotifErr(SubscriptionMessage),
 }
 
-impl IntoSubscriptionCloseResponse for Result<(), SerializeAsString> {
+impl IntoSubscriptionCloseResponse for Result<(), StringError> {
 	fn into_response(self) -> SubscriptionCloseResponse {
 		match self {
 			Ok(()) => SubscriptionCloseResponse::None,

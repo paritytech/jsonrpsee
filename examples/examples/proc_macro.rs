@@ -26,10 +26,9 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::{async_trait, client::Subscription, Error};
+use jsonrpsee::core::{async_trait, client::Subscription, Error, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder};
+use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder, SubscriptionMessage};
 use jsonrpsee::ws_client::WsClientBuilder;
 
 type ExampleHash = [u8; 32];
@@ -46,7 +45,7 @@ where
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
-	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> Result<(), Error>;
+	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl;
@@ -65,7 +64,7 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		&self,
 		pending: PendingSubscriptionSink,
 		_keys: Option<Vec<ExampleStorageKey>>,
-	) -> Result<(), Error> {
+	) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 		let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
 		sink.send(msg).await?;

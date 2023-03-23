@@ -221,7 +221,7 @@ pub(crate) mod visitor;
 /// mod rpc_impl {
 ///     use jsonrpsee::{proc_macros::rpc};
 ///     use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage, IntoSubscriptionCloseResponse, SubscriptionCloseResponse};
-///     use jsonrpsee::core::{async_trait, RpcResult};
+///     use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 ///
 ///     enum CloseResponse {
 ///         None,
@@ -266,7 +266,7 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "sub" => "subNotif", unsubscribe = "unsub", item = String)]
-///         async fn sub_override_notif_method(&self) -> RpcResult<()>;
+///         async fn sub_override_notif_method(&self) -> SubscriptionResult;
 ///
 ///         /// Use the same method name for both the `subscribe call` and `notifications`
 ///         ///
@@ -283,7 +283,7 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "subscribe", item = String)]
-///         async fn sub(&self) -> RpcResult<()>;
+///         async fn sub(&self) -> SubscriptionResult;
 ///
 
 ///         #[subscription(name = "sub_custom_close_msg", unsubscribe = "unsub_custom_close_msg", item = String)]
@@ -314,14 +314,14 @@ pub(crate) mod visitor;
 ///
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
-///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> RpcResult<()> {
+///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
 ///             sink.send("Response_A".into()).await?;
 ///             Ok(())
 ///         }
 ///
 ///         // Send out two values on the subscription.
-///         async fn sub(&self, pending: PendingSubscriptionSink) -> RpcResult<()> {
+///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
 ///             let msg1 = SubscriptionMessage::from("Response_A");
