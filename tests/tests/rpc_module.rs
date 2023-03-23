@@ -31,11 +31,12 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
-use jsonrpsee::core::error::{Error, SubscriptionCallbackError};
-use jsonrpsee::core::server::rpc_module::*;
+use jsonrpsee::core::error::Error;
+use jsonrpsee::core::server::*;
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
-use jsonrpsee::types::{ErrorObjectOwned, Params};
+use jsonrpsee::types::{ErrorObjectOwned, Params, Response};
+use jsonrpsee::SubscriptionMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::time::interval;
@@ -246,10 +247,8 @@ async fn subscribing_without_server() {
 				let _ = sink.send(msg).await.unwrap();
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
-			let close = ErrorObject::borrowed(0, &"closed successfully", None);
-			let _ = sink.close_with_error(SubscriptionMessage::from_json(&close).unwrap()).await;
 
-			Ok(())
+			Err(Error::Custom("closed successfully".into()).into())
 		})
 		.unwrap();
 
@@ -271,11 +270,11 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&"lo").unwrap();
+			let sink = pending.accept().await?;
+			let msg = SubscriptionMessage::from_json(&"lo")?;
 
 			// make sure to only send one item
-			sink.send(msg.clone()).await.unwrap();
+			sink.send(msg.clone()).await?;
 			sink.closed().await;
 
 			match sink.send(msg).await {
@@ -321,13 +320,13 @@ async fn subscribing_without_server_bad_params() {
 				Err(e) => {
 					let err: ErrorObjectOwned = e.into();
 					let _ = pending.reject(err).await;
-					return Err(SubscriptionCallbackError::None);
+					return Ok(());
 				}
 			};
 
-			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&p).unwrap();
-			sink.send(msg).await.unwrap();
+			let sink = pending.accept().await?;
+			let msg = SubscriptionMessage::from_json(&p)?;
+			sink.send(msg).await?;
 
 			Ok(())
 		})
@@ -345,11 +344,11 @@ async fn subscribing_without_server_indicates_close() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let sink = pending.accept().await.unwrap();
+			let sink = pending.accept().await?;
 
 			for m in 0..5 {
-				let msg = SubscriptionMessage::from_json(&m).unwrap();
-				sink.send(msg).await.unwrap();
+				let msg = SubscriptionMessage::from_json(&m)?;
+				sink.send(msg).await?;
 			}
 
 			Ok(())
@@ -371,9 +370,7 @@ async fn subscribe_unsubscribe_without_server() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);
-			pipe_from_stream_and_drop(pending, stream).await?;
-
-			Ok(())
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 
@@ -407,7 +404,6 @@ async fn rejected_subscription_without_server() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
 			let _ = pending.reject(err.into_owned()).await;
-
 			Ok(())
 		})
 		.unwrap();
@@ -420,21 +416,20 @@ async fn rejected_subscription_without_server() {
 
 #[tokio::test]
 async fn reject_works() {
+	init_logger();
+
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
-			let res = pending.reject(err.into_owned()).await;
-			assert!(matches!(res, Ok(())));
-
-			Ok(())
+			pending.reject(ErrorObject::owned(PARSE_ERROR_CODE, "rejected", None::<()>)).await;
+			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+			Err("do not send".into())
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
-	assert!(
-		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
-	);
+	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
+	assert_eq!(rp.result, r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"rejected"},"id":0}"#);
+	assert!(stream.recv().await.is_none());
 }
 
 #[tokio::test]
@@ -446,7 +441,6 @@ async fn bounded_subscription_works() {
 
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx| async move {
-			println!("accept");
 			let mut sink = pending.accept().await?;
 
 			let mut stream = IntervalStream::new(interval(std::time::Duration::from_millis(100)))
@@ -501,4 +495,37 @@ async fn bounded_subscription_works() {
 		let (item, _) = sub.next::<usize>().await.unwrap().unwrap();
 		assert_eq!(item, exp);
 	}
+}
+
+#[tokio::test]
+async fn serialize_sub_error_adds_extra_string_quotes() {
+	#[derive(Serialize)]
+	struct MyError {
+		number: u32,
+		address: String,
+	}
+
+	init_logger();
+
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+			let _ = pending.accept().await?;
+			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+			let err = serde_json::to_string(&MyError { number: 11, address: "State street 1337".into() }).unwrap();
+			Err(err.into())
+		})
+		.unwrap();
+
+	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
+	let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
+	let sub_resp = stream.recv().await.unwrap();
+	assert_eq!(
+		format!(
+			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":"{{"number":11,"address":"State street 1337"}}"}}}}"#,
+			resp.result
+		),
+		sub_resp
+	);
 }

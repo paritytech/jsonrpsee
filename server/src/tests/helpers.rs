@@ -5,7 +5,7 @@ use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 
 use anyhow::anyhow;
-use jsonrpsee_core::{DeserializeOwned, Error};
+use jsonrpsee_core::{DeserializeOwned, Error, StringError};
 use jsonrpsee_test_utils::mocks::TestContext;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::Response;
@@ -82,14 +82,19 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async move {
-			let sink = pending.accept().await?;
+		.register_subscription::<Result<(), StringError>, _, _>(
+			"subscribe_hello",
+			"subscribe_hello",
+			"unsubscribe_hello",
+			|_, pending, _| async move {
+				let sink = pending.accept().await?;
 
-			loop {
-				let _ = &sink;
-				tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-			}
-		})
+				loop {
+					let _ = &sink;
+					tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+				}
+			},
+		)
 		.unwrap();
 
 	module.register_method("notif", |_, _| Ok("")).unwrap();

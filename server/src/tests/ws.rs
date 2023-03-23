@@ -27,7 +27,7 @@
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
-use jsonrpsee_core::server::rpc_module::{SendTimeoutError, SubscriptionMessage};
+use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
@@ -688,8 +688,8 @@ async fn ws_server_backpressure_works() {
 			"unsubscribe_with_backpressure_aggregation",
 			move |_, pending, mut backpressure_tx| async move {
 				let sink = pending.accept().await?;
-				let n = SubscriptionMessage::from_json(&1).unwrap();
-				let bp = SubscriptionMessage::from_json(&2).unwrap();
+				let n = SubscriptionMessage::from_json(&1)?;
+				let bp = SubscriptionMessage::from_json(&2)?;
 
 				let mut msg = n.clone();
 
@@ -698,7 +698,7 @@ async fn ws_server_backpressure_works() {
 						biased;
 						_ = sink.closed() => {
 							// User closed connection.
-							break;
+							break Ok(());
 						},
 						res = sink.send_timeout(msg.clone(), std::time::Duration::from_millis(100)) => {
 							match res {
@@ -706,7 +706,7 @@ async fn ws_server_backpressure_works() {
 								Ok(_) => {
 									msg = n.clone();
 								}
-								Err(SendTimeoutError::Closed(_)) => break,
+								Err(SendTimeoutError::Closed(_)) => break Ok(()),
 								// msg == 2
 								Err(SendTimeoutError::Timeout(_)) => {
 									let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);
@@ -717,7 +717,6 @@ async fn ws_server_backpressure_works() {
 						},
 					}
 				}
-				Ok(())
 			},
 		)
 		.unwrap();

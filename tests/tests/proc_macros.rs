@@ -42,10 +42,19 @@ use jsonrpsee::ws_client::*;
 use serde_json::json;
 
 mod rpc_impl {
-	use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+	use jsonrpsee::core::server::{
+		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubscriptionCloseResponse, SubscriptionMessage,
+	};
 	use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::PendingSubscriptionSink;
+
+	pub struct CustomSubscriptionRet;
+
+	impl IntoSubscriptionCloseResponse for CustomSubscriptionRet {
+		fn into_response(self) -> SubscriptionCloseResponse {
+			SubscriptionCloseResponse::None
+		}
+	}
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
@@ -56,10 +65,18 @@ mod rpc_impl {
 		fn sync_method(&self) -> RpcResult<u16>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-		async fn sub(&self);
-
+		async fn sub(&self) -> SubscriptionResult;
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
-		async fn sub_with_params(&self, val: u32);
+		async fn sub_with_params(&self, val: u32) -> SubscriptionResult;
+
+		#[subscription(name = "not-result", unsubscribe = "unsubscribe-not-result", item = String)]
+		async fn sub_not_result(&self);
+
+		#[subscription(name = "custom", unsubscribe = "unsubscribe_custom", item = String)]
+		async fn sub_custom_ret(&self, x: usize) -> CustomSubscriptionRet;
+
+		#[subscription(name = "unit_type", unsubscribe = "unsubscribe_unit_type", item = String)]
+		async fn sub_unit_type(&self, x: usize);
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
@@ -116,7 +133,7 @@ mod rpc_impl {
 
 		/// All head subscription
 		#[subscription(name = "subscribeAllHeads", item = Header)]
-		async fn subscribe_all_heads(&self, hash: Hash);
+		async fn subscribe_all_heads(&self, hash: Hash) -> SubscriptionResult;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -131,7 +148,7 @@ mod rpc_impl {
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
 		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
-		async fn sub(&self, hash: Input);
+		async fn sub(&self, hash: Input) -> SubscriptionResult;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -169,23 +186,32 @@ mod rpc_impl {
 		}
 
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-			let sink = pending.accept().await.unwrap();
-
-			let _ = sink.send(SubscriptionMessage::from_json(&"Response_A").unwrap()).await;
-			let _ = sink.send(SubscriptionMessage::from_json(&"Response_B").unwrap()).await;
+			let sink = pending.accept().await?;
+			sink.send("Response_A".into()).await?;
+			sink.send("Response_B".into()).await?;
 
 			Ok(())
 		}
 
 		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
-			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&val).unwrap();
-
-			let _ = sink.send(msg.clone()).await;
-			let _ = sink.send(msg).await;
+			let sink = pending.accept().await?;
+			let msg = SubscriptionMessage::from_json(&val)?;
+			sink.send(msg.clone()).await?;
+			sink.send(msg).await?;
 
 			Ok(())
 		}
+
+		async fn sub_not_result(&self, pending: PendingSubscriptionSink) {
+			let sink = pending.accept().await.unwrap();
+			sink.send("lo".into()).await.unwrap();
+		}
+
+		async fn sub_custom_ret(&self, _pending: PendingSubscriptionSink, _x: usize) -> CustomSubscriptionRet {
+			CustomSubscriptionRet
+		}
+
+		async fn sub_unit_type(&self, _pending: PendingSubscriptionSink, _x: usize) {}
 	}
 
 	#[async_trait]
@@ -198,9 +224,9 @@ mod rpc_impl {
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
 		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
-			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&"hello").unwrap();
-			let _ = sink.send(msg).await.unwrap();
+			let sink = pending.accept().await?;
+			let msg = SubscriptionMessage::from("hello");
+			sink.send(msg).await?;
 
 			Ok(())
 		}
@@ -348,6 +374,8 @@ async fn subscriptions_do_not_work_for_http_servers() {
 
 #[tokio::test]
 async fn calls_with_bad_params() {
+	init_logger();
+
 	let server_addr = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -357,6 +385,7 @@ async fn calls_with_bad_params() {
 		.subscribe::<String, ArrayParams>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
 		.await
 		.unwrap_err();
+
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);

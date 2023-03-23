@@ -29,9 +29,8 @@ use std::time::Duration;
 
 use futures::{Stream, StreamExt};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::server::rpc_module::{SubscriptionMessage, TrySendError};
-use jsonrpsee::core::{Serialize, SubscriptionResult};
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::core::Serialize;
+use jsonrpsee::server::{RpcModule, ServerBuilder, SubscriptionMessage, TrySendError};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
@@ -83,9 +82,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
-			pipe_from_stream_and_drop(pending, stream).await?;
-
-			Ok(())
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 	module
@@ -95,9 +92,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let item = &LETTERS[one..two];
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
-			pipe_from_stream_and_drop(pending, stream).await?;
-
-			Ok(())
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 
@@ -114,39 +109,25 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 pub async fn pipe_from_stream_and_drop<T: Serialize>(
 	pending: PendingSubscriptionSink,
 	mut stream: impl Stream<Item = T> + Unpin,
-) -> SubscriptionResult {
+) -> Result<(), anyhow::Error> {
 	let mut sink = pending.accept().await?;
 
-	let msg = loop {
+	loop {
 		tokio::select! {
-			_ = sink.closed() => break "Subscription was closed".to_string(),
+			_ = sink.closed() => break Err(anyhow::anyhow!("Subscription was closed")),
 			maybe_item = stream.next() => {
 				let item = match maybe_item {
 					Some(item) => item,
-					None => break "Subscription executed successful".to_string(),
+					None => break Err(anyhow::anyhow!("Subscription was closed")),
 				};
-				let msg = match SubscriptionMessage::from_json(&item) {
-					Ok(msg) => msg,
-					Err(e) => break e.to_string(),
-				};
-
+				let msg = SubscriptionMessage::from_json(&item)?;
 				match sink.try_send(msg) {
 					Ok(_) => (),
-					Err(TrySendError::Closed(_)) => break "Subscription was closed".to_string(),
+					Err(TrySendError::Closed(_)) => break Err(anyhow::anyhow!("Subscription was closed")),
 					// channel is full, let's be naive an just drop the message.
 					Err(TrySendError::Full(_)) => (),
 				}
 			}
 		}
-	};
-
-	// NOTE: we are using `close_with_error` for the jsonrpsee client to terminate the subscription
-	// when the "close message" is received without any custom logic.
-	//
-	// Otherwise, the subscription would need custom logic on the client side
-	// for example with dedicate states/different messages to know whether the
-	// server closed just the particular subscription.
-	sink.close_with_error(SubscriptionMessage::from_json(&msg).unwrap()).await;
-
-	Ok(())
+	}
 }

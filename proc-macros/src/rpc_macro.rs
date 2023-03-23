@@ -271,10 +271,6 @@ impl RpcDescription {
 						));
 					}
 
-					if !matches!(method.sig.output, syn::ReturnType::Default) {
-						return Err(syn::Error::new_spanned(method, "Subscription methods must not return anything"));
-					}
-
 					if method.sig.asyncness.is_none() {
 						return Err(syn::Error::new_spanned(method, "Subscription methods must be `async`"));
 					}

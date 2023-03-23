@@ -12,9 +12,9 @@ use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
-	batch_response_error, prepare_error, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
+	batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::rpc_module::{CallOrSubscription, ConnState, MethodCallback, Methods};
+use jsonrpsee_core::server::{BoundedSubscriptions, CallOrSubscription, MethodCallback, Methods, SubscriptionState};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -223,7 +223,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 				logger.on_call(name, params.clone(), logger::MethodKind::Subscription, TransportProtocol::WebSocket);
 
 				if let Some(p) = bounded_subscriptions.acquire() {
-					let conn_state = ConnState { conn_id, id_provider, subscription_permit: p };
+					let conn_state = SubscriptionState { conn_id, id_provider, subscription_permit: p };
 					match callback(id, params, sink.clone(), conn_state).await {
 						Ok(r) => CallOrSubscription::Subscription(r),
 						Err(id) => {

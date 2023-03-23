@@ -56,7 +56,7 @@ pub(crate) mod visitor;
 /// - For subscription methods:
 ///   - There will be one additional argument inserted right after `&self`: `subscription_sink: SubscriptionSink`.
 ///   It should be used to accept or reject a subscription and send data back to subscribers.
-///   - The return type of the subscription method is `SubscriptionResult` for improved ergonomics.
+///   - The return type of the subscription method must implement `IntoSubscriptionCloseResponse`.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
@@ -86,7 +86,7 @@ pub(crate) mod visitor;
 ///     fn sync_method(&self) -> String;
 ///
 ///     #[subscription(name = "subscribe", item = "String")]
-///     async fn sub(&self);
+///     async fn sub(&self) -> SubscriptionResult;
 /// }
 /// ```
 ///
@@ -99,7 +99,7 @@ pub(crate) mod visitor;
 ///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
 ///     fn sync_method(&self) -> String;
 ///
-///     // Note that `pending_subscription_sink` and `SubscriptionResult` were added automatically.
+///     // Note that `pending_subscription_sink` was added automatically.
 ///     async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult;
 ///
 ///     fn into_rpc(self) -> Result<Self, jsonrpsee::core::Error> {
@@ -200,8 +200,8 @@ pub(crate) mod visitor;
 ///
 /// Rust method marked with the `subscription` attribute **must**:
 ///
-/// - be synchronous;
-/// - return `RpcResult<()>`
+/// - be asynchronous;
+/// - return a type that implements `jsonrpsee::server::IntoSubscriptionCloseResponse`.
 ///
 /// Rust method marked with `subscription` attribute **may**:
 ///
@@ -219,8 +219,26 @@ pub(crate) mod visitor;
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc, server::PendingSubscriptionSink, server::SubscriptionMessage};
-///     use jsonrpsee::core::{async_trait, SubscriptionResult, RpcResult};
+///     use jsonrpsee::{proc_macros::rpc};
+///     use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage, IntoSubscriptionCloseResponse, SubscriptionCloseResponse};
+///     use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
+///
+///     enum CloseResponse {
+///         None,
+///         Failed,
+///     }
+///
+///     impl IntoSubscriptionCloseResponse for CloseResponse {
+///         fn into_response(self) -> SubscriptionCloseResponse {
+///            match self {
+///                // Do not send a close response when the subscription is terminated.
+///                CloseResponse::None => SubscriptionCloseResponse::None,
+///                // Send a close response as an ordinary subscription notification
+///                // when the subscription is terminated.
+///                CloseResponse::Failed => SubscriptionCloseResponse::Notif("failed".into()),
+///            }
+///         }
+///     }
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
 ///     #[rpc(client, server, namespace = "foo")]
@@ -248,7 +266,7 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "sub" => "subNotif", unsubscribe = "unsub", item = String)]
-///         async fn sub_override_notif_method(&self);
+///         async fn sub_override_notif_method(&self) -> SubscriptionResult;
 ///
 ///         /// Use the same method name for both the `subscribe call` and `notifications`
 ///         ///
@@ -265,7 +283,11 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "subscribe", item = String)]
-///         async fn sub(&self);
+///         async fn sub(&self) -> SubscriptionResult;
+///
+
+///         #[subscription(name = "sub_custom_close_msg", unsubscribe = "unsub_custom_close_msg", item = String)]
+///         async fn sub_custom_close_msg(&self) -> CloseResponse;
 ///     }
 ///
 ///     // Structure that will implement the `MyRpcServer` trait.
@@ -294,10 +316,7 @@ pub(crate) mod visitor;
 ///         // as subscription responses.
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
-///
-///             let msg = SubscriptionMessage::from_json(&"Response_A")?;
-///             sink.send(msg).await?;
-///
+///             sink.send("Response_A".into()).await?;
 ///             Ok(())
 ///         }
 ///
@@ -305,13 +324,29 @@ pub(crate) mod visitor;
 ///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
-///             let msg1 = SubscriptionMessage::from_json(&"Response_A")?;
-///             let msg2 = SubscriptionMessage::from_json(&"Response_B")?;
+///             let msg1 = SubscriptionMessage::from("Response_A");
+///             let msg2 = SubscriptionMessage::from("Response_B");
 ///
 ///             sink.send(msg1).await?;
 ///             sink.send(msg2).await?;
 ///
 ///             Ok(())
+///         }
+///
+///         // If one doesn't want sent out a close message when a subscription terminates or treat
+///         // errors as subscription error notifications then it's possible to implement
+///         // `IntoSubscriptionCloseResponse` for customized behavior.
+///         async fn sub_custom_close_msg(&self, pending: PendingSubscriptionSink) -> CloseResponse {
+///             let Ok(sink) = pending.accept().await else {
+///                 return CloseResponse::None;
+///             };
+///
+///             if sink.send("Response_A".into()).await.is_ok() {
+///                 CloseResponse::Failed
+///             } else {
+///                 CloseResponse::None
+///             }
+///
 ///         }
 ///     }
 /// }

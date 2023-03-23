@@ -40,12 +40,13 @@ use helpers::{
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
-use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
+use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee_test_utils::TimeoutFutureExt;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
@@ -442,9 +443,9 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			"subscribe_hello",
 			"unsubscribe_hello",
 			|_, pending, mut tx| async move {
-				let sink = pending.accept().await.unwrap();
-				let msg = SubscriptionMessage::from_json(&1).unwrap();
-				sink.send(msg).await.unwrap();
+				let sink = pending.accept().await?;
+				let msg = SubscriptionMessage::from_json(&1)?;
+				sink.send(msg).await?;
 				sink.closed().await;
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed("Subscription terminated by remote peer").await.unwrap();
@@ -747,7 +748,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 	let _handle = server.start(module).unwrap();
@@ -802,14 +803,14 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-			pipe_from_stream_and_drop(pending, stream).await
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
 	let _handle = server.start(module).unwrap();
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	// Add 10 subscriptions (this should fill our subscrition limit for this connection):
+	// Add 10 subscriptions (this should fill our subscription limit for this connection):
 	let mut subs = Vec::new();
 	for _ in 0..10 {
 		subs.push(
@@ -1086,4 +1087,56 @@ async fn deny_invalid_host() {
 			matches!(err, Error::Transport(e) if e.to_string().contains("Connection rejected with status code: 403"))
 		)
 	}
+}
+
+#[tokio::test]
+async fn subscription_option_err_is_not_sent() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub = client
+		.subscribe::<serde_json::Value, ArrayParams>("subscribe_option", rpc_params![], "unsubscribe_option")
+		.await
+		.unwrap();
+
+	// the subscription never gets a special notification so the client doesn't know
+	// that it has been closed.
+	assert!(sub.next().with_timeout(std::time::Duration::from_secs(10)).await.is_err());
+}
+
+#[tokio::test]
+async fn subscription_err_is_sent() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub = client
+		.subscribe::<serde_json::Value, ArrayParams>("subscribe_noop", rpc_params![], "unsubscribe_noop")
+		.await
+		.unwrap();
+
+	// the subscription is closed once the error notification comes.
+	assert!(sub.next().await.is_none());
+}
+
+#[tokio::test]
+async fn subscription_ok_unit_not_sent() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub = client
+		.subscribe::<serde_json::Value, ArrayParams>("subscribe_unit", rpc_params![], "unsubscribe_unit")
+		.await
+		.unwrap();
+
+	// Assert that `result: null` is not sent.
+	assert!(sub.next().with_timeout(std::time::Duration::from_secs(10)).await.is_err());
 }

@@ -11,7 +11,7 @@ pub trait Rpc {
 	fn sync_method(&self) -> RpcResult<u16>;
 
 	#[subscription(name = "subscribe", item = String)]
-	async fn sub(&self);
+	async fn sub(&self) -> Result<(), Error>;
 }
 
 fn main() {}

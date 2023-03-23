@@ -42,8 +42,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
-use jsonrpsee_core::server::host_filtering::AllowHosts;
-use jsonrpsee_core::server::rpc_module::Methods;
+use jsonrpsee_core::server::{AllowHosts, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 

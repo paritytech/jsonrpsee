@@ -32,7 +32,7 @@ use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType};
+use syn::{token, AttrStyle, Attribute, Path, PathSegment};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -75,11 +75,6 @@ impl RpcDescription {
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
-
-			// For ergonomic reasons, the server's subscription method should return `SubscriptionResult`.
-			let return_ty = self.jrps_server_item(quote! { core::SubscriptionResult });
-			let output: ReturnType = parse_quote! { -> #return_ty };
-			sub_sig.sig.output = output;
 
 			sub_sig.sig.inputs.insert(1, subscription_sink);
 			quote! {
@@ -174,6 +169,7 @@ impl RpcDescription {
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let pending = proc_macro2::Ident::new("subscription_sink", rust_method_name.span());
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params, Some(pending));
+				let into_sub_response = self.jrps_server_item(quote! { IntoSubscriptionCloseResponse });
 
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
@@ -189,7 +185,7 @@ impl RpcDescription {
 				handle_register_result(quote! {
 					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
 						#parsing
-						context.as_ref().#rust_method_name(subscription_sink, #params_seq).await
+						#into_sub_response::into_response(context.as_ref().#rust_method_name(subscription_sink, #params_seq).await)
 					})
 				})
 			})
@@ -289,9 +285,8 @@ impl RpcDescription {
 		let params_fields_seq = params.iter().map(|(name, _)| name);
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
-		let err = self.jrps_server_item(quote! { core::Error });
-		let sub_err = self.jrps_server_item(quote! { core::SubscriptionCallbackError::None });
-		let tokio = self.jrps_server_item(quote! { tokio });
+		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
+		let err_obj = self.jrps_server_item(quote! { types::ErrorObjectOwned });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -302,11 +297,8 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								let _e: #err = e.into();
-								#tokio::spawn(async move {
-									let _ = #pending.reject(_e).await;
-								});
-								return Err(#sub_err);
+								#pending.reject(#err_obj::from(e)).await;
+								return #sub_err::None;
 							}
 						};
 					}
@@ -327,12 +319,9 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::warn!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								let _e: #err = e.into();
-								#tokio::spawn(async move {
-									let _ = #pending.reject(_e).await;
-								});
-								return Err(#sub_err);
+								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#pending.reject(#err_obj::from(e)).await;
+								return #sub_err::None;
 							}
 						};
 					}
@@ -409,11 +398,8 @@ impl RpcDescription {
 						Ok(p) => p,
 						Err(e) => {
 							#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
-							let _e: #err = e.into();
-							#tokio::spawn(async move {
-								let _ = #pending.reject(_e).await;
-							});
-							return Err(#sub_err);
+							#pending.reject(#err_obj::from(e)).await;
+							return #sub_err::None;
 						}
 					};
 

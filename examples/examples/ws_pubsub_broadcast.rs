@@ -31,9 +31,7 @@ use std::net::SocketAddr;
 use futures::future::{self, Either};
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::server::rpc_module::SubscriptionMessage;
-
-use jsonrpsee::core::SubscriptionResult;
+use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -80,7 +78,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let rx = tx.subscribe();
 			let stream = BroadcastStream::new(rx);
 			pipe_from_stream_with_bounded_buffer(pending, stream).await?;
-
 			Ok(())
 		})
 		.unwrap();
@@ -97,7 +94,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 async fn pipe_from_stream_with_bounded_buffer(
 	pending: PendingSubscriptionSink,
 	stream: BroadcastStream<usize>,
-) -> SubscriptionResult {
+) -> Result<(), anyhow::Error> {
 	let sink = pending.accept().await?;
 	let closed = sink.closed();
 
@@ -106,7 +103,7 @@ async fn pipe_from_stream_with_bounded_buffer(
 	loop {
 		match future::select(closed, stream.next()).await {
 			// subscription closed.
-			Either::Left((_, _)) => break,
+			Either::Left((_, _)) => break Ok(()),
 
 			// received new item from the stream.
 			Either::Right((Some(Ok(item)), c)) => {
@@ -116,20 +113,19 @@ async fn pipe_from_stream_with_bounded_buffer(
 				// and you might want to do something smarter if it's
 				// critical that "the most recent item" must be sent when it is produced.
 				if sink.send(notif).await.is_err() {
-					break;
+					break Ok(());
 				}
 
 				closed = c;
 			}
 
-			// stream is closed or some error, just quit.
-			Either::Right((_, _)) => {
-				break;
-			}
+			// Send back back the error.
+			Either::Right((Some(Err(e)), _)) => break Err(e.into()),
+
+			// Stream is closed.
+			Either::Right((None, _)) => break Ok(()),
 		}
 	}
-
-	Ok(())
 }
 
 // Naive example that broadcasts the produced values to all active subscribers.
