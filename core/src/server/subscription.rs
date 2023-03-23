@@ -39,7 +39,7 @@ use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 
 /// Type-alias for subscribers.
 pub type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Receiver<()>)>>>;
-/// Subscription permit
+/// Subscription permit.
 pub type SubscriptionPermit = OwnedSemaphorePermit;
 
 /// Convert something into a subscription close notification
