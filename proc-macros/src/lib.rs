@@ -86,7 +86,7 @@ pub(crate) mod visitor;
 ///     fn sync_method(&self) -> String;
 ///
 ///     #[subscription(name = "subscribe", item = "String")]
-///     async fn sub(&self) -> Result<(), Error>;
+///     async fn sub(&self) -> SubscriptionResult;
 /// }
 /// ```
 ///
