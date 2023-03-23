@@ -416,19 +416,20 @@ async fn rejected_subscription_without_server() {
 
 #[tokio::test]
 async fn reject_works() {
+	init_logger();
+
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
-			pending.reject(err.into_owned()).await;
-			Ok(())
+			pending.reject(ErrorObject::owned(PARSE_ERROR_CODE, "rejected", None::<()>)).await;
+			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+			Err("do not send".into())
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
-	assert!(
-		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
-	);
+	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
+	assert_eq!(rp.result, r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"rejected"},"id":0}"#);
+	assert!(stream.recv().await.is_none());
 }
 
 #[tokio::test]

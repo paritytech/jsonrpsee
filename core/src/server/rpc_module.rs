@@ -28,6 +28,7 @@ use std::collections::hash_map::Entry;
 use std::fmt::{self, Debug};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::error::Error;
@@ -44,7 +45,7 @@ use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
 use jsonrpsee_types::{ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId};
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -699,7 +700,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: conn.id_provider.next_id() };
 
 					// response to the subscription call.
-					let (tx, mut rx) = mpsc::channel(1);
+					let (tx, rx) = oneshot::channel();
+					let is_accepted = Arc::new(AtomicBool::new(false));
 
 					let sub_id = uniq_sub.sub_id.clone();
 					let method = notif_method_name;
@@ -710,7 +712,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						subscribers: subscribers.clone(),
 						uniq_sub,
 						id: id.clone().into_owned(),
-						subscribe: tx.clone(),
+						subscribe: tx,
 						permit: conn.subscription_permit,
 					};
 
@@ -720,13 +722,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					// This runs until the subscription callback has completed.
 					let sub_fut = callback(params.into_owned(), sink, ctx.clone());
 
+					let is_accepted2 = is_accepted.clone();
 					tokio::spawn(async move {
 						match sub_fut.await.into_response() {
-							SubscriptionCloseResponse::Notif(msg) if tx.is_closed() => {
+							SubscriptionCloseResponse::Notif(msg) if is_accepted2.load(Ordering::SeqCst) => {
 								let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &sub_id, method);
 								_ = method_sink.send(json).await;
 							}
-							SubscriptionCloseResponse::NotifErr(msg) if tx.is_closed() => {
+							SubscriptionCloseResponse::NotifErr(msg) if is_accepted2.load(Ordering::SeqCst) => {
 								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
 								_ = method_sink.send(json).await;
 							}
@@ -737,9 +740,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let id = id.clone().into_owned();
 
 					Box::pin(async move {
-						match rx.recv().await {
-							Some(msg) => Ok(msg),
-							None => Err(id),
+						match rx.await {
+							Ok(msg) => {
+								// If the subscription is rejected `success` will be set
+								// to false to prevent further notifications to be sent.
+								if msg.success {
+									is_accepted.store(true, Ordering::SeqCst);
+								}
+								Ok(msg)
+							}
+							Err(_) => Err(id),
 						}
 					})
 				})),

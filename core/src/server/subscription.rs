@@ -35,7 +35,7 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 
 /// Type-alias for subscribers.
 pub type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Receiver<()>)>>>;
@@ -147,7 +147,7 @@ where
 		// Add "<s.as_ref()>"
 		let json_str = {
 			let s = s.as_ref();
-			let mut res = String::with_capacity(s.len());
+			let mut res = String::with_capacity(s.len() + 2);
 			res.push('"');
 			res.push_str(s);
 			res.push('"');
@@ -228,17 +228,24 @@ pub struct PendingSubscriptionSink {
 	/// to reply to subscription method call and must only be used once.
 	pub(crate) id: Id<'static>,
 	/// Sender to answer the subscribe call.
-	pub(crate) subscribe: mpsc::Sender<MethodResponse>,
+	pub(crate) subscribe: oneshot::Sender<MethodResponse>,
 	/// Subscription permit.
 	pub(crate) permit: OwnedSemaphorePermit,
 }
 
 impl PendingSubscriptionSink {
-	/// Reject the subscription call with the error from [`jsonrpsee_types::error::ErrorObject`].
+	/// Reject the subscription by responding to the subscription method call with
+	/// the error message from [`jsonrpsee_types::error::ErrorObject`].
+	///
+	/// # Note
+	///
+	/// If this is used in the async subscription callback
+	/// the return value is simply ignored because no further notification are propagated
+	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
 		let err = MethodResponse::error(self.id, err.into());
 		_ = self.inner.send(err.result.clone()).await;
-		_ = self.subscribe.send(err).await;
+		_ = self.subscribe.send(err);
 	}
 
 	/// Attempt to accept the subscription and respond the subscription method call.
@@ -258,7 +265,7 @@ impl PendingSubscriptionSink {
 		// The same message is sent twice here because one is sent directly to the transport layer and
 		// the other one is sent internally to accept the subscription and register it in the RPC logger.
 		self.inner.send(response.result.clone()).await.map_err(|_| PendingSubscriptionAcceptError)?;
-		self.subscribe.send(response).await.map_err(|_| PendingSubscriptionAcceptError)?;
+		self.subscribe.send(response).map_err(|_| PendingSubscriptionAcceptError)?;
 
 		if success {
 			let (tx, rx) = mpsc::channel(1);
@@ -310,7 +317,7 @@ impl SubscriptionSink {
 	///
 	/// Returns
 	/// - `Ok(())` if the message could be sent.
-	/// - `Err(err)` if the connection or subscription was closed.
+	/// - `Err(unsent_msg)` if the connection or subscription was closed.
 	///
 	/// # Cancel safety
 	///
