@@ -197,7 +197,7 @@ impl RpcDescription {
 							#into_sub_response::into_response(context.as_ref().#rust_method_name(subscription_sink, #params_seq).await)
 						})
 					})
-				}			
+				}
 			})
 			.collect::<Vec<_>>();
 
