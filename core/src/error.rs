@@ -116,9 +116,6 @@ pub enum Error {
 	/// Empty batch request.
 	#[error("Empty batch request is not allowed")]
 	EmptyBatchRequest,
-	/// Subscription error that can occur during a subscription callback.
-	#[error("{0}")]
-	SubscriptionCallbackError(String),
 }
 
 impl Error {
@@ -196,33 +193,5 @@ impl From<soketto::connection::Error> for Error {
 impl From<hyper::Error> for Error {
 	fn from(hyper_err: hyper::Error) -> Error {
 		Error::Transport(hyper_err.into())
-	}
-}
-
-#[cfg(feature = "server")]
-impl From<crate::server::PendingSubscriptionAcceptError> for Error {
-	fn from(err: crate::server::PendingSubscriptionAcceptError) -> Self {
-		Self::SubscriptionCallbackError(err.to_string())
-	}
-}
-
-#[cfg(feature = "server")]
-impl From<crate::server::TrySendError> for Error {
-	fn from(err: crate::server::TrySendError) -> Self {
-		Self::SubscriptionCallbackError(err.to_string())
-	}
-}
-
-#[cfg(feature = "server")]
-impl From<crate::server::DisconnectError> for Error {
-	fn from(err: crate::server::DisconnectError) -> Self {
-		Self::SubscriptionCallbackError(err.to_string())
-	}
-}
-
-#[cfg(feature = "server")]
-impl From<crate::server::SendTimeoutError> for Error {
-	fn from(err: crate::server::SendTimeoutError) -> Self {
-		Self::SubscriptionCallbackError(err.to_string())
 	}
 }
