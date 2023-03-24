@@ -29,7 +29,7 @@ use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
-use jsonrpsee_types::response::SubscriptionError;
+use jsonrpsee_types::response::{PartialResponse, SubscriptionError};
 use jsonrpsee_types::{ErrorResponse, Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
@@ -339,7 +339,7 @@ impl ClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		rx_log_from_json(&Response::new(&json_value, id), self.max_log_length);
+		rx_log_from_json(&Response::new(PartialResponse::Result(json_value.clone()), id), self.max_log_length);
 
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
@@ -462,7 +462,7 @@ impl SubscriptionClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		rx_log_from_json(&Response::new(&sub_id, id_unsub), self.max_log_length);
+		rx_log_from_json(&Response::new(PartialResponse::Result(sub_id.clone()), id_unsub), self.max_log_length);
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
@@ -559,12 +559,12 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 
 					for r in raw_responses {
 						let id = if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
+							let result = match response.result_or_error {
+								PartialResponse::Result(r) => Ok(r),
+								PartialResponse::Error(err) => Err(err),
+							};
 							let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(InnerBatchResponse { id, result: Ok(response.result) });
-							id
-						} else if let Ok(err) = serde_json::from_str::<ErrorResponse>(r.get()) {
-							let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(InnerBatchResponse { id, result: Err(err.into_error_object()) });
+							batch.push(InnerBatchResponse { id, result });
 							id
 						} else {
 							return Err(unparse_error(raw));

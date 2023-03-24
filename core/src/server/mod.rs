@@ -42,3 +42,71 @@ pub use helpers::{BatchResponseBuilder, BoundedWriter, MethodResponse, MethodSin
 pub use host_filtering::*;
 pub use rpc_module::*;
 pub use subscription::*;
+
+use jsonrpsee_types::{ErrorObjectOwned, PartialResponse};
+use serde::{Serialize, Serializer};
+
+/// Something that can be converted into a JSON-RPC error object.
+pub trait IntoErrorObject {
+	/// Something that can be converted into a JSON-RPC error object.
+	fn into_error_object(self) -> ErrorObjectOwned;
+}
+
+impl IntoErrorObject for crate::Error {
+	fn into_error_object(self) -> ErrorObjectOwned {
+		self.into()
+	}
+}
+
+/// Something that can be converted into a JSON-RPC method call response.
+pub trait IntoResponse {
+	type Output: serde::Serialize;
+
+	/// Something that can be converted into a JSON-RPC method call response.
+	fn into_response(self) -> PartialResponse<Self::Output>;
+}
+
+impl<T: serde::Serialize, E: IntoErrorObject> IntoResponse for Result<T, E> {
+	type Output = T;
+
+	fn into_response(self) -> PartialResponse<T> {
+		match self {
+			Ok(val) => PartialResponse::Result(val),
+			Err(e) => PartialResponse::Error(e.into_error_object()),
+		}
+	}
+}
+
+macro_rules! impl_into_response {
+	($($n:ty),*) => {
+		$(
+			impl IntoResponse for $n {
+				type Output = $n;
+
+				fn into_response(self) -> PartialResponse<Self::Output> {
+					PartialResponse::Result(self)
+				}
+			}
+		)+
+	}
+}
+
+impl_into_response!(
+	u8,
+	u16,
+	u32,
+	u64,
+	u128,
+	usize,
+	i8,
+	i16,
+	i32,
+	i64,
+	i128,
+	isize,
+	String,
+	&'static str,
+	bool,
+	serde_json::Value,
+	()
+);

@@ -39,6 +39,7 @@ use crate::server::subscription::{
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
+use crate::server::PartialResponse;
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
@@ -46,6 +47,8 @@ use jsonrpsee_types::{ErrorResponse, Id, Params, Request, Response, Subscription
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::{mpsc, oneshot};
+
+use super::IntoResponse;
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -247,14 +250,11 @@ impl Methods {
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
+		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
 
-		if resp.success {
-			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
-		} else {
-			match serde_json::from_str::<ErrorResponse>(&resp.result) {
-				Ok(err) => Err(Error::Call(CallError::Custom(err.into_error_object()))),
-				Err(e) => Err(e.into()),
-			}
+		match rp.result_or_error {
+			PartialResponse::Error(err) => Err(Error::Call(CallError::Custom(err))),
+			PartialResponse::Result(r) => Ok(r),
 		}
 	}
 
@@ -386,15 +386,12 @@ impl Methods {
 
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
-		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result) {
-			Ok(r) => r,
-			Err(_) => match serde_json::from_str::<ErrorResponse>(&resp.result) {
-				Ok(err) => return Err(Error::Call(CallError::Custom(err.into_error_object()))),
-				Err(err) => return Err(err.into()),
-			},
-		};
+		let sub_response = serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result)?;
 
-		let sub_id = subscription_response.result.into_owned();
+		let sub_id = match sub_response.result_or_error {
+			PartialResponse::Result(r) => r.into_owned(),
+			PartialResponse::Error(err) => return Err(Error::Call(CallError::Custom(err))),
+		};
 
 		Ok(Subscription { sub_id, rx })
 	}
@@ -457,29 +454,27 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, Error>
 	where
 		Context: Send + Sync + 'static,
-		R: Serialize,
-		F: Fn(Params, &Context) -> Result<R, Error> + Send + Sync + 'static,
+		R: IntoResponse,
+		F: Fn(Params, &Context) -> R + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| match callback(params, &*ctx) {
-				Ok(res) => MethodResponse::response(id, res, max_response_size),
-				Err(err) => MethodResponse::error(id, err),
+			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| {
+				MethodResponse::response(id, callback(params, &*ctx).into_response(), max_response_size)
 			})),
 		)
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
-	pub fn register_async_method<R, E, Fun, Fut>(
+	pub fn register_async_method<R, Fun, Fut>(
 		&mut self,
 		method_name: &'static str,
 		callback: Fun,
 	) -> Result<&mut MethodCallback, Error>
 	where
-		R: Serialize + Send + Sync + 'static,
-		E: Into<Error>,
-		Fut: Future<Output = Result<R, E>> + Send,
+		R: IntoResponse,
+		Fut: Future<Output = R> + Send,
 		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
@@ -490,10 +485,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let callback = callback.clone();
 
 				let future = async move {
-					match callback(params, ctx).await {
-						Ok(res) => MethodResponse::response(id, res, max_response_size),
-						Err(err) => MethodResponse::error(id, err.into()),
-					}
+					let rp = callback(params, ctx).await.into_response();
+					MethodResponse::response(id, rp, max_response_size)
 				};
 				future.boxed()
 			})),
@@ -510,9 +503,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, Error>
 	where
 		Context: Send + Sync + 'static,
-		R: Serialize,
-		E: Into<Error>,
-		F: Fn(Params, Arc<Context>) -> Result<R, E> + Clone + Send + Sync + 'static,
+		R: IntoResponse,
+		F: Fn(Params, Arc<Context>) -> R + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
@@ -521,9 +513,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
-				tokio::task::spawn_blocking(move || match callback(params, ctx) {
-					Ok(result) => MethodResponse::response(id, result, max_response_size),
-					Err(err) => MethodResponse::error(id, err.into()),
+				tokio::task::spawn_blocking(move || {
+					let result = callback(params, ctx).into_response();
+					MethodResponse::response(id, result, max_response_size)
 				})
 				.map(|result| match result {
 					Ok(r) => r,
@@ -672,7 +664,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, false, max_response_size);
+							return MethodResponse::response(id, PartialResponse::Result(false), max_response_size);
 						}
 					};
 
@@ -687,7 +679,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, result, max_response_size)
+					MethodResponse::response(id, PartialResponse::Result(result), max_response_size)
 				})),
 			);
 		}

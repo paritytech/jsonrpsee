@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::{self, Error as TransportError, HttpTransportClient};
-use crate::types::{ErrorResponse, NotificationSer, RequestSer, Response};
+use crate::types::{NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::body::HttpBody;
 use hyper::http::HeaderMap;
@@ -44,7 +44,7 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::{ErrorObject, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, PartialResponse, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -300,15 +300,14 @@ where
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
-		let response: Response<&JsonRawValue> = match serde_json::from_slice(&body) {
-			Ok(response) => response,
-			Err(_) => {
-				let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-				return Err(Error::Call(CallError::Custom(err.into_error_object())));
-			}
+		let response: Response<&JsonRawValue> = serde_json::from_slice(&body)?;
+
+		let r = match response.result_or_error {
+			PartialResponse::Result(r) => r,
+			PartialResponse::Error(err) => return Err(Error::Call(CallError::Custom(err))),
 		};
 
-		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
+		let result = serde_json::from_str(r.get()).map_err(Error::ParseError)?;
 
 		if response.id == id {
 			Ok(result)
@@ -358,20 +357,22 @@ where
 		for rp in json_rps {
 			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
 				Ok(r) => {
+					let result = match r.result_or_error {
+						PartialResponse::Result(r) => {
+							successful_calls += 1;
+							Ok(r)
+						}
+						PartialResponse::Error(err) => {
+							failed_calls += 1;
+							Err(err)
+						}
+					};
+
 					let id = r.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-					successful_calls += 1;
-					(id, Ok(r.result))
+
+					(id, result)
 				}
-				Err(err) => match serde_json::from_str::<ErrorResponse>(rp.get()).map_err(Error::ParseError) {
-					Ok(err) => {
-						let id = err.id().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-						failed_calls += 1;
-						(id, Err(err.into_error_object()))
-					}
-					Err(_) => {
-						return Err(err);
-					}
-				},
+				Err(err) => return Err(err),
 			};
 
 			let maybe_elem = id

@@ -49,7 +49,7 @@ async fn http_only_works() {
 	module
 		.register_method("say_hello", |_, _| {
 			tracing::debug!("server respond to hello");
-			Ok("hello")
+			"hello"
 		})
 		.unwrap();
 
@@ -74,7 +74,7 @@ async fn ws_only_works() {
 	module
 		.register_method("say_hello", |_, _| {
 			tracing::debug!("server respond to hello");
-			Ok("hello")
+			"hello"
 		})
 		.unwrap();
 

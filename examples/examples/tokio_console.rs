@@ -52,11 +52,11 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = ServerBuilder::default().build("127.0.0.1:9944").await?;
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("lo"))?;
-	module.register_method("memory_call", |_, _| Ok("A".repeat(1024 * 1024)))?;
+	module.register_method("say_hello", |_, _| "lo")?;
+	module.register_method("memory_call", |_, _| "A".repeat(1024 * 1024))?;
 	module.register_async_method("sleep", |_, _| async {
 		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-		Result::<_, Error>::Ok("lo")
+		"lo"
 	})?;
 
 	let addr = server.local_addr()?;

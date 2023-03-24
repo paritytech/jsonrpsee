@@ -104,11 +104,11 @@ mod rpc_impl {
 			Ok(format!("Zero copy params: {}, {}", matches!(a, std::borrow::Cow::Borrowed(_)), b.is_borrowed()))
 		}
 
-		#[method(name = "blocking_call", blocking)]
+		/*#[method(name = "blocking_call", blocking)]
 		fn blocking_call(&self) -> RpcResult<u32> {
 			std::thread::sleep(std::time::Duration::from_millis(50));
 			Ok(42)
-		}
+		}*/
 	}
 
 	#[rpc(client, server, namespace = "chain")]

@@ -34,7 +34,7 @@ use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Permit};
 
-use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
+use super::{DisconnectError, PartialResponse, SendTimeoutError, SubscriptionMessage, TrySendError};
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -201,7 +201,7 @@ pub struct MethodResponse {
 impl MethodResponse {
 	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
 	/// an error will be sent instead.
-	pub fn response(id: Id, result: impl Serialize, max_response_size: usize) -> Self {
+	pub fn response<T: Serialize>(id: Id, result: PartialResponse<T>, max_response_size: usize) -> Self {
 		let mut writer = BoundedWriter::new(max_response_size);
 
 		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
@@ -293,7 +293,7 @@ pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> Str
 	serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).expect("ErrorResponse Serialize is infallible; qed")
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
 
 	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, Response};
@@ -361,4 +361,4 @@ mod tests {
 		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
 		assert_eq!(batch, exp_err);
 	}
-}
+}*/

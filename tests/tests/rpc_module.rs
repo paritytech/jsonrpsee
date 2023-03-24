@@ -32,10 +32,10 @@ use std::time::Duration;
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
 use jsonrpsee::core::error::Error;
-use jsonrpsee::core::server::*;
 use jsonrpsee::core::EmptyServerParams;
+use jsonrpsee::core::{server::*, RpcResult};
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
-use jsonrpsee::types::{ErrorObjectOwned, Params, Response};
+use jsonrpsee::types::{ErrorObjectOwned, Params, PartialResponse, Response};
 use jsonrpsee::SubscriptionMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -54,9 +54,9 @@ macro_rules! assert_type {
 fn rpc_modules_with_different_contexts_can_be_merged() {
 	let cx = Vec::<u8>::new();
 	let mut mod1 = RpcModule::new(cx);
-	mod1.register_method("bla with Vec context", |_: Params, _| Ok(())).unwrap();
+	mod1.register_method("bla with Vec context", |_: Params, _| RpcResult::Ok(())).unwrap();
 	let mut mod2 = RpcModule::new(String::new());
-	mod2.register_method("bla with String context", |_: Params, _| Ok(())).unwrap();
+	mod2.register_method("bla with String context", |_: Params, _| RpcResult::Ok(())).unwrap();
 
 	mod1.merge(mod2).unwrap();
 
@@ -85,7 +85,7 @@ fn rpc_context_modules_can_register_subscriptions() {
 fn rpc_register_alias() {
 	let mut module = RpcModule::new(());
 
-	module.register_method("hello_world", |_: Params, _| Ok(())).unwrap();
+	module.register_method("hello_world", |_: Params, _| RpcResult::Ok(())).unwrap();
 	module.register_alias("hello_foobar", "hello_world").unwrap();
 
 	assert!(module.method("hello_world").is_some());
@@ -96,7 +96,7 @@ fn rpc_register_alias() {
 async fn calling_method_without_server() {
 	// Call sync method with no params
 	let mut module = RpcModule::new(());
-	module.register_method("boo", |_: Params, _| Ok(String::from("boo!"))).unwrap();
+	module.register_method("boo", |_: Params, _| String::from("boo!")).unwrap();
 
 	let res: String = module.call("boo", EmptyServerParams::new()).await.unwrap();
 	assert_eq!(&res, "boo!");
@@ -105,7 +105,7 @@ async fn calling_method_without_server() {
 	module
 		.register_method("foo", |params, _| {
 			let n: u16 = params.one()?;
-			Ok(n * 2)
+			RpcResult::Ok(n * 2)
 		})
 		.unwrap();
 	let res: u64 = module.call("foo", [3_u64]).await.unwrap();
@@ -129,7 +129,7 @@ async fn calling_method_without_server() {
 	module
 		.register_async_method("roo", |params, ctx| {
 			let ns: Vec<u8> = params.parse().expect("valid params please");
-			async move { Result::<_, Error>::Ok(ctx.roo(ns)) }
+			async move { ctx.roo(ns) }
 		})
 		.unwrap();
 	let res: u64 = module.call("roo", [12, 13]).await.unwrap();
@@ -521,10 +521,16 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
 	let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
 	let sub_resp = stream.recv().await.unwrap();
+
+	let resp = match resp.result_or_error {
+		PartialResponse::Result(val) => val,
+		_ => panic!("Expected valid response"),
+	};
+
 	assert_eq!(
 		format!(
 			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":"{{"number":11,"address":"State street 1337"}}"}}}}"#,
-			resp.result
+			resp,
 		),
 		sub_resp
 	);

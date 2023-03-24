@@ -37,7 +37,8 @@ use tokio::sync::{mpsc, oneshot};
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse,
+	ErrorObject, ErrorResponse, Id, Notification, PartialResponse, RequestSer, Response, SubscriptionId,
+	SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
 use std::ops::Range;
@@ -176,6 +177,11 @@ pub(crate) fn process_single_response(
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
 	let response_id = response.id.into_owned();
+	let result = match response.result_or_error {
+		PartialResponse::Result(r) => r,
+		PartialResponse::Error(err) => return Err(Error::Call(CallError::Custom(err))),
+	};
+
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back_oneshot = match manager.complete_pending_call(response_id) {
@@ -183,14 +189,15 @@ pub(crate) fn process_single_response(
 				Some(None) => return Ok(None),
 				None => return Err(Error::InvalidRequestId),
 			};
-			let _ = send_back_oneshot.send(Ok(response.result));
+
+			let _ = send_back_oneshot.send(Ok(result));
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
 			let (unsub_id, send_back_oneshot, unsubscribe_method) =
 				manager.complete_pending_subscription(response_id.clone()).ok_or(Error::InvalidRequestId)?;
 
-			let sub_id: Result<SubscriptionId, _> = response.result.try_into();
+			let sub_id: Result<SubscriptionId, _> = result.try_into();
 			let sub_id = match sub_id {
 				Ok(sub_id) => sub_id,
 				Err(_) => {
