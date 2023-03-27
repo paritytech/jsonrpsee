@@ -32,7 +32,6 @@ use std::marker::PhantomData;
 use crate::params::{Id, SubscriptionId, TwoPointZero};
 use crate::request::Notification;
 use crate::ErrorObjectOwned;
-use serde::de::{SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

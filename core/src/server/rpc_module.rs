@@ -43,9 +43,9 @@ use crate::server::PartialResponse;
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
-use jsonrpsee_types::{ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId};
+use jsonrpsee_types::{Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId};
 use rustc_hash::FxHashMap;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 
 use super::IntoResponse;

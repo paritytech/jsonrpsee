@@ -17,7 +17,7 @@ use std::borrow::Cow as StdCow;
 
 use core::time::Duration;
 use helpers::{
-	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
+	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
 use jsonrpsee_types::TwoPointZero;
@@ -30,7 +30,7 @@ use futures_util::future::{self, Either, Fuse};
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::response::{PartialResponse, SubscriptionError};
-use jsonrpsee_types::{ErrorResponse, Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
+use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
@@ -542,10 +542,6 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
 					let _ = process_notification(manager, notif);
-				}
-				// Error response
-				else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(raw) {
-					process_error_response(manager, err)?;
 				} else {
 					return Err(unparse_error(raw));
 				}

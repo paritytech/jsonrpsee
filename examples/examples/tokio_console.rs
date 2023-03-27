@@ -36,7 +36,6 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::Error;
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::RpcModule;
 

@@ -44,7 +44,6 @@ pub use rpc_module::*;
 pub use subscription::*;
 
 use jsonrpsee_types::{ErrorObjectOwned, PartialResponse};
-use serde::{Serialize, Serializer};
 
 /// Something that can be converted into a JSON-RPC error object.
 pub trait IntoErrorObject {
@@ -59,7 +58,11 @@ impl IntoErrorObject for crate::Error {
 }
 
 /// Something that can be converted into a JSON-RPC method call response.
+///
+/// If the value couldn't be serialized/encoded, jsonrpsee will sent out an error
+/// to the client `response could not be serialized`.
 pub trait IntoResponse {
+	/// Output.
 	type Output: serde::Serialize;
 
 	/// Something that can be converted into a JSON-RPC method call response.

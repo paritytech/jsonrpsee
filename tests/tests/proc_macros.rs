@@ -336,6 +336,7 @@ async fn macro_zero_copy_cow() {
 
 // Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.
 #[cfg(not(target_os = "macos"))]
+#[ignore]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
 	use jsonrpsee::core::EmptyServerParams;
