@@ -207,7 +207,7 @@ impl Methods {
 
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
 	///
-	/// Unlike [Self::merge], existing callbacks are replaced.
+	/// Unlike [`Methods::merge`], existing callbacks are replaced.
 	pub fn merge_replace(&mut self, other: impl Into<Methods>)  {
 		let mut other = other.into();
 
