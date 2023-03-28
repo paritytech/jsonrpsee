@@ -205,6 +205,18 @@ impl Methods {
 		Ok(())
 	}
 
+	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
+	///
+	/// Unlike [Self::merge], existing callbacks are replaced.
+	pub fn merge_replace(&mut self, other: impl Into<Methods>)  {
+		let mut other = other.into();
+
+		let callbacks = self.mut_callbacks();
+		for (name, callback) in other.mut_callbacks().drain() {
+			callbacks.insert(name, callback);
+		}
+	}
+
 	/// Returns the method callback.
 	pub fn method(&self, method_name: &str) -> Option<&MethodCallback> {
 		self.callbacks.get(method_name)
