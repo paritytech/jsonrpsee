@@ -823,7 +823,7 @@ fn process_connection<'a, L: Logger, B, U>(
 }
 
 // Attempts to create a HTTP connection from a socket.
-async fn try_accept_connection<S, B>(socket: TcpStream, service: S, mut stop_handle: StopHandle)
+async fn try_accept_connection<S, B>(socket: TcpStream, service: S, stop_handle: StopHandle)
 where
 	S: Service<hyper::Request<hyper::Body>, Response = hyper::Response<B>> + Send + 'static,
 	S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,

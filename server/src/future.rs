@@ -146,6 +146,11 @@ where
 	}
 }
 
+/// Represent a stop handle which is a wrapper over a `multi-consumer receiver`
+/// and cloning [`StopHandle` will get a separate instance of the underlying receiver.
+///
+/// This means that `shutdown_requested` and `shutdown` can't be called
+/// on the same [`StopHandle`]
 #[derive(Debug, Clone)]
 pub(crate) struct StopHandle(watch::Receiver<()>);
 
@@ -159,9 +164,10 @@ impl StopHandle {
 		self.0.has_changed().unwrap_or(true)
 	}
 
-	pub(crate) async fn shutdown(&mut self) {
-		// Err(_) implies that the `sender` has been dropped.
-		// Ok(_) implies that `stop` has been called.
+	/// A future that resolves when server has been stopped
+	/// it consumes the stop handle such that [`StopHandle::shutdown_requested`]
+	/// can't be called on the same [`StopHandle`].
+	pub(crate) async fn shutdown(mut self) {
 		let _ = self.0.changed().await;
 	}
 }

@@ -461,7 +461,7 @@ pub(crate) async fn background_task<L: Logger>(
 async fn send_task(
 	rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
-	mut stop_handle: StopHandle,
+	stop_handle: StopHandle,
 	ping_interval: Duration,
 	conn_closed: oneshot::Receiver<()>,
 ) {
