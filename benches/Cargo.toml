@@ -17,7 +17,7 @@ jsonrpc-ws-server = { version = "18.0.0", optional = true }
 jsonrpc-http-server = { version = "18.0.0", optional = true }
 jsonrpc-pubsub = { version = "18.0.0", optional = true }
 serde_json = "1"
-tokio = { version = "1.16", features = ["rt-multi-thread"] }
+tokio = { version = "=1.26", features = ["rt-multi-thread"] }
 console-subscriber = "0.1.8"
 
 [[bench]]

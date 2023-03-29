@@ -22,7 +22,7 @@ heck = "0.4.0"
 [dev-dependencies]
 jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
 trybuild = "1.0"
-tokio = { version = "1.16", features = ["rt", "macros"] }
+tokio = { version = "=1.26", features = ["rt", "macros"] }
 futures-channel = { version = "0.3.14", default-features = false }
 futures-util = { version = "0.3.14", default-features = false }
 serde_json = "1"
