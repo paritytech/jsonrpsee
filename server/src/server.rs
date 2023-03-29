@@ -36,7 +36,7 @@ use crate::future::{ConnectionGuard, FutureDriver, ServerHandle, StopHandle};
 use crate::logger::{Logger, TransportProtocol};
 use crate::transport::{http, ws};
 
-use futures_util::future::{BoxFuture, FutureExt};
+use futures_util::future::{BoxFuture, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
 use hyper::body::HttpBody;
@@ -127,12 +127,15 @@ where
 
 		let mut id: u32 = 0;
 		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
+		let listener = self.listener;
+
 		let mut connections = FutureDriver::default();
-		let mut incoming = Monitored::new(Incoming(self.listener), &stop_handle);
+		let stopped = stop_handle.clone().shutdown();
+		tokio::pin!(stopped);
 
 		loop {
-			match connections.select_with(&mut incoming).await {
-				Ok((socket, remote_addr)) => {
+			match try_accept_conn(&listener, &mut connections, stopped).await {
+				AcceptConnection::Established { socket, remote_addr, stop } => {
 					let data = ProcessConnection {
 						remote_addr,
 						methods: methods.clone(),
@@ -154,11 +157,13 @@ where
 					};
 					process_connection(&self.service_builder, &connection_guard, data, socket, &mut connections);
 					id = id.wrapping_add(1);
+					stopped = stop;
 				}
-				Err(MonitoredError::Selector(err)) => {
-					tracing::error!("Error while awaiting a new connection: {:?}", err);
+				AcceptConnection::Err((e, stop)) => {
+					tracing::error!("Error while awaiting a new connection: {:?}", e);
+					stopped = stop;
 				}
-				Err(MonitoredError::Shutdown) => break,
+				AcceptConnection::Shutdown => break,
 			}
 		}
 
@@ -668,56 +673,6 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 	}
 }
 
-/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
-struct Monitored<'a, F> {
-	future: F,
-	stop_monitor: &'a StopHandle,
-}
-
-impl<'a, F> Monitored<'a, F> {
-	fn new(future: F, stop_monitor: &'a StopHandle) -> Self {
-		Monitored { future, stop_monitor }
-	}
-}
-
-enum MonitoredError<E> {
-	Shutdown,
-	Selector(E),
-}
-
-struct Incoming(TcpListener);
-
-impl<'a> Future for Monitored<'a, Incoming> {
-	type Output = Result<(TcpStream, SocketAddr), MonitoredError<std::io::Error>>;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
-		}
-
-		this.future.0.poll_accept(cx).map_err(MonitoredError::Selector)
-	}
-}
-
-impl<'a, 'f, F, T, E> Future for Monitored<'a, Pin<&'f mut F>>
-where
-	F: Future<Output = Result<T, E>>,
-{
-	type Output = Result<T, MonitoredError<E>>;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
-		}
-
-		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
-	}
-}
-
 struct ProcessConnection<L> {
 	/// Remote server address.
 	remote_addr: SocketAddr,
@@ -819,11 +774,11 @@ fn process_connection<'a, L: Logger, B, U>(
 
 	let service = service_builder.service(tower_service);
 
-	connections.add(Box::pin(try_accept_connection(socket, service, cfg.stop_handle).in_current_span()));
+	connections.add(Box::pin(to_http_service(socket, service, cfg.stop_handle).in_current_span()));
 }
 
 // Attempts to create a HTTP connection from a socket.
-async fn try_accept_connection<S, B>(socket: TcpStream, service: S, mut stop_handle: StopHandle)
+async fn to_http_service<S, B>(socket: TcpStream, service: S, stop_handle: StopHandle)
 where
 	S: Service<hyper::Request<hyper::Body>, Response = hyper::Response<B>> + Send + 'static,
 	S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
@@ -845,5 +800,32 @@ where
 		_ = stop_handle.shutdown() => {
 			conn.graceful_shutdown();
 		}
+	}
+}
+
+enum AcceptConnection<S> {
+	Shutdown,
+	Established { socket: TcpStream, remote_addr: SocketAddr, stop: S },
+	Err((std::io::Error, S)),
+}
+
+async fn try_accept_conn<S, F>(
+	listener: &TcpListener,
+	connections: &mut FutureDriver<F>,
+	stopped: S,
+) -> AcceptConnection<S>
+where
+	F: Future + Unpin,
+	S: Future + Unpin,
+{
+	let accept = connections.select_with(listener.accept());
+	tokio::pin!(accept);
+
+	match futures_util::future::select(accept, stopped).await {
+		Either::Left((res, stop)) => match res {
+			Ok((socket, remote_addr)) => AcceptConnection::Established { socket, remote_addr, stop },
+			Err(e) => AcceptConnection::Err((e, stop)),
+		},
+		Either::Right(_) => AcceptConnection::Shutdown,
 	}
 }
