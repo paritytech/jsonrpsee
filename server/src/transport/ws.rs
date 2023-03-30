@@ -484,7 +484,6 @@ where
 	F: Future + Unpin,
 	S: Future<Output = ()> + Unpin,
 {
-	// Need the extra scope to drop this pinned future and reclaim access to `data`
 	let receive = async {
 		// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
 		loop {
