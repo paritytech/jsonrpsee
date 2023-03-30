@@ -34,10 +34,6 @@ use std::task::{Context, Poll};
 use futures_util::future::FutureExt;
 use jsonrpsee_core::Error;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
-use tokio::time::{self, Duration, Interval};
-
-/// Polling for server stop monitor interval in milliseconds.
-const STOP_MONITOR_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// This is a flexible collection of futures that need to be driven to completion
 /// alongside some other future, such as connection handlers that need to be
@@ -47,16 +43,11 @@ const STOP_MONITOR_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
 /// `select_with` providing some other future, the result of which you need.
 pub(crate) struct FutureDriver<F> {
 	futures: Vec<F>,
-	stop_monitor_heartbeat: Interval,
 }
 
 impl<F> Default for FutureDriver<F> {
 	fn default() -> Self {
-		let mut heartbeat = time::interval(STOP_MONITOR_POLLING_INTERVAL);
-
-		heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-
-		FutureDriver { futures: Vec::new(), stop_monitor_heartbeat: heartbeat }
+		FutureDriver { futures: Vec::new() }
 	}
 }
 
@@ -93,12 +84,6 @@ where
 				i += 1;
 			}
 		}
-	}
-
-	fn poll_stop_monitor_heartbeat(&mut self, cx: &mut Context) {
-		// We don't care about the ticks of the heartbeat, it's here only
-		// to periodically wake the `Waker` on `cx`.
-		let _ = self.stop_monitor_heartbeat.poll_tick(cx);
 	}
 }
 
@@ -140,12 +125,13 @@ where
 		let this = Pin::into_inner(self);
 
 		this.driver.drive(cx);
-		this.driver.poll_stop_monitor_heartbeat(cx);
 
 		this.selector.poll_unpin(cx)
 	}
 }
 
+/// Represent a stop handle which is a wrapper over a `multi-consumer receiver`
+/// and cloning [`StopHandle`] will get a separate instance of the underlying receiver.
 #[derive(Debug, Clone)]
 pub(crate) struct StopHandle(watch::Receiver<()>);
 
@@ -154,14 +140,9 @@ impl StopHandle {
 		Self(rx)
 	}
 
-	pub(crate) fn shutdown_requested(&self) -> bool {
-		// if a message has been seen, it means that `stop` has been called.
-		self.0.has_changed().unwrap_or(true)
-	}
-
-	pub(crate) async fn shutdown(&mut self) {
-		// Err(_) implies that the `sender` has been dropped.
-		// Ok(_) implies that `stop` has been called.
+	/// A future that resolves when server has been stopped
+	/// it consumes the stop handle.
+	pub(crate) async fn shutdown(mut self) {
 		let _ = self.0.changed().await;
 	}
 }

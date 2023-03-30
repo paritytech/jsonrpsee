@@ -1,5 +1,3 @@
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{FutureDriver, StopHandle};
@@ -14,7 +12,9 @@ use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::{BoundedSubscriptions, CallOrSubscription, MethodCallback, Methods, SubscriptionState};
+use jsonrpsee_core::server::{
+	BoundedSubscriptions, CallOrSubscription, MethodCallback, MethodSinkPermit, Methods, SubscriptionState,
+};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -67,40 +67,6 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) sink: &'a MethodSink,
 	pub(crate) logger: &'a L,
 	pub(crate) request_start: L::Instant,
-}
-
-/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
-struct Monitored<'a, F> {
-	future: F,
-	stop_monitor: &'a StopHandle,
-}
-
-impl<'a, F> Monitored<'a, F> {
-	fn new(future: F, stop_monitor: &'a StopHandle) -> Self {
-		Monitored { future, stop_monitor }
-	}
-}
-
-enum MonitoredError<E> {
-	Shutdown,
-	Selector(E),
-}
-
-impl<'a, 'f, F, T, E> Future for Monitored<'a, Pin<&'f mut F>>
-where
-	F: Future<Output = Result<T, E>>,
-{
-	type Output = Result<T, MonitoredError<E>>;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
-		}
-
-		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
-	}
 }
 
 // Batch responses must be sent back as a single message so we read the results from each
@@ -287,52 +253,37 @@ pub(crate) async fn background_task<L: Logger>(
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
-	let mut method_executors = FutureDriver::default();
+	let mut method_executor = FutureDriver::default();
 	let logger = &logger;
+	let stopped = stop_handle.shutdown();
+
+	tokio::pin!(stopped);
 
 	let result = loop {
 		data.clear();
 
-		let sink_permit_fut = sink.reserve();
-
-		tokio::pin!(sink_permit_fut);
-
-		// Wait until there is a slot in the bounded channel which means that
-		// the underlying TCP socket won't be read.
-		//
-		// This will force the client to read socket on the other side
-		// otherwise the socket will not be read again.
-		let sink_permit = match method_executors.select_with(Monitored::new(sink_permit_fut, &stop_handle)).await {
-			Ok(permit) => permit,
-			Err(_) => break Ok(()),
+		let sink_permit = match wait_for_permit(&sink, &mut method_executor, stopped).await {
+			Some((p, s)) => {
+				stopped = s;
+				p
+			}
+			None => break Ok(()),
 		};
 
-		{
-			// Need the extra scope to drop this pinned future and reclaim access to `data`
-			let receive = async {
-				// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
-				loop {
-					match receiver.receive(&mut data).await? {
-						soketto::Incoming::Data(d) => break Ok(d),
-						soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
-						soketto::Incoming::Closed(_) => {
-							// The closing reason is already logged by `soketto` trace log level.
-							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
-							break Err(SokettoError::Closed);
-						}
-					}
-				}
-			};
+		match try_recv(&mut receiver, &mut data, &mut method_executor, stopped).await {
+			Receive::Shutdown => break Ok(()),
+			Receive::Ok(stop) => {
+				stopped = stop;
+			}
+			Receive::Err(err, stop) => {
+				stopped = stop;
 
-			tokio::pin!(receive);
-
-			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_handle)).await {
 				match err {
-					MonitoredError::Selector(SokettoError::Closed) => {
+					SokettoError::Closed => {
 						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
 						break Ok(());
 					}
-					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
+					SokettoError::MessageTooLarge { current, maximum } => {
 						tracing::debug!(
 							"WS transport error: request length: {} exceeded max limit: {} bytes",
 							current,
@@ -342,22 +293,17 @@ pub(crate) async fn background_task<L: Logger>(
 
 						continue;
 					}
-
-					// These errors can not be gracefully handled, so just log them and terminate the connection.
-					MonitoredError::Selector(err) => {
+					err => {
 						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn_id);
 						break Err(err.into());
 					}
-					MonitoredError::Shutdown => {
-						break Ok(());
-					}
 				};
-			};
-		};
+			}
+		}
 
 		let request_start = logger.on_request(TransportProtocol::WebSocket);
-
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
+
 		match first_non_whitespace {
 			Some(b'{') => {
 				let data = std::mem::take(&mut data);
@@ -394,7 +340,7 @@ pub(crate) async fn background_task<L: Logger>(
 				}
 				.boxed();
 
-				method_executors.add(fut);
+				method_executor.add(fut);
 			}
 			Some(b'[') if !batch_requests_supported => {
 				let response = MethodResponse::error(
@@ -436,7 +382,7 @@ pub(crate) async fn background_task<L: Logger>(
 					}
 				};
 
-				method_executors.add(Box::pin(fut));
+				method_executor.add(Box::pin(fut));
 			}
 			_ => {
 				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
@@ -449,7 +395,7 @@ pub(crate) async fn background_task<L: Logger>(
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	method_executors.await;
+	method_executor.await;
 
 	let _ = conn_tx.send(());
 	drop(conn);
@@ -461,7 +407,7 @@ pub(crate) async fn background_task<L: Logger>(
 async fn send_task(
 	rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
-	mut stop_handle: StopHandle,
+	stop_handle: StopHandle,
 	ping_interval: Duration,
 	conn_closed: oneshot::Receiver<()>,
 ) {
@@ -518,4 +464,71 @@ async fn send_task(
 	// Terminate connection and send close message.
 	let _ = ws_sender.close().await;
 	rx.close();
+}
+
+enum Receive<S> {
+	Shutdown,
+	Err(SokettoError, S),
+	Ok(S),
+}
+
+async fn try_recv<F, S>(
+	receiver: &mut Receiver,
+	data: &mut Vec<u8>,
+	method_executor: &mut FutureDriver<F>,
+	stopped: S,
+) -> Receive<S>
+where
+	F: Future + Unpin,
+	S: Future<Output = ()> + Unpin,
+{
+	let receive = async {
+		// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
+		loop {
+			match receiver.receive(data).await? {
+				soketto::Incoming::Data(d) => break Ok(d),
+				soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
+				soketto::Incoming::Closed(_) => {
+					// The closing reason is already logged by `soketto` trace log level.
+					// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
+					break Err(SokettoError::Closed);
+				}
+			}
+		}
+	};
+
+	let receive = method_executor.select_with(receive);
+	tokio::pin!(receive);
+
+	match futures_util::future::select(receive, stopped).await {
+		Either::Left((Ok(_), s)) => Receive::Ok(s),
+		Either::Left((Err(e), s)) => Receive::Err(e, s),
+		Either::Right(_) => Receive::Shutdown,
+	}
+}
+
+// Wait until there is a slot in the bounded channel which means that
+// the underlying TCP socket won't be read.
+//
+// This will force the client to read socket on the other side
+// otherwise the socket will not be read again.
+//
+// Fails if the connection was closed or if the server was stopped,
+async fn wait_for_permit<'a, F, S>(
+	sink: &'a MethodSink,
+	method_executor: &mut FutureDriver<F>,
+	stopped: S,
+) -> Option<(MethodSinkPermit<'a>, S)>
+where
+	F: Future + Unpin,
+	S: Future<Output = ()> + Unpin,
+{
+	let sink_permit_fut = method_executor.select_with(sink.reserve());
+	tokio::pin!(sink_permit_fut);
+
+	match futures_util::future::select(sink_permit_fut, stopped).await {
+		Either::Left((Ok(permit), s)) => Some((permit, s)),
+		// The sink or stopped were triggered, just terminate.
+		_ => None,
+	}
 }
