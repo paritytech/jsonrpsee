@@ -168,6 +168,10 @@ where
 			}
 		}
 
+		// FuturesUnordered won't poll anything until this line but because the
+		// tasks are spawned (so that they can progress independently)
+		// then this just makes sure that all tasks are completed before
+		// returning from this function.
 		while connections.next().await.is_some() {}
 	}
 }
