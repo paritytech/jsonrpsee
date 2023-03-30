@@ -487,7 +487,7 @@ where
 	let receive = async {
 		// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
 		loop {
-			match receiver.receive(&mut data).await? {
+			match receiver.receive(data).await? {
 				soketto::Incoming::Data(d) => break Ok(d),
 				soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
 				soketto::Incoming::Closed(_) => {
