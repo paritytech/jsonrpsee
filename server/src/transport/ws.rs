@@ -476,7 +476,7 @@ enum Receive<S> {
 
 async fn try_recv<F, S>(
 	receiver: &mut Receiver,
-	mut data: &mut Vec<u8>,
+	data: &mut Vec<u8>,
 	method_executor: &mut FutureDriver<F>,
 	stopped: S,
 ) -> Receive<S>
