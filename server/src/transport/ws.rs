@@ -251,8 +251,6 @@ pub(crate) async fn background_task<L: Logger>(
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval, conn_rx));
 
-	tracing::info!("background task");
-
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let mut method_executor = FutureDriver::default();
@@ -476,7 +474,7 @@ enum Receive<S> {
 
 async fn try_recv<F, S>(
 	receiver: &mut Receiver,
-	mut data: &mut Vec<u8>,
+	data: &mut Vec<u8>,
 	method_executor: &mut FutureDriver<F>,
 	stopped: S,
 ) -> Receive<S>
@@ -487,7 +485,7 @@ where
 	let receive = async {
 		// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
 		loop {
-			match receiver.receive(&mut data).await? {
+			match receiver.receive(data).await? {
 				soketto::Incoming::Data(d) => break Ok(d),
 				soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
 				soketto::Incoming::Closed(_) => {

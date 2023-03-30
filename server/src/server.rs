@@ -32,13 +32,14 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, FutureDriver, ServerHandle, StopHandle};
+use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::logger::{Logger, TransportProtocol};
 use crate::transport::{http, ws};
 
-use futures_util::future::{BoxFuture, Either, FutureExt};
+use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
+use futures_util::stream::{FuturesUnordered, StreamExt};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
@@ -129,12 +130,12 @@ where
 		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
 		let listener = self.listener;
 
-		let mut connections = FutureDriver::default();
+		let mut connections = FuturesUnordered::new();
 		let stopped = stop_handle.clone().shutdown();
 		tokio::pin!(stopped);
 
 		loop {
-			match try_accept_conn(&listener, &mut connections, stopped).await {
+			match try_accept_conn(&listener, stopped).await {
 				AcceptConnection::Established { socket, remote_addr, stop } => {
 					let data = ProcessConnection {
 						remote_addr,
@@ -167,7 +168,7 @@ where
 			}
 		}
 
-		connections.await;
+		while connections.next().await.is_some() {}
 	}
 }
 
@@ -718,7 +719,7 @@ fn process_connection<'a, L: Logger, B, U>(
 	connection_guard: &ConnectionGuard,
 	cfg: ProcessConnection<L>,
 	socket: TcpStream,
-	connections: &mut FutureDriver<BoxFuture<'a, ()>>,
+	connections: &mut FuturesUnordered<tokio::task::JoinHandle<()>>,
 ) where
 	B: Layer<TowerService<L>> + Send + 'static,
 	<B as Layer<TowerService<L>>>::Service: Send
@@ -741,7 +742,7 @@ fn process_connection<'a, L: Logger, B, U>(
 		Some(conn) => conn,
 		None => {
 			tracing::warn!("Too many connections. Please try again later.");
-			connections.add(http::reject_connection(socket).in_current_span().boxed());
+			connections.push(tokio::spawn(http::reject_connection(socket).in_current_span()));
 			return;
 		}
 	};
@@ -774,7 +775,7 @@ fn process_connection<'a, L: Logger, B, U>(
 
 	let service = service_builder.service(tower_service);
 
-	connections.add(Box::pin(to_http_service(socket, service, cfg.stop_handle).in_current_span()));
+	connections.push(tokio::spawn(to_http_service(socket, service, cfg.stop_handle).in_current_span()));
 }
 
 // Attempts to create a HTTP connection from a socket.
@@ -809,16 +810,11 @@ enum AcceptConnection<S> {
 	Err((std::io::Error, S)),
 }
 
-async fn try_accept_conn<S, F>(
-	listener: &TcpListener,
-	connections: &mut FutureDriver<F>,
-	stopped: S,
-) -> AcceptConnection<S>
+async fn try_accept_conn<S>(listener: &TcpListener, stopped: S) -> AcceptConnection<S>
 where
-	F: Future + Unpin,
 	S: Future + Unpin,
 {
-	let accept = connections.select_with(listener.accept());
+	let accept = listener.accept();
 	tokio::pin!(accept);
 
 	match futures_util::future::select(accept, stopped).await {
