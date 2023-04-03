@@ -39,7 +39,7 @@ use crate::server::subscription::{
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
-use crate::server::PartialResponse;
+use crate::server::ResponsePayload;
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
@@ -241,7 +241,7 @@ impl Methods {
 	///     assert_eq!(echo, 1);
 	/// }
 	/// ```
-	pub async fn call<Params: ToRpcParams, T: DeserializeOwned>(
+	pub async fn call<Params: ToRpcParams, T: DeserializeOwned + Clone>(
 		&self,
 		method: &str,
 		params: Params,
@@ -253,8 +253,8 @@ impl Methods {
 		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
 
 		match rp.result_or_error {
-			PartialResponse::Error(err) => Err(Error::Call(CallError::Custom(err))),
-			PartialResponse::Result(r) => Ok(r),
+			ResponsePayload::Error(err) => Err(Error::Call(CallError::Custom(err.into_owned()))),
+			ResponsePayload::Result(r) => Ok(r.into_owned()),
 		}
 	}
 
@@ -373,7 +373,7 @@ impl Methods {
 
 	/// Similar to [`Methods::subscribe_unbounded`] but it's using a bounded channel and the buffer capacity must be
 	/// provided.
-	pub async fn subscribe(
+	pub async fn subscribe<'a>(
 		&self,
 		sub_method: &str,
 		params: impl ToRpcParams,
@@ -386,11 +386,11 @@ impl Methods {
 
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
-		let sub_response = serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result)?;
+		let r: Response<serde_json::Value> = serde_json::from_str(&resp.result)?;
 
-		let sub_id = match sub_response.result_or_error {
-			PartialResponse::Result(r) => r.into_owned(),
-			PartialResponse::Error(err) => return Err(Error::Call(CallError::Custom(err))),
+		let sub_id = match r.result_or_error {
+			ResponsePayload::Result(r) => RpcSubscriptionId::try_from(r.into_owned()).unwrap(),
+			ResponsePayload::Error(err) => return Err(Error::Call(CallError::Custom(err.into_owned()))),
 		};
 
 		Ok(Subscription { sub_id, rx })
@@ -454,7 +454,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, Error>
 	where
 		Context: Send + Sync + 'static,
-		R: IntoResponse,
+		R: IntoResponse + 'static,
 		F: Fn(Params, &Context) -> R + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
@@ -473,7 +473,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		callback: Fun,
 	) -> Result<&mut MethodCallback, Error>
 	where
-		R: IntoResponse,
+		R: IntoResponse + 'static,
 		Fut: Future<Output = R> + Send,
 		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
@@ -503,7 +503,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, Error>
 	where
 		Context: Send + Sync + 'static,
-		R: IntoResponse,
+		R: IntoResponse + 'static,
 		F: Fn(Params, Arc<Context>) -> R + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
@@ -664,7 +664,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, PartialResponse::Result(false), max_response_size);
+							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
 						}
 					};
 
@@ -679,7 +679,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, PartialResponse::Result(result), max_response_size)
+					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
 				})),
 			);
 		}

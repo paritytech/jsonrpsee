@@ -34,7 +34,7 @@ use jsonrpsee_types::{ErrorObjectOwned, Id, InvalidRequest, Response};
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Permit};
 
-use super::{DisconnectError, PartialResponse, SendTimeoutError, SubscriptionMessage, TrySendError};
+use super::{DisconnectError, ResponsePayload, SendTimeoutError, SubscriptionMessage, TrySendError};
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -162,7 +162,7 @@ pub struct MethodSinkPermit<'a> {
 impl<'a> MethodSinkPermit<'a> {
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(self, id: Id, err: ErrorObject) {
-		let json = serde_json::to_string(&Response::new(PartialResponse::<()>::Error(err.into_owned()), id))
+		let json = serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err.into_owned()), id))
 			.expect("valid JSON; qed");
 
 		self.send_raw(json)
@@ -202,7 +202,7 @@ pub struct MethodResponse {
 impl MethodResponse {
 	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
 	/// an error will be sent instead.
-	pub fn response<T: Serialize>(id: Id, result: PartialResponse<T>, max_response_size: usize) -> Self {
+	pub fn response<T: Serialize + Clone>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self {
 		let mut writer = BoundedWriter::new(max_response_size);
 
 		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
@@ -216,7 +216,7 @@ impl MethodResponse {
 
 				if err.is_io() {
 					let data = format!("Exceeded max limit of {max_response_size}");
-					let err = PartialResponse::error(ErrorObject::owned(
+					let err = ResponsePayload::error(ErrorObject::owned(
 						OVERSIZED_RESPONSE_CODE,
 						OVERSIZED_RESPONSE_MSG,
 						Some(data),
@@ -226,7 +226,7 @@ impl MethodResponse {
 
 					Self { result, success: false }
 				} else {
-					let err = PartialResponse::error(ErrorObjectOwned::from(ErrorCode::InternalError));
+					let err = ResponsePayload::error(ErrorObjectOwned::from(ErrorCode::InternalError));
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 					Self { result, success: false }
@@ -237,7 +237,7 @@ impl MethodResponse {
 
 	/// Create a `MethodResponse` from an error.
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
-		let err = PartialResponse::error(err.into().into_owned());
+		let err = ResponsePayload::error(err.into().into_owned());
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 		Self { result, success: false }
 	}
@@ -298,7 +298,7 @@ impl BatchResponseBuilder {
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
-	let err = PartialResponse::Error::<()>(err.into());
+	let err = ResponsePayload::Error::<()>(err.into());
 	serde_json::to_string(&Response::new(err.into(), id)).expect("JSON serialization infallible; qed")
 }
 

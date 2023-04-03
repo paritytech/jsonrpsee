@@ -369,7 +369,7 @@ async fn is_connected_works() {
 	assert!(!client.is_connected())
 }
 
-async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + 'static>(
+async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> Result<BatchResponse<T>, Error> {

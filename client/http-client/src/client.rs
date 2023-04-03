@@ -44,7 +44,7 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::{ErrorObject, PartialResponse, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, ResponsePayload, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -303,8 +303,8 @@ where
 		let response: Response<&JsonRawValue> = serde_json::from_slice(&body)?;
 
 		let r = match response.result_or_error {
-			PartialResponse::Result(r) => r,
-			PartialResponse::Error(err) => return Err(Error::Call(CallError::Custom(err))),
+			ResponsePayload::Result(r) => r,
+			ResponsePayload::Error(err) => return Err(Error::Call(CallError::Custom(err.into_owned()))),
 		};
 
 		let result = serde_json::from_str(r.get()).map_err(Error::ParseError)?;
@@ -319,7 +319,7 @@ where
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
-		R: DeserializeOwned + fmt::Debug + 'a,
+		R: DeserializeOwned + fmt::Debug + 'a + Clone,
 	{
 		let batch = batch.build()?;
 		let guard = self.id_manager.next_request_id()?;
@@ -358,13 +358,13 @@ where
 			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
 				Ok(r) => {
 					let result = match r.result_or_error {
-						PartialResponse::Result(r) => {
+						ResponsePayload::Result(r) => {
 							successful_calls += 1;
-							Ok(r)
+							Ok(r.into_owned())
 						}
-						PartialResponse::Error(err) => {
+						ResponsePayload::Error(err) => {
 							failed_calls += 1;
-							Err(err)
+							Err(err.into_owned())
 						}
 					};
 

@@ -35,7 +35,7 @@ use jsonrpsee::core::error::Error;
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::core::{server::*, RpcResult};
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
-use jsonrpsee::types::{ErrorObjectOwned, Params, PartialResponse, Response};
+use jsonrpsee::types::{ErrorObjectOwned, Params, Response, ResponsePayload};
 use jsonrpsee::SubscriptionMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -523,7 +523,7 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 	let sub_resp = stream.recv().await.unwrap();
 
 	let resp = match resp.result_or_error {
-		PartialResponse::Result(val) => val,
+		ResponsePayload::Result(val) => val,
 		_ => panic!("Expected valid response"),
 	};
 

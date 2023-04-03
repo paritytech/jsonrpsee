@@ -8,7 +8,7 @@ use anyhow::anyhow;
 use jsonrpsee_core::{DeserializeOwned, Error, RpcResult, StringError};
 use jsonrpsee_test_utils::mocks::TestContext;
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::{PartialResponse, Response};
+use jsonrpsee_types::{Response, ResponsePayload};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 /// Spawns a dummy JSON-RPC server.
@@ -174,11 +174,11 @@ pub(crate) fn init_logger() {
 	let _ = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env()).try_init();
 }
 
-pub(crate) fn deser_call<T: DeserializeOwned + fmt::Debug>(raw: String) -> T {
+pub(crate) fn deser_call<T: DeserializeOwned + Clone + fmt::Debug>(raw: String) -> T {
 	let out: Response<T> = serde_json::from_str(&raw).unwrap();
 	match out.result_or_error {
-		PartialResponse::Result(val) => val,
-		err => panic!("{:?}", err),
+		ResponsePayload::Result(val) => val.into_owned(),
+		ResponsePayload::Error(err) => panic!("{:?}", err),
 	}
 }
 

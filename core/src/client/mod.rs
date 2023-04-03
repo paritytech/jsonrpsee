@@ -81,7 +81,7 @@ pub trait ClientT {
 	/// Returns `Error` if the network failed or any of the responses could be parsed a valid JSON-RPC response.
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
-		R: DeserializeOwned + fmt::Debug + 'a;
+		R: DeserializeOwned + fmt::Debug + 'a + Clone;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.

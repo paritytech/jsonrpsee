@@ -37,7 +37,7 @@ use tokio::sync::{mpsc, oneshot};
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, Id, Notification, PartialResponse, RequestSer, Response, SubscriptionId, SubscriptionResponse,
+	ErrorObject, Id, Notification, RequestSer, Response, ResponsePayload, SubscriptionId, SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
 use std::ops::Range;
@@ -178,8 +178,8 @@ pub(crate) fn process_single_response(
 	let response_id = response.id.into_owned();
 
 	let result = match response.result_or_error {
-		PartialResponse::Result(r) => Ok(r),
-		PartialResponse::Error(err) => Err(Error::Call(CallError::Custom(err))),
+		ResponsePayload::Result(r) => Ok(r.into_owned()),
+		ResponsePayload::Error(err) => Err(Error::Call(CallError::Custom(err.into_owned()))),
 	};
 
 	match manager.request_status(&response_id) {

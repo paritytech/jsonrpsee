@@ -43,7 +43,7 @@ pub use host_filtering::*;
 pub use rpc_module::*;
 pub use subscription::*;
 
-use jsonrpsee_types::{ErrorObjectOwned, PartialResponse};
+use jsonrpsee_types::{ErrorObjectOwned, ResponsePayload};
 
 /// Something that can be converted into a JSON-RPC method call response.
 ///
@@ -51,19 +51,22 @@ use jsonrpsee_types::{ErrorObjectOwned, PartialResponse};
 /// to the client `response could not be serialized`.
 pub trait IntoResponse {
 	/// Output.
-	type Output: serde::Serialize;
+	type Output: serde::Serialize + Clone;
 
 	/// Something that can be converted into a JSON-RPC method call response.
-	fn into_response(self) -> PartialResponse<Self::Output>;
+	fn into_response(self) -> ResponsePayload<'static, Self::Output>;
 }
 
-impl<T: serde::Serialize, E: Into<ErrorObjectOwned>> IntoResponse for Result<T, E> {
+impl<T, E: Into<ErrorObjectOwned>> IntoResponse for Result<T, E>
+where
+	T: serde::Serialize + Clone,
+{
 	type Output = T;
 
-	fn into_response(self) -> PartialResponse<T> {
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
 		match self {
-			Ok(val) => PartialResponse::Result(val),
-			Err(e) => PartialResponse::Error(e.into()),
+			Ok(val) => ResponsePayload::result(val),
+			Err(e) => ResponsePayload::Error(e.into()),
 		}
 	}
 }
@@ -74,8 +77,8 @@ macro_rules! impl_into_response {
 			impl IntoResponse for $n {
 				type Output = $n;
 
-				fn into_response(self) -> PartialResponse<Self::Output> {
-					PartialResponse::Result(self)
+				fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+					ResponsePayload::result(self)
 				}
 			}
 		)+

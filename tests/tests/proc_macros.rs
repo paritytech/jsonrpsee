@@ -112,7 +112,7 @@ mod rpc_impl {
 	}
 
 	#[rpc(client, server, namespace = "chain")]
-	pub trait ChainApi<Number, Hash, Header, SignedBlock> {
+	pub trait ChainApi<Number, Hash: Clone, Header: Clone, SignedBlock: Clone> {
 		/// Get header of a relay chain block.
 		#[method(name = "getHeader")]
 		fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
@@ -138,7 +138,7 @@ mod rpc_impl {
 
 	/// Trait to ensure that the trait bounds are correct.
 	#[rpc(client, server, namespace = "generic_call")]
-	pub trait OnlyGenericCall<I, R> {
+	pub trait OnlyGenericCall<I, R: Clone> {
 		#[method(name = "getHeader")]
 		fn call(&self, input: I) -> RpcResult<R>;
 	}

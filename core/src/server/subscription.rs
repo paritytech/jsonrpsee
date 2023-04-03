@@ -27,7 +27,7 @@
 //! Subscription related types and traits for server implementations.
 
 use super::helpers::{MethodResponse, MethodSink};
-use super::PartialResponse;
+use super::ResponsePayload;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
 use crate::{traits::IdProvider, Error, StringError};
@@ -257,7 +257,7 @@ impl PendingSubscriptionSink {
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
 		let response = MethodResponse::response(
 			self.id,
-			PartialResponse::Result(self.uniq_sub.sub_id.clone()),
+			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
 		);
 		let success = response.success;
