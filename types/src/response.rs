@@ -29,11 +29,36 @@
 use std::fmt;
 use std::marker::PhantomData;
 
+use crate::error::ErrorCode;
 use crate::params::{Id, SubscriptionId, TwoPointZero};
 use crate::request::Notification;
-use crate::ErrorObjectOwned;
+use crate::{ErrorObject, ErrorObjectOwned};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+/// JSON-RPC response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
+#[derive(Debug)]
+pub struct ResponseSer<'a, T> {
+	/// JSON-RPC version.
+	pub jsonrpc: Option<TwoPointZero>,
+	/// Result or error.
+	pub result_or_error: &'a PartialResponseSer<'a, T>,
+	/// Request ID
+	pub id: &'a Id<'a>,
+}
+
+impl<'a, T> ResponseSer<'a, T> {
+	/// Create a new [`Response`].
+	pub fn new(result_or_error: &'a PartialResponseSer<'a, T>, id: &'a Id<'a>) -> ResponseSer<'a, T> {
+		ResponseSer { jsonrpc: Some(TwoPointZero), result_or_error, id }
+	}
+}
+
+impl<'a, T: Serialize> fmt::Display for ResponseSer<'a, T> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", serde_json::to_string(&self).expect("valid JSON; qed"))
+	}
+}
 
 /// JSON-RPC response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
 #[derive(Debug)]
@@ -55,12 +80,6 @@ impl<'a, T> Response<'a, T> {
 	/// Create an owned [`Response`].
 	pub fn into_owned(self) -> Response<'static, T> {
 		Response { jsonrpc: self.jsonrpc, result_or_error: self.result_or_error, id: self.id.into_owned() }
-	}
-}
-
-impl<'a, T: Serialize> fmt::Display for Response<'a, T> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", serde_json::to_string(&self).expect("valid JSON; qed"))
 	}
 }
 
@@ -98,6 +117,42 @@ pub struct SubscriptionPayloadError<'a, T> {
 /// "error":{"code":<code>,"message":<msg>,"data":<data>}
 /// ```
 #[derive(Debug, PartialEq)]
+pub enum PartialResponseSer<'a, T> {
+	/// Corresponds to successful JSON-RPC response with the field `result`.
+	Result(&'a T),
+	/// Corresponds to failed JSON-RPC response with a error object with the field `error.
+	Error(ErrorObject<'a>),
+}
+
+impl<'a, T> PartialResponseSer<'a, T> {
+	/// Create successful partial response i.e, the `result field`
+	pub fn result(t: &'a T) -> Self {
+		Self::Result(t)
+	}
+}
+
+impl<'a> PartialResponseSer<'a, ()> {
+	/// Create failed partial response i.e, the `error field`
+	pub fn error(e: impl Into<ErrorObject<'a>>) -> Self {
+		Self::Error(e.into())
+	}
+}
+
+impl<'a> From<ErrorCode> for PartialResponseSer<'a, ()> {
+	fn from(code: ErrorCode) -> Self {
+		Self::Error(ErrorObject::from(code))
+	}
+}
+
+/// Represent the result or error field of the JSON-RPC response object
+///
+/// It can be:
+///
+/// ```json
+/// "result":<value>
+/// "error":{"code":<code>,"message":<msg>,"data":<data>}
+/// ```
+#[derive(Debug, PartialEq)]
 pub enum PartialResponse<T> {
 	/// Corresponds to successful JSON-RPC response with the field `result`.
 	Result(T),
@@ -110,10 +165,18 @@ impl<T> PartialResponse<T> {
 	pub fn result(t: T) -> Self {
 		Self::Result(t)
 	}
+
+	/// Borrow.
+	pub fn borrow(&self) -> PartialResponseSer<'_, T> {
+		match &self {
+			Self::Result(r) => PartialResponseSer::Result(r),
+			Self::Error(e) => PartialResponseSer::Error(e.borrow()),
+		}
+	}
 }
 
 impl PartialResponse<()> {
-	/// Create successful partial response i.e, the `result field`
+	/// Create failed partial response i.e, the `error field`
 	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
 		Self::Error(e.into())
 	}
@@ -142,7 +205,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Response<'de, T> {
 					type Value = Field;
 
 					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-						formatter.write_str("`jsonrpc`, `result/error` and `error`")
+						formatter.write_str("`jsonrpc`, `result`, `error` and `id`")
 					}
 
 					fn visit_str<E>(self, value: &str) -> Result<Field, E>
@@ -177,7 +240,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Response<'de, T> {
 			type Value = Response<'de, T>;
 
 			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-				formatter.write_str("struct Duration")
+				formatter.write_str("struct Response")
 			}
 
 			fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
@@ -242,12 +305,12 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Response<'de, T> {
 			}
 		}
 
-		const FIELDS: &'static [&'static str] = &["jsonrpc", "result/error", "id"];
+		const FIELDS: &[&str] = &["jsonrpc", "result", "error", "id"];
 		deserializer.deserialize_struct("Response", FIELDS, Visitor::new())
 	}
 }
 
-impl<'a, T: Serialize> Serialize for Response<'a, T> {
+impl<'a, T: Serialize> Serialize for ResponseSer<'a, T> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
@@ -259,8 +322,8 @@ impl<'a, T: Serialize> Serialize for Response<'a, T> {
 		}
 
 		match &self.result_or_error {
-			PartialResponse::Error(err) => s.serialize_field("error", err)?,
-			PartialResponse::Result(r) => s.serialize_field("result", r)?,
+			PartialResponseSer::Error(err) => s.serialize_field("error", err)?,
+			PartialResponseSer::Result(r) => s.serialize_field("result", r)?,
 		};
 
 		s.serialize_field("id", &self.id)?;
@@ -270,40 +333,33 @@ impl<'a, T: Serialize> Serialize for Response<'a, T> {
 
 #[cfg(test)]
 mod tests {
-	use crate::{response::PartialResponse, ErrorObjectOwned};
-
-	use super::{Id, Response, TwoPointZero};
+	use super::{Id, Response, ResponseSer, TwoPointZero};
+	use crate::{
+		response::{PartialResponse, PartialResponseSer},
+		ErrorObjectOwned,
+	};
 
 	#[test]
 	fn serialize_call_ok_response() {
-		let ser = serde_json::to_string(&Response {
-			jsonrpc: Some(TwoPointZero),
-			result_or_error: PartialResponse::Result("ok"),
-			id: Id::Number(1),
-		})
-		.unwrap();
+		let ser = serde_json::to_string(&ResponseSer::new(&PartialResponseSer::result(&"ok"), &Id::Number(1))).unwrap();
 		let exp = r#"{"jsonrpc":"2.0","result":"ok","id":1}"#;
 		assert_eq!(ser, exp);
 	}
 
 	#[test]
 	fn serialize_call_err_response() {
-		let ser = serde_json::to_string(&Response {
-			jsonrpc: Some(TwoPointZero),
-			result_or_error: PartialResponse::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
-			id: Id::Number(1),
-		})
-		.unwrap();
+		let err = ErrorObjectOwned::owned(1, "lo", None::<()>);
+		let ser = serde_json::to_string(&ResponseSer::new(&PartialResponseSer::error(err), &Id::Number(1))).unwrap();
 		let exp = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"lo"},"id":1}"#;
 		assert_eq!(ser, exp);
 	}
 
 	#[test]
 	fn serialize_call_response_missing_version_field() {
-		let ser = serde_json::to_string(&Response {
+		let ser = serde_json::to_string(&ResponseSer {
 			jsonrpc: None,
-			result_or_error: PartialResponse::Result("ok"),
-			id: Id::Number(1),
+			result_or_error: &PartialResponseSer::result(&"ok"),
+			id: &Id::Number(1),
 		})
 		.unwrap();
 		let exp = r#"{"result":"ok","id":1}"#;

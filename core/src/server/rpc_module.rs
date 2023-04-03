@@ -43,7 +43,7 @@ use crate::server::PartialResponse;
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
-use jsonrpsee_types::{Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId};
+use jsonrpsee_types::{Id, Params, PartialResponseSer, Request, Response, SubscriptionId as RpcSubscriptionId};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
@@ -461,7 +461,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| {
-				MethodResponse::response(id, callback(params, &*ctx).into_response(), max_response_size)
+				let rp = callback(params, &*ctx).into_response();
+				MethodResponse::response(id, &rp.borrow(), max_response_size)
 			})),
 		)
 	}
@@ -486,7 +487,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 				let future = async move {
 					let rp = callback(params, ctx).await.into_response();
-					MethodResponse::response(id, rp, max_response_size)
+					MethodResponse::response(id, &rp.borrow(), max_response_size)
 				};
 				future.boxed()
 			})),
@@ -514,8 +515,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let callback = callback.clone();
 
 				tokio::task::spawn_blocking(move || {
-					let result = callback(params, ctx).into_response();
-					MethodResponse::response(id, result, max_response_size)
+					let rp = callback(params, ctx).into_response();
+					MethodResponse::response(id, &rp.borrow(), max_response_size)
 				})
 				.map(|result| match result {
 					Ok(r) => r,
@@ -664,7 +665,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, PartialResponse::Result(false), max_response_size);
+							return MethodResponse::response(
+								id,
+								&PartialResponseSer::result(&false),
+								max_response_size,
+							);
 						}
 					};
 
@@ -679,7 +684,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, PartialResponse::Result(result), max_response_size)
+					MethodResponse::response(id, &PartialResponseSer::result(&result), max_response_size)
 				})),
 			);
 		}

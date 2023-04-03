@@ -29,7 +29,7 @@ use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
-use jsonrpsee_types::response::{PartialResponse, SubscriptionError};
+use jsonrpsee_types::response::{PartialResponse, PartialResponseSer, ResponseSer, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
@@ -339,7 +339,7 @@ impl ClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		rx_log_from_json(&Response::new(PartialResponse::Result(json_value.clone()), id), self.max_log_length);
+		rx_log_from_json(&ResponseSer::new(&PartialResponseSer::result(&json_value), &id), self.max_log_length);
 
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
@@ -462,7 +462,7 @@ impl SubscriptionClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		rx_log_from_json(&Response::new(PartialResponse::Result(sub_id.clone()), id_unsub), self.max_log_length);
+		rx_log_from_json(&ResponseSer::new(&PartialResponseSer::result(&sub_id), &id_unsub), self.max_log_length);
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
