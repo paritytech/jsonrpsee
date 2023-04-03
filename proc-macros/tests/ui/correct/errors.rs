@@ -1,24 +1,29 @@
-//! Example of using custom errors.
+//! Example of using custom response type.
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::async_trait;
+use jsonrpsee::core::{async_trait, Serialize};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::{IntoResponse, ServerBuilder};
+use jsonrpsee::types::PartialResponse;
 use jsonrpsee::ws_client::*;
 
+// This serialize impl is not used as the responses are sent out as error's.
+#[derive(Serialize)]
 pub enum CustomError {
 	One,
 	Two { custom_data: u32 },
 }
 
-impl From<CustomError> for jsonrpsee::core::Error {
-	fn from(err: CustomError) -> Self {
-		let code = match &err {
+impl IntoResponse for CustomError {
+	type Output = Self;
+
+	fn into_response(self) -> PartialResponse<Self::Output> {
+		let code = match &self {
 			CustomError::One => 101,
 			CustomError::Two { .. } => 102,
 		};
-		let data = match &err {
+		let data = match &self {
 			CustomError::One => None,
 			CustomError::Two { custom_data } => Some(serde_json::json!({ "customData": custom_data })),
 		};
@@ -26,30 +31,29 @@ impl From<CustomError> for jsonrpsee::core::Error {
 		let data = data.map(|val| serde_json::value::to_raw_value(&val).unwrap());
 
 		let error_object = jsonrpsee::types::ErrorObjectOwned::owned(code, "custom_error", data);
-
-		Self::Call(jsonrpsee::types::error::CallError::Custom(error_object))
+		PartialResponse::Error(error_object)
 	}
 }
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
 	#[method(name = "method1")]
-	async fn method1(&self) -> Result<u16, CustomError>;
+	async fn method1(&self) -> CustomError;
 
 	#[method(name = "method2")]
-	async fn method2(&self) -> Result<u16, CustomError>;
+	async fn method2(&self) -> CustomError;
 }
 
 pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn method1(&self) -> Result<u16, CustomError> {
-		Err(CustomError::One)
+	async fn method1(&self) -> CustomError {
+		CustomError::One
 	}
 
-	async fn method2(&self) -> Result<u16, CustomError> {
-		Err(CustomError::Two { custom_data: 123 })
+	async fn method2(&self) -> CustomError {
+		CustomError::Two { custom_data: 123 }
 	}
 }
 

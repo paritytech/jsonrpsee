@@ -4,11 +4,12 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: Serialize` is not satisfi
 10 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `<Conf as Config>::Hash`
    |
+   = note: required for `std::result::Result<<Conf as Config>::Hash, jsonrpsee::jsonrpsee_core::Error>` to implement `IntoResponse`
 note: required by a bound in `RpcModule::<Context>::register_method`
   --> $WORKSPACE/core/src/server/rpc_module.rs
    |
-   |         R: Serialize,
-   |            ^^^^^^^^^ required by this bound in `RpcModule::<Context>::register_method`
+   |         R: IntoResponse,
+   |            ^^^^^^^^^^^^ required by this bound in `RpcModule::<Context>::register_method`
    = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `for<'de> <Conf as Config>::Hash: Deserialize<'de>` is not satisfied
