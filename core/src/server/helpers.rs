@@ -30,7 +30,7 @@ use std::time::Duration;
 use crate::tracing::tx_log_from_str;
 use crate::Error;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
-use jsonrpsee_types::{Id, InvalidRequest, Response};
+use jsonrpsee_types::{ErrorObjectOwned, Id, InvalidRequest, Response};
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Permit};
 
@@ -216,7 +216,7 @@ impl MethodResponse {
 
 				if err.is_io() {
 					let data = format!("Exceeded max limit of {max_response_size}");
-					let err = PartialResponse::Error::<()>(ErrorObject::owned(
+					let err = PartialResponse::error(ErrorObject::owned(
 						OVERSIZED_RESPONSE_CODE,
 						OVERSIZED_RESPONSE_MSG,
 						Some(data),
@@ -226,7 +226,7 @@ impl MethodResponse {
 
 					Self { result, success: false }
 				} else {
-					let err = PartialResponse::Error::<()>(ErrorCode::InternalError.into());
+					let err = PartialResponse::error(ErrorObjectOwned::from(ErrorCode::InternalError));
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 					Self { result, success: false }
@@ -237,7 +237,7 @@ impl MethodResponse {
 
 	/// Create a `MethodResponse` from an error.
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
-		let err = PartialResponse::Error::<()>(err.into().into_owned());
+		let err = PartialResponse::error(err.into().into_owned());
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 		Self { result, success: false }
 	}

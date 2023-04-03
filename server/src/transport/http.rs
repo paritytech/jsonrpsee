@@ -312,14 +312,14 @@ pub(crate) async fn handle_request<L: Logger>(
 
 pub(crate) mod response {
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
-	use jsonrpsee_types::{Id, PartialResponse, Response};
+	use jsonrpsee_types::{ErrorObjectOwned, Id, PartialResponse, Response};
 
 	const JSON: &str = "application/json; charset=utf-8";
 	const TEXT: &str = "text/plain";
 
 	/// Create a response for json internal error.
 	pub(crate) fn internal_error() -> hyper::Response<hyper::Body> {
-		let err = PartialResponse::Error::<()>(ErrorCode::InternalError.into());
+		let err = PartialResponse::error(ErrorObjectOwned::from(ErrorCode::InternalError));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
@@ -342,7 +342,7 @@ pub(crate) mod response {
 
 	/// Create a json response for oversized requests (413)
 	pub(crate) fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
-		let err = PartialResponse::Error::<()>(reject_too_big_request(limit));
+		let err = PartialResponse::error(reject_too_big_request(limit));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
@@ -351,7 +351,7 @@ pub(crate) mod response {
 
 	/// Create a json response for empty or malformed requests (400)
 	pub(crate) fn malformed() -> hyper::Response<hyper::Body> {
-		let err = PartialResponse::Error::<()>(ErrorCode::ParseError.into());
+		let err = PartialResponse::error(ErrorObjectOwned::from(ErrorCode::ParseError));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 

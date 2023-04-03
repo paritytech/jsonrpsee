@@ -45,18 +45,6 @@ pub use subscription::*;
 
 use jsonrpsee_types::{ErrorObjectOwned, PartialResponse};
 
-/// Something that can be converted into a JSON-RPC error object.
-pub trait IntoErrorObject {
-	/// Something that can be converted into a JSON-RPC error object.
-	fn into_error_object(self) -> ErrorObjectOwned;
-}
-
-impl IntoErrorObject for crate::Error {
-	fn into_error_object(self) -> ErrorObjectOwned {
-		self.into()
-	}
-}
-
 /// Something that can be converted into a JSON-RPC method call response.
 ///
 /// If the value couldn't be serialized/encoded, jsonrpsee will sent out an error
@@ -69,13 +57,13 @@ pub trait IntoResponse {
 	fn into_response(self) -> PartialResponse<Self::Output>;
 }
 
-impl<T: serde::Serialize, E: IntoErrorObject> IntoResponse for Result<T, E> {
+impl<T: serde::Serialize, E: Into<ErrorObjectOwned>> IntoResponse for Result<T, E> {
 	type Output = T;
 
 	fn into_response(self) -> PartialResponse<T> {
 		match self {
 			Ok(val) => PartialResponse::Result(val),
-			Err(e) => PartialResponse::Error(e.into_error_object()),
+			Err(e) => PartialResponse::Error(e.into()),
 		}
 	}
 }

@@ -105,6 +105,20 @@ pub enum PartialResponse<T> {
 	Error(ErrorObjectOwned),
 }
 
+impl<T> PartialResponse<T> {
+	/// Create successful partial response i.e, the `result field`
+	pub fn result(t: T) -> Self {
+		Self::Result(t)
+	}
+}
+
+impl PartialResponse<()> {
+	/// Create successful partial response i.e, the `result field`
+	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
+		Self::Error(e.into())
+	}
+}
+
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Response<'de, T> {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -276,7 +290,7 @@ mod tests {
 	fn serialize_call_err_response() {
 		let ser = serde_json::to_string(&Response {
 			jsonrpc: Some(TwoPointZero),
-			result_or_error: PartialResponse::Error::<()>(ErrorObjectOwned::owned(1, "lo", None::<()>)),
+			result_or_error: PartialResponse::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
 			id: Id::Number(1),
 		})
 		.unwrap();
@@ -313,7 +327,7 @@ mod tests {
 	fn deserialize_err_call() {
 		let exp = Response {
 			jsonrpc: Some(TwoPointZero),
-			result_or_error: PartialResponse::Error::<()>(ErrorObjectOwned::owned(1, "lo", None::<()>)),
+			result_or_error: PartialResponse::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
 			id: Id::Number(11),
 		};
 		let dsr: Response<()> =
