@@ -312,14 +312,14 @@ pub(crate) async fn handle_request<L: Logger>(
 
 pub(crate) mod response {
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
-	use jsonrpsee_types::{ErrorObject, Id, PartialResponseSer, ResponseSer};
+	use jsonrpsee_types::{ErrorObject, Id, ResponsePayloadSer, ResponseSer};
 
 	const JSON: &str = "application/json; charset=utf-8";
 	const TEXT: &str = "text/plain";
 
 	/// Create a response for json internal error.
 	pub(crate) fn internal_error() -> hyper::Response<hyper::Body> {
-		let err = PartialResponseSer::error(ErrorObject::from(ErrorCode::InternalError));
+		let err = ResponsePayloadSer::error(ErrorObject::from(ErrorCode::InternalError));
 		let rp = ResponseSer::new(&err, &Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
@@ -342,7 +342,7 @@ pub(crate) mod response {
 
 	/// Create a json response for oversized requests (413)
 	pub(crate) fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
-		let err = PartialResponseSer::error(reject_too_big_request(limit));
+		let err = ResponsePayloadSer::error(reject_too_big_request(limit));
 		let rp = ResponseSer::new(&err, &Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 

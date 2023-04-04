@@ -39,11 +39,11 @@ use crate::server::subscription::{
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
-use crate::server::PartialResponse;
+use crate::server::ResponsePayload;
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
-use jsonrpsee_types::{Id, Params, PartialResponseSer, Request, Response, SubscriptionId as RpcSubscriptionId};
+use jsonrpsee_types::{Id, Params, Request, Response, ResponsePayloadSer, SubscriptionId as RpcSubscriptionId};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
@@ -254,8 +254,8 @@ impl Methods {
 		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
 
 		match rp.result_or_error {
-			PartialResponse::Error(err) => Err(Error::Call(CallError::Custom(err))),
-			PartialResponse::Result(r) => Ok(r),
+			ResponsePayload::Error(err) => Err(Error::Call(CallError::Custom(err))),
+			ResponsePayload::Result(r) => Ok(r),
 		}
 	}
 
@@ -390,8 +390,8 @@ impl Methods {
 		let sub_response = serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result)?;
 
 		let sub_id = match sub_response.result_or_error {
-			PartialResponse::Result(r) => r.into_owned(),
-			PartialResponse::Error(err) => return Err(Error::Call(CallError::Custom(err))),
+			ResponsePayload::Result(r) => r.into_owned(),
+			ResponsePayload::Error(err) => return Err(Error::Call(CallError::Custom(err))),
 		};
 
 		Ok(Subscription { sub_id, rx })
@@ -668,7 +668,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 							return MethodResponse::response(
 								id,
-								&PartialResponseSer::result(&false),
+								&ResponsePayloadSer::result(&false),
 								max_response_size,
 							);
 						}
@@ -685,7 +685,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, &PartialResponseSer::result(&result), max_response_size)
+					MethodResponse::response(id, &ResponsePayloadSer::result(&result), max_response_size)
 				})),
 			);
 		}

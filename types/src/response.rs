@@ -42,14 +42,14 @@ pub struct ResponseSer<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: Option<TwoPointZero>,
 	/// Result or error.
-	pub result_or_error: &'a PartialResponseSer<'a, T>,
+	pub result_or_error: &'a ResponsePayloadSer<'a, T>,
 	/// Request ID
 	pub id: &'a Id<'a>,
 }
 
 impl<'a, T> ResponseSer<'a, T> {
 	/// Create a new [`Response`].
-	pub fn new(result_or_error: &'a PartialResponseSer<'a, T>, id: &'a Id<'a>) -> ResponseSer<'a, T> {
+	pub fn new(result_or_error: &'a ResponsePayloadSer<'a, T>, id: &'a Id<'a>) -> ResponseSer<'a, T> {
 		ResponseSer { jsonrpc: Some(TwoPointZero), result_or_error, id }
 	}
 }
@@ -67,14 +67,14 @@ pub struct Response<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: Option<TwoPointZero>,
 	/// Result or error.
-	pub result_or_error: PartialResponse<T>,
+	pub result_or_error: ResponsePayload<T>,
 	/// Request ID
 	pub id: Id<'a>,
 }
 
 impl<'a, T> Response<'a, T> {
 	/// Create a new [`Response`].
-	pub fn new(result_or_error: PartialResponse<T>, id: Id<'a>) -> Response<'a, T> {
+	pub fn new(result_or_error: ResponsePayload<T>, id: Id<'a>) -> Response<'a, T> {
 		Response { jsonrpc: Some(TwoPointZero), result_or_error, id }
 	}
 
@@ -101,8 +101,8 @@ impl<'a, T> TryFrom<Response<'a, T>> for Success<'a, T> {
 
 	fn try_from(rp: Response<'a, T>) -> Result<Self, Self::Error> {
 		match rp.result_or_error {
-			PartialResponse::Error(e) => Err(e),
-			PartialResponse::Result(r) => Ok(Success { jsonrpc: rp.jsonrpc, result: r, id: rp.id }),
+			ResponsePayload::Error(e) => Err(e),
+			ResponsePayload::Result(r) => Ok(Success { jsonrpc: rp.jsonrpc, result: r, id: rp.id }),
 		}
 	}
 }
@@ -141,28 +141,28 @@ pub struct SubscriptionPayloadError<'a, T> {
 /// "error":{"code":<code>,"message":<msg>,"data":<data>}
 /// ```
 #[derive(Debug, PartialEq)]
-pub enum PartialResponseSer<'a, T> {
+pub enum ResponsePayloadSer<'a, T> {
 	/// Corresponds to successful JSON-RPC response with the field `result`.
 	Result(&'a T),
 	/// Corresponds to failed JSON-RPC response with a error object with the field `error.
 	Error(ErrorObject<'a>),
 }
 
-impl<'a, T> PartialResponseSer<'a, T> {
+impl<'a, T> ResponsePayloadSer<'a, T> {
 	/// Create successful partial response i.e, the `result field`
 	pub fn result(t: &'a T) -> Self {
 		Self::Result(t)
 	}
 }
 
-impl<'a> PartialResponseSer<'a, ()> {
+impl<'a> ResponsePayloadSer<'a, ()> {
 	/// Create failed partial response i.e, the `error field`
 	pub fn error(e: impl Into<ErrorObject<'a>>) -> Self {
 		Self::Error(e.into())
 	}
 }
 
-impl<'a> From<ErrorCode> for PartialResponseSer<'a, ()> {
+impl<'a> From<ErrorCode> for ResponsePayloadSer<'a, ()> {
 	fn from(code: ErrorCode) -> Self {
 		Self::Error(ErrorObject::from(code))
 	}
@@ -177,29 +177,29 @@ impl<'a> From<ErrorCode> for PartialResponseSer<'a, ()> {
 /// "error":{"code":<code>,"message":<msg>,"data":<data>}
 /// ```
 #[derive(Debug, PartialEq)]
-pub enum PartialResponse<T> {
+pub enum ResponsePayload<T> {
 	/// Corresponds to successful JSON-RPC response with the field `result`.
 	Result(T),
 	/// Corresponds to failed JSON-RPC response with a error object with the field `error.
 	Error(ErrorObjectOwned),
 }
 
-impl<T> PartialResponse<T> {
+impl<T> ResponsePayload<T> {
 	/// Create successful partial response i.e, the `result field`
 	pub fn result(t: T) -> Self {
 		Self::Result(t)
 	}
 
 	/// Borrow.
-	pub fn borrow(&self) -> PartialResponseSer<'_, T> {
+	pub fn borrow(&self) -> ResponsePayloadSer<'_, T> {
 		match &self {
-			Self::Result(r) => PartialResponseSer::Result(r),
-			Self::Error(e) => PartialResponseSer::Error(e.borrow()),
+			Self::Result(r) => ResponsePayloadSer::Result(r),
+			Self::Error(e) => ResponsePayloadSer::Error(e.borrow()),
 		}
 	}
 }
 
-impl PartialResponse<()> {
+impl ResponsePayload<()> {
 	/// Create failed partial response i.e, the `error field`
 	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
 		Self::Error(e.into())
@@ -311,16 +311,16 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Response<'de, T> {
 						return Err(serde::de::Error::duplicate_field("result and error are mutually exclusive"))
 					}
 					(Some(jsonrpc), Some(result), None) => {
-						Response { jsonrpc, result_or_error: PartialResponse::Result(result), id }
+						Response { jsonrpc, result_or_error: ResponsePayload::Result(result), id }
 					}
 					(Some(jsonrpc), None, Some(err)) => {
-						Response { jsonrpc, result_or_error: PartialResponse::Error(err), id }
+						Response { jsonrpc, result_or_error: ResponsePayload::Error(err), id }
 					}
 					(None, Some(result), _) => {
-						Response { jsonrpc: None, result_or_error: PartialResponse::Result(result), id }
+						Response { jsonrpc: None, result_or_error: ResponsePayload::Result(result), id }
 					}
 					(None, _, Some(err)) => {
-						Response { jsonrpc: None, result_or_error: PartialResponse::Error(err), id }
+						Response { jsonrpc: None, result_or_error: ResponsePayload::Error(err), id }
 					}
 					(_, None, None) => return Err(serde::de::Error::missing_field("result/error")),
 				};
@@ -346,8 +346,8 @@ impl<'a, T: Serialize> Serialize for ResponseSer<'a, T> {
 		}
 
 		match &self.result_or_error {
-			PartialResponseSer::Error(err) => s.serialize_field("error", err)?,
-			PartialResponseSer::Result(r) => s.serialize_field("result", r)?,
+			ResponsePayloadSer::Error(err) => s.serialize_field("error", err)?,
+			ResponsePayloadSer::Result(r) => s.serialize_field("result", r)?,
 		};
 
 		s.serialize_field("id", &self.id)?;
@@ -359,13 +359,13 @@ impl<'a, T: Serialize> Serialize for ResponseSer<'a, T> {
 mod tests {
 	use super::{Id, Response, ResponseSer, TwoPointZero};
 	use crate::{
-		response::{PartialResponse, PartialResponseSer},
+		response::{ResponsePayload, ResponsePayloadSer},
 		ErrorObjectOwned,
 	};
 
 	#[test]
 	fn serialize_call_ok_response() {
-		let ser = serde_json::to_string(&ResponseSer::new(&PartialResponseSer::result(&"ok"), &Id::Number(1))).unwrap();
+		let ser = serde_json::to_string(&ResponseSer::new(&ResponsePayloadSer::result(&"ok"), &Id::Number(1))).unwrap();
 		let exp = r#"{"jsonrpc":"2.0","result":"ok","id":1}"#;
 		assert_eq!(ser, exp);
 	}
@@ -373,7 +373,7 @@ mod tests {
 	#[test]
 	fn serialize_call_err_response() {
 		let err = ErrorObjectOwned::owned(1, "lo", None::<()>);
-		let ser = serde_json::to_string(&ResponseSer::new(&PartialResponseSer::error(err), &Id::Number(1))).unwrap();
+		let ser = serde_json::to_string(&ResponseSer::new(&ResponsePayloadSer::error(err), &Id::Number(1))).unwrap();
 		let exp = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"lo"},"id":1}"#;
 		assert_eq!(ser, exp);
 	}
@@ -382,7 +382,7 @@ mod tests {
 	fn serialize_call_response_missing_version_field() {
 		let ser = serde_json::to_string(&ResponseSer {
 			jsonrpc: None,
-			result_or_error: &PartialResponseSer::result(&"ok"),
+			result_or_error: &ResponsePayloadSer::result(&"ok"),
 			id: &Id::Number(1),
 		})
 		.unwrap();
@@ -394,7 +394,7 @@ mod tests {
 	fn deserialize_success_call() {
 		let exp = Response {
 			jsonrpc: Some(TwoPointZero),
-			result_or_error: PartialResponse::Result(99_u64),
+			result_or_error: ResponsePayload::Result(99_u64),
 			id: Id::Number(11),
 		};
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
@@ -407,7 +407,7 @@ mod tests {
 	fn deserialize_err_call() {
 		let exp = Response {
 			jsonrpc: Some(TwoPointZero),
-			result_or_error: PartialResponse::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
+			result_or_error: ResponsePayload::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
 			id: Id::Number(11),
 		};
 		let dsr: Response<()> =
@@ -419,7 +419,7 @@ mod tests {
 
 	#[test]
 	fn deserialize_call_missing_version_field() {
-		let exp = Response { jsonrpc: None, result_or_error: PartialResponse::Result(99_u64), id: Id::Number(11) };
+		let exp = Response { jsonrpc: None, result_or_error: ResponsePayload::Result(99_u64), id: Id::Number(11) };
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":null, "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.result_or_error, exp.result_or_error);

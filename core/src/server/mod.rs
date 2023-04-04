@@ -43,7 +43,7 @@ pub use host_filtering::*;
 pub use rpc_module::*;
 pub use subscription::*;
 
-use jsonrpsee_types::{ErrorObjectOwned, PartialResponse};
+use jsonrpsee_types::{ErrorObjectOwned, ResponsePayload};
 
 /// Something that can be converted into a JSON-RPC method call response.
 ///
@@ -54,16 +54,16 @@ pub trait IntoResponse {
 	type Output: serde::Serialize;
 
 	/// Something that can be converted into a JSON-RPC method call response.
-	fn into_response(self) -> PartialResponse<Self::Output>;
+	fn into_response(self) -> ResponsePayload<Self::Output>;
 }
 
 impl<T: serde::Serialize, E: Into<ErrorObjectOwned>> IntoResponse for Result<T, E> {
 	type Output = T;
 
-	fn into_response(self) -> PartialResponse<T> {
+	fn into_response(self) -> ResponsePayload<T> {
 		match self {
-			Ok(val) => PartialResponse::Result(val),
-			Err(e) => PartialResponse::Error(e.into()),
+			Ok(val) => ResponsePayload::Result(val),
+			Err(e) => ResponsePayload::Error(e.into()),
 		}
 	}
 }
@@ -74,8 +74,8 @@ macro_rules! impl_into_response {
 			impl IntoResponse for $n {
 				type Output = $n;
 
-				fn into_response(self) -> PartialResponse<Self::Output> {
-					PartialResponse::Result(self)
+				fn into_response(self) -> ResponsePayload<Self::Output> {
+					ResponsePayload::Result(self)
 				}
 			}
 		)+
