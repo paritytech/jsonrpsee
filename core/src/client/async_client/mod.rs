@@ -29,7 +29,7 @@ use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
-use jsonrpsee_types::response::{PartialResponse, PartialResponseSer, ResponseSer, SubscriptionError};
+use jsonrpsee_types::response::{PartialResponseSer, ResponseSer, SubscriptionError, Success};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
@@ -554,17 +554,13 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 					let mut range = None;
 
 					for r in raw_responses {
-						let id = if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
-							let result = match response.result_or_error {
-								PartialResponse::Result(r) => Ok(r),
-								PartialResponse::Error(err) => Err(err),
-							};
-							let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-							batch.push(InnerBatchResponse { id, result });
-							id
-						} else {
+						let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) else {
 							return Err(unparse_error(raw));
 						};
+
+						let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+						let result = Success::try_from(response).map(|s| s.result);
+						batch.push(InnerBatchResponse { id, result });
 
 						let r = range.get_or_insert(id..id);
 

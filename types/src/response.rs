@@ -61,6 +61,7 @@ impl<'a, T: Serialize> fmt::Display for ResponseSer<'a, T> {
 }
 
 /// JSON-RPC response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
+/// the result can still be `success` or `failed.
 #[derive(Debug)]
 pub struct Response<'a, T> {
 	/// JSON-RPC version.
@@ -80,6 +81,29 @@ impl<'a, T> Response<'a, T> {
 	/// Create an owned [`Response`].
 	pub fn into_owned(self) -> Response<'static, T> {
 		Response { jsonrpc: self.jsonrpc, result_or_error: self.result_or_error, id: self.id.into_owned() }
+	}
+}
+
+/// JSON-RPC response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object)
+/// but differs from [`Response`] as it only represent a successful response.
+#[derive(Debug)]
+pub struct Success<'a, T> {
+	/// JSON-RPC version.
+	pub jsonrpc: Option<TwoPointZero>,
+	/// Result or error.
+	pub result: T,
+	/// Request ID
+	pub id: Id<'a>,
+}
+
+impl<'a, T> TryFrom<Response<'a, T>> for Success<'a, T> {
+	type Error = ErrorObjectOwned;
+
+	fn try_from(rp: Response<'a, T>) -> Result<Self, Self::Error> {
+		match rp.result_or_error {
+			PartialResponse::Error(e) => Err(e),
+			PartialResponse::Result(r) => Ok(Success { jsonrpc: rp.jsonrpc, result: r, id: rp.id }),
+		}
 	}
 }
 

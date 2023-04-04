@@ -44,7 +44,8 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::{ErrorObject, PartialResponse, TwoPointZero};
+use jsonrpsee_types::response::Success;
+use jsonrpsee_types::{ErrorObject, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -300,14 +301,11 @@ where
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
-		let response: Response<&JsonRawValue> = serde_json::from_slice(&body)?;
+		let response: Success<_> = serde_json::from_slice::<Response<&JsonRawValue>>(&body)?
+			.try_into()
+			.map_err(|e| Error::Call(CallError::Custom(e)))?;
 
-		let r = match response.result_or_error {
-			PartialResponse::Result(r) => r,
-			PartialResponse::Error(err) => return Err(Error::Call(CallError::Custom(err))),
-		};
-
-		let result = serde_json::from_str(r.get()).map_err(Error::ParseError)?;
+		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
 
 		if response.id == id {
 			Ok(result)
@@ -357,18 +355,18 @@ where
 		for rp in json_rps {
 			let (id, res) = match serde_json::from_str::<Response<R>>(rp.get()).map_err(Error::ParseError) {
 				Ok(r) => {
-					let result = match r.result_or_error {
-						PartialResponse::Result(r) => {
+					let id = r.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+
+					let result = match Success::try_from(r) {
+						Ok(r) => {
 							successful_calls += 1;
-							Ok(r)
+							Ok(r.result)
 						}
-						PartialResponse::Error(err) => {
+						Err(err) => {
 							failed_calls += 1;
 							Err(err)
 						}
 					};
-
-					let id = r.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
 
 					(id, result)
 				}
