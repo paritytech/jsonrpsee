@@ -230,10 +230,11 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::RpcModule;
+	///     use jsonrpsee::{RpcModule, IntoResponse};
+	///     use jsonrpsee::core::RpcResult;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_method("echo_call", |params, _| {
+	///     module.register_method::<RpcResult<u64>, _>("echo_call", |params, _| {
 	///         params.one::<u64>().map_err(Into::into)
 	///     }).unwrap();
 	///
@@ -268,7 +269,7 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::types::Response;
+	///     use jsonrpsee::types::{response::Success, Response};
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
@@ -281,7 +282,7 @@ impl Methods {
 	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
-	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
+	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.result).unwrap().try_into().unwrap();    
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
