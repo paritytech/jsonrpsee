@@ -41,21 +41,21 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub struct Response<'a, T: ToOwned<Owned = T>> {
 	/// JSON-RPC version.
 	pub jsonrpc: Option<TwoPointZero>,
-	/// Result or error.
-	pub result_or_error: ResponsePayload<'a, T>,
+	/// Payload which can be result or error.
+	pub payload: ResponsePayload<'a, T>,
 	/// Request ID
 	pub id: Id<'a>,
 }
 
 impl<'a, T: ToOwned<Owned = T>> Response<'a, T> {
 	/// Create a new [`Response`].
-	pub fn new(result_or_error: ResponsePayload<'a, T>, id: Id<'a>) -> Response<'a, T> {
-		Response { jsonrpc: Some(TwoPointZero), result_or_error, id }
+	pub fn new(payload: ResponsePayload<'a, T>, id: Id<'a>) -> Response<'a, T> {
+		Response { jsonrpc: Some(TwoPointZero), payload, id }
 	}
 
 	/// Create an owned [`Response`].
 	pub fn into_owned(self) -> Response<'static, T> {
-		Response { jsonrpc: self.jsonrpc, result_or_error: self.result_or_error.into_owned(), id: self.id.into_owned() }
+		Response { jsonrpc: self.jsonrpc, payload: self.payload.into_owned(), id: self.id.into_owned() }
 	}
 }
 
@@ -83,7 +83,7 @@ where
 pub struct Success<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: Option<TwoPointZero>,
-	/// Result or error.
+	/// Result.
 	pub result: T,
 	/// Request ID
 	pub id: Id<'a>,
@@ -93,7 +93,7 @@ impl<'a, T: ToOwned<Owned = T>> TryFrom<Response<'a, T>> for Success<'a, T> {
 	type Error = ErrorObjectOwned;
 
 	fn try_from(rp: Response<'a, T>) -> Result<Self, Self::Error> {
-		match rp.result_or_error {
+		match rp.payload {
 			ResponsePayload::Error(e) => Err(e.into_owned()),
 			ResponsePayload::Result(r) => Ok(Success { jsonrpc: rp.jsonrpc, result: r.into_owned(), id: rp.id }),
 		}
@@ -312,17 +312,11 @@ where
 						return Err(serde::de::Error::duplicate_field("result and error are mutually exclusive"))
 					}
 					(Some(jsonrpc), Some(result), None) => {
-						Response { jsonrpc, result_or_error: ResponsePayload::Result(result), id }
+						Response { jsonrpc, payload: ResponsePayload::Result(result), id }
 					}
-					(Some(jsonrpc), None, Some(err)) => {
-						Response { jsonrpc, result_or_error: ResponsePayload::Error(err), id }
-					}
-					(None, Some(result), _) => {
-						Response { jsonrpc: None, result_or_error: ResponsePayload::Result(result), id }
-					}
-					(None, _, Some(err)) => {
-						Response { jsonrpc: None, result_or_error: ResponsePayload::Error(err), id }
-					}
+					(Some(jsonrpc), None, Some(err)) => Response { jsonrpc, payload: ResponsePayload::Error(err), id },
+					(None, Some(result), _) => Response { jsonrpc: None, payload: ResponsePayload::Result(result), id },
+					(None, _, Some(err)) => Response { jsonrpc: None, payload: ResponsePayload::Error(err), id },
 					(_, None, None) => return Err(serde::de::Error::missing_field("result/error")),
 				};
 
@@ -349,7 +343,7 @@ where
 			s.serialize_field("jsonrpc", field)?;
 		}
 
-		match &self.result_or_error {
+		match &self.payload {
 			ResponsePayload::Error(err) => s.serialize_field("error", err)?,
 			ResponsePayload::Result(r) => s.serialize_field("result", r)?,
 		};
@@ -368,7 +362,7 @@ mod tests {
 	fn serialize_call_ok_response() {
 		let ser = serde_json::to_string(&Response {
 			jsonrpc: Some(TwoPointZero),
-			result_or_error: ResponsePayload::result("ok"),
+			payload: ResponsePayload::result("ok"),
 			id: Id::Number(1),
 		})
 		.unwrap();
@@ -380,7 +374,7 @@ mod tests {
 	fn serialize_call_err_response() {
 		let ser = serde_json::to_string(&Response {
 			jsonrpc: Some(TwoPointZero),
-			result_or_error: ResponsePayload::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
+			payload: ResponsePayload::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
 			id: Id::Number(1),
 		})
 		.unwrap();
@@ -392,7 +386,7 @@ mod tests {
 	fn serialize_call_response_missing_version_field() {
 		let ser = serde_json::to_string(&Response {
 			jsonrpc: None,
-			result_or_error: ResponsePayload::result("ok"),
+			payload: ResponsePayload::result("ok"),
 			id: Id::Number(1),
 		})
 		.unwrap();
@@ -402,14 +396,11 @@ mod tests {
 
 	#[test]
 	fn deserialize_success_call() {
-		let exp = Response {
-			jsonrpc: Some(TwoPointZero),
-			result_or_error: ResponsePayload::result(99_u64),
-			id: Id::Number(11),
-		};
+		let exp =
+			Response { jsonrpc: Some(TwoPointZero), payload: ResponsePayload::result(99_u64), id: Id::Number(11) };
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
-		assert_eq!(dsr.result_or_error, exp.result_or_error);
+		assert_eq!(dsr.payload, exp.payload);
 		assert_eq!(dsr.id, exp.id);
 	}
 
@@ -417,22 +408,22 @@ mod tests {
 	fn deserialize_err_call() {
 		let exp = Response {
 			jsonrpc: Some(TwoPointZero),
-			result_or_error: ResponsePayload::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
+			payload: ResponsePayload::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
 			id: Id::Number(11),
 		};
 		let dsr: Response<()> =
 			serde_json::from_str(r#"{"jsonrpc":"2.0","error":{"code":1,"message":"lo"},"id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
-		assert_eq!(dsr.result_or_error, exp.result_or_error);
+		assert_eq!(dsr.payload, exp.payload);
 		assert_eq!(dsr.id, exp.id);
 	}
 
 	#[test]
 	fn deserialize_call_missing_version_field() {
-		let exp = Response { jsonrpc: None, result_or_error: ResponsePayload::result(99_u64), id: Id::Number(11) };
+		let exp = Response { jsonrpc: None, payload: ResponsePayload::result(99_u64), id: Id::Number(11) };
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":null, "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
-		assert_eq!(dsr.result_or_error, exp.result_or_error);
+		assert_eq!(dsr.payload, exp.payload);
 		assert_eq!(dsr.id, exp.id);
 	}
 }

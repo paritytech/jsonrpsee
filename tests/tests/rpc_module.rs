@@ -522,7 +522,7 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 	let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
 	let sub_resp = stream.recv().await.unwrap();
 
-	let resp = match resp.result_or_error {
+	let resp = match resp.payload {
 		ResponsePayload::Result(val) => val,
 		_ => panic!("Expected valid response"),
 	};

@@ -71,6 +71,17 @@ where
 	}
 }
 
+impl<T> IntoResponse for Option<T>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = Option<T>;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
+	}
+}
+
 macro_rules! impl_into_response {
 	($($n:ty),*) => {
 		$(
