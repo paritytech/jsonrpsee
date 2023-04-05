@@ -42,7 +42,9 @@ use crate::server::subscription::{
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
-use jsonrpsee_types::{Id, Params, Request, Response, ResponsePayload, SubscriptionId as RpcSubscriptionId};
+use jsonrpsee_types::{
+	Id, Params, Request, Response, ResponsePayload, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
+};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
@@ -251,11 +253,7 @@ impl Methods {
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
-
-		match rp.result_or_error {
-			ResponsePayload::Error(err) => Err(Error::Call(CallError::Custom(err.into_owned()))),
-			ResponsePayload::Result(r) => Ok(r.into_owned()),
-		}
+		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| Error::Call(CallError::Custom(e)))
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
@@ -373,7 +371,7 @@ impl Methods {
 
 	/// Similar to [`Methods::subscribe_unbounded`] but it's using a bounded channel and the buffer capacity must be
 	/// provided.
-	pub async fn subscribe<'a>(
+	pub async fn subscribe(
 		&self,
 		sub_method: &str,
 		params: impl ToRpcParams,
@@ -386,12 +384,12 @@ impl Methods {
 
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
-		let r: Response<serde_json::Value> = serde_json::from_str(&resp.result)?;
+		// TODO: hack around the lifetime on the `SubscriptionId` by deserialize first to serde_json::Value.
+		let as_success: ResponseSuccess<serde_json::Value> = serde_json::from_str::<Response<_>>(&resp.result)?
+			.try_into()
+			.map_err(|e| Error::Call(CallError::Custom(e)))?;
 
-		let sub_id = match r.result_or_error {
-			ResponsePayload::Result(r) => RpcSubscriptionId::try_from(r.into_owned()).unwrap(),
-			ResponsePayload::Error(err) => return Err(Error::Call(CallError::Custom(err.into_owned()))),
-		};
+		let sub_id = as_success.result.try_into().map_err(|_| Error::InvalidSubscriptionId)?;
 
 		Ok(Subscription { sub_id, rx })
 	}

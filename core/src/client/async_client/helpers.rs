@@ -37,7 +37,7 @@ use tokio::sync::{mpsc, oneshot};
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse, SuccessResponse,
+	ErrorObject, Id, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
 use std::ops::Range;
@@ -176,9 +176,7 @@ pub(crate) fn process_single_response(
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
 	let response_id = response.id.clone().into_owned();
-
-	let as_success: Result<SuccessResponse<_>, _> = response.try_into();
-	let result = as_success.map(|s| s.result).map_err(|e| Error::Call(CallError::Custom(e)));
+	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(|e| Error::Call(CallError::Custom(e)));
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {

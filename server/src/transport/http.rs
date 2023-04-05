@@ -344,16 +344,15 @@ pub(crate) mod response {
 	pub(crate) fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
 		let err = ResponsePayload::error(reject_too_big_request(limit));
 		let rp = Response::new(err, Id::Null);
-		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
+		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
 		from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, error, JSON)
 	}
 
 	/// Create a json response for empty or malformed requests (400)
 	pub(crate) fn malformed() -> hyper::Response<hyper::Body> {
-		let err = ResponsePayload::error(ErrorObjectOwned::from(ErrorCode::ParseError));
-		let rp = Response::new(err, Id::Null);
-		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
+		let rp = Response::new(ErrorCode::ParseError.into(), Id::Null);
+		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
 		from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
 	}

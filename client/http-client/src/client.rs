@@ -44,7 +44,7 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::{ErrorObject, SuccessResponse, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -300,8 +300,7 @@ where
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
-		let response: SuccessResponse<_> = serde_json::from_slice::<Response<&JsonRawValue>>(&body)?
-			.try_into()
+		let response = ResponseSuccess::try_from(serde_json::from_slice::<Response<&JsonRawValue>>(&body)?)
 			.map_err(|e| Error::Call(CallError::Custom(e)))?;
 
 		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
@@ -354,7 +353,7 @@ where
 		for rp in json_rps {
 			let id = rp.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
 
-			let res = match SuccessResponse::try_from(rp) {
+			let res = match ResponseSuccess::try_from(rp) {
 				Ok(r) => {
 					let result = serde_json::from_str(r.result.get())?;
 					successful_calls += 1;

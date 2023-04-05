@@ -8,7 +8,7 @@ use jsonrpsee::server::{IntoResponse, ServerBuilder};
 use jsonrpsee::types::ResponsePayload;
 use jsonrpsee::ws_client::*;
 
-// This serialize impl is not used as the responses are sent out as error's.
+// Serialize impl is not used as the responses are sent out as error.
 #[derive(Serialize, Clone)]
 pub enum CustomError {
 	One,

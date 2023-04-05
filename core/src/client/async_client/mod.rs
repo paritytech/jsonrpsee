@@ -20,7 +20,7 @@ use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
-use jsonrpsee_types::{SuccessResponse, TwoPointZero};
+use jsonrpsee_types::{ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
 
 use async_lock::Mutex;
@@ -559,7 +559,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 						};
 
 						let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-						let result = SuccessResponse::try_from(response).map(|s| s.result);
+						let result = ResponseSuccess::try_from(response).map(|s| s.result);
 						batch.push(InnerBatchResponse { id, result });
 
 						let r = range.get_or_insert(id..id);

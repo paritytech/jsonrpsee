@@ -8,7 +8,7 @@ use anyhow::anyhow;
 use jsonrpsee_core::{DeserializeOwned, Error, RpcResult, StringError};
 use jsonrpsee_test_utils::mocks::TestContext;
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::{Response, SuccessResponse};
+use jsonrpsee_types::{Response, ResponseSuccess};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 /// Spawns a dummy JSON-RPC server.
@@ -176,7 +176,7 @@ pub(crate) fn init_logger() {
 
 pub(crate) fn deser_call<T: DeserializeOwned + fmt::Debug + Clone>(raw: String) -> T {
 	let rp: Response<T> = serde_json::from_str(&raw).unwrap();
-	SuccessResponse::try_from(rp).unwrap().result
+	ResponseSuccess::try_from(rp).expect("Successful call").result
 }
 
 /// Applications can/should provide their own error.
