@@ -301,7 +301,7 @@ impl BatchResponseBuilder {
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
-	let err = ResponsePayload::Error::<()>(err.into());
+	let err = ResponsePayload::error_borrowed(err);
 	serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed")
 }
 
