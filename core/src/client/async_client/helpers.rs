@@ -35,8 +35,10 @@ use futures_util::future::{self, Either};
 use tokio::sync::{mpsc, oneshot};
 
 use jsonrpsee_types::error::CallError;
-use jsonrpsee_types::response::{SubscriptionError, Success};
-use jsonrpsee_types::{ErrorObject, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
+use jsonrpsee_types::response::SubscriptionError;
+use jsonrpsee_types::{
+	ErrorObject, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse, SuccessResponse,
+};
 use serde_json::Value as JsonValue;
 use std::ops::Range;
 
@@ -175,7 +177,7 @@ pub(crate) fn process_single_response(
 ) -> Result<Option<RequestMessage>, Error> {
 	let response_id = response.id.clone().into_owned();
 
-	let as_success: Result<Success<_>, _> = response.try_into();
+	let as_success: Result<SuccessResponse<_>, _> = response.try_into();
 	let result = as_success.map(|s| s.result).map_err(|e| Error::Call(CallError::Custom(e)));
 
 	match manager.request_status(&response_id) {

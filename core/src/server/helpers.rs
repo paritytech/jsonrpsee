@@ -30,7 +30,7 @@ use std::time::Duration;
 use crate::tracing::tx_log_from_str;
 use crate::Error;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
-use jsonrpsee_types::{Id, InvalidRequest, ResponsePayloadSer, ResponseSer};
+use jsonrpsee_types::{Id, InvalidRequest, Response, ResponsePayload};
 use serde::Serialize;
 use serde_json::value::to_raw_value;
 use tokio::sync::mpsc::{self, Permit};
@@ -163,8 +163,8 @@ pub struct MethodSinkPermit<'a> {
 impl<'a> MethodSinkPermit<'a> {
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(self, id: Id, err: ErrorObject) {
-		let json =
-			serde_json::to_string(&ResponseSer::new(&ResponsePayloadSer::error(err), &id)).expect("valid JSON; qed");
+		let json = serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err.into_owned()), id))
+			.expect("valid JSON; qed");
 
 		self.send_raw(json)
 	}
@@ -203,10 +203,13 @@ pub struct MethodResponse {
 impl MethodResponse {
 	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
 	/// an error will be sent instead.
-	pub fn response<T: Serialize>(id: Id, result: &ResponsePayloadSer<T>, max_response_size: usize) -> Self {
+	pub fn response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
+	where
+		T: Serialize + ToOwned<Owned = T>,
+	{
 		let mut writer = BoundedWriter::new(max_response_size);
 
-		match serde_json::to_writer(&mut writer, &ResponseSer::new(result, &id)) {
+		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
 			Ok(_) => {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
@@ -217,18 +220,17 @@ impl MethodResponse {
 
 				if err.is_io() {
 					let data = to_raw_value(&format!("Exceeded max limit of {max_response_size}")).ok();
-					let err = ResponsePayloadSer::error(ErrorObject::borrowed(
+					let err = ResponsePayload::error_borrowed(ErrorObject::borrowed(
 						OVERSIZED_RESPONSE_CODE,
 						&OVERSIZED_RESPONSE_MSG,
 						data.as_deref(),
 					));
-					let result = serde_json::to_string(&ResponseSer::new(&err, &id))
-						.expect("JSON serialization infallible; qed");
+					let result =
+						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
 					Self { result, success: false }
 				} else {
-					let err = ResponsePayloadSer::error(ErrorObject::from(ErrorCode::InternalError));
-					let result = serde_json::to_string(&ResponseSer::new(&err, &id))
+					let result = serde_json::to_string(&Response::new(ErrorCode::InternalError.into(), id))
 						.expect("JSON serialization infallible; qed");
 					Self { result, success: false }
 				}
@@ -238,8 +240,8 @@ impl MethodResponse {
 
 	/// Create a `MethodResponse` from an error.
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
-		let err = ResponsePayloadSer::error(err);
-		let result = serde_json::to_string(&ResponseSer::new(&err, &id)).expect("JSON serialization infallible; qed");
+		let err = ResponsePayload::error_borrowed(err);
+		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 		Self { result, success: false }
 	}
 }
@@ -299,22 +301,20 @@ impl BatchResponseBuilder {
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
-	let err = ResponsePayloadSer::error(err);
-	serde_json::to_string(&ResponseSer::new(&err, &id)).expect("JSON serialization infallible; qed")
+	let err = ResponsePayload::Error::<()>(err.into());
+	serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed")
 }
 
 #[cfg(test)]
 mod tests {
-
-	use jsonrpsee_types::ResponsePayloadSer;
-
-	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, ResponseSer};
+	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, Response};
+	use jsonrpsee_types::ResponsePayload;
 
 	#[test]
 	fn bounded_serializer_work() {
 		let mut writer = BoundedWriter::new(100);
-		let result = ResponsePayloadSer::result(&"success");
-		let rp = &ResponseSer::new(&result, &Id::Number(1));
+		let result = ResponsePayload::result(&"success");
+		let rp = &Response::new(result, Id::Number(1));
 
 		assert!(serde_json::to_writer(&mut writer, rp).is_ok());
 		assert_eq!(String::from_utf8(writer.into_bytes()).unwrap(), r#"{"jsonrpc":"2.0","result":"success","id":1}"#);
@@ -329,7 +329,7 @@ mod tests {
 
 	#[test]
 	fn batch_with_single_works() {
-		let method = MethodResponse::response(Id::Number(1), &ResponsePayloadSer::Result(&"a"), usize::MAX);
+		let method = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a"), usize::MAX);
 		assert_eq!(method.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]`.
@@ -342,7 +342,7 @@ mod tests {
 
 	#[test]
 	fn batch_with_multiple_works() {
-		let m1 = MethodResponse::response(Id::Number(1), &ResponsePayloadSer::Result(&"a"), usize::MAX);
+		let m1 = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a"), usize::MAX);
 		assert_eq!(m1.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]` and one byte for `,` to append a method call.
@@ -366,7 +366,7 @@ mod tests {
 
 	#[test]
 	fn batch_too_big() {
-		let method = MethodResponse::response(Id::Number(1), &ResponsePayloadSer::result(&"a".repeat(28)), 128);
+		let method = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a".repeat(28)), 128);
 		assert_eq!(method.result.len(), 64);
 
 		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();

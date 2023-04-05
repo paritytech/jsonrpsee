@@ -20,7 +20,7 @@ use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
-use jsonrpsee_types::TwoPointZero;
+use jsonrpsee_types::{SuccessResponse, TwoPointZero};
 use manager::RequestManager;
 
 use async_lock::Mutex;
@@ -29,7 +29,7 @@ use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
-use jsonrpsee_types::response::{ResponsePayloadSer, ResponseSer, SubscriptionError, Success};
+use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
@@ -339,7 +339,7 @@ impl ClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		rx_log_from_json(&ResponseSer::new(&ResponsePayloadSer::result(&json_value), &id), self.max_log_length);
+		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&json_value), id), self.max_log_length);
 
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
@@ -462,7 +462,7 @@ impl SubscriptionClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		rx_log_from_json(&ResponseSer::new(&ResponsePayloadSer::result(&sub_id), &id_unsub), self.max_log_length);
+		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&sub_id), id_unsub), self.max_log_length);
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
@@ -559,7 +559,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 						};
 
 						let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
-						let result = Success::try_from(response).map(|s| s.result);
+						let result = SuccessResponse::try_from(response).map(|s| s.result);
 						batch.push(InnerBatchResponse { id, result });
 
 						let r = range.get_or_insert(id..id);

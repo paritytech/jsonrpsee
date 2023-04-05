@@ -26,14 +26,14 @@ pub trait MyRpcC<Conf: Config> {
 }
 
 /// Server only RPC.
-#[rpc(server, namespace = "foo", server_bounds(Conf::Hash: jsonrpsee::core::Serialize))]
+#[rpc(server, namespace = "foo", server_bounds(Conf::Hash: jsonrpsee::core::Serialize + Clone))]
 pub trait MyRpcS<Conf: Config> {
 	#[method(name = "bar")]
 	fn method(&self) -> RpcResult<Conf::Hash>;
 }
 
 /// Client and server RPC.
-#[rpc(server, client, namespace = "foo", client_bounds(Conf::Hash: jsonrpsee::core::DeserializeOwned), server_bounds(Conf::Hash: jsonrpsee::core::Serialize))]
+#[rpc(server, client, namespace = "foo", client_bounds(Conf::Hash: jsonrpsee::core::DeserializeOwned), server_bounds(Conf::Hash: jsonrpsee::core::Serialize + Clone))]
 pub trait MyRpcSC<Conf: Config> {
 	#[method(name = "bar")]
 	fn method(&self) -> RpcResult<Conf::Hash>;

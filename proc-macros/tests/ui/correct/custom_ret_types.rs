@@ -9,7 +9,7 @@ use jsonrpsee::types::ResponsePayload;
 use jsonrpsee::ws_client::*;
 
 // This serialize impl is not used as the responses are sent out as error's.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum CustomError {
 	One,
 	Two { custom_data: u32 },
@@ -18,7 +18,7 @@ pub enum CustomError {
 impl IntoResponse for CustomError {
 	type Output = Self;
 
-	fn into_response(self) -> ResponsePayload<Self::Output> {
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
 		let code = match &self {
 			CustomError::One => 101,
 			CustomError::Two { .. } => 102,

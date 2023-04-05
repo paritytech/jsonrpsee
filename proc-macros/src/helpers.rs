@@ -87,7 +87,7 @@ fn find_jsonrpsee_crate(crate_names: &[&str]) -> Result<proc_macro2::TokenStream
 ///  use jsonrpsee::core::{RpcResult, SubscriptionResult};
 ///
 ///  #[rpc(client, server)]
-///  pub trait RpcTrait<A, B, C> {
+///  pub trait RpcTrait<A, B: Clone, C> {
 ///    #[method(name = "call")]
 ///    fn call(&self, a: A) -> RpcResult<B>;
 ///
