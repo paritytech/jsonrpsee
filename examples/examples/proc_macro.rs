@@ -35,7 +35,7 @@ type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;
 
 #[rpc(server, client, namespace = "state")]
-pub trait Rpc<Hash: Clone, StorageKey: Clone>
+pub trait Rpc<Hash, StorageKey>
 where
 	Hash: std::fmt::Debug,
 {
