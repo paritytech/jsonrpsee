@@ -205,7 +205,7 @@ impl MethodResponse {
 	/// an error will be sent instead.
 	pub fn response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
 	where
-		T: Serialize + ToOwned<Owned = T>,
+		T: Serialize + Clone,
 	{
 		let mut writer = BoundedWriter::new(max_response_size);
 

@@ -38,7 +38,7 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// JSON-RPC response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
-pub struct Response<'a, T: ToOwned<Owned = T>> {
+pub struct Response<'a, T: Clone> {
 	/// JSON-RPC version.
 	pub jsonrpc: Option<TwoPointZero>,
 	/// Payload which can be result or error.
@@ -47,7 +47,7 @@ pub struct Response<'a, T: ToOwned<Owned = T>> {
 	pub id: Id<'a>,
 }
 
-impl<'a, T: ToOwned<Owned = T>> Response<'a, T> {
+impl<'a, T: Clone> Response<'a, T> {
 	/// Create a new [`Response`].
 	pub fn new(payload: ResponsePayload<'a, T>, id: Id<'a>) -> Response<'a, T> {
 		Response { jsonrpc: Some(TwoPointZero), payload, id }
@@ -61,7 +61,7 @@ impl<'a, T: ToOwned<Owned = T>> Response<'a, T> {
 
 impl<'a, T> fmt::Display for Response<'a, T>
 where
-	T: Serialize + ToOwned<Owned = T>,
+	T: Serialize + Clone,
 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(&serde_json::to_string(&self).expect("valid JSON; qed"))
@@ -70,7 +70,7 @@ where
 
 impl<'a, T> fmt::Debug for Response<'a, T>
 where
-	T: Serialize + ToOwned<Owned = T>,
+	T: Serialize + Clone,
 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(&serde_json::to_string(&self).expect("valid JSON; qed"))
@@ -89,7 +89,7 @@ pub struct Success<'a, T> {
 	pub id: Id<'a>,
 }
 
-impl<'a, T: ToOwned<Owned = T>> TryFrom<Response<'a, T>> for Success<'a, T> {
+impl<'a, T: Clone> TryFrom<Response<'a, T>> for Success<'a, T> {
 	type Error = ErrorObjectOwned;
 
 	fn try_from(rp: Response<'a, T>) -> Result<Self, Self::Error> {
@@ -135,7 +135,7 @@ pub struct SubscriptionPayloadError<'a, T> {
 /// ```
 pub enum ResponsePayload<'a, T>
 where
-	T: ToOwned<Owned = T>,
+	T: Clone,
 {
 	/// Corresponds to successful JSON-RPC response with the field `result`.
 	Result(StdCow<'a, T>),
@@ -143,7 +143,7 @@ where
 	Error(ErrorObject<'a>),
 }
 
-impl<'a, T: ToOwned<Owned = T>> ResponsePayload<'a, T> {
+impl<'a, T: Clone> ResponsePayload<'a, T> {
 	/// Create successful an owned response payload.
 	pub fn result(t: T) -> Self {
 		Self::Result(StdCow::Owned(t))
@@ -165,7 +165,7 @@ impl<'a, T: ToOwned<Owned = T>> ResponsePayload<'a, T> {
 
 impl<'a, T> fmt::Debug for ResponsePayload<'a, T>
 where
-	T: fmt::Debug + ToOwned<Owned = T>,
+	T: fmt::Debug + Clone,
 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_fmt(format_args!("{:?}", self))
@@ -174,7 +174,7 @@ where
 
 impl<'a, T> PartialEq for ResponsePayload<'a, T>
 where
-	T: PartialEq + ToOwned<Owned = T>,
+	T: PartialEq + Clone,
 {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
@@ -205,12 +205,12 @@ impl<'a> From<ErrorCode> for ResponsePayload<'a, ()> {
 
 impl<'de, T> Deserialize<'de> for Response<'de, T>
 where
-	T: Deserialize<'de> + ToOwned<Owned = T>,
+	T: Deserialize<'de> + Clone,
 {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
-		T: Deserialize<'de> + ToOwned<Owned = T>,
+		T: Deserialize<'de> + Clone,
 	{
 		enum Field {
 			Jsonrpc,
@@ -260,7 +260,7 @@ where
 
 		impl<'de, T> serde::de::Visitor<'de> for Visitor<T>
 		where
-			T: Deserialize<'de> + ToOwned<Owned = T> + 'de,
+			T: Deserialize<'de> + Clone + 'de,
 		{
 			type Value = Response<'de, T>;
 
@@ -331,7 +331,7 @@ where
 
 impl<'a, T> Serialize for Response<'a, T>
 where
-	T: Serialize + ToOwned<Owned = T>,
+	T: Serialize + Clone,
 {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where

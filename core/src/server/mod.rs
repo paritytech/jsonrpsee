@@ -51,7 +51,7 @@ use jsonrpsee_types::{ErrorObjectOwned, ResponsePayload};
 /// to the client `response could not be serialized`.
 pub trait IntoResponse {
 	/// Output.
-	type Output: serde::Serialize + ToOwned<Owned = Self::Output>;
+	type Output: serde::Serialize + Clone;
 
 	/// Something that can be converted into a JSON-RPC method call response.
 	fn into_response(self) -> ResponsePayload<'static, Self::Output>;
@@ -59,7 +59,7 @@ pub trait IntoResponse {
 
 impl<T, E: Into<ErrorObjectOwned>> IntoResponse for Result<T, E>
 where
-	T: serde::Serialize + ToOwned<Owned = T>,
+	T: serde::Serialize + Clone,
 {
 	type Output = T;
 
