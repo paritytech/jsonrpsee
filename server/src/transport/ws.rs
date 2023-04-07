@@ -245,7 +245,6 @@ pub(crate) async fn background_task<L: Logger>(
 		..
 	} = svc;
 
-	let (method_executor, method_consumer) = mpsc::unbounded_channel::<MethodOp<L>>();
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
@@ -253,18 +252,6 @@ pub(crate) async fn background_task<L: Logger>(
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval, conn_rx));
-
-	let params = ExecuteParams {
-		conn_id,
-		methods,
-		max_log_length,
-		max_response_body_size,
-		bounded_subscriptions,
-		sink: sink.clone(),
-		id_provider,
-		logger: logger.clone(),
-	};
-	tokio::spawn(method_executor_task(params, method_consumer));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -320,9 +307,18 @@ pub(crate) async fn background_task<L: Logger>(
 		match first_non_whitespace {
 			Some(b'{') => {
 				let data = std::mem::take(&mut data);
-				if method_executor.send(MethodOp::Call { data, sink_permit, start: request_start }).is_err() {
-					break Ok(());
-				}
+				let cmd = MethodOp::Call { data, sink_permit, start: request_start };
+				let params = ExecuteParams {
+					conn_id,
+					methods: methods.clone(),
+					max_log_length,
+					max_response_body_size,
+					bounded_subscriptions: bounded_subscriptions.clone(),
+					sink: sink.clone(),
+					id_provider: id_provider.clone(),
+					logger: logger.clone(),
+				};
+				tokio::spawn(execute_command(cmd, params));
 			}
 			Some(b'[') if !batch_requests_supported => {
 				let response = MethodResponse::error(
@@ -335,9 +331,18 @@ pub(crate) async fn background_task<L: Logger>(
 			Some(b'[') => {
 				// Make sure the following variables are not moved into async closure below.
 				let data = std::mem::take(&mut data);
-				if method_executor.send(MethodOp::Batch { data, sink_permit, start: request_start }).is_err() {
-					break Ok(());
-				}
+				let cmd = MethodOp::Batch { data, sink_permit, start: request_start };
+				let params = ExecuteParams {
+					conn_id,
+					methods: methods.clone(),
+					max_log_length,
+					max_response_body_size,
+					bounded_subscriptions: bounded_subscriptions.clone(),
+					sink: sink.clone(),
+					id_provider: id_provider.clone(),
+					logger: logger.clone(),
+				};
+				tokio::spawn(execute_command(cmd, params));
 			}
 			_ => {
 				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
