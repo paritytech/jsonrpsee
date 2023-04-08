@@ -27,7 +27,6 @@
 //! Utilities for handling async code.
 
 use std::future::Future;
-use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -36,37 +35,27 @@ use futures_util::future::FutureExt;
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
 use jsonrpsee_core::Error;
-use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 
 /// This is a flexible collection of futures that need to be driven to completion
 /// alongside some other future, such as connection handlers that need to be
 /// handled along with a listener for new connections.
-///
-/// In order to `.await` on these futures and drive them to completion, call
-/// `select_with` providing some other future, the result of which you need.
-///
-///
-
-/// This is a glorified select `Future` that will attempt to drive all
-/// connection futures `F` to completion on each `poll`, while also
-/// handling incoming connections.
-pub(crate) struct DriverSelect<'a, S, F> {
-	selector: S,
+pub(crate) struct DriveFutures<'a, S, F> {
+	future: S,
 	futures: &'a mut FuturesUnordered<F>,
 }
 
-impl<'a, S, F> DriverSelect<'a, S, F>
+impl<'a, S, F> DriveFutures<'a, S, F>
 where
 	S: Future + Unpin,
 	F: Future + Unpin,
 {
-	pub(crate) fn new(selector: S, futures: &'a mut FuturesUnordered<F>) -> Self {
-		Self { selector, futures }
+	pub(crate) fn new(future: S, futures: &'a mut FuturesUnordered<F>) -> Self {
+		Self { future, futures }
 	}
 }
 
-impl<'a, S, F> Future for DriverSelect<'a, S, F>
+impl<'a, S, F> Future for DriveFutures<'a, S, F>
 where
 	S: Future + Unpin,
 	F: Future + Unpin,
@@ -76,13 +65,13 @@ where
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		// Wakeup the list of pending futures and just check one item.
+		// Wakeup the list of pending futures and poll just one item.
 		if !this.futures.is_empty() {
-			// don't care about the result, just remove the completed one from list of pending futures.
+			// Don't care about the result, just remove the completed one from list of pending futures.
 			_ = this.futures.poll_next_unpin(cx);
 		}
 
-		this.selector.poll_unpin(cx)
+		this.future.poll_unpin(cx)
 	}
 }
 
@@ -100,60 +89,6 @@ impl StopHandle {
 	/// it consumes the stop handle.
 	pub(crate) async fn shutdown(mut self) {
 		let _ = self.0.changed().await;
-	}
-
-	pub(crate) fn shutdown_requested(&self) -> bool {
-		self.0.has_changed().unwrap_or(true)
-	}
-}
-
-/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
-pub(crate) struct Monitored<'a, F> {
-	future: F,
-	stop_monitor: &'a StopHandle,
-}
-
-impl<'a, F> Monitored<'a, F> {
-	pub(crate) fn new(future: F, stop_monitor: &'a StopHandle) -> Self {
-		Monitored { future, stop_monitor }
-	}
-}
-
-pub(crate) enum MonitoredError<E> {
-	Shutdown,
-	Selector(E),
-}
-
-pub(crate) struct Incoming(pub(crate) TcpListener);
-
-impl<'a> Future for Monitored<'a, Incoming> {
-	type Output = Result<(TcpStream, SocketAddr), MonitoredError<std::io::Error>>;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
-		}
-
-		this.future.0.poll_accept(cx).map_err(MonitoredError::Selector)
-	}
-}
-
-impl<'a, 'f, F, T, E> Future for Monitored<'a, Pin<&'f mut F>>
-where
-	F: Future<Output = Result<T, E>>,
-{
-	type Output = Result<T, MonitoredError<E>>;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
-		}
-
-		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
 	}
 }
 

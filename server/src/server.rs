@@ -32,11 +32,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, Incoming, Monitored, MonitoredError, ServerHandle, StopHandle};
+use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::logger::{Logger, TransportProtocol};
 use crate::transport::{http, ws};
 
-use futures_util::future::FutureExt;
+use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
 use futures_util::stream::{FuturesUnordered, StreamExt};
@@ -128,13 +128,15 @@ where
 
 		let mut id: u32 = 0;
 		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
-		let mut monitored = Monitored::new(Incoming(self.listener), &stop_handle);
+		let listener = self.listener;
 
 		let mut connections = FuturesUnordered::new();
+		let stopped = stop_handle.clone().shutdown();
+		tokio::pin!(stopped);
 
 		loop {
-			match (&mut monitored).await {
-				Ok((socket, remote_addr)) => {
+			match try_accept_conn(&listener, stopped).await {
+				AcceptConnection::Established { socket, remote_addr, stop } => {
 					let data = ProcessConnection {
 						remote_addr,
 						methods: methods.clone(),
@@ -156,12 +158,14 @@ where
 					};
 					process_connection(&self.service_builder, &connection_guard, data, socket, &mut connections);
 					id = id.wrapping_add(1);
+					stopped = stop;
 				}
-				Err(MonitoredError::Shutdown) => {
+				AcceptConnection::Shutdown => {
 					break;
 				}
-				Err(MonitoredError::Selector(err)) => {
-					tracing::error!("Error while awaiting a new connection: {:?}", err);
+				AcceptConnection::Err((e, stop)) => {
+					tracing::error!("Error while awaiting a new connection: {:?}", e);
+					stopped = stop;
 				}
 			}
 		}
@@ -803,5 +807,27 @@ where
 		_ = stop_handle.shutdown() => {
 			conn.graceful_shutdown();
 		}
+	}
+}
+
+enum AcceptConnection<S> {
+	Shutdown,
+	Established { socket: TcpStream, remote_addr: SocketAddr, stop: S },
+	Err((std::io::Error, S)),
+}
+
+async fn try_accept_conn<S>(listener: &TcpListener, stopped: S) -> AcceptConnection<S>
+where
+	S: Future + Unpin,
+{
+	let accept = listener.accept();
+	tokio::pin!(accept);
+
+	match futures_util::future::select(accept, stopped).await {
+		Either::Left((res, stop)) => match res {
+			Ok((socket, remote_addr)) => AcceptConnection::Established { socket, remote_addr, stop },
+			Err(e) => AcceptConnection::Err((e, stop)),
+		},
+		Either::Right(_) => AcceptConnection::Shutdown,
 	}
 }
