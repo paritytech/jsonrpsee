@@ -1,19 +1,20 @@
 use std::time::Duration;
 
-use crate::future::{FutureDriver, StopHandle};
+use crate::future::{DriverSelect, Monitored, MonitoredError, StopHandle};
 use crate::logger::{self, Logger, TransportProtocol};
 use crate::server::ServiceData;
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::FuturesOrdered;
+use futures_util::stream::{FuturesOrdered, FuturesUnordered};
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse, MethodSink,
 };
 use jsonrpsee_core::server::{
-	BoundedSubscriptions, CallOrSubscription, MethodCallback, MethodSinkPermit, Methods, SubscriptionState,
+	BoundedSubscriptions, CallOrSubscription, DisconnectError, MethodCallback, MethodSinkPermit, Methods,
+	SubscriptionState,
 };
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
@@ -253,31 +254,20 @@ pub(crate) async fn background_task<L: Logger>(
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
-	let mut method_executor = FutureDriver::default();
+	let mut tasks = FuturesUnordered::new();
 	let logger = &logger;
-	let stopped = stop_handle.shutdown();
-
-	tokio::pin!(stopped);
 
 	let result = loop {
 		data.clear();
 
-		let sink_permit = match wait_for_permit(&sink, &mut method_executor, stopped).await {
-			Some((p, s)) => {
-				stopped = s;
-				p
-			}
-			None => break Ok(()),
+		let Ok(sink_permit) = wait_for_permit(&sink, &mut tasks, &stop_handle).await else {
+			break Ok(())
 		};
 
-		match try_recv(&mut receiver, &mut data, &mut method_executor, stopped).await {
-			Receive::Shutdown => break Ok(()),
-			Receive::Ok(stop) => {
-				stopped = stop;
-			}
-			Receive::Err(err, stop) => {
-				stopped = stop;
-
+		match try_recv(&mut receiver, &mut data, &mut tasks, &stop_handle).await {
+			Ok(_) => (),
+			Err(MonitoredError::Shutdown) => break Ok(()),
+			Err(MonitoredError::Selector(err)) => {
 				match err {
 					SokettoError::Closed => {
 						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
@@ -340,7 +330,7 @@ pub(crate) async fn background_task<L: Logger>(
 				}
 				.boxed();
 
-				method_executor.add(fut);
+				tasks.push(fut);
 			}
 			Some(b'[') if !batch_requests_supported => {
 				let response = MethodResponse::error(
@@ -380,9 +370,10 @@ pub(crate) async fn background_task<L: Logger>(
 						logger.on_response(&response, request_start, TransportProtocol::WebSocket);
 						sink_permit.send_raw(response);
 					}
-				};
+				}
+				.boxed();
 
-				method_executor.add(Box::pin(fut));
+				tasks.push(fut);
 			}
 			_ => {
 				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
@@ -395,7 +386,7 @@ pub(crate) async fn background_task<L: Logger>(
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	method_executor.await;
+	while tasks.next().await.is_some() {}
 
 	let _ = conn_tx.send(());
 	drop(conn);
@@ -466,21 +457,14 @@ async fn send_task(
 	rx.close();
 }
 
-enum Receive<S> {
-	Shutdown,
-	Err(SokettoError, S),
-	Ok(S),
-}
-
-async fn try_recv<F, S>(
+async fn try_recv<F>(
 	receiver: &mut Receiver,
 	data: &mut Vec<u8>,
-	method_executor: &mut FutureDriver<F>,
-	stopped: S,
-) -> Receive<S>
+	futs: &mut FuturesUnordered<F>,
+	stop: &StopHandle,
+) -> Result<soketto::Data, MonitoredError<SokettoError>>
 where
 	F: Future + Unpin,
-	S: Future<Output = ()> + Unpin,
 {
 	let receive = async {
 		// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
@@ -497,14 +481,11 @@ where
 		}
 	};
 
-	let receive = method_executor.select_with(receive);
 	tokio::pin!(receive);
+	let m = Monitored::new(receive, stop);
+	let receive = DriverSelect::new(m, futs);
 
-	match futures_util::future::select(receive, stopped).await {
-		Either::Left((Ok(_), s)) => Receive::Ok(s),
-		Either::Left((Err(e), s)) => Receive::Err(e, s),
-		Either::Right(_) => Receive::Shutdown,
-	}
+	receive.await
 }
 
 // Wait until there is a slot in the bounded channel which means that
@@ -514,21 +495,16 @@ where
 // otherwise the socket will not be read again.
 //
 // Fails if the connection was closed or if the server was stopped,
-async fn wait_for_permit<'a, F, S>(
+async fn wait_for_permit<'a, F>(
 	sink: &'a MethodSink,
-	method_executor: &mut FutureDriver<F>,
-	stopped: S,
-) -> Option<(MethodSinkPermit<'a>, S)>
+	futs: &mut FuturesUnordered<F>,
+	stop: &StopHandle,
+) -> Result<MethodSinkPermit<'a>, MonitoredError<DisconnectError>>
 where
 	F: Future + Unpin,
-	S: Future<Output = ()> + Unpin,
 {
-	let sink_permit_fut = method_executor.select_with(sink.reserve());
-	tokio::pin!(sink_permit_fut);
+	let permit = sink.reserve();
+	tokio::pin!(permit);
 
-	match futures_util::future::select(sink_permit_fut, stopped).await {
-		Either::Left((Ok(permit), s)) => Some((permit, s)),
-		// The sink or stopped were triggered, just terminate.
-		_ => None,
-	}
+	DriverSelect::new(Monitored::new(permit, stop), futs).await
 }

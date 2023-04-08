@@ -321,6 +321,9 @@ fn ws_concurrent_conn_calls(
 	request: RequestType,
 	concurrent_conns: &[usize],
 ) {
+	#[cfg(feature = "tokio_unstable")]
+	console_subscriber::init();
+
 	let fast_call = request.methods()[0];
 	assert!(fast_call.starts_with("fast_call"));
 
