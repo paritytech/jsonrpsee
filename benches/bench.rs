@@ -235,11 +235,21 @@ impl RequestBencher for AsyncBencher {
 }
 
 fn round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl ClientT>, name: &str, request: RequestType) {
-	for method in request.methods() {
-		let bench_name = format!("{}/{}", name, method);
+	for &size in [3, 9, 27, 81, 243, 729].iter() {
+		let bench_name = format!("{name}/{size}");
+
 		crit.bench_function(&request.group_name(&bench_name), |b| {
 			b.to_async(rt).iter(|| async {
-				black_box(client.request::<String>(method, None).await.unwrap());
+				let futs = FuturesUnordered::new();
+
+				// Make `n` concurrent calls by 1/3 slow calls, 1/3 fast calls and 1/3 memory intense calls.
+				for _ in 0..(size / 3) {
+					for method in request.methods() {
+						futs.push(client.request::<String>(method, None));
+					}
+				}
+
+				join_all(futs).await;
 			})
 		});
 	}
@@ -321,9 +331,6 @@ fn ws_concurrent_conn_calls(
 	request: RequestType,
 	concurrent_conns: &[usize],
 ) {
-	#[cfg(feature = "tokio_unstable")]
-	console_subscriber::init();
-
 	let fast_call = request.methods()[0];
 	assert!(fast_call.starts_with("fast_call"));
 
