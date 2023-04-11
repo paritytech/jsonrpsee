@@ -7,7 +7,7 @@ use crate::server::ServiceData;
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::{FuturesOrdered, FuturesUnordered};
+use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
@@ -26,7 +26,7 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
-use tokio::sync::mpsc::UnboundedReceiver;
+
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::Compat;
@@ -306,19 +306,21 @@ pub(crate) async fn background_task<L: Logger>(
 
 		match first_non_whitespace {
 			Some(b'{') => {
-				let data = std::mem::take(&mut data);
-				let cmd = MethodOp::Call { data, sink_permit, start: request_start };
 				let params = ExecuteParams {
 					conn_id,
 					methods: methods.clone(),
 					max_log_length,
 					max_response_body_size,
 					bounded_subscriptions: bounded_subscriptions.clone(),
+					request_start,
 					sink: sink.clone(),
+					sink_permit,
 					id_provider: id_provider.clone(),
 					logger: logger.clone(),
+					data: std::mem::take(&mut data),
+					command: MethodOp::Call,
 				};
-				tokio::spawn(execute_command(cmd, params));
+				tokio::spawn(execute_command(params));
 			}
 			Some(b'[') if !batch_requests_supported => {
 				let response = MethodResponse::error(
@@ -329,20 +331,21 @@ pub(crate) async fn background_task<L: Logger>(
 				sink_permit.send_raw(response.result);
 			}
 			Some(b'[') => {
-				// Make sure the following variables are not moved into async closure below.
-				let data = std::mem::take(&mut data);
-				let cmd = MethodOp::Batch { data, sink_permit, start: request_start };
 				let params = ExecuteParams {
 					conn_id,
 					methods: methods.clone(),
 					max_log_length,
 					max_response_body_size,
 					bounded_subscriptions: bounded_subscriptions.clone(),
+					request_start,
 					sink: sink.clone(),
+					sink_permit,
 					id_provider: id_provider.clone(),
 					logger: logger.clone(),
+					data: std::mem::take(&mut data),
+					command: MethodOp::Batch,
 				};
-				tokio::spawn(execute_command(cmd, params));
+				tokio::spawn(execute_command(params));
 			}
 			_ => {
 				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
@@ -467,113 +470,75 @@ where
 	}
 }
 
-enum MethodOp<L: Logger> {
-	Call { data: Vec<u8>, sink_permit: MethodSinkPermit, start: L::Instant },
-	Batch { data: Vec<u8>, sink_permit: MethodSinkPermit, start: L::Instant },
+enum MethodOp {
+	Call,
+	Batch,
 }
 
-#[derive(Clone)]
 struct ExecuteParams<L: Logger> {
-	conn_id: u32,
 	bounded_subscriptions: BoundedSubscriptions,
+	command: MethodOp,
+	conn_id: u32,
+	data: Vec<u8>,
 	id_provider: Arc<dyn IdProvider>,
 	methods: Methods,
 	max_response_body_size: u32,
 	max_log_length: u32,
 	sink: MethodSink,
+	sink_permit: MethodSinkPermit,
 	logger: L,
+	request_start: L::Instant,
 }
 
-async fn method_executor_task<L: Logger>(params: ExecuteParams<L>, mut next_task: UnboundedReceiver<MethodOp<L>>) {
-	let mut tasks = FuturesUnordered::new();
-
-	loop {
-		// This is way to not poll `FuturesUnordered` when it's empty to waste CPU cycles.
-		if tasks.is_empty() {
-			let Some(command) = next_task.recv().await else {
-				return;
-			};
-
-			tasks.push(execute_command(command, params.clone()));
-		} else {
-			tokio::select! {
-				_ = tasks.next() => {},
-				task = next_task.recv() => {
-					let Some(command) = task else {
-						return;
-					};
-
-					tasks.push(execute_command(command, params.clone()));
-				}
-			}
-		}
-	}
-}
-
-async fn execute_command<L: Logger>(command: MethodOp<L>, params: ExecuteParams<L>) {
+async fn execute_command<L: Logger>(params: ExecuteParams<L>) {
 	let ExecuteParams {
 		conn_id,
+		command,
+		data,
 		sink,
+		sink_permit,
 		max_response_body_size,
 		max_log_length,
 		methods,
 		id_provider,
 		bounded_subscriptions,
 		logger,
+		request_start,
 	} = params;
 
-	match command {
-		MethodOp::Call { data, sink_permit, start } => {
-			let call = CallData {
-				conn_id: conn_id as usize,
-				bounded_subscriptions,
-				max_response_body_size,
-				max_log_length,
-				methods: &methods,
-				sink: &sink,
-				id_provider: &*id_provider,
-				logger: &logger,
-				request_start: start,
-			};
+	let call_data = CallData {
+		conn_id: conn_id as usize,
+		bounded_subscriptions,
+		max_response_body_size,
+		max_log_length,
+		methods: &methods,
+		sink: &sink,
+		id_provider: &*id_provider,
+		logger: &logger,
+		request_start,
+	};
 
-			if let Some(rp) = process_single_request(data, call).await {
+	match command {
+		MethodOp::Call => {
+			if let Some(rp) = process_single_request(data, call_data).await {
 				match rp {
 					CallOrSubscription::Subscription(r) => {
-						logger.on_response(&r.result, start, TransportProtocol::WebSocket);
+						logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 					}
 
 					CallOrSubscription::Call(r) => {
-						logger.on_response(&r.result, start, TransportProtocol::WebSocket);
+						logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 						sink_permit.send_raw(r.result);
 					}
 				}
 			}
 		}
-		MethodOp::Batch { data, sink_permit, start } => {
-			let methods = methods.clone();
-			let logger = logger.clone();
-			let id_provider = id_provider.clone();
-			let bounded_subscriptions = bounded_subscriptions.clone();
-
-			let response = process_batch_request(Batch {
-				data,
-				call: CallData {
-					conn_id: conn_id as usize,
-					bounded_subscriptions,
-					max_response_body_size,
-					max_log_length,
-					methods: &methods,
-					sink: &sink,
-					id_provider: &*id_provider,
-					logger: &logger,
-					request_start: start,
-				},
-			})
-			.await;
+		MethodOp::Batch => {
+			let response = process_batch_request(Batch { data, call: call_data }).await;
 
 			if let Some(response) = response {
 				tx_log_from_str(&response, max_log_length);
-				logger.on_response(&response, start, TransportProtocol::WebSocket);
+				logger.on_response(&response, request_start, TransportProtocol::WebSocket);
 				sink_permit.send_raw(response);
 			}
 		}
