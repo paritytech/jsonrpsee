@@ -40,27 +40,27 @@ use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 /// This is a flexible collection of futures that need to be driven to completion
 /// alongside some other future, such as connection handlers that need to be
 /// handled along with a listener for new connections.
-pub(crate) struct DriveFutures<'a, S, F> {
-	future: S,
-	futures: &'a mut FuturesUnordered<F>,
+pub(crate) struct DriveFutures<'a, Fut1, Fut2> {
+	future: Fut1,
+	futures: &'a mut FuturesUnordered<Fut2>,
 }
 
-impl<'a, S, F> DriveFutures<'a, S, F>
+impl<'a, Fut1, Fut2> DriveFutures<'a, Fut1, Fut2>
 where
-	S: Future + Unpin,
-	F: Future + Unpin,
+	Fut1: Future + Unpin,
+	Fut2: Future + Unpin,
 {
-	pub(crate) fn new(future: S, futures: &'a mut FuturesUnordered<F>) -> Self {
+	pub(crate) fn new(future: Fut1, futures: &'a mut FuturesUnordered<Fut2>) -> Self {
 		Self { future, futures }
 	}
 }
 
-impl<'a, S, F> Future for DriveFutures<'a, S, F>
+impl<'a, Fut1, Fut2> Future for DriveFutures<'a, Fut1, Fut2>
 where
-	S: Future + Unpin,
-	F: Future + Unpin,
+	Fut1: Future + Unpin,
+	Fut2: Future + Unpin,
 {
-	type Output = S::Output;
+	type Output = Fut1::Output;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);

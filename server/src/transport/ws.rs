@@ -253,7 +253,7 @@ pub(crate) async fn background_task<L: Logger>(
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
-	let mut tasks = FuturesUnordered::new();
+	let mut method_executor = FuturesUnordered::new();
 	let logger = &logger;
 	let stopped = stop_handle.shutdown();
 
@@ -262,7 +262,7 @@ pub(crate) async fn background_task<L: Logger>(
 	let result = loop {
 		data.clear();
 
-		let sink_permit = match wait_for_permit(&sink, &mut tasks, stopped).await {
+		let sink_permit = match wait_for_permit(&sink, &mut method_executor, stopped).await {
 			Some((p, s)) => {
 				stopped = s;
 				p
@@ -270,7 +270,7 @@ pub(crate) async fn background_task<L: Logger>(
 			None => break Ok(()),
 		};
 
-		match try_recv(&mut receiver, &mut data, &mut tasks, stopped).await {
+		match try_recv(&mut receiver, &mut data, &mut method_executor, stopped).await {
 			Receive::Shutdown => break Ok(()),
 			Receive::Ok(stop) => {
 				stopped = stop;
@@ -340,7 +340,7 @@ pub(crate) async fn background_task<L: Logger>(
 				}
 				.boxed();
 
-				tasks.push(fut);
+				method_executor.push(fut);
 			}
 			Some(b'[') if !batch_requests_supported => {
 				let response = MethodResponse::error(
@@ -383,7 +383,7 @@ pub(crate) async fn background_task<L: Logger>(
 				}
 				.boxed();
 
-				tasks.push(fut);
+				method_executor.push(fut);
 			}
 			_ => {
 				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
@@ -396,7 +396,7 @@ pub(crate) async fn background_task<L: Logger>(
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	while tasks.next().await.is_some() {}
+	while method_executor.next().await.is_some() {}
 
 	let _ = conn_tx.send(());
 	drop(conn);
@@ -526,9 +526,7 @@ where
 	let sink_permit_fut = sink.reserve();
 	tokio::pin!(sink_permit_fut);
 
-	let fut = DriveFutures::new(sink_permit_fut, method_executor);
-
-	match futures_util::future::select(fut, stopped).await {
+	match futures_util::future::select(DriveFutures::new(sink_permit_fut, method_executor), stopped).await {
 		Either::Left((Ok(permit), s)) => Some((permit, s)),
 		// The sink or stopped were triggered, just terminate.
 		_ => None,
