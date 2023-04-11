@@ -82,6 +82,28 @@ where
 	}
 }
 
+impl<T> IntoResponse for Vec<T>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = Vec<T>;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
+	}
+}
+
+impl<T, const N: usize> IntoResponse for [T; N]
+where
+	[T; N]: serde::Serialize + Clone,
+{
+	type Output = [T; N];
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
+	}
+}
+
 macro_rules! impl_into_response {
 	($($n:ty),*) => {
 		$(
