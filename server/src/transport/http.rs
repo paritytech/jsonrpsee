@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::logger::{self, Logger, TransportProtocol};
+use crate::server::BatchRequestConfig;
 
 use futures_util::future::Either;
 use futures_util::stream::{FuturesOrdered, StreamExt};
@@ -13,7 +14,9 @@ use jsonrpsee_core::server::helpers::{batch_response_error, prepare_error, Batch
 use jsonrpsee_core::server::{MethodCallback, Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::JsonRawValue;
-use jsonrpsee_types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
+use jsonrpsee_types::error::{
+	reject_too_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
+};
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use tokio::sync::OwnedSemaphorePermit;
 use tracing::instrument;
@@ -53,7 +56,7 @@ pub(crate) struct ProcessValidatedRequest<'a, L: Logger> {
 	pub(crate) max_request_body_size: u32,
 	pub(crate) max_response_body_size: u32,
 	pub(crate) max_log_length: u32,
-	pub(crate) batch_requests_supported: bool,
+	pub(crate) batch_requests_config: BatchRequestConfig,
 	pub(crate) request_start: L::Instant,
 }
 
@@ -68,7 +71,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 		max_request_body_size,
 		max_response_body_size,
 		max_log_length,
-		batch_requests_supported,
+		batch_requests_config,
 		request_start,
 	} = input;
 
@@ -92,17 +95,21 @@ pub(crate) async fn process_validated_request<L: Logger>(
 		logger.on_response(&response.result, request_start, TransportProtocol::Http);
 		response::ok_response(response.result)
 	}
-	// Batch of requests or notifications
-	else if !batch_requests_supported {
-		let err = MethodResponse::error(
-			Id::Null,
-			ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
-		);
-		logger.on_response(&err.result, request_start, TransportProtocol::Http);
-		response::ok_response(err.result)
-	}
-	// Batch of requests or notifications
+	// Batch of requests.
 	else {
+		let limit = match batch_requests_config {
+			BatchRequestConfig::Disabled => {
+				let response = MethodResponse::error(
+					Id::Null,
+					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+				);
+				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
+				return response::ok_response(response.result);
+			}
+			BatchRequestConfig::Limit(limit) => limit as usize,
+			BatchRequestConfig::Unlimited => usize::MAX,
+		};
+
 		let response = process_batch_request(Batch {
 			data: body,
 			call: CallData {
@@ -113,6 +120,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 				max_log_length,
 				request_start,
 			},
+			max_len: limit,
 		})
 		.await;
 		logger.on_response(&response, request_start, TransportProtocol::Http);
@@ -124,6 +132,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 pub(crate) struct Batch<'a, L: Logger> {
 	data: Vec<u8>,
 	call: CallData<'a, L>,
+	max_len: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -144,9 +153,13 @@ pub(crate) async fn process_batch_request<L>(b: Batch<'_, L>) -> String
 where
 	L: Logger,
 {
-	let Batch { data, call } = b;
+	let Batch { data, call, max_len } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
+		if batch.len() > max_len {
+			return batch_response_error(Id::Null, reject_too_batch_request(max_len));
+		}
+
 		let mut got_notif = false;
 		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 
@@ -261,7 +274,7 @@ pub(crate) struct HandleRequest<L: Logger> {
 	pub(crate) max_request_body_size: u32,
 	pub(crate) max_response_body_size: u32,
 	pub(crate) max_log_length: u32,
-	pub(crate) batch_requests_supported: bool,
+	pub(crate) batch_requests_config: BatchRequestConfig,
 	pub(crate) logger: L,
 	pub(crate) conn: Arc<OwnedSemaphorePermit>,
 	pub(crate) remote_addr: SocketAddr,
@@ -276,7 +289,7 @@ pub(crate) async fn handle_request<L: Logger>(
 		max_request_body_size,
 		max_response_body_size,
 		max_log_length,
-		batch_requests_supported,
+		batch_requests_config,
 		logger,
 		conn,
 		remote_addr,
@@ -293,7 +306,7 @@ pub(crate) async fn handle_request<L: Logger>(
 				max_request_body_size,
 				max_response_body_size,
 				max_log_length,
-				batch_requests_supported,
+				batch_requests_config,
 				logger: &logger,
 				request_start,
 			})

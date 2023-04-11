@@ -26,6 +26,7 @@
 
 use std::net::SocketAddr;
 
+use crate::server::BatchRequestConfig;
 use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee_core::Error;
@@ -505,7 +506,8 @@ async fn can_set_the_max_response_size_to_batch() {
 async fn disabled_batches() {
 	let addr = "127.0.0.1:0";
 	// Disable batches support.
-	let server = ServerBuilder::default().batch_requests_supported(false).build(addr).await.unwrap();
+	let server =
+		ServerBuilder::default().set_batch_request_config(BatchRequestConfig::Disabled).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -519,6 +521,30 @@ async fn disabled_batches() {
 	]"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.body, batches_not_supported());
+
+	handle.stop().unwrap();
+	handle.stopped().await;
+}
+
+#[tokio::test]
+async fn batch_limit_works() {
+	let addr = "127.0.0.1:0";
+	// Disable batches support.
+	let server =
+		ServerBuilder::default().set_batch_request_config(BatchRequestConfig::Limit(1)).build(addr).await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
+	let addr = server.local_addr().unwrap();
+	let uri = to_http_uri(addr);
+	let handle = server.start(module).unwrap();
+
+	// Send a valid batch.
+	let req = r#"[
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1},
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":2}
+	]"#;
+	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.body, batches_too_large(1));
 
 	handle.stop().unwrap();
 	handle.stopped().await;

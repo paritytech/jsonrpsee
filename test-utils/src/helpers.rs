@@ -81,6 +81,12 @@ pub fn batches_not_supported() -> String {
 	r#"{"jsonrpc":"2.0","error":{"code":-32005,"message":"Batched requests are not supported by this server"},"id":null}"#.into()
 }
 
+pub fn batches_too_large(max_limit: usize) -> String {
+	format!(
+		r#"{{"jsonrpc":"2.0","error":{{"code":-32010,"message":"The batch request was too large","data":"Exceeded max limit of {max_limit}"}},"id":null}}"#
+	)
+}
+
 pub fn oversized_response(id: Id, max_limit: u32) -> String {
 	format!(
 		r#"{{"jsonrpc":"2.0","error":{{"code":-32008,"message":"Response is too big","data":"Exceeded max limit of {}"}},"id":{}}}"#,
