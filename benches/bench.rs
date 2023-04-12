@@ -235,7 +235,7 @@ impl RequestBencher for AsyncBencher {
 }
 
 fn round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl ClientT>, name: &str, request: RequestType) {
-	for &size in [3, 9, 27, 81, 243, 729, 2187].iter() {
+	for &size in [3, 9, 27, 81, 243, 729].iter() {
 		let bench_name = format!("{name}/{size}");
 
 		crit.bench_function(&request.group_name(&bench_name), |b| {

@@ -258,7 +258,7 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
-async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + 'static>(
+async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> Result<BatchResponse<T>, Error> {

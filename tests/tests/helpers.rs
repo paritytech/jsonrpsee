@@ -30,7 +30,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::core::Error;
+use jsonrpsee::core::{Error, RpcResult};
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{
 	AllowHosts, PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
@@ -47,7 +47,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+	module.register_method("say_hello", |_, _| "hello").unwrap();
 
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async move {
@@ -154,7 +154,7 @@ pub async fn server_with_subscription() -> SocketAddr {
 pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+	module.register_method("say_hello", |_, _| "hello").unwrap();
 
 	module
 		.register_async_method("slow_hello", |_, _| async {
@@ -163,7 +163,9 @@ pub async fn server() -> SocketAddr {
 		})
 		.unwrap();
 
-	module.register_async_method("err", |_, _| async { Err::<(), _>(Error::Custom("err".to_string())) }).unwrap();
+	module
+		.register_async_method::<RpcResult<()>, _, _>("err", |_, _| async { Err(Error::Custom("err".to_string())) })
+		.unwrap();
 
 	let addr = server.local_addr().unwrap();
 
@@ -222,10 +224,10 @@ pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLay
 		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
-	module.register_method("notif", |_, _| Ok("")).unwrap();
+	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("notif", |_, _| "").unwrap();
 
-	module.register_method("system_health", |_, _| Ok(serde_json::json!({ "health": true }))).unwrap();
+	module.register_method("system_health", |_, _| RpcResult::Ok(serde_json::json!({ "health": true }))).unwrap();
 
 	let handle = server.start(module).unwrap();
 	(addr, handle)
