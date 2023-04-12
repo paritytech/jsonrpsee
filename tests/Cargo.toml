@@ -3,8 +3,8 @@ name = "jsonrpsee-integration-tests"
 version = "0.16.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Integration tests for jsonrpsee"
-edition = "2021"
-license = "MIT"
+edition.workspace = true
+license.workspace = true
 publish = false
 
 [dev-dependencies]

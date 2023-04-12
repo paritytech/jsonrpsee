@@ -1,7 +1,8 @@
 [package]
 name = "wasm-test"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+license.workspace = true
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.24"

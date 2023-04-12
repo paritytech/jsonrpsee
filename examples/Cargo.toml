@@ -3,7 +3,8 @@ name = "jsonrpsee-examples"
 version = "0.16.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Examples for jsonrpsee"
-edition = "2021"
+edition.workspace = true
+license.workspace = true
 publish = false
 
 [dev-dependencies]

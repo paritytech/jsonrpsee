@@ -1,13 +1,17 @@
 [package]
 name = "jsonrpsee-wasm-client"
+description = "JSON-RPC WASM client"
 version = "0.16.2"
-authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
-description = "WASM client for JSON-RPC"
-edition = "2021"
-license = "MIT"
-repository = "https://github.com/paritytech/jsonrpsee"
-homepage = "https://github.com/paritytech/jsonrpsee"
-documentation = "https://docs.rs/jsonrpsee-wasm-client"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+readme.workspace = true
+publish = true
 
 [dependencies]
 jsonrpsee-types = { path = "../../types", version = "0.16.2" }
