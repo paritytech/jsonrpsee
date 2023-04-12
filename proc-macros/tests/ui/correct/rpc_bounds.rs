@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, RpcResult};
+use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::ws_client::*;
@@ -26,17 +26,79 @@ pub trait MyRpcC<Conf: Config> {
 }
 
 /// Server only RPC.
-#[rpc(server, namespace = "foo", server_bounds(Conf::Hash: jsonrpsee::core::Serialize))]
+#[rpc(server, namespace = "foo", server_bounds(Conf::Hash: jsonrpsee::core::Serialize + Clone))]
 pub trait MyRpcS<Conf: Config> {
 	#[method(name = "bar")]
 	fn method(&self) -> RpcResult<Conf::Hash>;
 }
 
 /// Client and server RPC.
-#[rpc(server, client, namespace = "foo", client_bounds(Conf::Hash: jsonrpsee::core::DeserializeOwned), server_bounds(Conf::Hash: jsonrpsee::core::Serialize))]
+#[rpc(server, client, namespace = "foo", client_bounds(Conf::Hash: jsonrpsee::core::DeserializeOwned), server_bounds(Conf::Hash: jsonrpsee::core::Serialize + Clone))]
 pub trait MyRpcSC<Conf: Config> {
 	#[method(name = "bar")]
 	fn method(&self) -> RpcResult<Conf::Hash>;
+}
+
+/// Trait to ensure that the trait bounds are correct.
+#[rpc(client, server, namespace = "generic_call")]
+pub trait OnlyGenericCall<I, R> {
+	#[method(name = "getHeader")]
+	fn call(&self, input: I) -> RpcResult<R>;
+}
+
+/// Trait to ensure that the trait bounds are correct.
+#[rpc(client, server, namespace = "generic_sub")]
+pub trait OnlyGenericSubscription<Input, R> {
+	/// Get header of a relay chain block.
+	#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
+	async fn sub(&self, hash: Input) -> SubscriptionResult;
+}
+
+/// Trait to ensure that the trait bounds are correct.
+#[rpc(client, server, namespace = "generic_with_where_clause")]
+pub trait GenericWhereClause<I, R>
+where
+	I: std::fmt::Debug,
+	R: Copy + Clone,
+{
+	#[method(name = "getHeader")]
+	fn call(&self, input: I) -> RpcResult<R>;
+}
+
+/// Trait to ensure that the trait bounds are correct.
+#[rpc(client, server, namespace = "generic_with_where_clause")]
+pub trait GenericWhereClauseWithTypeBoundsToo<I: Copy + Clone, R>
+where
+	I: std::fmt::Debug,
+	R: Copy + Clone,
+{
+	#[method(name = "getHeader")]
+	fn call(&self, input: I) -> RpcResult<R>;
+}
+
+#[rpc(client, server, namespace = "chain")]
+pub trait ChainApi<Number, Hash, Header, SignedBlock> {
+	/// Get header of a relay chain block.
+	#[method(name = "getHeader")]
+	fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
+
+	/// Get header and body of a relay chain block.
+	#[method(name = "getBlock")]
+	async fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
+
+	/// Get hash of the n-th block in the canon chain.
+	///
+	/// By default returns latest block hash.
+	#[method(name = "getBlockHash")]
+	fn block_hash(&self, hash: Hash) -> RpcResult<Option<Hash>>;
+
+	/// Get hash of the last finalized block in the canon chain.
+	#[method(name = "getFinalizedHead")]
+	fn finalized_head(&self) -> RpcResult<Hash>;
+
+	/// All head subscription
+	#[subscription(name = "subscribeAllHeads", item = Header)]
+	async fn subscribe_all_heads(&self, hash: Hash) -> SubscriptionResult;
 }
 
 /// Implementation for the `MyRpcS` trait (server only).

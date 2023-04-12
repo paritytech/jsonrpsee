@@ -15,7 +15,7 @@ use jsonrpsee_core::server::{MethodCallback, Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::JsonRawValue;
 use jsonrpsee_types::error::{
-	reject_too_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
+	reject_too_big_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
 };
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use tokio::sync::OwnedSemaphorePermit;
@@ -157,7 +157,7 @@ where
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
 		if batch.len() > max_len {
-			return batch_response_error(Id::Null, reject_too_batch_request(max_len));
+			return batch_response_error(Id::Null, reject_too_big_batch_request(max_len));
 		}
 
 		let mut got_notif = false;
@@ -324,16 +324,17 @@ pub(crate) async fn handle_request<L: Logger>(
 }
 
 pub(crate) mod response {
-	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode, ErrorResponse};
-	use jsonrpsee_types::Id;
+	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
+	use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload};
 
 	const JSON: &str = "application/json; charset=utf-8";
 	const TEXT: &str = "text/plain";
 
 	/// Create a response for json internal error.
 	pub(crate) fn internal_error() -> hyper::Response<hyper::Body> {
-		let error = serde_json::to_string(&ErrorResponse::borrowed(ErrorCode::InternalError.into(), Id::Null))
-			.expect("built from known-good data; qed");
+		let err = ResponsePayload::error(ErrorObjectOwned::from(ErrorCode::InternalError));
+		let rp = Response::new(err, Id::Null);
+		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
 		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
 	}
@@ -354,16 +355,17 @@ pub(crate) mod response {
 
 	/// Create a json response for oversized requests (413)
 	pub(crate) fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
-		let error = serde_json::to_string(&ErrorResponse::borrowed(reject_too_big_request(limit), Id::Null))
-			.expect("built from known-good data; qed");
+		let err = ResponsePayload::error(reject_too_big_request(limit));
+		let rp = Response::new(err, Id::Null);
+		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
 		from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, error, JSON)
 	}
 
 	/// Create a json response for empty or malformed requests (400)
 	pub(crate) fn malformed() -> hyper::Response<hyper::Body> {
-		let error = serde_json::to_string(&ErrorResponse::borrowed(ErrorCode::ParseError.into(), Id::Null))
-			.expect("built from known-good data; qed");
+		let rp = Response::new(ErrorCode::ParseError.into(), Id::Null);
+		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
 		from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
 	}

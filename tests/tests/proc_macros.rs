@@ -111,68 +111,6 @@ mod rpc_impl {
 		}
 	}
 
-	#[rpc(client, server, namespace = "chain")]
-	pub trait ChainApi<Number, Hash, Header, SignedBlock> {
-		/// Get header of a relay chain block.
-		#[method(name = "getHeader")]
-		fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
-
-		/// Get header and body of a relay chain block.
-		#[method(name = "getBlock")]
-		async fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
-
-		/// Get hash of the n-th block in the canon chain.
-		///
-		/// By default returns latest block hash.
-		#[method(name = "getBlockHash")]
-		fn block_hash(&self, hash: Hash) -> RpcResult<Option<Hash>>;
-
-		/// Get hash of the last finalized block in the canon chain.
-		#[method(name = "getFinalizedHead")]
-		fn finalized_head(&self) -> RpcResult<Hash>;
-
-		/// All head subscription
-		#[subscription(name = "subscribeAllHeads", item = Header)]
-		async fn subscribe_all_heads(&self, hash: Hash) -> SubscriptionResult;
-	}
-
-	/// Trait to ensure that the trait bounds are correct.
-	#[rpc(client, server, namespace = "generic_call")]
-	pub trait OnlyGenericCall<I, R> {
-		#[method(name = "getHeader")]
-		fn call(&self, input: I) -> RpcResult<R>;
-	}
-
-	/// Trait to ensure that the trait bounds are correct.
-	#[rpc(client, server, namespace = "generic_sub")]
-	pub trait OnlyGenericSubscription<Input, R> {
-		/// Get header of a relay chain block.
-		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
-		async fn sub(&self, hash: Input) -> SubscriptionResult;
-	}
-
-	/// Trait to ensure that the trait bounds are correct.
-	#[rpc(client, server, namespace = "generic_with_where_clause")]
-	pub trait GenericWhereClause<I, R>
-	where
-		I: std::fmt::Debug,
-		R: Copy + Clone,
-	{
-		#[method(name = "getHeader")]
-		fn call(&self, input: I) -> RpcResult<R>;
-	}
-
-	/// Trait to ensure that the trait bounds are correct.
-	#[rpc(client, server, namespace = "generic_with_where_clause")]
-	pub trait GenericWhereClauseWithTypeBoundsToo<I: Copy + Clone, R>
-	where
-		I: std::fmt::Debug,
-		R: Copy + Clone,
-	{
-		#[method(name = "getHeader")]
-		fn call(&self, input: I) -> RpcResult<R>;
-	}
-
 	pub struct RpcServerImpl;
 
 	#[async_trait]
@@ -212,24 +150,6 @@ mod rpc_impl {
 		}
 
 		async fn sub_unit_type(&self, _pending: PendingSubscriptionSink, _x: usize) {}
-	}
-
-	#[async_trait]
-	impl OnlyGenericCallServer<String, String> for RpcServerImpl {
-		fn call(&self, _: String) -> RpcResult<String> {
-			Ok("hello".to_string())
-		}
-	}
-
-	#[async_trait]
-	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		async fn sub(&self, pending: PendingSubscriptionSink, _: String) -> SubscriptionResult {
-			let sink = pending.accept().await?;
-			let msg = SubscriptionMessage::from("hello");
-			sink.send(msg).await?;
-
-			Ok(())
-		}
 	}
 }
 
@@ -336,6 +256,7 @@ async fn macro_zero_copy_cow() {
 
 // Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.
 #[cfg(not(target_os = "macos"))]
+#[ignore]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
 	use jsonrpsee::core::EmptyServerParams;

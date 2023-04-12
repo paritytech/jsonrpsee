@@ -19,7 +19,7 @@ use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
 use jsonrpsee_types::error::{
-	reject_too_batch_request, reject_too_big_request, reject_too_many_subscriptions, ErrorCode,
+	reject_too_big_batch_request, reject_too_big_request, reject_too_many_subscriptions, ErrorCode,
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
 };
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
@@ -79,7 +79,7 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
 		if batch.len() > max_len {
-			return Some(batch_response_error(Id::Null, reject_too_batch_request(max_len)));
+			return Some(batch_response_error(Id::Null, reject_too_big_batch_request(max_len)));
 		}
 
 		let mut got_notif = false;

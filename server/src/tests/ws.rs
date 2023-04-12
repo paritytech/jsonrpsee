@@ -29,6 +29,7 @@ use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
+use jsonrpsee_core::RpcResult;
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
@@ -46,7 +47,7 @@ async fn can_set_the_max_request_body_size() {
 	// Rejects all requests larger than 100 bytes
 	let server = ServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
+	module.register_method("anything", |_p, _cx| "a".repeat(100)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let handle = server.start(module).unwrap();
 
@@ -74,7 +75,7 @@ async fn can_set_the_max_response_body_size() {
 	// Set the max response body size to 100 bytes
 	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok("a".repeat(101))).unwrap();
+	module.register_method("anything", |_p, _cx| "a".repeat(101)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let server_handle = server.start(module).unwrap();
 
@@ -97,7 +98,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	// Set the max response body size to 100 bytes
 	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok("a".repeat(51))).unwrap();
+	module.register_method("anything", |_p, _cx| "a".repeat(51)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let server_handle = server.start(module).unwrap();
 
@@ -120,7 +121,7 @@ async fn can_set_max_connections() {
 	// Server that accepts max 2 connections
 	let server = ServerBuilder::default().max_connections(2).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
+	module.register_method("anything", |_p, _cx| RpcResult::Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
 
 	let server_handle = server.start(module).unwrap();
@@ -402,8 +403,8 @@ async fn unknown_field_is_ok() {
 #[tokio::test]
 async fn register_methods_works() {
 	let mut module = RpcModule::new(());
-	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
-	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
+	assert!(module.register_method("say_hello", |_, _| "lo").is_ok());
+	assert!(module.register_method("say_hello", |_, _| "lo").is_err());
 	assert!(module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async { Ok(()) })
 		.is_ok());
@@ -413,7 +414,7 @@ async fn register_methods_works() {
 		})
 		.is_err());
 	assert!(
-		module.register_method("subscribe_hello_again", |_, _| Ok("lo")).is_ok(),
+		module.register_method("subscribe_hello_again", |_, _| "lo").is_ok(),
 		"Failed register_subscription should not have side-effects"
 	);
 }
@@ -485,12 +486,12 @@ async fn can_register_modules() {
 
 	assert_eq!(mod1.method_names().count(), 0);
 	assert_eq!(mod2.method_names().count(), 0);
-	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {cx}"))).unwrap();
-	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {cx}"))).unwrap();
-	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {cx:?}"))).unwrap();
+	mod1.register_method("bla", |_, cx| format!("Gave me {cx}")).unwrap();
+	mod1.register_method("bla2", |_, cx| format!("Gave me {cx}")).unwrap();
+	mod2.register_method("yada", |_, cx| format!("Gave me {cx:?}")).unwrap();
 
 	// Won't register, name clashes
-	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {cx:?}"))).unwrap();
+	mod2.register_method("bla", |_, cx| format!("Gave me {cx:?}")).unwrap();
 
 	assert_eq!(mod1.method_names().count(), 2);
 	let err = mod1.merge(mod2).unwrap_err();
@@ -583,7 +584,7 @@ async fn disabled_batches() {
 		.unwrap();
 
 	let mut module = RpcModule::new(());
-	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
+	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 
 	let server_handle = server.start(module).unwrap();
@@ -613,7 +614,7 @@ async fn batch_limit_works() {
 		.unwrap();
 
 	let mut module = RpcModule::new(());
-	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
+	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 
 	let server_handle = server.start(module).unwrap();
