@@ -285,7 +285,7 @@ impl<B, L> Builder<B, L> {
 	/// Configure how [batch requests](https://www.jsonrpc.org/specification#batch) shall be handled
 	/// by the server.
 	///
-	/// Default: batch requests are allowed and can be arbitrary big but the maximum response size is limited.
+	/// Default: batch requests are allowed and can be arbitrary big but the maximum payload size is limited.
 	pub fn set_batch_request_config(mut self, cfg: BatchRequestConfig) -> Self {
 		self.settings.batch_requests_config = cfg;
 		self
