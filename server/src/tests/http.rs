@@ -26,9 +26,10 @@
 
 use std::net::SocketAddr;
 
+use crate::server::BatchRequestConfig;
 use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
-use jsonrpsee_core::Error;
+use jsonrpsee_core::{Error, RpcResult};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -45,40 +46,40 @@ async fn server() -> (SocketAddr, ServerHandle) {
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+	module.register_method("say_hello", |_, _| RpcResult::Ok("lo")).unwrap();
 	module.register_async_method("say_hello_async", |_, _| async move { Result::<_, Error>::Ok("lo") }).unwrap();
 	module
 		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
+			RpcResult::Ok(sum)
 		})
 		.unwrap();
 	module
 		.register_method("multiparam", |params, _| {
 			let params: (String, String, Vec<u8>) = params.parse()?;
 			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
-			Ok(r)
+			RpcResult::Ok(r)
 		})
 		.unwrap();
-	module.register_method("notif", |_, _| Ok("")).unwrap();
+	module.register_method("notif", |_, _| "").unwrap();
 	module
 		.register_method("should_err", |_, ctx| {
 			ctx.err().map_err(CallError::Failed)?;
-			Ok("err")
+			RpcResult::Ok("err")
 		})
 		.unwrap();
 
 	module
 		.register_method("should_ok", |_, ctx| {
 			ctx.ok().map_err(CallError::Failed)?;
-			Ok("ok")
+			RpcResult::Ok("ok")
 		})
 		.unwrap();
 	module
 		.register_async_method("should_ok_async", |_p, ctx| async move {
 			ctx.ok().map_err(CallError::Failed)?;
-			Result::<_, Error>::Ok("ok")
+			RpcResult::Ok("ok")
 		})
 		.unwrap();
 
@@ -420,12 +421,12 @@ async fn can_register_modules() {
 	let mut mod2 = RpcModule::new(cx2);
 
 	assert_eq!(mod1.method_names().count(), 0);
-	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {cx}"))).unwrap();
-	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {cx}"))).unwrap();
-	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {cx:?}"))).unwrap();
+	mod1.register_method("bla", |_, cx| format!("Gave me {cx}")).unwrap();
+	mod1.register_method("bla2", |_, cx| format!("Gave me {cx}")).unwrap();
+	mod2.register_method("yada", |_, cx| format!("Gave me {cx:?}")).unwrap();
 
 	// Won't register, name clashes
-	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {cx:?}"))).unwrap();
+	mod2.register_method("bla", |_, cx| format!("Gave me {cx:?}")).unwrap();
 
 	assert_eq!(mod1.method_names().count(), 2);
 
@@ -442,7 +443,7 @@ async fn can_set_the_max_request_body_size() {
 	// Rejects all requests larger than 100 bytes
 	let server = ServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
+	module.register_method("anything", |_p, _cx| "a".repeat(100)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
 	let handle = server.start(module).unwrap();
@@ -467,7 +468,7 @@ async fn can_set_the_max_response_size() {
 	// Set the max response size to 100 bytes
 	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok("a".repeat(101))).unwrap();
+	module.register_method("anything", |_p, _cx| "a".repeat(101)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
 	let handle = server.start(module).unwrap();
@@ -487,7 +488,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	// Set the max response size to 100 bytes
 	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok("a".repeat(51))).unwrap();
+	module.register_method("anything", |_p, _cx| "a".repeat(51)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
 	let handle = server.start(module).unwrap();
@@ -505,9 +506,10 @@ async fn can_set_the_max_response_size_to_batch() {
 async fn disabled_batches() {
 	let addr = "127.0.0.1:0";
 	// Disable batches support.
-	let server = ServerBuilder::default().batch_requests_supported(false).build(addr).await.unwrap();
+	let server =
+		ServerBuilder::default().set_batch_request_config(BatchRequestConfig::Disabled).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
+	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
 	let handle = server.start(module).unwrap();
@@ -519,6 +521,30 @@ async fn disabled_batches() {
 	]"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.body, batches_not_supported());
+
+	handle.stop().unwrap();
+	handle.stopped().await;
+}
+
+#[tokio::test]
+async fn batch_limit_works() {
+	let addr = "127.0.0.1:0";
+	// Disable batches support.
+	let server =
+		ServerBuilder::default().set_batch_request_config(BatchRequestConfig::Limit(1)).build(addr).await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
+	let addr = server.local_addr().unwrap();
+	let uri = to_http_uri(addr);
+	let handle = server.start(module).unwrap();
+
+	// Send a valid batch.
+	let req = r#"[
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1},
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":2}
+	]"#;
+	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.body, batches_too_large(1));
 
 	handle.stop().unwrap();
 	handle.stopped().await;

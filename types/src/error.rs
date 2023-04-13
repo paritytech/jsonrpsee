@@ -26,63 +26,12 @@
 
 use std::fmt;
 
-use crate::params::{Id, TwoPointZero};
 use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::borrow::{Borrow, Cow as StdCow};
 use thiserror::Error;
-
-/// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct ErrorResponse<'a> {
-	/// JSON-RPC version.
-	jsonrpc: TwoPointZero,
-	/// Error.
-	#[serde(borrow)]
-	error: ErrorObject<'a>,
-	/// Request ID
-	id: Id<'a>,
-}
-
-impl<'a> ErrorResponse<'a> {
-	/// Create a borrowed `ErrorResponse`.
-	pub fn borrowed(error: ErrorObject<'a>, id: Id<'a>) -> Self {
-		Self { jsonrpc: TwoPointZero, error, id }
-	}
-
-	/// Create a borrowed `ErrorResponse`.
-	pub fn owned(error: ErrorObject<'static>, id: Id<'static>) -> Self {
-		Self { jsonrpc: TwoPointZero, error, id }
-	}
-
-	/// Take ownership of the parameters within, if we haven't already.
-	pub fn into_owned(self) -> ErrorResponse<'static> {
-		ErrorResponse { jsonrpc: self.jsonrpc, error: self.error.into_owned(), id: self.id.into_owned() }
-	}
-
-	/// Get a reference to the [`ErrorObject`] of the error response.
-	pub fn as_error_object(&self) -> ErrorObject<'_> {
-		self.error.borrow()
-	}
-
-	/// Consume the error response and extract the [`ErrorObject`].
-	pub fn into_error_object(self) -> ErrorObjectOwned {
-		self.error.into_owned()
-	}
-
-	/// Get the [`Id`] of the error response.
-	pub fn id(&self) -> &Id {
-		&self.id
-	}
-}
-
-impl<'a> fmt::Display for ErrorResponse<'a> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
-	}
-}
 
 /// Owned variant of [`ErrorObject`].
 pub type ErrorObjectOwned = ErrorObject<'static>;
@@ -194,6 +143,8 @@ pub const OVERSIZED_REQUEST_CODE: i32 = -32007;
 pub const OVERSIZED_RESPONSE_CODE: i32 = -32008;
 /// Server is busy error code.
 pub const SERVER_IS_BUSY_CODE: i32 = -32009;
+/// Batch request limit was exceed.
+pub const TOO_BIG_BATCH_CODE: i32 = -32010;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
@@ -217,6 +168,8 @@ pub const SERVER_ERROR_MSG: &str = "Server error";
 pub const BATCHES_NOT_SUPPORTED_MSG: &str = "Batched requests are not supported by this server";
 /// Subscription limit per connection was exceeded.
 pub const TOO_MANY_SUBSCRIPTIONS_MSG: &str = "Too many subscriptions on the connection";
+/// Batched requests limit was exceed.
+pub const TOO_BIG_BATCH_MSG: &str = "The batch request was too large";
 
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
@@ -354,73 +307,64 @@ pub fn reject_too_big_request(limit: u32) -> ErrorObjectOwned {
 	)
 }
 
+/// Helper to get a `JSON-RPC` error object when the maximum batch request size have been exceeded.
+pub fn reject_too_big_batch_request(limit: usize) -> ErrorObjectOwned {
+	ErrorObjectOwned::owned(TOO_BIG_BATCH_CODE, TOO_BIG_BATCH_MSG, Some(format!("Exceeded max limit of {limit}")))
+}
+
 #[cfg(test)]
 mod tests {
-	use super::{ErrorCode, ErrorObject, ErrorResponse, Id, TwoPointZero};
+	use super::{ErrorCode, ErrorObject};
 
 	#[test]
 	fn deserialize_works() {
-		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
-		let exp = ErrorResponse {
-			jsonrpc: TwoPointZero,
-			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error".into(), data: None },
-			id: Id::Null,
-		};
-		let err: ErrorResponse = serde_json::from_str(ser).unwrap();
+		let ser = r#"{"code":-32700,"message":"Parse error"}"#;
+		let exp: ErrorObject = ErrorCode::ParseError.into();
+		let err: ErrorObject = serde_json::from_str(ser).unwrap();
 		assert_eq!(exp, err);
 	}
 
 	#[test]
 	fn deserialize_with_optional_data() {
-		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
+		let ser = r#"{"code":-32700,"message":"Parse error", "data":"vegan"}"#;
 		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
-		let exp = ErrorResponse {
-			jsonrpc: TwoPointZero,
-			error: ErrorObject::owned(ErrorCode::ParseError.code(), "Parse error", Some(data)),
-			id: Id::Null,
-		};
-		let err: ErrorResponse = serde_json::from_str(ser).unwrap();
+		let exp = ErrorObject::owned(ErrorCode::ParseError.code(), "Parse error", Some(data));
+		let err: ErrorObject = serde_json::from_str(ser).unwrap();
 		assert_eq!(exp, err);
 	}
 
 	#[test]
 	fn deserialized_error_with_quoted_str() {
 		let raw = r#"{
-			"error": {
 				"code": 1002,
 				"message": "desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
 				"data": "\\\"validate_transaction\\\""
-			},
-			"id": 7,
-			"jsonrpc": "2.0"
 		}"#;
-		let err: ErrorResponse = serde_json::from_str(raw).unwrap();
+		let err: ErrorObject = serde_json::from_str(raw).unwrap();
 
 		let data = serde_json::value::to_raw_value(&"\\\"validate_transaction\\\"").unwrap();
-
-		assert_eq!(
-			err,
-			ErrorResponse {
-				error: ErrorObject::borrowed(
-					1002,
-					&"desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
-					Some(&*data)
-				),
-				id: Id::Number(7),
-				jsonrpc: TwoPointZero,
-			}
+		let exp = ErrorObject::borrowed(
+			1002,
+			&"desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
+			Some(&*data),
 		);
+
+		assert_eq!(err, exp);
 	}
 
 	#[test]
 	fn serialize_works() {
-		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
-		let err = ErrorResponse {
-			jsonrpc: TwoPointZero,
-			error: ErrorObject { code: ErrorCode::InternalError, message: "Internal error".into(), data: None },
-			id: Id::Number(1337),
-		};
+		let exp = r#"{"code":-32603,"message":"Internal error"}"#;
+		let err: ErrorObject = ErrorCode::InternalError.into();
 		let ser = serde_json::to_string(&err).unwrap();
+		assert_eq!(exp, ser);
+	}
+
+	#[test]
+	fn serialize_optional_data_works() {
+		let exp = r#"{"code":-32699,"message":"food","data":"not vegan"}"#;
+		let data = serde_json::value::to_raw_value(&"not vegan").unwrap();
+		let ser = serde_json::to_string(&ErrorObject::owned(-32699, "food", Some(data))).unwrap();
 		assert_eq!(exp, ser);
 	}
 }

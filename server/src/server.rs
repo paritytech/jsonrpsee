@@ -123,7 +123,7 @@ where
 		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 		let allow_hosts = self.cfg.allow_hosts;
 		let logger = self.logger;
-		let batch_requests_supported = self.cfg.batch_requests_supported;
+		let batch_requests_config = self.cfg.batch_requests_config;
 		let id_provider = self.id_provider;
 
 		let mut id: u32 = 0;
@@ -145,7 +145,7 @@ where
 						max_response_body_size,
 						max_log_length,
 						max_subscriptions_per_connection,
-						batch_requests_supported,
+						batch_requests_config,
 						id_provider: id_provider.clone(),
 						ping_interval: self.cfg.ping_interval,
 						stop_handle: stop_handle.clone(),
@@ -196,7 +196,7 @@ struct Settings {
 	/// Host filtering.
 	allow_hosts: AllowHosts,
 	/// Whether batch requests are supported by this server or not.
-	batch_requests_supported: bool,
+	batch_requests_config: BatchRequestConfig,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	/// The interval at which `Ping` frames are submitted.
@@ -209,6 +209,16 @@ struct Settings {
 	message_buffer_capacity: u32,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum BatchRequestConfig {
+	/// Batch requests are disabled.
+	Disabled,
+	/// Each batch request is limited to `len` and any batch request bigger than `len` will not be processed.
+	Limit(u32),
+	/// The batch request is unlimited.
+	Unlimited,
+}
+
 impl Default for Settings {
 	fn default() -> Self {
 		Self {
@@ -217,7 +227,7 @@ impl Default for Settings {
 			max_log_length: 4096,
 			max_connections: MAX_CONNECTIONS,
 			max_subscriptions_per_connection: 1024,
-			batch_requests_supported: true,
+			batch_requests_config: BatchRequestConfig::Unlimited,
 			allow_hosts: AllowHosts::Any,
 			tokio_runtime: None,
 			ping_interval: Duration::from_secs(60),
@@ -274,10 +284,12 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Enables or disables support of [batch requests](https://www.jsonrpc.org/specification#batch).
-	/// By default, support is enabled.
-	pub fn batch_requests_supported(mut self, supported: bool) -> Self {
-		self.settings.batch_requests_supported = supported;
+	/// Configure how [batch requests](https://www.jsonrpc.org/specification#batch) shall be handled
+	/// by the server.
+	///
+	/// Default: batch requests are allowed and can be arbitrary big but the maximum payload size is limited.
+	pub fn set_batch_request_config(mut self, cfg: BatchRequestConfig) -> Self {
+		self.settings.batch_requests_config = cfg;
 		self
 	}
 
@@ -558,7 +570,7 @@ pub(crate) struct ServiceData<L: Logger> {
 	/// Maximum number of subscriptions per connection.
 	pub(crate) max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
-	pub(crate) batch_requests_supported: bool,
+	pub(crate) batch_requests_config: BatchRequestConfig,
 	/// Subscription ID provider.
 	pub(crate) id_provider: Arc<dyn IdProvider>,
 	/// Ping interval
@@ -665,7 +677,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 				max_request_body_size: self.inner.max_request_body_size,
 				max_response_body_size: self.inner.max_response_body_size,
 				max_log_length: self.inner.max_log_length,
-				batch_requests_supported: self.inner.batch_requests_supported,
+				batch_requests_config: self.inner.batch_requests_config,
 				logger: self.inner.logger.clone(),
 				conn: self.inner.conn.clone(),
 				remote_addr: self.inner.remote_addr,
@@ -698,7 +710,7 @@ struct ProcessConnection<L> {
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
-	batch_requests_supported: bool,
+	batch_requests_config: BatchRequestConfig,
 	/// Subscription ID provider.
 	id_provider: Arc<dyn IdProvider>,
 	/// Ping interval
@@ -755,7 +767,7 @@ fn process_connection<'a, L: Logger, B, U>(
 
 	let max_conns = cfg.max_connections as usize;
 	let curr_conns = max_conns - connection_guard.available_connections();
-	tracing::info!("Accepting new connection {}/{}", curr_conns, max_conns);
+	tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
 
 	let tower_service = TowerService {
 		inner: ServiceData {
@@ -766,7 +778,7 @@ fn process_connection<'a, L: Logger, B, U>(
 			max_response_body_size: cfg.max_response_body_size,
 			max_log_length: cfg.max_log_length,
 			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
-			batch_requests_supported: cfg.batch_requests_supported,
+			batch_requests_config: cfg.batch_requests_config,
 			id_provider: cfg.id_provider,
 			ping_interval: cfg.ping_interval,
 			stop_handle: cfg.stop_handle.clone(),

@@ -1,10 +1,10 @@
 [package]
 name = "jsonrpsee-benchmarks"
-version = "0.16.2"
-authors = ["Parity Technologies <admin@parity.io>"]
 description = "Benchmarks for jsonrpsee"
-edition = "2021"
-license = "MIT"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

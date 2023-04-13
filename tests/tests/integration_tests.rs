@@ -1026,7 +1026,7 @@ async fn ws_host_filtering_wildcard_works() {
 	let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+	module.register_method("say_hello", |_, _| "hello").unwrap();
 
 	let _handle = server.start(module).unwrap();
 
@@ -1047,7 +1047,7 @@ async fn http_host_filtering_wildcard_works() {
 	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+	module.register_method("say_hello", |_, _| "hello").unwrap();
 
 	let _handle = server.start(module).unwrap();
 
@@ -1068,7 +1068,7 @@ async fn deny_invalid_host() {
 	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+	module.register_method("say_hello", |_, _| "hello").unwrap();
 
 	let _handle = server.start(module).unwrap();
 

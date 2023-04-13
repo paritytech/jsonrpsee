@@ -42,3 +42,98 @@ pub use helpers::{BatchResponseBuilder, BoundedWriter, MethodResponse, MethodSin
 pub use host_filtering::*;
 pub use rpc_module::*;
 pub use subscription::*;
+
+use jsonrpsee_types::{ErrorObjectOwned, ResponsePayload};
+
+/// Something that can be converted into a JSON-RPC method call response.
+///
+/// If the value couldn't be serialized/encoded, jsonrpsee will sent out an error
+/// to the client `response could not be serialized`.
+pub trait IntoResponse {
+	/// Output.
+	type Output: serde::Serialize + Clone;
+
+	/// Something that can be converted into a JSON-RPC method call response.
+	fn into_response(self) -> ResponsePayload<'static, Self::Output>;
+}
+
+impl<T, E: Into<ErrorObjectOwned>> IntoResponse for Result<T, E>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = T;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		match self {
+			Ok(val) => ResponsePayload::result(val),
+			Err(e) => ResponsePayload::Error(e.into()),
+		}
+	}
+}
+
+impl<T> IntoResponse for Option<T>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = Option<T>;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
+	}
+}
+
+impl<T> IntoResponse for Vec<T>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = Vec<T>;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
+	}
+}
+
+impl<T, const N: usize> IntoResponse for [T; N]
+where
+	[T; N]: serde::Serialize + Clone,
+{
+	type Output = [T; N];
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
+	}
+}
+
+macro_rules! impl_into_response {
+	($($n:ty),*) => {
+		$(
+			impl IntoResponse for $n {
+				type Output = $n;
+
+				fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+					ResponsePayload::result(self)
+				}
+			}
+		)+
+	}
+}
+
+impl_into_response!(
+	u8,
+	u16,
+	u32,
+	u64,
+	u128,
+	usize,
+	i8,
+	i16,
+	i32,
+	i64,
+	i128,
+	isize,
+	String,
+	&'static str,
+	bool,
+	serde_json::Value,
+	()
+);
