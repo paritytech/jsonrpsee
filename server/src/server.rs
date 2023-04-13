@@ -211,7 +211,7 @@ struct Settings {
 pub enum BatchRequestConfig {
 	/// Batch requests are disabled.
 	Disabled,
-	/// The batch request is limited to `len`.
+	/// Each batch request is limited to `len` and any batch request bigger than `len` will not be processed.
 	Limit(u32),
 	/// The batch request is unlimited.
 	Unlimited,
