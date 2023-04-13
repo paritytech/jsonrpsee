@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::server::BatchRequestConfig;
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
@@ -575,7 +576,7 @@ async fn custom_subscription_id_works() {
 async fn disabled_batches() {
 	// Disable batches support.
 	let server = ServerBuilder::default()
-		.batch_requests_supported(false)
+		.set_batch_request_config(BatchRequestConfig::Disabled)
 		.build("127.0.0.1:0")
 		.with_default_timeout()
 		.await
@@ -596,6 +597,36 @@ async fn disabled_batches() {
 	]"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, batches_not_supported());
+
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
+}
+
+#[tokio::test]
+async fn batch_limit_works() {
+	// Disable batches support.
+	let server = ServerBuilder::default()
+		.set_batch_request_config(BatchRequestConfig::Limit(1))
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	let mut module = RpcModule::new(());
+	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
+	let addr = server.local_addr().unwrap();
+
+	let server_handle = server.start(module).unwrap();
+
+	// Send a valid batch.
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let req = r#"[
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1},
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":2}
+	]"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, batches_too_large(1));
 
 	server_handle.stop().unwrap();
 	server_handle.stopped().await;
