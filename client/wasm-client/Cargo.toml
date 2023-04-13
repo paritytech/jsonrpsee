@@ -14,6 +14,6 @@ readme.workspace = true
 publish = true
 
 [dependencies]
-jsonrpsee-types = { path = "../../types", version = "0.16.2" }
-jsonrpsee-client-transport = { path = "../transport", version = "0.16.2", features = ["web"] }
-jsonrpsee-core = { path = "../../core", version = "0.16.2", features = ["async-wasm-client"] }
+jsonrpsee-types = { workspace = true }
+jsonrpsee-client-transport = { workspace = true, features = ["web"] }
+jsonrpsee-core = { workspace = true, features = ["async-wasm-client"] }

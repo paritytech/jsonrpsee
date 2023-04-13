@@ -14,7 +14,7 @@ readme.workspace = true
 publish = true
 
 [dependencies]
-jsonrpsee-core = { path = "../../core", version = "0.16.2", features = ["client"] }
+jsonrpsee-core = { workspace = true, features = ["client"] }
 tracing = "0.1.34"
 
 # optional
