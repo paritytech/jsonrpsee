@@ -95,7 +95,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| {
 		println!("say_hello method called!");
-		Ok("Hello there!!")
+		"Hello there!!"
 	})?;
 
 	let addr = server.local_addr()?;

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::future::StopHandle;
 use crate::logger::{self, Logger, TransportProtocol};
-use crate::server::ServiceData;
+use crate::server::{BatchRequestConfig, ServiceData};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -20,8 +20,8 @@ use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
 use jsonrpsee_types::error::{
-	reject_too_big_request, reject_too_many_subscriptions, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
-	BATCHES_NOT_SUPPORTED_MSG,
+	reject_too_big_batch_request, reject_too_big_request, reject_too_many_subscriptions, ErrorCode,
+	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
 };
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
@@ -56,6 +56,7 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 pub(crate) struct Batch<'a, L: Logger> {
 	pub(crate) data: Vec<u8>,
 	pub(crate) call: CallData<'a, L>,
+	pub(crate) max_len: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -76,9 +77,13 @@ pub(crate) struct CallData<'a, L: Logger> {
 // complete batch response back to the client over `tx`.
 #[instrument(name = "batch", skip(b), level = "TRACE")]
 pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<String> {
-	let Batch { data, call } = b;
+	let Batch { data, call, max_len } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
+		if batch.len() > max_len {
+			return Some(batch_response_error(Id::Null, reject_too_big_batch_request(max_len)));
+		}
+
 		let mut got_notif = false;
 		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 
@@ -233,7 +238,7 @@ pub(crate) async fn background_task<L: Logger>(
 		max_response_body_size,
 		max_log_length,
 		max_subscriptions_per_connection,
-		batch_requests_supported,
+		batch_requests_config,
 		stop_handle,
 		id_provider,
 		ping_interval,
@@ -319,23 +324,37 @@ pub(crate) async fn background_task<L: Logger>(
 
 		match first_non_whitespace {
 			Some(b'{') => {
-				let data = std::mem::take(&mut data);
-				if method_executor.send(MethodOp::Call { data, sink_permit, start: request_start }).is_err() {
+				if method_executor
+					.send(MethodOp::Call { data: std::mem::take(&mut data), sink_permit, start: request_start })
+					.is_err()
+				{
 					break Ok(());
 				}
 			}
-			Some(b'[') if !batch_requests_supported => {
-				let response = MethodResponse::error(
-					Id::Null,
-					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
-				);
-				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-				sink_permit.send_raw(response.result);
-			}
 			Some(b'[') => {
-				// Make sure the following variables are not moved into async closure below.
-				let data = std::mem::take(&mut data);
-				if method_executor.send(MethodOp::Batch { data, sink_permit, start: request_start }).is_err() {
+				let limit = match batch_requests_config {
+					BatchRequestConfig::Disabled => {
+						let response = MethodResponse::error(
+							Id::Null,
+							ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+						);
+						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
+						sink_permit.send_raw(response.result);
+						continue;
+					}
+					BatchRequestConfig::Limit(limit) => limit as usize,
+					BatchRequestConfig::Unlimited => usize::MAX,
+				};
+
+				if method_executor
+					.send(MethodOp::Batch {
+						data: std::mem::take(&mut data),
+						sink_permit,
+						start: request_start,
+						max_len: limit,
+					})
+					.is_err()
+				{
 					break Ok(());
 				}
 			}
@@ -344,6 +363,9 @@ pub(crate) async fn background_task<L: Logger>(
 			}
 		}
 	};
+
+	// Wait the pending calls to finish.
+	method_executor.closed().await;
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 
@@ -464,7 +486,7 @@ where
 
 enum MethodOp<L: Logger> {
 	Call { data: Vec<u8>, sink_permit: MethodSinkPermit, start: L::Instant },
-	Batch { data: Vec<u8>, sink_permit: MethodSinkPermit, start: L::Instant },
+	Batch { data: Vec<u8>, sink_permit: MethodSinkPermit, start: L::Instant, max_len: usize },
 }
 
 #[derive(Clone)]
@@ -483,10 +505,10 @@ async fn method_executor_task<L: Logger>(params: ExecuteParams<L>, mut next_task
 	let mut tasks = FuturesUnordered::new();
 
 	loop {
-		// This is way to not poll `FuturesUnordered` when it's empty to waste CPU cycles.
+		// This is "to not poll" `FuturesUnordered` when it's empty to waste CPU cycles.
 		if tasks.is_empty() {
 			let Some(command) = next_task.recv().await else {
-				return;
+				break;
 			};
 
 			tasks.push(execute_command(command, params.clone()));
@@ -495,7 +517,7 @@ async fn method_executor_task<L: Logger>(params: ExecuteParams<L>, mut next_task
 				_ = tasks.next() => {},
 				task = next_task.recv() => {
 					let Some(command) = task else {
-						return;
+						break;
 					};
 
 					tasks.push(execute_command(command, params.clone()));
@@ -503,6 +525,8 @@ async fn method_executor_task<L: Logger>(params: ExecuteParams<L>, mut next_task
 			}
 		}
 	}
+
+	while tasks.next().await.is_some() {}
 }
 
 async fn execute_command<L: Logger>(command: MethodOp<L>, params: ExecuteParams<L>) {
@@ -544,7 +568,7 @@ async fn execute_command<L: Logger>(command: MethodOp<L>, params: ExecuteParams<
 				}
 			}
 		}
-		MethodOp::Batch { data, sink_permit, start } => {
+		MethodOp::Batch { data, sink_permit, start, max_len } => {
 			let methods = methods.clone();
 			let logger = logger.clone();
 			let id_provider = id_provider.clone();
@@ -563,6 +587,7 @@ async fn execute_command<L: Logger>(command: MethodOp<L>, params: ExecuteParams<
 					logger: &logger,
 					request_start: start,
 				},
+				max_len,
 			})
 			.await;
 

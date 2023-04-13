@@ -42,10 +42,14 @@ use crate::server::subscription::{
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
-use jsonrpsee_types::{ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId};
+use jsonrpsee_types::{
+	Id, Params, Request, Response, ResponsePayload, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
+};
 use rustc_hash::FxHashMap;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
+
+use super::IntoResponse;
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -227,10 +231,11 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::RpcModule;
+	///     use jsonrpsee::{RpcModule, IntoResponse};
+	///     use jsonrpsee::core::RpcResult;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_method("echo_call", |params, _| {
+	///     module.register_method::<RpcResult<u64>, _>("echo_call", |params, _| {
 	///         params.one::<u64>().map_err(Into::into)
 	///     }).unwrap();
 	///
@@ -238,7 +243,7 @@ impl Methods {
 	///     assert_eq!(echo, 1);
 	/// }
 	/// ```
-	pub async fn call<Params: ToRpcParams, T: DeserializeOwned>(
+	pub async fn call<Params: ToRpcParams, T: DeserializeOwned + Clone>(
 		&self,
 		method: &str,
 		params: Params,
@@ -247,15 +252,8 @@ impl Methods {
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
-
-		if resp.success {
-			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
-		} else {
-			match serde_json::from_str::<ErrorResponse>(&resp.result) {
-				Ok(err) => Err(Error::Call(CallError::Custom(err.into_error_object()))),
-				Err(e) => Err(e.into()),
-			}
-		}
+		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
+		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| Error::Call(CallError::Custom(e)))
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
@@ -268,7 +266,7 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::types::Response;
+	///     use jsonrpsee::types::{response::Success, Response};
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
@@ -281,7 +279,7 @@ impl Methods {
 	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
-	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
+	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.result).unwrap().try_into().unwrap();    
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
@@ -386,15 +384,12 @@ impl Methods {
 
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
-		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&resp.result) {
-			Ok(r) => r,
-			Err(_) => match serde_json::from_str::<ErrorResponse>(&resp.result) {
-				Ok(err) => return Err(Error::Call(CallError::Custom(err.into_error_object()))),
-				Err(err) => return Err(err.into()),
-			},
-		};
+		// TODO: hack around the lifetime on the `SubscriptionId` by deserialize first to serde_json::Value.
+		let as_success: ResponseSuccess<serde_json::Value> = serde_json::from_str::<Response<_>>(&resp.result)?
+			.try_into()
+			.map_err(|e| Error::Call(CallError::Custom(e)))?;
 
-		let sub_id = subscription_response.result.into_owned();
+		let sub_id = as_success.result.try_into().map_err(|_| Error::InvalidSubscriptionId)?;
 
 		Ok(Subscription { sub_id, rx })
 	}
@@ -457,29 +452,28 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, Error>
 	where
 		Context: Send + Sync + 'static,
-		R: Serialize,
-		F: Fn(Params, &Context) -> Result<R, Error> + Send + Sync + 'static,
+		R: IntoResponse + 'static,
+		F: Fn(Params, &Context) -> R + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| match callback(params, &*ctx) {
-				Ok(res) => MethodResponse::response(id, res, max_response_size),
-				Err(err) => MethodResponse::error(id, err),
+			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| {
+				let rp = callback(params, &*ctx).into_response();
+				MethodResponse::response(id, rp, max_response_size)
 			})),
 		)
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
-	pub fn register_async_method<R, E, Fun, Fut>(
+	pub fn register_async_method<R, Fun, Fut>(
 		&mut self,
 		method_name: &'static str,
 		callback: Fun,
 	) -> Result<&mut MethodCallback, Error>
 	where
-		R: Serialize + Send + Sync + 'static,
-		E: Into<Error>,
-		Fut: Future<Output = Result<R, E>> + Send,
+		R: IntoResponse + 'static,
+		Fut: Future<Output = R> + Send,
 		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
@@ -490,10 +484,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let callback = callback.clone();
 
 				let future = async move {
-					match callback(params, ctx).await {
-						Ok(res) => MethodResponse::response(id, res, max_response_size),
-						Err(err) => MethodResponse::error(id, err.into()),
-					}
+					let rp = callback(params, ctx).await.into_response();
+					MethodResponse::response(id, rp, max_response_size)
 				};
 				future.boxed()
 			})),
@@ -503,16 +495,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// Register a new **blocking** synchronous RPC method, which computes the response with the given callback.
 	/// Unlike the regular [`register_method`](RpcModule::register_method), this method can block its thread and perform
 	/// expensive computations.
-	pub fn register_blocking_method<R, E, F>(
+	pub fn register_blocking_method<R, F>(
 		&mut self,
 		method_name: &'static str,
 		callback: F,
 	) -> Result<&mut MethodCallback, Error>
 	where
 		Context: Send + Sync + 'static,
-		R: Serialize,
-		E: Into<Error>,
-		F: Fn(Params, Arc<Context>) -> Result<R, E> + Clone + Send + Sync + 'static,
+		R: IntoResponse + 'static,
+		F: Fn(Params, Arc<Context>) -> R + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
@@ -521,9 +512,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
-				tokio::task::spawn_blocking(move || match callback(params, ctx) {
-					Ok(result) => MethodResponse::response(id, result, max_response_size),
-					Err(err) => MethodResponse::error(id, err.into()),
+				tokio::task::spawn_blocking(move || {
+					let rp = callback(params, ctx).into_response();
+					MethodResponse::response(id, rp, max_response_size)
 				})
 				.map(|result| match result {
 					Ok(r) => r,
@@ -672,7 +663,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, false, max_response_size);
+							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
 						}
 					};
 
@@ -687,7 +678,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, result, max_response_size)
+					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
 				})),
 			);
 		}
