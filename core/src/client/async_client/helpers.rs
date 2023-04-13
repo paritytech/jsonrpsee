@@ -37,7 +37,7 @@ use tokio::sync::{mpsc, oneshot};
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse,
+	ErrorObject, Id, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
 use std::ops::Range;
@@ -175,7 +175,9 @@ pub(crate) fn process_single_response(
 	response: Response<JsonValue>,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
-	let response_id = response.id.into_owned();
+	let response_id = response.id.clone().into_owned();
+	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(|e| Error::Call(CallError::Custom(e)));
+
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back_oneshot = match manager.complete_pending_call(response_id) {
@@ -183,18 +185,24 @@ pub(crate) fn process_single_response(
 				Some(None) => return Ok(None),
 				None => return Err(Error::InvalidRequestId),
 			};
-			let _ = send_back_oneshot.send(Ok(response.result));
+
+			let _ = send_back_oneshot.send(result);
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
 			let (unsub_id, send_back_oneshot, unsubscribe_method) =
 				manager.complete_pending_subscription(response_id.clone()).ok_or(Error::InvalidRequestId)?;
 
-			let sub_id: Result<SubscriptionId, _> = response.result.try_into();
+			let sub_id = result.map(|r| SubscriptionId::try_from(r).ok());
+
 			let sub_id = match sub_id {
-				Ok(sub_id) => sub_id,
-				Err(_) => {
+				Ok(Some(sub_id)) => sub_id,
+				Ok(None) => {
 					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
+					return Ok(None);
+				}
+				Err(e) => {
+					let _ = send_back_oneshot.send(Err(e));
 					return Ok(None);
 				}
 			};
@@ -246,28 +254,6 @@ pub(crate) fn build_unsubscribe_message(
 
 	let raw = serde_json::to_string(&RequestSer::owned(unsub_req_id.clone(), unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
-}
-
-/// Attempts to process an error response.
-///
-/// Returns `Ok` if the response was successfully sent.
-/// Returns `Err(_)` if the response ID was not found.
-pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) -> Result<(), Error> {
-	let id = err.id().clone().into_owned();
-
-	match manager.request_status(&id) {
-		RequestStatus::PendingMethodCall => {
-			let send_back = manager.complete_pending_call(id).expect("State checked above; qed");
-			let _ = send_back.map(|s| s.send(Err(Error::Call(CallError::Custom(err.into_error_object())))));
-			Ok(())
-		}
-		RequestStatus::PendingSubscription => {
-			let (_, send_back, _) = manager.complete_pending_subscription(id).expect("State checked above; qed");
-			let _ = send_back.send(Err(Error::Call(CallError::Custom(err.into_error_object()))));
-			Ok(())
-		}
-		_ => Err(Error::InvalidRequestId),
-	}
 }
 
 /// Wait for a stream to complete within the given timeout.

@@ -5,10 +5,10 @@ use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 
 use anyhow::anyhow;
-use jsonrpsee_core::{DeserializeOwned, Error, StringError};
+use jsonrpsee_core::{DeserializeOwned, Error, RpcResult, StringError};
 use jsonrpsee_test_utils::mocks::TestContext;
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::Response;
+use jsonrpsee_types::{Response, ResponseSuccess};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 /// Spawns a dummy JSON-RPC server.
@@ -36,21 +36,21 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 	module
 		.register_method("say_hello", |_, _| {
 			tracing::debug!("server respond to hello");
-			Ok("hello")
+			"hello"
 		})
 		.unwrap();
 	module
 		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
+			RpcResult::Ok(sum)
 		})
 		.unwrap();
 	module
 		.register_method("multiparam", |params, _| {
 			let params: (String, String, Vec<u8>) = params.parse()?;
 			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
-			Ok(r)
+			RpcResult::Ok(r)
 		})
 		.unwrap();
 	module
@@ -59,7 +59,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 				tracing::debug!("server respond to hello");
 				// Call some async function inside.
 				futures_util::future::ready(()).await;
-				Result::<_, Error>::Ok("hello")
+				"hello"
 			}
 		})
 		.unwrap();
@@ -67,18 +67,20 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		.register_async_method("add_async", |params, _| async move {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-			Result::<_, Error>::Ok(sum)
+			RpcResult::Ok(sum)
 		})
 		.unwrap();
 	module
-		.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams(anyhow!("buh!")).into()))
+		.register_method::<RpcResult<()>, _>("invalid_params", |_params, _| {
+			Err(CallError::InvalidParams(anyhow!("buh!")).into())
+		})
 		.unwrap();
 	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
 			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
-			Ok("Yawn!")
+			RpcResult::Ok("Yawn!")
 		})
 		.unwrap();
 	module
@@ -97,18 +99,18 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		)
 		.unwrap();
 
-	module.register_method("notif", |_, _| Ok("")).unwrap();
+	module.register_method("notif", |_, _| "").unwrap();
 	module
 		.register_method("should_err", |_, ctx| {
 			ctx.err().map_err(CallError::Failed)?;
-			Ok("err")
+			RpcResult::Ok("err")
 		})
 		.unwrap();
 
 	module
 		.register_method("should_ok", |_, ctx| {
 			ctx.ok().map_err(CallError::Failed)?;
-			Ok("ok")
+			RpcResult::Ok("ok")
 		})
 		.unwrap();
 	module
@@ -134,14 +136,14 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 	rpc_module
 		.register_method("should_err", |_p, ctx| {
 			ctx.err().map_err(CallError::Failed)?;
-			Ok("err")
+			RpcResult::Ok("err")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_method("should_ok", |_p, ctx| {
 			ctx.ok().map_err(CallError::Failed)?;
-			Ok("ok")
+			RpcResult::Ok("ok")
 		})
 		.unwrap();
 
@@ -172,9 +174,9 @@ pub(crate) fn init_logger() {
 	let _ = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env()).try_init();
 }
 
-pub(crate) fn deser_call<T: DeserializeOwned>(raw: String) -> T {
-	let out: Response<T> = serde_json::from_str(&raw).unwrap();
-	out.result
+pub(crate) fn deser_call<T: DeserializeOwned + fmt::Debug + Clone>(raw: String) -> T {
+	let rp: Response<T> = serde_json::from_str(&raw).unwrap();
+	ResponseSuccess::try_from(rp).expect("Successful call").result
 }
 
 /// Applications can/should provide their own error.

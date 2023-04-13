@@ -137,6 +137,9 @@ pub(crate) fn generate_where_clause(
 				if visitor.input_params.contains(&ty.ident) {
 					bounds.push(parse_quote!(jsonrpsee::core::DeserializeOwned))
 				}
+				if visitor.ret_params.contains(&ty.ident) {
+					bounds.push(parse_quote!(std::clone::Clone))
+				}
 				if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
 					bounds.push(parse_quote!(jsonrpsee::core::Serialize))
 				}

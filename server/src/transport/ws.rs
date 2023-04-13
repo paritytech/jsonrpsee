@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::future::StopHandle;
 use crate::logger::{self, Logger, TransportProtocol};
-use crate::server::ServiceData;
+use crate::server::{BatchRequestConfig, ServiceData};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -20,8 +20,8 @@ use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
 use jsonrpsee_types::error::{
-	reject_too_big_request, reject_too_many_subscriptions, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
-	BATCHES_NOT_SUPPORTED_MSG,
+	reject_too_big_batch_request, reject_too_big_request, reject_too_many_subscriptions, ErrorCode,
+	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
 };
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
@@ -56,6 +56,7 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 pub(crate) struct Batch<'a, L: Logger> {
 	pub(crate) data: Vec<u8>,
 	pub(crate) call: CallData<'a, L>,
+	pub(crate) max_len: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -76,9 +77,13 @@ pub(crate) struct CallData<'a, L: Logger> {
 // complete batch response back to the client over `tx`.
 #[instrument(name = "batch", skip(b), level = "TRACE")]
 pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<String> {
-	let Batch { data, call } = b;
+	let Batch { data, call, max_len } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
+		if batch.len() > max_len {
+			return Some(batch_response_error(Id::Null, reject_too_big_batch_request(max_len)));
+		}
+
 		let mut got_notif = false;
 		let mut batch_response = BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize);
 
@@ -233,7 +238,7 @@ pub(crate) async fn background_task<L: Logger>(
 		max_response_body_size,
 		max_log_length,
 		max_subscriptions_per_connection,
-		batch_requests_supported,
+		batch_requests_config,
 		stop_handle,
 		id_provider,
 		ping_interval,
@@ -322,15 +327,20 @@ pub(crate) async fn background_task<L: Logger>(
 				};
 				tokio::spawn(execute_command(params));
 			}
-			Some(b'[') if !batch_requests_supported => {
-				let response = MethodResponse::error(
-					Id::Null,
-					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
-				);
-				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-				sink_permit.send_raw(response.result);
-			}
 			Some(b'[') => {
+				let limit = match batch_requests_config {
+					BatchRequestConfig::Disabled => {
+						let response = MethodResponse::error(
+							Id::Null,
+							ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+						);
+						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
+						sink_permit.send_raw(response.result);
+						continue;
+					}
+					BatchRequestConfig::Limit(limit) => limit as usize,
+					BatchRequestConfig::Unlimited => usize::MAX,
+				};
 				let params = ExecuteParams {
 					conn_id,
 					methods: methods.clone(),
@@ -343,7 +353,7 @@ pub(crate) async fn background_task<L: Logger>(
 					id_provider: id_provider.clone(),
 					logger: logger.clone(),
 					data: std::mem::take(&mut data),
-					command: MethodOp::Batch,
+					command: MethodOp::Batch(limit),
 				};
 				tokio::spawn(execute_command(params));
 			}
@@ -472,7 +482,7 @@ where
 
 enum MethodOp {
 	Call,
-	Batch,
+	Batch(usize),
 }
 
 struct ExecuteParams<L: Logger> {
@@ -533,8 +543,8 @@ async fn execute_command<L: Logger>(params: ExecuteParams<L>) {
 				}
 			}
 		}
-		MethodOp::Batch => {
-			let response = process_batch_request(Batch { data, call: call_data }).await;
+		MethodOp::Batch(max_len) => {
+			let response = process_batch_request(Batch { data, call: call_data, max_len }).await;
 
 			if let Some(response) = response {
 				tx_log_from_str(&response, max_log_length);
