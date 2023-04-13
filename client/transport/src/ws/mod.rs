@@ -182,11 +182,6 @@ pub enum WsHandshakeError {
 	#[error("Error in the WebSocket handshake: {0}")]
 	Transport(#[source] soketto::handshake::Error),
 
-	/// Invalid DNS name error for TLS
-	#[cfg(feature = "__tls")]
-	#[error("Invalid DNS name: {0}")]
-	InvalidDnsName(#[source] tokio_rustls::webpki::InvalidDnsNameError),
-
 	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {status_code}")]
 	Rejected {
@@ -463,13 +458,6 @@ async fn connect(sockaddr: SocketAddr, timeout_dur: Duration) -> Result<EitherSt
 impl From<io::Error> for WsHandshakeError {
 	fn from(err: io::Error) -> WsHandshakeError {
 		WsHandshakeError::Io(err)
-	}
-}
-
-#[cfg(feature = "__tls")]
-impl From<tokio_rustls::webpki::InvalidDnsNameError> for WsHandshakeError {
-	fn from(err: tokio_rustls::webpki::InvalidDnsNameError) -> WsHandshakeError {
-		WsHandshakeError::InvalidDnsName(err)
 	}
 }
 

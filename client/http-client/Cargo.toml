@@ -12,7 +12,7 @@ documentation = "https://docs.rs/jsonrpsee-http-client"
 [dependencies]
 async-trait = "0.1"
 hyper = { version = "0.14.10", features = ["client", "http1", "http2", "tcp"] }
-hyper-rustls = { version = "0.23", optional = true, default-features = false, features = ["http1", "tls12", "logging"] }
+hyper-rustls = { version = "0.24", optional = true, default-features = false, features = ["http1", "tls12", "logging"] }
 jsonrpsee-types = { path = "../../types", version = "0.16.2" }
 jsonrpsee-core = { path = "../../core", version = "0.16.2", features = ["client", "http-helpers"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }

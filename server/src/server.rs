@@ -765,7 +765,7 @@ fn process_connection<'a, L: Logger, B, U>(
 
 	let max_conns = cfg.max_connections as usize;
 	let curr_conns = max_conns - connection_guard.available_connections();
-	tracing::info!("Accepting new connection {}/{}", curr_conns, max_conns);
+	tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
 
 	let tower_service = TowerService {
 		inner: ServiceData {
