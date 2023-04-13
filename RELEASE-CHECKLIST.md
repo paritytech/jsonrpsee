@@ -10,8 +10,7 @@ We also assume that ongoing work done is being merged directly to the `master` b
     on the changes to date. If unsure what to bump the version to (e.g. is it a major, minor or patch release), check with the
     Parity Tools team.
 
-3.  Bump the crate versions in `Cargo.toml` to whatever was decided in step 2. The easiest approach is to search and replace, checking
-    that you didn't replace any other crate versions along the way.
+3.  Bump the crate version (several locations) in `Cargo.toml` of the workspace to whatever was decided in step 2.
 
 4.  Update `CHANGELOG.md` to reflect the difference between this release and the last. If you're unsure of
     what to add, check with the Tools team. See the `CHANGELOG.md` file for details of the format it follows.
