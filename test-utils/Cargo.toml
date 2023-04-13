@@ -1,7 +1,7 @@
 [package]
 name = "jsonrpsee-test-utils"
-version = "0.16.2"
-authors = ["Parity Technologies <admin@parity.io>"]
+version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false

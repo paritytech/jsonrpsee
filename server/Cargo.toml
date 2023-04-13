@@ -1,7 +1,7 @@
 [package]
 name = "jsonrpsee-server"
 description = "JSON-RPC server that supports HTTP and WebSocket transports"
-version = "0.16.2"
+version.workspace = true
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true

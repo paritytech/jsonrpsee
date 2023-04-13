@@ -19,6 +19,7 @@ resolver = "2"
 
 [workspace.package]
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
+version = "0.16.2"
 edition = "2021"
 rust-version = "1.64.0"
 license = "MIT"
