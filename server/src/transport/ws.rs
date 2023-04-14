@@ -269,7 +269,7 @@ pub(crate) async fn background_task<L: Logger>(
 		id_provider,
 		logger: logger.clone(),
 	};
-	tokio::spawn(method_executor_task(params, method_consumer));
+	let method_executor_handle = tokio::spawn(method_executor_task(params, method_consumer));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -364,8 +364,9 @@ pub(crate) async fn background_task<L: Logger>(
 		}
 	};
 
-	// Wait the pending calls to finish.
-	method_executor.closed().await;
+	// Wait for the method executor to finish for graceful shutdown.
+	drop(method_executor);
+	_ = method_executor_handle.await;
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 
@@ -501,32 +502,35 @@ struct ExecuteParams<L: Logger> {
 	logger: L,
 }
 
-async fn method_executor_task<L: Logger>(params: ExecuteParams<L>, mut next_task: UnboundedReceiver<MethodOp<L>>) {
-	let mut tasks = FuturesUnordered::new();
+async fn method_executor_task<L: Logger>(params: ExecuteParams<L>, mut next_call: UnboundedReceiver<MethodOp<L>>) {
+	let mut pending = FuturesUnordered::new();
 
 	loop {
 		// This is "to not poll" `FuturesUnordered` when it's empty to waste CPU cycles.
-		if tasks.is_empty() {
-			let Some(command) = next_task.recv().await else {
+		if pending.is_empty() {
+			let Some(command) = next_call.recv().await else {
 				break;
 			};
 
-			tasks.push(execute_command(command, params.clone()));
+			pending.push(execute_command(command, params.clone()));
 		} else {
 			tokio::select! {
-				_ = tasks.next() => {},
-				task = next_task.recv() => {
+				// A pending call was executed.
+				_ = pending.next() => {},
+				// A new call to process.
+				task = next_call.recv() => {
 					let Some(command) = task else {
 						break;
 					};
 
-					tasks.push(execute_command(command, params.clone()));
+					pending.push(execute_command(command, params.clone()));
 				}
 			}
 		}
 	}
 
-	while tasks.next().await.is_some() {}
+	// Complete pending calls for a graceful shutdown.
+	while pending.next().await.is_some() {}
 }
 
 async fn execute_command<L: Logger>(command: MethodOp<L>, params: ExecuteParams<L>) {
