@@ -265,6 +265,8 @@ async fn garbage_request_fails() {
 
 #[tokio::test]
 async fn whitespace_is_not_significant() {
+	init_logger();
+
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -275,6 +277,16 @@ async fn whitespace_is_not_significant() {
 	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, r#"[{"jsonrpc":"2.0","result":3,"id":1}]"#);
+
+	// Up to 127 whitespace chars are accepted.
+	let req = format!("{}{}", " ".repeat(127), r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#);
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::Number(3u32.into()), Id::Num(1)));
+
+	// More than 127 whitespace chars are not accepted.
+	let req = format!("{}{}", " ".repeat(128), r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#);
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
 }
 
 #[tokio::test]
