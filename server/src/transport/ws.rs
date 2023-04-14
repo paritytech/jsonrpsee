@@ -7,7 +7,7 @@ use crate::server::{BatchRequestConfig, ServiceData};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::FuturesOrdered;
+use futures_util::stream::{FuturesOrdered, FuturesUnordered};
 use futures_util::{Future, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
@@ -254,6 +254,7 @@ pub(crate) async fn background_task<L: Logger>(
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
+	let mut pending_calls = FuturesUnordered::new();
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval, conn_rx));
@@ -304,66 +305,31 @@ pub(crate) async fn background_task<L: Logger>(
 					}
 				};
 			}
-		}
+		};
 
-		let request_start = logger.on_request(TransportProtocol::WebSocket);
-		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
+		let params = ExecuteCallParams {
+			batch_requests_config,
+			bounded_subscriptions: bounded_subscriptions.clone(),
+			conn_id,
+			methods: methods.clone(),
+			max_log_length,
+			max_response_body_size,
+			sink: sink.clone(),
+			sink_permit,
+			id_provider: id_provider.clone(),
+			logger: logger.clone(),
+			data: std::mem::take(&mut data),
+		};
 
-		match first_non_whitespace {
-			Some(b'{') => {
-				let params = ExecuteParams {
-					conn_id,
-					methods: methods.clone(),
-					max_log_length,
-					max_response_body_size,
-					bounded_subscriptions: bounded_subscriptions.clone(),
-					request_start,
-					sink: sink.clone(),
-					sink_permit,
-					id_provider: id_provider.clone(),
-					logger: logger.clone(),
-					data: std::mem::take(&mut data),
-					command: MethodOp::Call,
-				};
-				tokio::spawn(execute_command(params));
-			}
-			Some(b'[') => {
-				let limit = match batch_requests_config {
-					BatchRequestConfig::Disabled => {
-						let response = MethodResponse::error(
-							Id::Null,
-							ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
-						);
-						logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-						sink_permit.send_raw(response.result);
-						continue;
-					}
-					BatchRequestConfig::Limit(limit) => limit as usize,
-					BatchRequestConfig::Unlimited => usize::MAX,
-				};
-				let params = ExecuteParams {
-					conn_id,
-					methods: methods.clone(),
-					max_log_length,
-					max_response_body_size,
-					bounded_subscriptions: bounded_subscriptions.clone(),
-					request_start,
-					sink: sink.clone(),
-					sink_permit,
-					id_provider: id_provider.clone(),
-					logger: logger.clone(),
-					data: std::mem::take(&mut data),
-					command: MethodOp::Batch(limit),
-				};
-				tokio::spawn(execute_command(params));
-			}
-			_ => {
-				sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
-			}
-		}
+		pending_calls.push(tokio::spawn(execute_unchecked_call(params)));
 	};
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
+
+	// Drive all running methods to completion.
+	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
+	// proper drop behaviour.
+	while pending_calls.next().await.is_some() {}
 
 	let _ = conn_tx.send(());
 	drop(conn);
@@ -480,14 +446,9 @@ where
 	}
 }
 
-enum MethodOp {
-	Call,
-	Batch(usize),
-}
-
-struct ExecuteParams<L: Logger> {
+struct ExecuteCallParams<L: Logger> {
+	batch_requests_config: BatchRequestConfig,
 	bounded_subscriptions: BoundedSubscriptions,
-	command: MethodOp,
 	conn_id: u32,
 	data: Vec<u8>,
 	id_provider: Arc<dyn IdProvider>,
@@ -497,13 +458,12 @@ struct ExecuteParams<L: Logger> {
 	sink: MethodSink,
 	sink_permit: MethodSinkPermit,
 	logger: L,
-	request_start: L::Instant,
 }
 
-async fn execute_command<L: Logger>(params: ExecuteParams<L>) {
-	let ExecuteParams {
+async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
+	let ExecuteCallParams {
+		batch_requests_config,
 		conn_id,
-		command,
 		data,
 		sink,
 		sink_permit,
@@ -513,23 +473,25 @@ async fn execute_command<L: Logger>(params: ExecuteParams<L>) {
 		id_provider,
 		bounded_subscriptions,
 		logger,
-		request_start,
 	} = params;
 
-	let call_data = CallData {
-		conn_id: conn_id as usize,
-		bounded_subscriptions,
-		max_response_body_size,
-		max_log_length,
-		methods: &methods,
-		sink: &sink,
-		id_provider: &*id_provider,
-		logger: &logger,
-		request_start,
-	};
+	let request_start = logger.on_request(TransportProtocol::WebSocket);
+	let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
 
-	match command {
-		MethodOp::Call => {
+	match first_non_whitespace {
+		Some(b'{') => {
+			let call_data = CallData {
+				conn_id: conn_id as usize,
+				bounded_subscriptions,
+				max_response_body_size,
+				max_log_length,
+				methods: &methods,
+				sink: &sink,
+				id_provider: &*id_provider,
+				logger: &logger,
+				request_start,
+			};
+
 			if let Some(rp) = process_single_request(data, call_data).await {
 				match rp {
 					CallOrSubscription::Subscription(r) => {
@@ -543,8 +505,34 @@ async fn execute_command<L: Logger>(params: ExecuteParams<L>) {
 				}
 			}
 		}
-		MethodOp::Batch(max_len) => {
-			let response = process_batch_request(Batch { data, call: call_data, max_len }).await;
+		Some(b'[') => {
+			let limit = match batch_requests_config {
+				BatchRequestConfig::Disabled => {
+					let response = MethodResponse::error(
+						Id::Null,
+						ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+					);
+					logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
+					sink_permit.send_raw(response.result);
+					return;
+				}
+				BatchRequestConfig::Limit(limit) => limit as usize,
+				BatchRequestConfig::Unlimited => usize::MAX,
+			};
+
+			let call_data = CallData {
+				conn_id: conn_id as usize,
+				bounded_subscriptions,
+				max_response_body_size,
+				max_log_length,
+				methods: &methods,
+				sink: &sink,
+				id_provider: &*id_provider,
+				logger: &logger,
+				request_start,
+			};
+
+			let response = process_batch_request(Batch { data, call: call_data, max_len: limit }).await;
 
 			if let Some(response) = response {
 				tx_log_from_str(&response, max_log_length);
@@ -552,5 +540,8 @@ async fn execute_command<L: Logger>(params: ExecuteParams<L>) {
 				sink_permit.send_raw(response);
 			}
 		}
-	}
+		_ => {
+			sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
+		}
+	};
 }
