@@ -250,10 +250,10 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
-	let (conn_tx, conn_rx) = oneshot::channel();
+	let (mut conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let pending_calls = FuturesUnordered::new();
+	let mut pending_calls = FuturesUnordered::new();
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
@@ -267,7 +267,7 @@ pub(crate) async fn background_task<L: Logger>(
 	let result = loop {
 		data.clear();
 
-		let sink_permit = match wait_for_reserve(&sink, stopped).await {
+		let sink_permit = match wait_for_permit(&sink, stopped).await {
 			Some((permit, stop)) => {
 				stopped = stop;
 				permit
@@ -326,7 +326,26 @@ pub(crate) async fn background_task<L: Logger>(
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	graceful_shutdown(pending_calls, conn_tx).await;
+	//
+	// This is not strictly not needed because `tokio::spawn` will drive these the completion
+	// but it's preferred the `stop_handle.stopped()` should not return until all methods has been
+	// executed and the connection has been closed.
+	loop {
+		tokio::select! {
+			// If connection is closed, there is no point waiting for the calls to terminate.
+			_ = conn_tx.closed() => {
+				break;
+			}
+			maybe_done = pending_calls.next() => {
+				// All pending calls has been executed => ok to stop.
+				if maybe_done.is_none() {
+					let _ = conn_tx.send(());
+					break;
+				}
+			}
+		}
+	}
+
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
 
@@ -400,7 +419,13 @@ enum Receive<S> {
 	Ok(S),
 }
 
-async fn wait_for_reserve<S>(sink: &MethodSink, stopped: S) -> Option<(MethodSinkPermit, S)>
+// Wait until there is a slot in the bounded channel.
+//
+// This will force the client to read socket on the other side
+// otherwise the socket will not be read again.
+//
+// Fails if the server was stopped.
+async fn wait_for_permit<S>(sink: &MethodSink, stopped: S) -> Option<(MethodSinkPermit, S)>
 where
 	S: Future<Output = ()> + Unpin,
 {
@@ -413,6 +438,7 @@ where
 	}
 }
 
+/// Attempts to read data from WebSocket fails if the server was stopped.
 async fn try_recv<S>(receiver: &mut Receiver, data: &mut Vec<u8>, stopped: S) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
@@ -539,22 +565,4 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 			sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
 		}
 	};
-}
-
-async fn graceful_shutdown<F: Future>(mut pending_calls: FuturesUnordered<F>, mut conn: oneshot::Sender<()>) {
-	loop {
-		tokio::select! {
-			// If connection is closed, there is no point waiting for the calls to terminate.
-			_ = conn.closed() => {
-				break;
-			}
-			maybe_done = pending_calls.next() => {
-				// If the all pending calls has been executed => it's ok to stop.
-				if maybe_done.is_none() {
-					let _ = conn.send(());
-					break;
-				}
-			}
-		}
-	}
 }
