@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::future::StopHandle;
 use crate::logger::{self, Logger, TransportProtocol};
 use crate::server::{BatchRequestConfig, ServiceData};
 
@@ -254,10 +253,10 @@ pub(crate) async fn background_task<L: Logger>(
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let mut pending_calls = FuturesUnordered::new();
+	let pending_calls = FuturesUnordered::new();
 
 	// Spawn another task that sends out the responses on the Websocket.
-	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval, conn_rx));
+	tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -324,15 +323,13 @@ pub(crate) async fn background_task<L: Logger>(
 		pending_calls.push(tokio::spawn(execute_unchecked_call(params)));
 	};
 
-	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
-
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	while pending_calls.next().await.is_some() {}
-
-	let _ = conn_tx.send(());
+	graceful_shutdown(pending_calls, conn_tx).await;
+	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
+
 	result
 }
 
@@ -340,21 +337,19 @@ pub(crate) async fn background_task<L: Logger>(
 async fn send_task(
 	rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
-	stop_handle: StopHandle,
 	ping_interval: Duration,
-	conn_closed: oneshot::Receiver<()>,
+	stop: oneshot::Receiver<()>,
 ) {
 	// Interval to send out continuously `pings`.
 	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
-	let stopped = stop_handle.shutdown();
 	let rx = ReceiverStream::new(rx);
 
-	tokio::pin!(ping_interval, stopped, rx, conn_closed);
+	tokio::pin!(ping_interval, rx, stop);
 
 	// Received messages from the WebSocket.
 	let mut rx_item = rx.next();
 	let next_ping = ping_interval.next();
-	let mut futs = future::select(next_ping, future::select(stopped, conn_closed));
+	let mut futs = future::select(next_ping, stop);
 
 	loop {
 		// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
@@ -387,7 +382,7 @@ async fn send_task(
 				futs = future::select(ping_interval.next(), stop);
 			}
 
-			// Server is stopped or closed
+			// Server is stopped.
 			Either::Right((Either::Right(_), _)) => {
 				break;
 			}
@@ -544,4 +539,22 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 			sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
 		}
 	};
+}
+
+async fn graceful_shutdown<F: Future>(mut pending_calls: FuturesUnordered<F>, mut conn: oneshot::Sender<()>) {
+	loop {
+		tokio::select! {
+			// If connection is closed, there is no point waiting for the calls to terminate.
+			_ = conn.closed() => {
+				break;
+			}
+			maybe_done = pending_calls.next() => {
+				// If the all pending calls has been executed => it's ok to stop.
+				if maybe_done.is_none() {
+					let _ = conn.send(());
+					break;
+				}
+			}
+		}
+	}
 }
