@@ -250,7 +250,7 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
-	let (mut conn_tx, conn_rx) = oneshot::channel();
+	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 	let mut pending_calls = FuturesUnordered::new();
@@ -330,21 +330,8 @@ pub(crate) async fn background_task<L: Logger>(
 	// This is not strictly not needed because `tokio::spawn` will drive these the completion
 	// but it's preferred the `stop_handle.stopped()` should not return until all methods has been
 	// executed and the connection has been closed.
-	loop {
-		tokio::select! {
-			// If connection is closed, there is no point waiting for the calls to terminate.
-			_ = conn_tx.closed() => {
-				break;
-			}
-			maybe_done = pending_calls.next() => {
-				// All pending calls has been executed => ok to stop.
-				if maybe_done.is_none() {
-					let _ = conn_tx.send(());
-					break;
-				}
-			}
-		}
-	}
+	while pending_calls.next().await.is_some() {}
+	let _ = conn_tx.send(());
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
