@@ -826,7 +826,7 @@ async fn drop_client_with_pending_calls_works() {
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	for _ in 0..10 {
-		let req = r#"{"jsonrpc":"2.0","method":"sleep_10s","id":1}"#;
+		let req = r#"{"jsonrpc":"2.0","method":"infinite_call","id":1}"#;
 		client.send(req).with_default_timeout().await.unwrap().unwrap();
 	}
 
