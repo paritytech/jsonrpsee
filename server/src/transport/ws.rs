@@ -253,7 +253,7 @@ pub(crate) async fn background_task<L: Logger>(
 	let (mut conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let mut pending_calls = FuturesUnordered::new();
+	let pending_calls = FuturesUnordered::new();
 
 	// Spawn another task that sends out the responses on the Websocket.
 	tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
