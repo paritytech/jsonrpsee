@@ -31,6 +31,10 @@ After this release one must do something like:
 
 ```rust
     // This is just a example helper.
+	// 
+	// Other examples:
+	// - <https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/ws_pubsub_broadcast.rs>
+	// - <https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/ws_pubsub_with_params.rs>
 	pub async fn pipe_from_stream<T: Serialize>(
 		pending: PendingSubscriptionSink,
 		mut stream: impl Stream<Item = T> + Unpin,
