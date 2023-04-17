@@ -124,8 +124,8 @@ Example:
 The return value in the example above needs to implement `IntoSubscriptionCloseResponse` and
 any value that is returned after that the subscription has been accepted will be treated as a `IntoSubscriptionCloseResponse`.
 
-Because `Result<(), E>` is used here the close notification will sent out as error notification and in this case
-the return value is ignored by using `()`. You can implement `IntoSubscriptionCloseResponse` for other behaviour.
+Because `Result<(), E>` is used here the close notification will be sent out as error notification but it's possible to
+disable the subscription close response by using `()` instead of `Result<(), E>` or implement `IntoSubscriptionCloseResponse` for other behaviour.
 
 ### [Added]
 - feat(server): configurable limit for batch requests.  ([#1073](https://github.com/paritytech/jsonrpsee/pull/1073))
