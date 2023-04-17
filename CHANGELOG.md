@@ -10,11 +10,8 @@ This is a significant release and the important changes to be aware of are:
 
 ### Server backpressure
 
-This release changed the server to be "backpressured", before the the server used unbounded channels and
-now one needs to explicitly handle what to do when a channel becomes full as it's highly application dependent.
-
-This mostly concerns the subscription APIs and both non-blocking and async APIs are now provided.
-As a consequence of the changes `pipe_from_stream` has been removed.
+This release changed the server to be "backpressured" and it mostly concerns subscriptions.
+New APIs has been introduced because that and the API `pipe_from_stream` has been removed.
 
 Before it was possible to do:
 
@@ -25,7 +22,7 @@ Before it was possible to do:
 
 			tokio::spawn(async move {
 				sink.pipe_from_stream(stream)
-				});
+			});
 		})
 		.unwrap();
 ```
@@ -67,8 +64,9 @@ After this release one must do something like:
 This release also introduces a trait called `IntoResponse` which is makes it possible to return custom types and/or error
 types instead of enforcing everything to return `Result<T, jsonrpsee::core::Error>`
 
-The return values from `RpcModule::register_method`, `RpcModule::register_async_method` and `RpcModule::register_blocking_method`
+This affects the APIs `RpcModule::register_method`, `RpcModule::register_async_method` and `RpcModule::register_blocking_method`
 and when these are used in the proc macro API are affected by this change.
+Be aware that [the client APIs don't support this yet](https://github.com/paritytech/jsonrpsee/issues/1067)
 
 The `IntoResponse` trait is already implemented for `Result<T, jsonrpsee::core::Error>` and for the primitive types
 
@@ -90,20 +88,19 @@ After this release it possible to do:
 
 jsonrpsee now spawns the subscriptions and it's sufficient to provide an async block in `register_subscription`
 
-Futher, the subscription API had a close API for closing subscriptions which was hard to understand and
-to get right then this errors were not propagated the client just logged on the server side.
+Further, the subscription API had a close API for closing subscriptions which was hard to understand and
+to get right.
 
 To elaborate why this `close API` can be useful is that if a server is closing a subscription it's possible that
 the client won't be notified unless a separate notification is sent before the subscription is dropped. In those
 scenarios it could be useful to use the `close API` instead of defining your own messages.
 
-To cope with that a new trait called `IntoSubscriptionCloseResponse` has been introduced to make that easier.
-After the `subscription` has been accepted then return value from that async block can be send out as close notification.
+In the changed API after the `subscription` has been accepted then return value (`IntoSubscriptionCloseResponse`) from that async block will determine what to
+do when it returns. Based on what the return type of the subscription callback it's possible to choose whether the subscription shall
+send out on close.
 
-It's implemented for Result<(), E> an that the error notification has a slightly different
-format than an ordiniary subscription notification. If one doesn't want that you can
-the `IntoSubscriptionCloseResponse trait` for your own type or just use `()` if no
-close notification should be sent.
+For instance `Result<(), E>` will send out a error notification and `()` won't send out anything and for other behaviour
+the trait `IntoSubscriptionCloseResponse` can be implemented for custom types.
 
 Before it was possible to do:
 
