@@ -107,8 +107,8 @@ Example:
 The return value in example above needs to implement `IntoSubscriptionCloseResponse` and in this case it's `Result<(), E>` which
 implies that any value after `pending.accept().await?`.
 
-Because `Result<(), E>` is used here then close notification will sent out as error notification and it's also possible
-to ignore the return value by using `()` or implement `IntoSubscriptionCloseResponse` for some other behaviour.
+Because `Result<(), E>` is used here then close notification will sent out as error notification and in this case
+the return value is ignored by using `()`. You can implement `IntoSubscriptionCloseResponse` for some other behaviour.
 
 ### [Added]
 - feat(server): configurable limit for batch requests.  ([#1073](https://github.com/paritytech/jsonrpsee/pull/1073))
