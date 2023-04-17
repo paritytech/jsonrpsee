@@ -30,31 +30,44 @@ Before it was possible to do:
 After this release one must do something like:
 
 ```rust
-	module
-		.register_subscription("sub", "s", "unsub", |_, pending, _| async move {
-			pending.accept().await?;
+    // This is just a example helper.
+	pub async fn pipe_from_stream<T: Serialize>(
+		pending: PendingSubscriptionSink,
+		mut stream: impl Stream<Item = T> + Unpin,
+	) -> Result<(), anyhow::Error> {
+		let mut sink = pending.accept().await?;
 
-			let stream = stream_of_integers();
+		loop {
+			tokio::select! {
+				_ = sink.closed() => break Ok(()),
 
-			loop {
-				tokio::select! {
-					_ = sink.closed() => break Ok(()),
-					maybe_item = stream.next() => {
-						let Some(item) = maybe_item else {
-							break Ok(())
-						};
-						let msg = SubscriptionMessage::from_json(&item)?;
-						if let Err(e) = sink.send_timeout(msg) {
-							match e {
-								// The subscription is closed.
-								Err(TrySendError::Closed(_)) => break Ok(()),
-								// Channel is full, just drop the subscription
-								Err(TrySendError::Full(_)) => break Ok(()),
-							}
+				maybe_item = stream.next() => {
+					let Some(item) = match maybe_item else {
+						break Ok(()),
+					};
+
+					let msg = SubscriptionMessage::from_json(&item)?;
+
+					if let Err(e) = sink.send_timeout(msg, Duration::from_secs(60)).await {
+						match e {
+							// The subscription or connection was closed.
+							SendTimeoutError::Closed(_) => break Ok(()),
+							/// The subscription send timeout expired
+							/// the message is returned and you could save that message
+							/// and retry again later.
+							SendTimeoutError::Timeout(_) => break Err(anyhow::anyhow!("Subscription timeout expired")),
 						}
 					}
 				}
 			}
+		}
+	}
+
+
+	module
+		.register_subscription("sub", "s", "unsub", |_, pending, _| async move {
+			let stream = stream();
+			pipe_from_stream(sink, stream).await
 		})
 		.unwrap();
 ```
@@ -104,11 +117,11 @@ Example:
 		.unwrap();
 ```
 
-The return value in the example above needs to implement `IntoSubscriptionCloseResponse` and in this case it's `Result<(), E>` which
-implies that any value after `pending.accept().await?`.
+The return value in the example above needs to implement `IntoSubscriptionCloseResponse` and
+any value that is returned after that the subscription has been accepted will be treated as a `IntoSubscriptionCloseResponse`.
 
 Because `Result<(), E>` is used here then close notification will sent out as error notification and in this case
-the return value is ignored by using `()`. You can implement `IntoSubscriptionCloseResponse` for some other behaviour.
+the return value is ignored by using `()`. You can implement `IntoSubscriptionCloseResponse` for other behaviour.
 
 ### [Added]
 - feat(server): configurable limit for batch requests.  ([#1073](https://github.com/paritytech/jsonrpsee/pull/1073))
