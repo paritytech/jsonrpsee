@@ -32,8 +32,8 @@ use crate::Error;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response, ResponsePayload};
 use serde::Serialize;
+use tokio::sync::mpsc::{self, OwnedPermit};
 use serde_json::value::to_raw_value;
-use tokio::sync::mpsc::{self, Permit};
 
 use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
@@ -146,7 +146,7 @@ impl MethodSink {
 
 	/// Waits for channel capacity. Once capacity to send one message is available, it is reserved for the caller.
 	pub async fn reserve(&self) -> Result<MethodSinkPermit, DisconnectError> {
-		match self.tx.reserve().await {
+		match self.tx.clone().reserve_owned().await {
 			Ok(permit) => Ok(MethodSinkPermit { tx: permit, max_log_length: self.max_log_length }),
 			Err(_) => Err(DisconnectError(SubscriptionMessage::empty())),
 		}
@@ -155,12 +155,12 @@ impl MethodSink {
 
 /// A method sink with reserved spot in the bounded queue.
 #[derive(Debug)]
-pub struct MethodSinkPermit<'a> {
-	tx: Permit<'a, String>,
+pub struct MethodSinkPermit {
+	tx: OwnedPermit<String>,
 	max_log_length: u32,
 }
 
-impl<'a> MethodSinkPermit<'a> {
+impl MethodSinkPermit {
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(self, id: Id, err: ErrorObject) {
 		let json = serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err.into_owned()), id))
