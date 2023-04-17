@@ -124,7 +124,7 @@ Example:
 The return value in the example above needs to implement `IntoSubscriptionCloseResponse` and
 any value that is returned after that the subscription has been accepted will be treated as a `IntoSubscriptionCloseResponse`.
 
-Because `Result<(), E>` is used here then close notification will sent out as error notification and in this case
+Because `Result<(), E>` is used here the close notification will sent out as error notification and in this case
 the return value is ignored by using `()`. You can implement `IntoSubscriptionCloseResponse` for other behaviour.
 
 ### [Added]
