@@ -94,7 +94,7 @@ Before it was possible to do:
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 ```
 
-After this release it possible to do:
+After this release it's possible to do:
 
 ```rust
 	// Note, this method call is infallible and you might not want to return Result.
