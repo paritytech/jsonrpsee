@@ -98,7 +98,7 @@ the client won't be notified unless a separate notification is sent before the s
 scenarios it could be useful to use the `close API` instead of defining your own messages.
 
 To cope with that a new trait called `IntoSubscriptionCloseResponse` has been introduced to make that easier.
-After the `subscription` has been accepted then return value from that async block can be send out as close notification.
+After the `subscription` has been accepted then return value from that async block can be sent out as close notification.
 It's implemented for Result<T, E> and can be implemented for custom types/behaviour as well.
 
 Before it was possible to do:
