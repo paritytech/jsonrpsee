@@ -11,7 +11,7 @@ This is a significant release and the major breaking changes to be aware of are:
 ### Server backpressure
 
 This release changes the server to be "backpressured" and it mostly concerns subscriptions.
-New APIs has been introduced because that and the API `pipe_from_stream` has been removed.
+New APIs has been introduced because of that and the API `pipe_from_stream` has been removed.
 
 Before it was possible to do:
 
