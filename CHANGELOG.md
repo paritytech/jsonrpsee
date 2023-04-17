@@ -86,68 +86,29 @@ After this release it possible to do:
 
 ### Subscription API is changed.
 
-jsonrpsee now spawns the subscriptions and it's sufficient to provide an async block in `register_subscription`
+jsonrpsee now spawns the subscriptions via `tokio::spawn` and it's sufficient to provide an async block in `register_subscription`
 
-Further, the subscription API had a close API for closing subscriptions which was hard to understand and
-to get right.
+Further, the subscription API had an explicit close API for closing subscriptions which was hard to understand and
+to get right. This has been removed and everything is handled by the return value/type of the async block instead.
 
-To elaborate why this `close API` can be useful is that if a server is closing a subscription it's possible that
-the client won't be notified unless a separate notification is sent before the subscription is dropped. In those
-scenarios it could be useful to use the `close API` instead of defining your own messages.
-
-In the changed API after the `subscription` has been accepted then return value (`IntoSubscriptionCloseResponse`) from that async block will determine what to
-do when it returns. Based on what the return type of the subscription callback it's possible to choose whether the subscription shall
-send out on close.
-
-For instance `Result<(), E>` will send out a error notification and `()` won't send out anything and for other behaviour
-the trait `IntoSubscriptionCloseResponse` can be implemented for custom types.
-
-Before it was possible to do:
+Example:
 
 ```rust
 	module
-		.register_subscription("sub", "s", "unsub", |_, sink, _| async move {
-		let stream = stream_of_integers();
-
-		tokio::spawn(async move {
-			match sink.pipe_from_try_stream(stream).await {
-				SubscriptionClosed::Success => {
-					sink.close(SubscriptionClosed::Success);
-				}
-				SubscriptionClosed::RemotePeerAborted => (),
-				SubscriptionClosed::Failed(err) => {
-					sink.close(err);
-				}
-			}
-		});
-	})
-	.unwrap();
-```
-
-After this release it's possible to do:
-
-```rust
-	module
-		.register_subscription("sub", "s", "unsub", |_, pending, _| async move {
+		.register_subscription::<RpcResult<(), _, _>::("sub", "s", "unsub", |_, pending, _| async move {
+			// This just answers the RPC call and if this fails => no close notification is sent out.
 			pending.accept().await?;
-			let stream = stream_of_integers();
-
-			// Errors here returned here will be sent out as a close notification.
-			loop {
-				tokio::select! {
-					_ = sink.closed() => break Ok(()),
-					maybe_item = stream.next() => {
-						let Some(item) = maybe_item else {
-							break Ok(())
-						};
-						let msg = SubscriptionMessage::from_json(&item)?;
-						sink.send.await(msg).map_err(|_| anyhow::anyhow!("The subscription failed"))?;
-					}
-				}
-			}
+			// This is sent out as a `close notification/message`.
+			Err(anyhow::anyhow!("The subscription failed"))?;
 		})
 		.unwrap();
 ```
+
+The return value in example above needs to implement `IntoSubscriptionCloseResponse` and in this case it's `Result<(), E>` which
+implies that any value after `pending.accept().await?`.
+
+Because `Result<(), E>` is used here then close notification will sent out as error notification and it's also possible
+to ignore the return value by using `()` or implement `IntoSubscriptionCloseResponse` for some other behaviour.
 
 ### [Added]
 - feat(server): configurable limit for batch requests.  ([#1073](https://github.com/paritytech/jsonrpsee/pull/1073))
