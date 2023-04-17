@@ -4,6 +4,168 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.17.0] - 2023-04-17
+
+This is a significant release and the major breaking changes to be aware of are:
+
+### Server backpressure
+
+This release changes the server to be "backpressured" and it mostly concerns subscriptions.
+New APIs has been introduced because of that and the API `pipe_from_stream` has been removed.
+
+Before it was possible to do:
+
+```rust
+	module
+		.register_subscription("sub", "s", "unsub", |_, sink, _| async move {
+			let stream = stream_of_integers();
+
+			tokio::spawn(async move {
+				sink.pipe_from_stream(stream)
+			});
+		})
+		.unwrap();
+```
+
+After this release one must do something like:
+
+```rust
+	// This is just a example helper.
+	//
+	// Other examples:
+	// - <https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/ws_pubsub_broadcast.rs>
+	// - <https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/ws_pubsub_with_params.rs>
+	async fn pipe_from_stream<T: Serialize>(
+		pending: PendingSubscriptionSink,
+		mut stream: impl Stream<Item = T> + Unpin,
+	) -> Result<(), anyhow::Error> {
+		let mut sink = pending.accept().await?;
+
+		loop {
+			tokio::select! {
+				_ = sink.closed() => break Ok(()),
+
+				maybe_item = stream.next() => {
+					let Some(item) = match maybe_item else {
+						break Ok(()),
+					};
+
+					let msg = SubscriptionMessage::from_json(&item)?;
+
+					if let Err(e) = sink.send_timeout(msg, Duration::from_secs(60)).await {
+						match e {
+							// The subscription or connection was closed.
+							SendTimeoutError::Closed(_) => break Ok(()),
+							/// The subscription send timeout expired
+							/// the message is returned and you could save that message
+							/// and retry again later.
+							SendTimeoutError::Timeout(_) => break Err(anyhow::anyhow!("Subscription timeout expired")),
+						}
+					}
+				}
+			}
+		}
+	}
+
+
+	module
+		.register_subscription("sub", "s", "unsub", |_, pending, _| async move {
+			let stream = stream();
+			pipe_from_stream(sink, stream).await
+		})
+		.unwrap();
+```
+
+### Method call return type is more flexible
+
+This release also introduces a trait called `IntoResponse` which is makes it possible to return custom types and/or error
+types instead of enforcing everything to return `Result<T, jsonrpsee::core::Error>`
+
+This affects the APIs `RpcModule::register_method`, `RpcModule::register_async_method` and `RpcModule::register_blocking_method`
+and when these are used in the proc macro API are affected by this change.
+Be aware that [the client APIs don't support this yet](https://github.com/paritytech/jsonrpsee/issues/1067)
+
+The `IntoResponse` trait is already implemented for `Result<T, jsonrpsee::core::Error>` and for the primitive types
+
+Before it was possible to do:
+
+```rust
+	// This would return Result<&str, jsonrpsee::core::Error>
+	module.register_method("say_hello", |_, _| Ok("lo"))?;
+```
+
+After this release it's possible to do:
+
+```rust
+	// Note, this method call is infallible and you might not want to return Result.
+	module.register_method("say_hello", |_, _| "lo")?;
+```
+
+### Subscription API is changed.
+
+jsonrpsee now spawns the subscriptions via `tokio::spawn` and it's sufficient to provide an async block in `register_subscription`
+
+Further, the subscription API had an explicit close API for closing subscriptions which was hard to understand and
+to get right. This has been removed and everything is handled by the return value/type of the async block instead.
+
+Example:
+
+```rust
+	module
+		.register_subscription::<RpcResult<(), _, _>::("sub", "s", "unsub", |_, pending, _| async move {
+			// This just answers the RPC call and if this fails => no close notification is sent out.
+			pending.accept().await?;
+			// This is sent out as a `close notification/message`.
+			Err(anyhow::anyhow!("The subscription failed"))?;
+		})
+		.unwrap();
+```
+
+The return value in the example above needs to implement `IntoSubscriptionCloseResponse` and
+any value that is returned after that the subscription has been accepted will be treated as a `IntoSubscriptionCloseResponse`.
+
+Because `Result<(), E>` is used here the close notification will be sent out as error notification but it's possible to
+disable the subscription close response by using `()` instead of `Result<(), E>` or implement `IntoSubscriptionCloseResponse` for other behaviour.
+
+### [Added]
+- feat(server): configurable limit for batch requests.  ([#1073](https://github.com/paritytech/jsonrpsee/pull/1073))
+- feat(http client): add tower middleware  ([#981](https://github.com/paritytech/jsonrpsee/pull/981))
+
+### [Fixed]
+- add tests for ErrorObject  ([#1078](https://github.com/paritytech/jsonrpsee/pull/1078))
+- fix: tokio v1.27  ([#1062](https://github.com/paritytech/jsonrpsee/pull/1062))
+- fix: remove needless `Semaphore::(u32::MAX)`  ([#1051](https://github.com/paritytech/jsonrpsee/pull/1051))
+- fix server: don't send error on JSON-RPC notifications  ([#1021](https://github.com/paritytech/jsonrpsee/pull/1021))
+- fix: add `max_log_length` APIs and use missing configs  ([#956](https://github.com/paritytech/jsonrpsee/pull/956))
+- fix(rpc module): subscription close bug  ([#1011](https://github.com/paritytech/jsonrpsee/pull/1011))
+- fix: customized server error codes  ([#1004](https://github.com/paritytech/jsonrpsee/pull/1004))
+
+### [Changed]
+- docs: introduce workspace attributes and add keywords ([#1077](https://github.com/paritytech/jsonrpsee/pull/1077))
+- refactor(server): downgrade connection log  ([#1076](https://github.com/paritytech/jsonrpsee/pull/1076))
+- chore(deps): update webpki-roots and tls  ([#1068](https://github.com/paritytech/jsonrpsee/pull/1068))
+- rpc module: refactor subscriptions to return `impl IntoSubscriptionResponse`  ([#1034](https://github.com/paritytech/jsonrpsee/pull/1034))
+- add `IntoResponse` trait for method calls  ([#1057](https://github.com/paritytech/jsonrpsee/pull/1057))
+- Make `jsonrpc` protocol version field in `Response` as `Option`  ([#1046](https://github.com/paritytech/jsonrpsee/pull/1046))
+- server: remove dependency http  ([#1037](https://github.com/paritytech/jsonrpsee/pull/1037))
+- chore(deps): update tower-http requirement from 0.3.4 to 0.4.0  ([#1033](https://github.com/paritytech/jsonrpsee/pull/1033))
+- chore(deps): update socket2 requirement from 0.4.7 to 0.5.1  ([#1032](https://github.com/paritytech/jsonrpsee/pull/1032))
+- Update bound type name  ([#1029](https://github.com/paritytech/jsonrpsee/pull/1029))
+- rpc module: remove `SubscriptionAnswer`  ([#1025](https://github.com/paritytech/jsonrpsee/pull/1025))
+- make verify_and_insert pub  ([#1028](https://github.com/paritytech/jsonrpsee/pull/1028))
+- update MethodKind  ([#1026](https://github.com/paritytech/jsonrpsee/pull/1026))
+- remove batch response  ([#1020](https://github.com/paritytech/jsonrpsee/pull/1020))
+- remove debug log  ([#1024](https://github.com/paritytech/jsonrpsee/pull/1024))
+- client: rename `max_notifs_per_subscription` to `max_buffer_capacity_per_subscription`  ([#1012](https://github.com/paritytech/jsonrpsee/pull/1012))
+- client: feature gate tls cert store  ([#994](https://github.com/paritytech/jsonrpsee/pull/994))
+- server: bounded channels and backpressure  ([#962](https://github.com/paritytech/jsonrpsee/pull/962))
+- client: use tokio channels  ([#999](https://github.com/paritytech/jsonrpsee/pull/999))
+- chore: update gloo-net ^0.2.6  ([#978](https://github.com/paritytech/jsonrpsee/pull/978))
+- Custom errors  ([#977](https://github.com/paritytech/jsonrpsee/pull/977))
+- client: distinct APIs to configure max request and response sizes  ([#967](https://github.com/paritytech/jsonrpsee/pull/967))
+- server: replace `FutureDriver` with `tokio::spawn`  ([#1080](https://github.com/paritytech/jsonrpsee/pull/1080))
+- server: uniform whitespace handling in rpc calls  ([#1082](https://github.com/paritytech/jsonrpsee/pull/1082))
+
 ## [v0.16.2] - 2022-12-01
 
 This release adds `Clone` and `Copy` implementations.
@@ -38,7 +200,7 @@ Both HTTP and WebSocket are still enabled by default.
 
 v0.16.0 is a breaking release and the major changes are:
 
-- The server now support WS and HTTP on the same socket and the `jsonrpsee-http-server` and `jsonrpsee-ws-server` crates are moved to the `jsonrpsee-server` crate instead. 
+- The server now support WS and HTTP on the same socket and the `jsonrpsee-http-server` and `jsonrpsee-ws-server` crates are moved to the `jsonrpsee-server` crate instead.
 - The client batch request API is improved such as the errors and valid responses can be iterated over.
 - The server has `tower middleware` support.
 - The server now adds a tracing span for each connection to distinguish logs per connection.
