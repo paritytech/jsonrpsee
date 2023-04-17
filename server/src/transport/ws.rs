@@ -79,7 +79,7 @@ pub(crate) struct CallData<'a, L: Logger> {
 pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<String> {
 	let Batch { data, call, max_len } = b;
 
-	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
+	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(data) {
 		if batch.len() > max_len {
 			return Some(batch_response_error(Id::Null, reject_too_big_batch_request(max_len)));
 		}
@@ -130,12 +130,12 @@ pub(crate) async fn process_single_request<L: Logger>(
 	data: &[u8],
 	call: CallData<'_, L>,
 ) -> Option<CallOrSubscription> {
-	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
+	if let Ok(req) = serde_json::from_slice::<Request>(data) {
 		Some(execute_call_with_tracing(req, call).await)
-	} else if serde_json::from_slice::<Notif>(&data).is_ok() {
+	} else if serde_json::from_slice::<Notif>(data).is_ok() {
 		None
 	} else {
-		let (id, code) = prepare_error(&data);
+		let (id, code) = prepare_error(data);
 		Some(CallOrSubscription::Call(MethodResponse::error(id, ErrorObject::from(code))))
 	}
 }
