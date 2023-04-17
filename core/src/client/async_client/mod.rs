@@ -360,6 +360,9 @@ impl ClientT for Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
 		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
+		if batches.len() == 1 {
+			dbg!(&raw);
+		}
 
 		tx_log_from_str(&raw, self.max_log_length);
 

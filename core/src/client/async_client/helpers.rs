@@ -267,7 +267,10 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 			let _ = send_back.send(Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))));
 			Ok(())
 		}
-		_ => Err(Error::InvalidRequestId),
+		_ => {
+			dbg!(err);
+			Err(Error::InvalidRequestId)
+		}
 	}
 }
 
