@@ -99,7 +99,7 @@ scenarios it could be useful to use the `close API` instead of defining your own
 
 To cope with that a new trait called `IntoSubscriptionCloseResponse` has been introduced to make that easier.
 After the `subscription` has been accepted then return value from that async block can be sent out as close notification.
-It's implemented for Result<T, E> and can be implemented for custom types/behaviour as well.
+It's implemented for Result<(), E> and can be implemented for custom types/behaviour as well.
 
 Before it was possible to do:
 
