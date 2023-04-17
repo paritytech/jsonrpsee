@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.17.0] - 2023-04-14
 
-This is a significant release and the important changes to be aware of are:
+This is a significant release and the major breaking changes to be aware of are:
 
 ### Server backpressure
 
@@ -120,6 +120,8 @@ to ignore the return value by using `()` or implement `IntoSubscriptionCloseResp
 - fix: remove needless `Semaphore::(u32::MAX)`  ([#1051](https://github.com/paritytech/jsonrpsee/pull/1051))
 - fix server: don't send error on JSON-RPC notifications  ([#1021](https://github.com/paritytech/jsonrpsee/pull/1021))
 - fix: add `max_log_length` APIs and use missing configs  ([#956](https://github.com/paritytech/jsonrpsee/pull/956))
+- fix(rpc module): subscription close bug  ([#1011](https://github.com/paritytech/jsonrpsee/pull/1011))
+- fix: customized server error codes  ([#1004](https://github.com/paritytech/jsonrpsee/pull/1004))
 
 ### [Changed]
 - docs: introduce workspace attributes and add keywords ([#1077](https://github.com/paritytech/jsonrpsee/pull/1077))
@@ -137,9 +139,7 @@ to ignore the return value by using `()` or implement `IntoSubscriptionCloseResp
 - update MethodKind  ([#1026](https://github.com/paritytech/jsonrpsee/pull/1026))
 - remove batch response  ([#1020](https://github.com/paritytech/jsonrpsee/pull/1020))
 - remove debug log  ([#1024](https://github.com/paritytech/jsonrpsee/pull/1024))
-- fix(rpc module): subscription close bug  ([#1011](https://github.com/paritytech/jsonrpsee/pull/1011))
 - client: rename `max_notifs_per_subscription` to `max_buffer_capacity_per_subscription`  ([#1012](https://github.com/paritytech/jsonrpsee/pull/1012))
-- Update error codes  ([#1004](https://github.com/paritytech/jsonrpsee/pull/1004))
 - client: feature gate tls cert store  ([#994](https://github.com/paritytech/jsonrpsee/pull/994))
 - server: bounded channels and backpressure  ([#962](https://github.com/paritytech/jsonrpsee/pull/962))
 - client: use tokio channels  ([#999](https://github.com/paritytech/jsonrpsee/pull/999))
