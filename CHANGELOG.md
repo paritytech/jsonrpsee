@@ -10,24 +10,22 @@ This is a significant release and the important changes to be aware of are:
 
 ### Server backpressure
 
-This release changed the server to be "backpressured", before the API used unbounded channels and 
-now one needs to explicitly handle what do when a channel becomes full as it's highly application dependent.
+This release changed the server to be "backpressured", before the the server used unbounded channels and
+now one needs to explicitly handle what to do when a channel becomes full as it's highly application dependent.
 
-It mostly changes the subscription APIs and now both non-blocking and async APIs are provided.
-
-As a consequence the old API pipe_from_stream has been removed and jsonrpsee only provides async primitives to implement
-something similar depending on the use-case.
+This mostly concerns the subscription APIs and both non-blocking and async APIs are now provided.
+As a consequence of the changes `pipe_from_stream` has been removed.
 
 Before it was possible to do:
 
 ```rust
 	module
 		.register_subscription("sub", "s", "unsub", |_, sink, _| async move {
-            let stream = stream_of_integers();
+			let stream = stream_of_integers();
 
-            tokio::spawn(async move {
-                sink.pipe_from_stream(stream)
-            });
+			tokio::spawn(async move {
+				sink.pipe_from_stream(stream)
+				});
 		})
 		.unwrap();
 ```
@@ -46,8 +44,8 @@ After this release one must do something like:
 					_ = sink.closed() => break Ok(()),
 					maybe_item = stream.next() => {
 						let Some(item) = maybe_item else {
-                            break Ok(())
-                        };
+							break Ok(())
+						};
 						let msg = SubscriptionMessage::from_json(&item)?;
 						if let Err(e) = sink.send_timeout(msg) {
 							match e {
@@ -64,7 +62,7 @@ After this release one must do something like:
 		.unwrap();
 ```
 
-### Method calls return type are more flexible
+### Method call return type is more flexible
 
 This release also introduces a trait called `IntoResponse` which is makes it possible to return custom types and/or error
 types instead of enforcing everything to return `Result<T, jsonrpsee::core::Error>`
@@ -77,21 +75,23 @@ The `IntoResponse` trait is already implemented for `Result<T, jsonrpsee::core::
 Before it was possible to do:
 
 ```rust
-    // This would return Result<&str, jsonrpsee::core::Error>
-    module.register_method("say_hello", |_, _| Ok("lo"))?;
+	// This would return Result<&str, jsonrpsee::core::Error>
+	module.register_method("say_hello", |_, _| Ok("lo"))?;
 ```
 
 After this release it possible to do:
 
 ```rust
-    // Note, this method call is infallible and you might not want to return Result.
-    module.register_method("say_hello", |_, _| "lo")?;
+	// Note, this method call is infallible and you might not want to return Result.
+	module.register_method("say_hello", |_, _| "lo")?;
 ```
 
-### Subscription close API is simplified
+### Subscription API is changed.
 
-Before the subscription API had a dedicated API for sending something that was called `close notifications`
-which was hard to understand and to get right then this errors were not propagated the client just logged on the server side.
+jsonrpsee now spawns the subscriptions and it's sufficient to provide an async block in `register_subscription`
+
+Futher, the subscription API had a close API for closing subscriptions which was hard to understand and
+to get right then this errors were not propagated the client just logged on the server side.
 
 To elaborate why this `close API` can be useful is that if a server is closing a subscription it's possible that
 the client won't be notified unless a separate notification is sent before the subscription is dropped. In those
@@ -99,46 +99,50 @@ scenarios it could be useful to use the `close API` instead of defining your own
 
 To cope with that a new trait called `IntoSubscriptionCloseResponse` has been introduced to make that easier.
 After the `subscription` has been accepted then return value from that async block can be send out as close notification.
-It's implemented for Result<T, E> and can be implemented for custom types/behaviour as well.
+
+It's implemented for Result<(), E> an that the error notification has a slightly different
+format than an ordiniary subscription notification. If one doesn't want that you can
+the `IntoSubscriptionCloseResponse trait` for your own type or just use `()` if no
+close notification should be sent.
 
 Before it was possible to do:
 
 ```rust
 	module
 		.register_subscription("sub", "s", "unsub", |_, sink, _| async move {
-            let stream = stream_of_integers();
+		let stream = stream_of_integers();
 
-		    tokio::spawn(async move {
-			    match sink.pipe_from_try_stream(stream).await {
-				    SubscriptionClosed::Success => {
-					    sink.close(SubscriptionClosed::Success);
-				    }
-				    SubscriptionClosed::RemotePeerAborted => (),
-				    SubscriptionClosed::Failed(err) => {
-					    sink.close(err);
-                    }
+		tokio::spawn(async move {
+			match sink.pipe_from_try_stream(stream).await {
+				SubscriptionClosed::Success => {
+					sink.close(SubscriptionClosed::Success);
 				}
-			});
-		})
-		.unwrap();
+				SubscriptionClosed::RemotePeerAborted => (),
+				SubscriptionClosed::Failed(err) => {
+					sink.close(err);
+				}
+			}
+		});
+	})
+	.unwrap();
 ```
 
-After this release it possible to do:
+After this release it's possible to do:
 
 ```rust
 	module
 		.register_subscription("sub", "s", "unsub", |_, pending, _| async move {
-            pending.accept().await?;
-            let stream = stream_of_integers();
+			pending.accept().await?;
+			let stream = stream_of_integers();
 
-			// Errors here returned here will be sent out as a close notification. 
-            loop {
+			// Errors here returned here will be sent out as a close notification.
+			loop {
 				tokio::select! {
 					_ = sink.closed() => break Ok(()),
 					maybe_item = stream.next() => {
 						let Some(item) = maybe_item else {
-                            break Ok(())
-                        };
+							break Ok(())
+						};
 						let msg = SubscriptionMessage::from_json(&item)?;
 						sink.send.await(msg).map_err(|_| anyhow::anyhow!("The subscription failed"))?;
 					}
@@ -221,7 +225,7 @@ Both HTTP and WebSocket are still enabled by default.
 
 v0.16.0 is a breaking release and the major changes are:
 
-- The server now support WS and HTTP on the same socket and the `jsonrpsee-http-server` and `jsonrpsee-ws-server` crates are moved to the `jsonrpsee-server` crate instead. 
+- The server now support WS and HTTP on the same socket and the `jsonrpsee-http-server` and `jsonrpsee-ws-server` crates are moved to the `jsonrpsee-server` crate instead.
 - The client batch request API is improved such as the errors and valid responses can be iterated over.
 - The server has `tower middleware` support.
 - The server now adds a tracing span for each connection to distinguish logs per connection.
