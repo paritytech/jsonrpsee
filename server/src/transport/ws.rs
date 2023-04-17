@@ -53,7 +53,7 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Batch<'a, L: Logger> {
-	pub(crate) data: Vec<u8>,
+	pub(crate) data: &'a [u8],
 	pub(crate) call: CallData<'a, L>,
 	pub(crate) max_len: usize,
 }
@@ -78,7 +78,7 @@ pub(crate) struct CallData<'a, L: Logger> {
 pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<String> {
 	let Batch { data, call, max_len } = b;
 
-	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data) {
+	if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(data) {
 		if batch.len() > max_len {
 			return Some(batch_response_error(Id::Null, reject_too_big_batch_request(max_len)));
 		}
@@ -126,15 +126,15 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> Option<
 }
 
 pub(crate) async fn process_single_request<L: Logger>(
-	data: Vec<u8>,
+	data: &[u8],
 	call: CallData<'_, L>,
 ) -> Option<CallOrSubscription> {
-	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
+	if let Ok(req) = serde_json::from_slice::<Request>(data) {
 		Some(execute_call_with_tracing(req, call).await)
-	} else if serde_json::from_slice::<Notif>(&data).is_ok() {
+	} else if serde_json::from_slice::<Notif>(data).is_ok() {
 		None
 	} else {
-		let (id, code) = prepare_error(&data);
+		let (id, code) = prepare_error(data);
 		Some(CallOrSubscription::Call(MethodResponse::error(id, ErrorObject::from(code))))
 	}
 }
@@ -341,7 +341,6 @@ pub(crate) async fn background_task<L: Logger>(
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
-
 	result
 }
 
@@ -490,10 +489,10 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 	} = params;
 
 	let request_start = logger.on_request(TransportProtocol::WebSocket);
-	let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
+	let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
 	match first_non_whitespace {
-		Some(b'{') => {
+		Some((start, b'{')) => {
 			let call_data = CallData {
 				conn_id: conn_id as usize,
 				bounded_subscriptions,
@@ -506,7 +505,7 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 				request_start,
 			};
 
-			if let Some(rp) = process_single_request(data, call_data).await {
+			if let Some(rp) = process_single_request(&data[start..], call_data).await {
 				match rp {
 					CallOrSubscription::Subscription(r) => {
 						logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
@@ -519,7 +518,7 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 				}
 			}
 		}
-		Some(b'[') => {
+		Some((start, b'[')) => {
 			let limit = match batch_requests_config {
 				BatchRequestConfig::Disabled => {
 					let response = MethodResponse::error(
@@ -546,7 +545,7 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 				request_start,
 			};
 
-			let response = process_batch_request(Batch { data, call: call_data, max_len: limit }).await;
+			let response = process_batch_request(Batch { data: &data[start..], call: call_data, max_len: limit }).await;
 
 			if let Some(response) = response {
 				tx_log_from_str(&response, max_log_length);

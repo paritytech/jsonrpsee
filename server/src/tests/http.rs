@@ -354,6 +354,19 @@ async fn whitespace_is_not_significant() {
 	let expected = r#"[{"jsonrpc":"2.0","result":3,"id":1}]"#;
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, expected);
+
+	// Up to 127 whitespace chars are accepted.
+	let req = format!("{}{}", " ".repeat(127), r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#);
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	let expected = r#"{"jsonrpc":"2.0","result":3,"id":1}"#;
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, expected);
+
+	// More than 127 whitespace chars are not accepted.
+	let req = format!("{}{}", " ".repeat(128), r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#);
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.status, StatusCode::BAD_REQUEST);
+	assert_eq!(response.body, parse_error(Id::Null));
 }
 
 #[tokio::test]
