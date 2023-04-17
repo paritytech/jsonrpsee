@@ -10,7 +10,7 @@ This is a significant release and the important changes to be aware of are:
 
 ### Server backpressure
 
-This release changed the server to be "backpressured" and it mostly concerns subscriptions.
+This release changes the server to be "backpressured" and it mostly concerns subscriptions.
 New APIs has been introduced because that and the API `pipe_from_stream` has been removed.
 
 Before it was possible to do:
