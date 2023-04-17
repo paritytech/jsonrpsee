@@ -104,7 +104,7 @@ Example:
 		.unwrap();
 ```
 
-The return value in example above needs to implement `IntoSubscriptionCloseResponse` and in this case it's `Result<(), E>` which
+The return value in the example above needs to implement `IntoSubscriptionCloseResponse` and in this case it's `Result<(), E>` which
 implies that any value after `pending.accept().await?`.
 
 Because `Result<(), E>` is used here then close notification will sent out as error notification and in this case
