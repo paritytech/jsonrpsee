@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::future::StopHandle;
 use crate::logger::{self, Logger, TransportProtocol};
 use crate::server::{BatchRequestConfig, ServiceData};
 
@@ -251,13 +250,13 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
-	let (conn_tx, conn_rx) = oneshot::channel();
+	let (mut conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let mut pending_calls = FuturesUnordered::new();
+	let pending_calls = FuturesUnordered::new();
 
 	// Spawn another task that sends out the responses on the Websocket.
-	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval, conn_rx));
+	tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -268,7 +267,7 @@ pub(crate) async fn background_task<L: Logger>(
 	let result = loop {
 		data.clear();
 
-		let sink_permit = match wait_for_reserve(&sink, stopped).await {
+		let sink_permit = match wait_for_permit(&sink, stopped).await {
 			Some((permit, stop)) => {
 				stopped = stop;
 				permit
@@ -324,14 +323,23 @@ pub(crate) async fn background_task<L: Logger>(
 		pending_calls.push(tokio::spawn(execute_unchecked_call(params)));
 	};
 
-	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
-
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	while pending_calls.next().await.is_some() {}
+	//
+	// This is not strictly not needed because `tokio::spawn` will drive these the completion
+	// but it's preferred that the `stop_handle.stopped()` should not return until all methods has been
+	// executed and the connection has been closed.
+	tokio::select! {
+		// All pending calls executed.
+		_ = pending_calls.for_each(|_| async {}) => {
+			_ = conn_tx.send(());
+		}
+		// The connection was closed, no point of waiting for the pending calls.
+		_ = conn_tx.closed() => {}
+	}
 
-	let _ = conn_tx.send(());
+	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
 	result
 }
@@ -340,21 +348,19 @@ pub(crate) async fn background_task<L: Logger>(
 async fn send_task(
 	rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
-	stop_handle: StopHandle,
 	ping_interval: Duration,
-	conn_closed: oneshot::Receiver<()>,
+	stop: oneshot::Receiver<()>,
 ) {
 	// Interval to send out continuously `pings`.
 	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
-	let stopped = stop_handle.shutdown();
 	let rx = ReceiverStream::new(rx);
 
-	tokio::pin!(ping_interval, stopped, rx, conn_closed);
+	tokio::pin!(ping_interval, rx, stop);
 
 	// Received messages from the WebSocket.
 	let mut rx_item = rx.next();
 	let next_ping = ping_interval.next();
-	let mut futs = future::select(next_ping, future::select(stopped, conn_closed));
+	let mut futs = future::select(next_ping, stop);
 
 	loop {
 		// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
@@ -387,7 +393,7 @@ async fn send_task(
 				futs = future::select(ping_interval.next(), stop);
 			}
 
-			// Server is stopped or closed
+			// Server is stopped.
 			Either::Right((Either::Right(_), _)) => {
 				break;
 			}
@@ -405,7 +411,13 @@ enum Receive<S> {
 	Ok(S),
 }
 
-async fn wait_for_reserve<S>(sink: &MethodSink, stopped: S) -> Option<(MethodSinkPermit, S)>
+// Wait until there is a slot in the bounded channel.
+//
+// This will force the client to read socket on the other side
+// otherwise the socket will not be read again.
+//
+// Fails if the server was stopped.
+async fn wait_for_permit<S>(sink: &MethodSink, stopped: S) -> Option<(MethodSinkPermit, S)>
 where
 	S: Future<Output = ()> + Unpin,
 {
@@ -418,6 +430,7 @@ where
 	}
 }
 
+/// Attempts to read data from WebSocket fails if the server was stopped.
 async fn try_recv<S>(receiver: &mut Receiver, data: &mut Vec<u8>, stopped: S) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
