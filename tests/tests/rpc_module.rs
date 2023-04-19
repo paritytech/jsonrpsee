@@ -226,7 +226,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	// Call async method with option which should `Err`.
 	let err = module.call::<_, Option<String>>("can_have_options", vec![2]).await.unwrap_err();
 	assert!(matches!(err,
-		Error::Call(err) if err.message() == "Custom error: too big number"
+		Error::Call(err) if err.message() == "too big number"
 	));
 }
 

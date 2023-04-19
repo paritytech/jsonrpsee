@@ -36,7 +36,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::error::ErrorCode;
-use crate::ErrorObjectOwned;
+use crate::{ErrorObject, ErrorObjectOwned};
 
 /// JSON-RPC v2 marker type.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -124,7 +124,7 @@ impl<'a> Params<'a> {
 	{
 		// NOTE(niklasad1): Option::None is serialized as `null` so we provide that here.
 		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("null");
-		serde_json::from_str(params).map_err(|_e| ErrorCode::InvalidParams.into())
+		serde_json::from_str(params).map_err(|e| invalid_params(e))
 	}
 
 	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
@@ -179,7 +179,7 @@ impl<'a> ParamsSequence<'a> {
 			_ => {
 				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {json:?}");
 				tracing::error!("[next_inner] {}", errmsg);
-				return Some(Err(ErrorCode::InvalidParams.into()));
+				return Some(Err(invalid_params(errmsg)));
 			}
 		}
 
@@ -200,7 +200,7 @@ impl<'a> ParamsSequence<'a> {
 				);
 				self.0 = "";
 
-				Some(Err(ErrorCode::InvalidParams.into()))
+				Some(Err(invalid_params(e)))
 			}
 		}
 	}
@@ -381,6 +381,10 @@ impl<'a> Id<'a> {
 			Id::Str(s) => s.parse().ok(),
 		}
 	}
+}
+
+fn invalid_params(e: impl ToString) -> ErrorObjectOwned {
+	ErrorObject::owned(ErrorCode::InvalidParams.code(), e.to_string(), None::<()>)
 }
 
 #[cfg(test)]
