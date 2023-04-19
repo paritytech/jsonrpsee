@@ -26,9 +26,10 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, client::Subscription, Error, SubscriptionResult};
+use jsonrpsee::core::{async_trait, client::Subscription, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder, SubscriptionMessage};
+use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
 
 type ExampleHash = [u8; 32];
@@ -41,7 +42,11 @@ where
 {
 	/// Async method call example.
 	#[method(name = "getKeys")]
-	async fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>, Error>;
+	async fn storage_keys(
+		&self,
+		storage_key: StorageKey,
+		hash: Option<Hash>,
+	) -> Result<Vec<StorageKey>, ErrorObjectOwned>;
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
@@ -56,7 +61,7 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		&self,
 		storage_key: ExampleStorageKey,
 		_hash: Option<ExampleHash>,
-	) -> Result<Vec<ExampleStorageKey>, Error> {
+	) -> Result<Vec<ExampleStorageKey>, ErrorObjectOwned> {
 		Ok(vec![storage_key])
 	}
 

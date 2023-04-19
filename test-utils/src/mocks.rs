@@ -44,17 +44,6 @@ pub use hyper::{Body, HeaderMap, StatusCode, Uri};
 
 type Error = Box<dyn std::error::Error>;
 
-pub struct TestContext;
-
-impl TestContext {
-	pub fn ok(&self) -> Result<(), anyhow::Error> {
-		Ok(())
-	}
-	pub fn err(&self) -> Result<(), anyhow::Error> {
-		Err(anyhow::anyhow!("RPC context failed"))
-	}
-}
-
 /// Request Id
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

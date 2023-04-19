@@ -26,9 +26,7 @@
 
 use std::fmt;
 
-use jsonrpsee_types::error::{
-	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, UNKNOWN_ERROR_CODE,
-};
+use jsonrpsee_types::error::ErrorObjectOwned;
 
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -45,20 +43,12 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 	}
 }
 
-// NOTE(niklasad1): this `From` impl is a bit opinionated to regard all generic errors as `CallError`.
-// In practice this should be the most common use case for users of this library.
-impl From<anyhow::Error> for Error {
-	fn from(err: anyhow::Error) -> Self {
-		Error::Call(CallError::Failed(err))
-	}
-}
-
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Error that occurs when a call failed.
 	#[error("{0}")]
-	Call(#[from] CallError),
+	Call(#[from] ErrorObjectOwned),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] anyhow::Error),
@@ -116,33 +106,6 @@ pub enum Error {
 	/// Empty batch request.
 	#[error("Empty batch request is not allowed")]
 	EmptyBatchRequest,
-}
-
-impl Error {
-	/// Create `Error::CallError` from a generic error.
-	/// Useful if you don't care about specific JSON-RPC error code and
-	/// just wants to return your custom error type.
-	pub fn to_call_error<E>(err: E) -> Self
-	where
-		E: std::error::Error + Send + Sync + 'static,
-	{
-		Error::Call(CallError::from_std_error(err))
-	}
-}
-
-impl From<Error> for ErrorObjectOwned {
-	fn from(err: Error) -> Self {
-		match err {
-			Error::Call(CallError::Custom(err)) => err,
-			Error::Call(CallError::InvalidParams(e)) => {
-				ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>)
-			}
-			Error::Call(CallError::Failed(e)) => {
-				ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>)
-			}
-			_ => ErrorObject::owned(UNKNOWN_ERROR_CODE, err.to_string(), None::<()>),
-		}
-	}
 }
 
 /// Generic transport error.

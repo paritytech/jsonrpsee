@@ -37,8 +37,9 @@ use thiserror::Error;
 pub type ErrorObjectOwned = ErrorObject<'static>;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, thiserror::Error)]
 #[serde(deny_unknown_fields)]
+#[error("kkk")]
 pub struct ErrorObject<'a> {
 	/// Code
 	code: ErrorCode,
@@ -106,16 +107,6 @@ impl<'a> PartialEq for ErrorObject<'a> {
 impl<'a> From<ErrorCode> for ErrorObject<'a> {
 	fn from(code: ErrorCode) -> Self {
 		Self { code, message: code.message().into(), data: None }
-	}
-}
-
-impl<'a> From<CallError> for ErrorObject<'a> {
-	fn from(error: CallError) -> Self {
-		match error {
-			CallError::InvalidParams(e) => ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>),
-			CallError::Failed(e) => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>),
-			CallError::Custom(err) => err,
-		}
 	}
 }
 
@@ -267,25 +258,12 @@ impl serde::Serialize for ErrorCode {
 
 /// Error that occurs when a call failed.
 #[derive(Debug, thiserror::Error)]
-pub enum CallError {
-	/// Invalid params in the call.
-	#[error("Invalid params in the call: {0}")]
-	InvalidParams(#[source] anyhow::Error),
-	/// The call failed (let jsonrpsee assign default error code and error message).
-	#[error("RPC call failed: {0}")]
-	Failed(#[from] anyhow::Error),
-	/// Custom error with specific JSON-RPC error code, message and data.
-	#[error("RPC call failed: {0:?}")]
-	Custom(ErrorObjectOwned),
-}
+#[error("Invalid params in the call: {0}")]
+pub struct InvalidParams(#[source] pub anyhow::Error);
 
-impl CallError {
-	/// Create `CallError` from a generic error.
-	pub fn from_std_error<E>(err: E) -> Self
-	where
-		E: std::error::Error + Send + Sync + 'static,
-	{
-		CallError::Failed(err.into())
+impl<'a> From<InvalidParams> for ErrorObject<'a> {
+	fn from(_e: InvalidParams) -> Self {
+		ErrorCode::InvalidParams.into()
 	}
 }
 

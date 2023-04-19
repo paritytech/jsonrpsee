@@ -26,9 +26,10 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, Error};
+use jsonrpsee::core::async_trait;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
 
 type ExampleHash = [u8; 32];
@@ -53,14 +54,14 @@ impl Config for ExampleHash {
 #[rpc(server, client, namespace = "foo", client_bounds(T::Hash: jsonrpsee::core::DeserializeOwned), server_bounds(T::Hash: jsonrpsee::core::Serialize + Clone))]
 pub trait Rpc<T: Config> {
 	#[method(name = "bar")]
-	fn method(&self) -> Result<T::Hash, Error>;
+	fn method(&self) -> Result<T::Hash, ErrorObjectOwned>;
 }
 
 pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer<ExampleHash> for RpcServerImpl {
-	fn method(&self) -> Result<<ExampleHash as Config>::Hash, Error> {
+	fn method(&self) -> Result<<ExampleHash as Config>::Hash, ErrorObjectOwned> {
 		Ok([0u8; 32])
 	}
 }

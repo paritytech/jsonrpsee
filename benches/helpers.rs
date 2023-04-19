@@ -186,7 +186,7 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module
 		.register_async_method(ASYNC_SLOW_CALL, |_, _| async move {
 			tokio::time::sleep(SLOW_CALL).await;
-			Result::<_, jsonrpsee::core::Error>::Ok("slow call async")
+			"slow call async"
 		})
 		.unwrap();
 

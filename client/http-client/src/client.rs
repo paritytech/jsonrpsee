@@ -43,7 +43,6 @@ use jsonrpsee_core::client::{
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::{ErrorObject, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
@@ -301,7 +300,7 @@ where
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
 		let response = ResponseSuccess::try_from(serde_json::from_slice::<Response<&JsonRawValue>>(&body)?)
-			.map_err(|e| Error::Call(CallError::Custom(e)))?;
+			.map_err(|e| Error::Call(e))?;
 
 		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
 

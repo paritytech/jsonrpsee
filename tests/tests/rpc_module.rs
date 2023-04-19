@@ -34,7 +34,7 @@ use helpers::{init_logger, pipe_from_stream_and_drop};
 use jsonrpsee::core::error::Error;
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::core::{server::*, RpcResult};
-use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
+use jsonrpsee::types::error::{ErrorCode, ErrorObject, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Params, Response, ResponsePayload};
 use jsonrpsee::SubscriptionMessage;
 use serde::{Deserialize, Serialize};
@@ -54,9 +54,9 @@ macro_rules! assert_type {
 fn rpc_modules_with_different_contexts_can_be_merged() {
 	let cx = Vec::<u8>::new();
 	let mut mod1 = RpcModule::new(cx);
-	mod1.register_method("bla with Vec context", |_: Params, _| RpcResult::Ok(())).unwrap();
+	mod1.register_method("bla with Vec context", |_: Params, _| ()).unwrap();
 	let mut mod2 = RpcModule::new(String::new());
-	mod2.register_method("bla with String context", |_: Params, _| RpcResult::Ok(())).unwrap();
+	mod2.register_method("bla with String context", |_: Params, _| ()).unwrap();
 
 	mod1.merge(mod2).unwrap();
 
@@ -103,9 +103,9 @@ async fn calling_method_without_server() {
 
 	// Call sync method with params
 	module
-		.register_method("foo", |params, _| {
+		.register_method::<Result<u16, ErrorObjectOwned>, _>("foo", |params, _| {
 			let n: u16 = params.one()?;
-			RpcResult::Ok(n * 2)
+			Ok(n * 2)
 		})
 		.unwrap();
 	let res: u64 = module.call("foo", [3_u64]).await.unwrap();
@@ -115,7 +115,7 @@ async fn calling_method_without_server() {
 	let err = module.call::<_, EmptyServerParams>("foo", (false,)).await.unwrap_err();
 	assert!(matches!(
 		err,
-		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
+		Error::Call(err) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
 	));
 
 	// Call async method with params and context
@@ -156,42 +156,42 @@ async fn calling_method_without_server_using_proc_macro() {
 	pub trait Cool {
 		/// Sync method, no params.
 		#[method(name = "rebel_without_cause")]
-		fn rebel_without_cause(&self) -> Result<bool, Error>;
+		fn rebel_without_cause(&self) -> RpcResult<bool>;
 
 		/// Sync method.
 		#[method(name = "rebel")]
-		fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> Result<String, Error>;
+		fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> RpcResult<String>;
 
 		/// Async method.
 		#[method(name = "revolution")]
-		async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> Result<String, Error>;
+		async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> RpcResult<String>;
 
 		/// Async method with option.
 		#[method(name = "can_have_options")]
-		async fn can_have_options(&self, x: usize) -> Result<Option<String>, Error>;
+		async fn can_have_options(&self, x: usize) -> RpcResult<Option<String>>;
 	}
 
 	struct CoolServerImpl;
 
 	#[async_trait]
 	impl CoolServer for CoolServerImpl {
-		fn rebel_without_cause(&self) -> Result<bool, Error> {
+		fn rebel_without_cause(&self) -> RpcResult<bool> {
 			Ok(false)
 		}
 
-		fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> Result<String, Error> {
+		fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> RpcResult<String> {
 			Ok(format!("{} {:?}", map.values().len(), gun))
 		}
 
-		async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> Result<String, Error> {
+		async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> RpcResult<String> {
 			Ok(format!("drink: {:?}, phases: {:?}", beverage, some_bytes))
 		}
 
-		async fn can_have_options(&self, x: usize) -> Result<Option<String>, Error> {
+		async fn can_have_options(&self, x: usize) -> RpcResult<Option<String>> {
 			match x {
 				0 => Ok(Some("one".to_string())),
 				1 => Ok(None),
-				_ => Err(Error::Custom("too big number".to_string())),
+				_ => Err(ErrorObject::owned(1, "too big number".to_string(), None::<()>)),
 			}
 		}
 	}
@@ -208,7 +208,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	// Call sync method with bad params
 	let err = module.call::<_, EmptyServerParams>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
 	assert!(matches!(err,
-		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected a map at line 1 column 5"
+		Error::Call(err) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected a map at line 1 column 5"
 	));
 
 	// Call async method with params and context
@@ -226,7 +226,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	// Call async method with option which should `Err`.
 	let err = module.call::<_, Option<String>>("can_have_options", vec![2]).await.unwrap_err();
 	assert!(matches!(err,
-		Error::Call(CallError::Custom(err)) if err.message() == "Custom error: too big number"
+		Error::Call(err) if err.message() == "Custom error: too big number"
 	));
 }
 
@@ -335,7 +335,7 @@ async fn subscribing_without_server_bad_params() {
 	let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
 
 	assert!(
-		matches!(sub, Error::Call(CallError::Custom(e)) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
+		matches!(sub, Error::Call(e) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
 	);
 }
 
@@ -409,9 +409,7 @@ async fn rejected_subscription_without_server() {
 		.unwrap();
 
 	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
-	assert!(
-		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
-	);
+	assert!(matches!(sub_err, Error::Call(e) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE));
 }
 
 #[tokio::test]

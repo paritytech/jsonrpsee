@@ -36,7 +36,7 @@ use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::types::error::{CallError, ErrorCode};
+use jsonrpsee::types::error::ErrorCode;
 
 use jsonrpsee::ws_client::*;
 use serde_json::json;
@@ -45,8 +45,9 @@ mod rpc_impl {
 	use jsonrpsee::core::server::{
 		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubscriptionCloseResponse, SubscriptionMessage,
 	};
-	use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
+	use jsonrpsee::core::{async_trait, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
+	use jsonrpsee::types::ErrorObjectOwned;
 
 	pub struct CustomSubscriptionRet;
 
@@ -59,10 +60,10 @@ mod rpc_impl {
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
 		#[method(name = "foo")]
-		async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
+		async fn async_method(&self, param_a: u8, param_b: String) -> Result<u16, ErrorObjectOwned>;
 
 		#[method(name = "bar")]
-		fn sync_method(&self) -> RpcResult<u16>;
+		fn sync_method(&self) -> Result<u16, ErrorObjectOwned>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
 		async fn sub(&self) -> SubscriptionResult;
@@ -79,12 +80,12 @@ mod rpc_impl {
 		async fn sub_unit_type(&self, x: usize);
 
 		#[method(name = "params")]
-		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
+		fn params(&self, a: u8, b: &str) -> Result<String, ErrorObjectOwned> {
 			Ok(format!("Called with: {}, {}", a, b))
 		}
 
 		#[method(name = "optional_params")]
-		fn optional_params(&self, a: u32, b: Option<u32>, c: Option<u32>) -> RpcResult<String> {
+		fn optional_params(&self, a: u32, b: Option<u32>, c: Option<u32>) -> Result<String, ErrorObjectOwned> {
 			Ok(format!("Called with: {}, {:?}, {:?}", a, b, c))
 		}
 
@@ -95,17 +96,21 @@ mod rpc_impl {
 			b: &'_ str,
 			c: std::borrow::Cow<'_, str>,
 			d: Option<beef::Cow<'_, str>>,
-		) -> RpcResult<String> {
+		) -> Result<String, ErrorObjectOwned> {
 			Ok(format!("Called with: {}, {}, {}, {:?}", a, b, c, d))
 		}
 
 		#[method(name = "zero_copy_cow")]
-		fn zero_copy_cow(&self, a: std::borrow::Cow<'_, str>, b: beef::Cow<'_, str>) -> RpcResult<String> {
+		fn zero_copy_cow(
+			&self,
+			a: std::borrow::Cow<'_, str>,
+			b: beef::Cow<'_, str>,
+		) -> Result<String, ErrorObjectOwned> {
 			Ok(format!("Zero copy params: {}, {}", matches!(a, std::borrow::Cow::Borrowed(_)), b.is_borrowed()))
 		}
 
 		#[method(name = "blocking_call", blocking)]
-		fn blocking_call(&self) -> RpcResult<u32> {
+		fn blocking_call(&self) -> Result<u32, ErrorObjectOwned> {
 			std::thread::sleep(std::time::Duration::from_millis(50));
 			Ok(42)
 		}
@@ -115,12 +120,12 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl RpcServer for RpcServerImpl {
-		async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
-			Ok(42u16)
+		async fn async_method(&self, _param_a: u8, _param_b: String) -> Result<u16, ErrorObjectOwned> {
+			Ok(42)
 		}
 
-		fn sync_method(&self) -> RpcResult<u16> {
-			Ok(10u16)
+		fn sync_method(&self) -> Result<u16, ErrorObjectOwned> {
+			Ok(10)
 		}
 
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
@@ -308,13 +313,13 @@ async fn calls_with_bad_params() {
 		.unwrap_err();
 
 	assert!(
-		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(err) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Call with faulty params as array.
 	let err: Error = client.request::<String, ArrayParams>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"faulty\", expected u8") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(err) if err.message().contains("invalid type: string \"faulty\", expected u8") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Sub with faulty params as map.
@@ -324,7 +329,7 @@ async fn calls_with_bad_params() {
 	let err: Error =
 		client.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(err) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Call with faulty params as map.
@@ -334,7 +339,7 @@ async fn calls_with_bad_params() {
 
 	let err: Error = client.request::<String, ObjectParams>("foo_foo", params).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: integer `2`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(err) if err.message().contains("invalid type: integer `2`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
 	);
 }
 

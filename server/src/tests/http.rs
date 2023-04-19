@@ -27,13 +27,15 @@
 use std::net::SocketAddr;
 
 use crate::server::BatchRequestConfig;
-use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
-use jsonrpsee_core::{Error, RpcResult};
+use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
+use jsonrpsee_test_utils::mocks::{Id, StatusCode};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_types::ErrorObjectOwned;
 use serde_json::Value as JsonValue;
+
+use super::helpers::{MyAppError, TestContext};
 
 fn init_logger() {
 	let _ = tracing_subscriber::FmtSubscriber::builder()
@@ -46,40 +48,42 @@ async fn server() -> (SocketAddr, ServerHandle) {
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| RpcResult::Ok("lo")).unwrap();
-	module.register_async_method("say_hello_async", |_, _| async move { Result::<_, Error>::Ok("lo") }).unwrap();
+	module.register_method("say_hello", |_, _| "lo").unwrap();
 	module
-		.register_method("add", |params, _| {
+		.register_async_method("say_hello_async", |_, _| async move { Result::<_, ErrorObjectOwned>::Ok("lo") })
+		.unwrap();
+	module
+		.register_method::<Result<u64, ErrorObjectOwned>, _>("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-			RpcResult::Ok(sum)
+			Ok(sum)
 		})
 		.unwrap();
 	module
-		.register_method("multiparam", |params, _| {
+		.register_method::<Result<String, ErrorObjectOwned>, _>("multiparam", |params, _| {
 			let params: (String, String, Vec<u8>) = params.parse()?;
 			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
-			RpcResult::Ok(r)
+			Ok(r)
 		})
 		.unwrap();
 	module.register_method("notif", |_, _| "").unwrap();
 	module
-		.register_method("should_err", |_, ctx| {
-			ctx.err().map_err(CallError::Failed)?;
-			RpcResult::Ok("err")
+		.register_method::<Result<&str, MyAppError>, _>("should_err", |_, ctx| {
+			ctx.err()?;
+			Ok("err")
 		})
 		.unwrap();
 
 	module
-		.register_method("should_ok", |_, ctx| {
-			ctx.ok().map_err(CallError::Failed)?;
-			RpcResult::Ok("ok")
+		.register_method::<Result<&str, MyAppError>, _>("should_ok", |_, ctx| {
+			ctx.ok()?;
+			Ok("ok")
 		})
 		.unwrap();
 	module
-		.register_async_method("should_ok_async", |_p, ctx| async move {
-			ctx.ok().map_err(CallError::Failed)?;
-			RpcResult::Ok("ok")
+		.register_async_method::<Result<&str, MyAppError>, _, _>("should_ok_async", |_p, ctx| async move {
+			ctx.ok()?;
+			Ok("ok")
 		})
 		.unwrap();
 

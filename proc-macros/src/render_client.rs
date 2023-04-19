@@ -102,6 +102,11 @@ impl RpcDescription {
 			if args.len() != 1 {
 				return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"));
 			}
+
+			// Force the last argument to be `jsonrpsee::core::Error`:
+			let error_arg = args.last_mut().unwrap();
+			*error_arg = syn::GenericArgument::Type(syn::Type::Verbatim(self.jrps_client_item(quote! { core::Error })));
+
 			quote!(#ty)
 		} else {
 			// Any other type name isn't allowed.

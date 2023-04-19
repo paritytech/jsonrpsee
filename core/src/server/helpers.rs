@@ -28,12 +28,11 @@ use std::io;
 use std::time::Duration;
 
 use crate::tracing::tx_log_from_str;
-use crate::Error;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response, ResponsePayload};
 use serde::Serialize;
-use tokio::sync::mpsc::{self, OwnedPermit};
 use serde_json::value::to_raw_value;
+use tokio::sync::mpsc::{self, OwnedPermit};
 
 use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
@@ -169,10 +168,11 @@ impl MethodSinkPermit {
 		self.send_raw(json)
 	}
 
+	/*
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client.
 	pub fn send_call_error(self, id: Id, err: Error) {
 		self.send_error(id, err.into())
-	}
+	}*/
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check the validity
 	/// of the JSON being sent.

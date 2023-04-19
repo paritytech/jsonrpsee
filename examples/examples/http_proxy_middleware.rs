@@ -38,7 +38,6 @@
 //! like to query a certain `URI` path for statistics.
 
 use hyper::{Body, Client, Request};
-use jsonrpsee::core::RpcResult;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -95,7 +94,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo").unwrap();
-	module.register_method("system_health", |_, _| RpcResult::Ok(serde_json::json!({ "health": true }))).unwrap();
+	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
 	let handle = server.start(module)?;
 

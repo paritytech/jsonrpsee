@@ -29,7 +29,6 @@ use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
-use jsonrpsee_core::RpcResult;
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
@@ -121,7 +120,7 @@ async fn can_set_max_connections() {
 	// Server that accepts max 2 connections
 	let server = ServerBuilder::default().max_connections(2).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| RpcResult::Ok(())).unwrap();
+	module.register_method("anything", |_p, _cx| ()).unwrap();
 	let addr = server.local_addr().unwrap();
 
 	let server_handle = server.start(module).unwrap();

@@ -35,7 +35,7 @@ use jsonrpsee_core::{rpc_params, DeserializeOwned, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
+use jsonrpsee_types::error::ErrorObjectOwned;
 use serde_json::Value as JsonValue;
 
 fn init_logger() {
@@ -393,10 +393,9 @@ async fn run_request_with_response(response: String) -> Result<String, Error> {
 }
 
 fn assert_error_response(err: Error, exp: ErrorObjectOwned) {
-	let exp = CallError::Custom(exp);
 	match &err {
 		Error::Call(e) => {
-			assert_eq!(e.to_string(), exp.to_string());
+			assert_eq!(e, &exp);
 		}
 		e => panic!("Expected error: \"{err}\", got: {e:?}"),
 	};

@@ -101,9 +101,9 @@ fn test_module() -> RpcModule<()> {
 	#[rpc(server)]
 	pub trait Rpc {
 		#[method(name = "say_hello")]
-		async fn hello(&self) -> Result<&'static str, Error> {
+		async fn hello(&self) -> String {
 			sleep(Duration::from_millis(50)).await;
-			Ok("hello")
+			"hello".to_string()
 		}
 	}
 
