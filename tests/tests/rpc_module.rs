@@ -244,7 +244,7 @@ async fn subscribing_without_server() {
 			while let Some(letter) = stream_data.pop() {
 				tracing::debug!("This is your friendly subscription sending data.");
 				let msg = SubscriptionMessage::from_json(&letter).unwrap();
-				let _ = sink.send(msg).await.unwrap();
+				sink.send(msg).await.unwrap();
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
 
@@ -277,10 +277,8 @@ async fn close_test_subscribing_without_server() {
 			sink.send(msg.clone()).await?;
 			sink.closed().await;
 
-			match sink.send(msg).await {
-				Ok(_) => panic!("The sink should be closed"),
-				Err(DisconnectError(_)) => {}
-			}
+			sink.send(msg).await.expect("The sink should be closed");
+
 			Ok(())
 		})
 		.unwrap();
@@ -318,8 +316,7 @@ async fn subscribing_without_server_bad_params() {
 			let p = match params.one::<String>() {
 				Ok(p) => p,
 				Err(e) => {
-					let err: ErrorObjectOwned = e.into();
-					let _ = pending.reject(err).await;
+					let _ = pending.reject(e).await;
 					return Ok(());
 				}
 			};

@@ -175,7 +175,7 @@ pub(crate) fn process_single_response(
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
 	let response_id = response.id.clone().into_owned();
-	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(|e| Error::Call(e));
+	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(Error::Call);
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {

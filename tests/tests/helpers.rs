@@ -74,7 +74,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 				let count = match params.one::<usize>().map(|c| c.wrapping_add(1)) {
 					Ok(count) => count,
 					Err(e) => {
-						let _ = pending.reject(ErrorObjectOwned::from(e)).await;
+						let _ = pending.reject(e).await;
 						return Ok(());
 					}
 				};

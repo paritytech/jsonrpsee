@@ -71,7 +71,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_method::<Result<(), ErrorObjectOwned>, _>("invalid_params", |_params, _| Err(invalid_params().into()))
+		.register_method::<Result<(), ErrorObjectOwned>, _>("invalid_params", |_params, _| Err(invalid_params()))
 		.unwrap();
 	module.register_method("call_fail", |_params, _| Err::<(), _>(MyAppError)).unwrap();
 	module
@@ -189,7 +189,7 @@ impl std::error::Error for MyAppError {}
 
 impl From<MyAppError> for ErrorObjectOwned {
 	fn from(_: MyAppError) -> Self {
-		ErrorObject::owned(1, "MyAppError", None::<()>)
+		ErrorObject::owned(-32000, "MyAppError", None::<()>)
 	}
 }
 

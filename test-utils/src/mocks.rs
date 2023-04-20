@@ -333,7 +333,7 @@ pub fn ws_server_with_redirect(other_server: String) -> String {
 	let server = hyper::Server::bind(&addr).serve(service);
 	let addr = server.local_addr();
 
-	tokio::spawn(async move { server.await });
+	tokio::spawn(server);
 	format!("ws://{addr}")
 }
 

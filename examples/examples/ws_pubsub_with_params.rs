@@ -31,7 +31,6 @@ use futures::{Stream, StreamExt};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::Serialize;
 use jsonrpsee::server::{RpcModule, ServerBuilder, SubscriptionMessage, TrySendError};
-use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 use tokio::time::interval;
@@ -72,7 +71,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let idx = match params.one::<usize>() {
 				Ok(p) => p,
 				Err(e) => {
-					let _ = pending.reject(ErrorObjectOwned::from(e)).await;
+					let _ = pending.reject(e).await;
 					return Ok(());
 				}
 			};

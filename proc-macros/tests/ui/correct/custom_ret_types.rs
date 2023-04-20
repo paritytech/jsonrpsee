@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, RpcResult, Serialize};
+use jsonrpsee::core::{async_trait, Serialize};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{IntoResponse, ServerBuilder};
 use jsonrpsee::types::ResponsePayload;
@@ -86,7 +86,7 @@ async fn main() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	let get_error_object = |err| match err {
-		jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(object)) => object,
+		jsonrpsee::core::Error::Call(object) => object,
 		_ => panic!("wrong error kind: {:?}", err),
 	};
 

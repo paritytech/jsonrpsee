@@ -124,7 +124,7 @@ impl<'a> Params<'a> {
 	{
 		// NOTE(niklasad1): Option::None is serialized as `null` so we provide that here.
 		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("null");
-		serde_json::from_str(params).map_err(|e| invalid_params(e))
+		serde_json::from_str(params).map_err(invalid_params)
 	}
 
 	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.

@@ -316,7 +316,7 @@ async fn single_method_call_with_faulty_context() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, call_execution_failed("RPC context failed", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("MyAppError", Id::Num(1)));
 }
 
 #[tokio::test]
@@ -356,7 +356,7 @@ async fn async_method_call_that_fails() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"err_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, call_execution_failed("nah", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("MyAppError", Id::Num(1)));
 }
 
 #[tokio::test]

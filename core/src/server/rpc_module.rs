@@ -253,7 +253,7 @@ impl Methods {
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
-		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| Error::Call(e))
+		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(Error::Call)
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
@@ -386,7 +386,7 @@ impl Methods {
 
 		// TODO: hack around the lifetime on the `SubscriptionId` by deserialize first to serde_json::Value.
 		let as_success: ResponseSuccess<serde_json::Value> =
-			serde_json::from_str::<Response<_>>(&resp.result)?.try_into().map_err(|e| Error::Call(e))?;
+			serde_json::from_str::<Response<_>>(&resp.result)?.try_into()?;
 
 		let sub_id = as_success.result.try_into().map_err(|_| Error::InvalidSubscriptionId)?;
 

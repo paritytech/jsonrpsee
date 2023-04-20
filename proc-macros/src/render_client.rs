@@ -103,11 +103,11 @@ impl RpcDescription {
 				return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"));
 			}
 
-			// Force the last argument to be `jsonrpsee::core::Error`:
-			let error_arg = args.last_mut().unwrap();
-			*error_arg = syn::GenericArgument::Type(syn::Type::Verbatim(self.jrps_client_item(quote! { core::Error })));
+			// The type alias `RpcResult<T>` is modified to `Result<T, Error>`.
+			let ret_ty = args.last_mut().unwrap();
+			let err_ty = self.jrps_client_item(quote! { core::Error });
 
-			quote!(#ty)
+			quote! { core::result::Result<#ret_ty, #err_ty> }
 		} else {
 			// Any other type name isn't allowed.
 			quote_spanned!(type_name.span() => compile_error!("The return type must be Result or RpcResult"))
