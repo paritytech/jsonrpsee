@@ -7,7 +7,6 @@ license.workspace = true
 publish = false
 
 [dependencies]
-anyhow = "1"
 futures-channel = "0.3.14"
 futures-util = "0.3.14"
 hyper = { version = "0.14.10", features = ["full"] }
