@@ -256,17 +256,6 @@ impl serde::Serialize for ErrorCode {
 	}
 }
 
-/// Error that occurs when a call failed.
-#[derive(Debug, thiserror::Error)]
-#[error("Invalid params in the call: {0}")]
-pub struct InvalidParams(#[source] pub anyhow::Error);
-
-impl<'a> From<InvalidParams> for ErrorObject<'a> {
-	fn from(_e: InvalidParams) -> Self {
-		ErrorCode::InvalidParams.into()
-	}
-}
-
 /// Helper to get a `JSON-RPC` error object when the maximum number of subscriptions have been exceeded.
 pub fn reject_too_many_subscriptions(limit: u32) -> ErrorObjectOwned {
 	ErrorObjectOwned::owned(

@@ -29,6 +29,7 @@
 
 use std::fmt;
 
+use anyhow::anyhow;
 use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
@@ -227,7 +228,7 @@ impl<'a> ParamsSequence<'a> {
 	{
 		match self.next_inner() {
 			Some(result) => result,
-			None => Err(ErrorCode::InvalidParams.into()),
+			None => Err(invalid_params(anyhow!("No more params"))),
 		}
 	}
 
