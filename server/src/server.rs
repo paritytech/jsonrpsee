@@ -815,7 +815,8 @@ where
 			}
 		}
 		_ = stop_handle.shutdown() => {
-			conn.graceful_shutdown();
+			conn.as_mut().graceful_shutdown();
+			let _ = conn.await;
 		}
 	}
 }

@@ -1145,7 +1145,7 @@ async fn subscription_ok_unit_not_sent() {
 }
 
 #[tokio::test]
-async fn graceful_shutdown_works() {
+async fn graceful_shutdown_ws_works() {
 	init_logger();
 
 	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1206,4 +1206,72 @@ async fn graceful_shutdown_works() {
 
 	// The pending calls should be answered before shutdown.
 	assert_eq!(res.await.unwrap(), calls_len);
+
+	// The server should be closed now.
+	assert!(client.request::<String, _>("sleep_10s", rpc_params!()).await.is_err());
+}
+
+#[tokio::test]
+async fn graceful_shutdown_http_works() {
+	init_logger();
+
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+	let call_answered = Arc::new(AtomicBool::new(false));
+
+	let (handle, addr) = {
+		let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+
+		let mut module = RpcModule::new((tx, call_answered.clone()));
+
+		module
+			.register_async_method("sleep_10s", |_, mut ctx| async move {
+				let ctx = Arc::make_mut(&mut ctx);
+				let _ = ctx.0.send(());
+				tokio::time::sleep(Duration::from_secs(10)).await;
+				ctx.1.store(true, std::sync::atomic::Ordering::SeqCst);
+				"ok"
+			})
+			.unwrap();
+		let addr = server.local_addr().unwrap();
+
+		(server.start(module).unwrap(), addr)
+	};
+
+	let client = HttpClientBuilder::default().build(format!("http://{addr}")).unwrap();
+
+	let mut calls: FuturesUnordered<_> = (0..10)
+		.map(|_| {
+			let c = client.clone();
+			async move { c.request::<String, _>("sleep_10s", rpc_params!()).await }
+		})
+		.collect();
+
+	let calls_len = calls.len();
+
+	let res = tokio::spawn(async move {
+		let mut c = 0;
+		while let Some(Ok(_)) = calls.next().await {
+			c += 1;
+		}
+		c
+	});
+
+	// All calls has been received by server => then stop.
+	for _ in 0..calls_len {
+		rx.recv().await.unwrap();
+	}
+
+	// Assert that no calls have been answered yet
+	// The assumption is that the server should be able to read 10 messages < 10s.
+	assert!(!call_answered.load(std::sync::atomic::Ordering::SeqCst));
+
+	// Stop the server.
+	handle.stop().unwrap();
+	handle.stopped().await;
+
+	// The pending calls should be answered before shutdown.
+	assert_eq!(res.await.unwrap(), 10);
+
+	// The server should be closed now.
+	assert!(client.request::<String, _>("sleep_10s", rpc_params!()).await.is_err());
 }
