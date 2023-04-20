@@ -46,7 +46,7 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-	/// Error that occurs when a call failed.
+	/// JSON-RPC error which can occur when a JSON-RPC call fails.
 	#[error("{0}")]
 	Call(#[from] ErrorObjectOwned),
 	/// Networking error or error on the low-level protocol layer.
