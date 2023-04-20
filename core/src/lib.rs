@@ -62,7 +62,7 @@ pub use async_trait::async_trait;
 pub use error::{Error, GenericTransportError, StringError};
 
 /// JSON-RPC result.
-pub type RpcResult<T> = std::result::Result<T, ErrorObjectOwned>;
+pub type RpcResult<T> = std::result::Result<T, jsonrpee_types::ErrorObjectOwned>;
 
 /// Empty server `RpcParams` type to use while registering modules.
 pub type EmptyServerParams = Vec<()>;
