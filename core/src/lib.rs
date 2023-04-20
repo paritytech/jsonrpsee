@@ -77,7 +77,6 @@ pub mod __reexports {
 }
 
 pub use beef::Cow;
-use jsonrpsee_types::ErrorObjectOwned;
 pub use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json::{
 	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
