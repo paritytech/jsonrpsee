@@ -70,9 +70,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 			Ok(sum)
 		})
 		.unwrap();
-	module
-		.register_method::<Result<(), ErrorObjectOwned>, _>("invalid_params", |_params, _| Err(invalid_params()))
-		.unwrap();
+	module.register_method("invalid_params", |_params, _| Err::<(), _>(invalid_params())).unwrap();
 	module.register_method("call_fail", |_params, _| Err::<(), _>(MyAppError)).unwrap();
 	module
 		.register_method::<Result<&str, ErrorObjectOwned>, _>("sleep_for", |params, _| {
@@ -112,9 +110,9 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_async_method::<Result<&str, MyAppError>, _, _>("should_ok_async", |_p, ctx| async move {
+		.register_async_method("should_ok_async", |_p, ctx| async move {
 			ctx.ok()?;
-			Ok("ok")
+			Ok::<_, MyAppError>("ok")
 		})
 		.unwrap();
 

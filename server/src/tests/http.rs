@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 
 use crate::server::BatchRequestConfig;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
-use jsonrpsee_core::Error;
+use jsonrpsee_core::{Error, RpcResult};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -49,14 +49,12 @@ async fn server() -> (SocketAddr, ServerHandle) {
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "lo").unwrap();
+	module.register_async_method("say_hello_async", |_, _| async move { RpcResult::Ok("lo") }).unwrap();
 	module
-		.register_async_method("say_hello_async", |_, _| async move { Result::<_, ErrorObjectOwned>::Ok("lo") })
-		.unwrap();
-	module
-		.register_method::<Result<u64, ErrorObjectOwned>, _>("add", |params, _| {
+		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
+			RpcResult::Ok(sum)
 		})
 		.unwrap();
 	module
@@ -68,22 +66,22 @@ async fn server() -> (SocketAddr, ServerHandle) {
 		.unwrap();
 	module.register_method("notif", |_, _| "").unwrap();
 	module
-		.register_method::<Result<&str, MyAppError>, _>("should_err", |_, ctx| {
+		.register_method("should_err", |_, ctx| {
 			ctx.err()?;
-			Ok("err")
+			Ok::<_, MyAppError>("err")
 		})
 		.unwrap();
 
 	module
-		.register_method::<Result<&str, MyAppError>, _>("should_ok", |_, ctx| {
+		.register_method("should_ok", |_, ctx| {
 			ctx.ok()?;
-			Ok("ok")
+			Ok::<_, MyAppError>("ok")
 		})
 		.unwrap();
 	module
-		.register_async_method::<Result<&str, MyAppError>, _, _>("should_ok_async", |_p, ctx| async move {
+		.register_async_method("should_ok_async", |_p, ctx| async move {
 			ctx.ok()?;
-			Ok("ok")
+			Ok::<_, MyAppError>("ok")
 		})
 		.unwrap();
 
