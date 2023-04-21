@@ -38,7 +38,7 @@ enum Error {
 impl RpcServer for () {
 	async fn keys(&self) -> Result<String, jsonrpsee::core::Error> {
 		Err(jsonrpsee::core::Error::to_call_error(Error::A))
-		// or jsonrpsee:::core::Error::Call(CallError::Custom(ErrorObject::owned(1, "a", None::<()>)))
+		// or jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(1, "a", None::<()>)))
 	}
 }
 ```
