@@ -37,7 +37,7 @@ enum Error {
 #[async_trait]
 impl RpcServer for () {
 	async fn keys(&self) -> Result<String, jsonrpsee::core::Error> {
-		jsonrpsee:::core::Error::to_call_error(Error::A)
+		Err(jsonrpsee:::core::Error::to_call_error(Error::A))
 		// or jsonrpsee:::core::Error::Call(CallError::Custom(ErrorObject::owned(1, "a", None::<()>)))
 	}
 }
@@ -54,24 +54,22 @@ enum Error {
 impl From<Error> for ErrorObjectOwned {
 	fn from(e: Error) -> Self {
 		match e {
-			Error:::A => ErrorObject::owned(1, "a", None::<()>)
-			Error::B => ErrorObject::owned(2, "b", None::<()>)
+			Error::A => ErrorObject::owned(1, "a", None::<()>),
+			Error::B => ErrorObject::owned(2, "b", None::<()>),
 		}
 	}
 }
 
 #[rpc(server, client)]
-pub trait Rpc
-{
+pub trait Rpc {
 	#[method(name = "getKeys")]
-	async fn keys(&self) -> Result<Vec<StorageKey>, Error>;
+	async fn keys(&self) -> Result<String, Error>;
 }
-
 
 #[async_trait]
 impl RpcServer for () {
-	async fn keys(&self) -> Result<Vec<StorageKey>, Error> {
-		Error::A
+	async fn keys(&self) -> Result<String, Error> {
+		Err(Error::A)
 	}
 }
 ```
