@@ -29,7 +29,6 @@ use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
-use jsonrpsee_core::RpcResult;
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
@@ -121,7 +120,7 @@ async fn can_set_max_connections() {
 	// Server that accepts max 2 connections
 	let server = ServerBuilder::default().max_connections(2).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| RpcResult::Ok(())).unwrap();
+	module.register_method("anything", |_p, _cx| ()).unwrap();
 	let addr = server.local_addr().unwrap();
 
 	let server_handle = server.start(module).unwrap();
@@ -303,7 +302,7 @@ async fn single_method_call_with_params_works() {
 async fn single_method_call_with_faulty_params_returns_err() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
-	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params","data":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["should be a number"],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
@@ -317,7 +316,7 @@ async fn single_method_call_with_faulty_context() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, call_execution_failed("RPC context failed", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("MyAppError", Id::Num(1)));
 }
 
 #[tokio::test]
@@ -357,7 +356,7 @@ async fn async_method_call_that_fails() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"err_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, call_execution_failed("nah", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("MyAppError", Id::Num(1)));
 }
 
 #[tokio::test]

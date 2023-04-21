@@ -102,7 +102,12 @@ impl RpcDescription {
 			if args.len() != 1 {
 				return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"));
 			}
-			quote!(#ty)
+
+			// The type alias `RpcResult<T>` is modified to `Result<T, Error>`.
+			let ret_ty = args.last_mut().unwrap();
+			let err_ty = self.jrps_client_item(quote! { core::Error });
+
+			quote! { core::result::Result<#ret_ty, #err_ty> }
 		} else {
 			// Any other type name isn't allowed.
 			quote_spanned!(type_name.span() => compile_error!("The return type must be Result or RpcResult"))

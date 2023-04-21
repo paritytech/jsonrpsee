@@ -27,13 +27,15 @@
 use std::net::SocketAddr;
 
 use crate::server::BatchRequestConfig;
-use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee_core::{Error, RpcResult};
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
+use jsonrpsee_test_utils::mocks::{Id, StatusCode};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_types::ErrorObjectOwned;
 use serde_json::Value as JsonValue;
+
+use super::helpers::{MyAppError, TestContext};
 
 fn init_logger() {
 	let _ = tracing_subscriber::FmtSubscriber::builder()
@@ -46,8 +48,8 @@ async fn server() -> (SocketAddr, ServerHandle) {
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| RpcResult::Ok("lo")).unwrap();
-	module.register_async_method("say_hello_async", |_, _| async move { Result::<_, Error>::Ok("lo") }).unwrap();
+	module.register_method("say_hello", |_, _| "lo").unwrap();
+	module.register_async_method("say_hello_async", |_, _| async move { RpcResult::Ok("lo") }).unwrap();
 	module
 		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
@@ -56,30 +58,30 @@ async fn server() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_method("multiparam", |params, _| {
+		.register_method::<Result<String, ErrorObjectOwned>, _>("multiparam", |params, _| {
 			let params: (String, String, Vec<u8>) = params.parse()?;
 			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
-			RpcResult::Ok(r)
+			Ok(r)
 		})
 		.unwrap();
 	module.register_method("notif", |_, _| "").unwrap();
 	module
 		.register_method("should_err", |_, ctx| {
-			ctx.err().map_err(CallError::Failed)?;
-			RpcResult::Ok("err")
+			ctx.err()?;
+			Ok::<_, MyAppError>("err")
 		})
 		.unwrap();
 
 	module
 		.register_method("should_ok", |_, ctx| {
-			ctx.ok().map_err(CallError::Failed)?;
-			RpcResult::Ok("ok")
+			ctx.ok()?;
+			Ok::<_, MyAppError>("ok")
 		})
 		.unwrap();
 	module
 		.register_async_method("should_ok_async", |_p, ctx| async move {
-			ctx.ok().map_err(CallError::Failed)?;
-			RpcResult::Ok("ok")
+			ctx.ok()?;
+			Ok::<_, MyAppError>("ok")
 		})
 		.unwrap();
 
@@ -153,7 +155,7 @@ async fn single_method_call_with_multiple_params_of_different_types() {
 async fn single_method_call_with_faulty_params_returns_err() {
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
-	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"this should be a number\", expected u64 at line 1 column 26"},"id":1}"#;
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params","data":"invalid type: string \"this should be a number\", expected u64 at line 1 column 26"},"id":1}"#;
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["this should be a number"],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -169,7 +171,7 @@ async fn single_method_call_with_faulty_context() {
 	let req = r#"{"jsonrpc":"2.0","method":"should_err","params":[],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, call_execution_failed("RPC context failed", Id::Num(1)));
+	assert_eq!(response.body, call_execution_failed("MyAppError", Id::Num(1)));
 }
 
 #[tokio::test]

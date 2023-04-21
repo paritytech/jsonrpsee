@@ -29,13 +29,15 @@
 
 use std::fmt;
 
-use crate::error::CallError;
 use anyhow::anyhow;
 use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+
+use crate::error::{ErrorCode, INVALID_PARAMS_MSG};
+use crate::{ErrorObject, ErrorObjectOwned};
 
 /// JSON-RPC v2 marker type.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -117,17 +119,17 @@ impl<'a> Params<'a> {
 	}
 
 	/// Attempt to parse all parameters as an array or map into type `T`.
-	pub fn parse<T>(&'a self) -> Result<T, CallError>
+	pub fn parse<T>(&'a self) -> Result<T, ErrorObjectOwned>
 	where
 		T: Deserialize<'a>,
 	{
 		// NOTE(niklasad1): Option::None is serialized as `null` so we provide that here.
 		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("null");
-		serde_json::from_str(params).map_err(|e| CallError::InvalidParams(e.into()))
+		serde_json::from_str(params).map_err(invalid_params)
 	}
 
 	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
-	pub fn one<T>(&'a self) -> Result<T, CallError>
+	pub fn one<T>(&'a self) -> Result<T, ErrorObjectOwned>
 	where
 		T: Deserialize<'a>,
 	{
@@ -161,7 +163,7 @@ impl<'a> Params<'a> {
 pub struct ParamsSequence<'a>(&'a str);
 
 impl<'a> ParamsSequence<'a> {
-	fn next_inner<T>(&mut self) -> Option<Result<T, CallError>>
+	fn next_inner<T>(&mut self) -> Option<Result<T, ErrorObjectOwned>>
 	where
 		T: Deserialize<'a>,
 	{
@@ -178,7 +180,7 @@ impl<'a> ParamsSequence<'a> {
 			_ => {
 				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {json:?}");
 				tracing::error!("[next_inner] {}", errmsg);
-				return Some(Err(CallError::InvalidParams(anyhow!(errmsg))));
+				return Some(Err(invalid_params(errmsg)));
 			}
 		}
 
@@ -199,7 +201,7 @@ impl<'a> ParamsSequence<'a> {
 				);
 				self.0 = "";
 
-				Some(Err(CallError::InvalidParams(e.into())))
+				Some(Err(invalid_params(e)))
 			}
 		}
 	}
@@ -220,13 +222,13 @@ impl<'a> ParamsSequence<'a> {
 	/// assert_eq!(c, "foo");
 	/// ```
 	#[allow(clippy::should_implement_trait)]
-	pub fn next<T>(&mut self) -> Result<T, CallError>
+	pub fn next<T>(&mut self) -> Result<T, ErrorObjectOwned>
 	where
 		T: Deserialize<'a>,
 	{
 		match self.next_inner() {
 			Some(result) => result,
-			None => Err(CallError::InvalidParams(anyhow!("No more params"))),
+			None => Err(invalid_params(anyhow!("No more params"))),
 		}
 	}
 
@@ -248,7 +250,7 @@ impl<'a> ParamsSequence<'a> {
 	///
 	/// assert_eq!(params, [Some(1), Some(2), None, None]);
 	/// ```
-	pub fn optional_next<T>(&mut self) -> Result<Option<T>, CallError>
+	pub fn optional_next<T>(&mut self) -> Result<Option<T>, ErrorObjectOwned>
 	where
 		T: Deserialize<'a>,
 	{
@@ -380,6 +382,10 @@ impl<'a> Id<'a> {
 			Id::Str(s) => s.parse().ok(),
 		}
 	}
+}
+
+fn invalid_params(e: impl ToString) -> ErrorObjectOwned {
+	ErrorObject::owned(ErrorCode::InvalidParams.code(), INVALID_PARAMS_MSG, Some(e.to_string()))
 }
 
 #[cfg(test)]

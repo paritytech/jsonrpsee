@@ -690,7 +690,7 @@ async fn ws_batch_works() {
 		})
 		.collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None)]);
+	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"err", None)]);
 }
 
 #[tokio::test]
@@ -730,13 +730,13 @@ async fn http_batch_works() {
 		})
 		.collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"Custom error: err", None)]);
+	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"err", None)]);
 }
 
 #[tokio::test]
 async fn ws_server_limit_subs_per_conn_works() {
 	use futures::StreamExt;
-	use jsonrpsee::types::error::{CallError, TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
+	use jsonrpsee::types::error::{TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
 	use jsonrpsee::{server::ServerBuilder, RpcModule};
 
 	init_logger();
@@ -781,10 +781,10 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let data = "\"Exceeded max limit of 10\"";
 
 	assert!(
-		matches!(err1, Err(Error::Call(CallError::Custom(err))) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
+		matches!(err1, Err(Error::Call(err)) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
 	);
 	assert!(
-		matches!(err2, Err(Error::Call(CallError::Custom(err))) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
+		matches!(err2, Err(Error::Call(err)) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
 	);
 }
 

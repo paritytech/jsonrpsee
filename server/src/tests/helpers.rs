@@ -1,15 +1,23 @@
 use std::fmt;
 use std::net::SocketAddr;
 
-use crate::types::error::CallError;
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 
-use anyhow::anyhow;
-use jsonrpsee_core::{DeserializeOwned, Error, RpcResult, StringError};
-use jsonrpsee_test_utils::mocks::TestContext;
+use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::{Response, ResponseSuccess};
+use jsonrpsee_types::{error::ErrorCode, ErrorObject, ErrorObjectOwned, Response, ResponseSuccess};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
+
+pub(crate) struct TestContext;
+
+impl TestContext {
+	pub(crate) fn ok(&self) -> Result<(), MyAppError> {
+		Ok(())
+	}
+	pub(crate) fn err(&self) -> Result<(), MyAppError> {
+		Err(MyAppError)
+	}
+}
 
 /// Spawns a dummy JSON-RPC server.
 pub(crate) async fn server() -> SocketAddr {
@@ -19,14 +27,6 @@ pub(crate) async fn server() -> SocketAddr {
 }
 
 /// Spawns a dummy JSON-RPC server.
-///
-/// It has the following methods:
-///     sync methods: `say_hello` and `add`
-///     async: `say_hello_async` and `add_sync`
-///     other: `invalid_params` (always returns `CallError::InvalidParams`),
-///            `call_fail` (always returns `CallError::Failed`),
-///            `sleep_for`
-///            `subscribe_hello` (starts a subscription that doesn't send anything)
 ///
 /// Returns the address together with handle for the server.
 pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
@@ -40,17 +40,17 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_method("add", |params, _| {
+		.register_method::<Result<u64, ErrorObjectOwned>, _>("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-			RpcResult::Ok(sum)
+			Ok(sum)
 		})
 		.unwrap();
 	module
-		.register_method("multiparam", |params, _| {
+		.register_method::<Result<String, ErrorObjectOwned>, _>("multiparam", |params, _| {
 			let params: (String, String, Vec<u8>) = params.parse()?;
 			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
-			RpcResult::Ok(r)
+			Ok(r)
 		})
 		.unwrap();
 	module
@@ -64,23 +64,19 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_async_method("add_async", |params, _| async move {
+		.register_async_method::<Result<u64, ErrorObjectOwned>, _, _>("add_async", |params, _| async move {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-			RpcResult::Ok(sum)
+			Ok(sum)
 		})
 		.unwrap();
+	module.register_method("invalid_params", |_params, _| Err::<(), _>(invalid_params())).unwrap();
+	module.register_method("call_fail", |_params, _| Err::<(), _>(MyAppError)).unwrap();
 	module
-		.register_method::<RpcResult<()>, _>("invalid_params", |_params, _| {
-			Err(CallError::InvalidParams(anyhow!("buh!")).into())
-		})
-		.unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
-	module
-		.register_method("sleep_for", |params, _| {
+		.register_method::<Result<&str, ErrorObjectOwned>, _>("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
 			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
-			RpcResult::Ok("Yawn!")
+			Ok("Yawn!")
 		})
 		.unwrap();
 	module
@@ -102,21 +98,21 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 	module.register_method("notif", |_, _| "").unwrap();
 	module
 		.register_method("should_err", |_, ctx| {
-			ctx.err().map_err(CallError::Failed)?;
+			ctx.err()?;
 			RpcResult::Ok("err")
 		})
 		.unwrap();
 
 	module
 		.register_method("should_ok", |_, ctx| {
-			ctx.ok().map_err(CallError::Failed)?;
+			ctx.ok()?;
 			RpcResult::Ok("ok")
 		})
 		.unwrap();
 	module
 		.register_async_method("should_ok_async", |_p, ctx| async move {
-			ctx.ok().map_err(CallError::Failed)?;
-			Result::<_, Error>::Ok("ok")
+			ctx.ok()?;
+			Ok::<_, MyAppError>("ok")
 		})
 		.unwrap();
 
@@ -135,31 +131,31 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 
 	rpc_module
 		.register_method("should_err", |_p, ctx| {
-			ctx.err().map_err(CallError::Failed)?;
+			ctx.err()?;
 			RpcResult::Ok("err")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_method("should_ok", |_p, ctx| {
-			ctx.ok().map_err(CallError::Failed)?;
+			ctx.ok()?;
 			RpcResult::Ok("ok")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_async_method("should_ok_async", |_p, ctx| async move {
-			ctx.ok().map_err(CallError::Failed)?;
+			ctx.ok()?;
 			// Call some async function inside.
-			Result::<_, Error>::Ok(futures_util::future::ready("ok!").await)
+			Result::<_, MyAppError>::Ok(futures_util::future::ready("ok!").await)
 		})
 		.unwrap();
 
 	rpc_module
 		.register_async_method("err_async", |_p, ctx| async move {
-			ctx.ok().map_err(CallError::Failed)?;
+			ctx.ok()?;
 			// Async work that returns an error
-			futures_util::future::err::<(), Error>(anyhow!("nah").into()).await
+			futures_util::future::err::<(), _>(MyAppError).await
 		})
 		.unwrap();
 
@@ -180,11 +176,21 @@ pub(crate) fn deser_call<T: DeserializeOwned + fmt::Debug + Clone>(raw: String) 
 }
 
 /// Applications can/should provide their own error.
-#[derive(Debug)]
-struct MyAppError;
+#[derive(Copy, Clone, Debug)]
+pub struct MyAppError;
 impl fmt::Display for MyAppError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "MyAppError")
 	}
 }
 impl std::error::Error for MyAppError {}
+
+impl From<MyAppError> for ErrorObjectOwned {
+	fn from(_: MyAppError) -> Self {
+		ErrorObject::owned(-32000, "MyAppError", None::<()>)
+	}
+}
+
+fn invalid_params() -> ErrorObjectOwned {
+	ErrorCode::InvalidParams.into()
+}

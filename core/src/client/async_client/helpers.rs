@@ -34,7 +34,6 @@ use futures_timer::Delay;
 use futures_util::future::{self, Either};
 use tokio::sync::{mpsc, oneshot};
 
-use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
 	ErrorObject, Id, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
@@ -176,7 +175,7 @@ pub(crate) fn process_single_response(
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
 	let response_id = response.id.clone().into_owned();
-	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(|e| Error::Call(CallError::Custom(e)));
+	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(Error::Call);
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {

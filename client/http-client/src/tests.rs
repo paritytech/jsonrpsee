@@ -34,7 +34,7 @@ use jsonrpsee_core::{rpc_params, DeserializeOwned};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
+use jsonrpsee_types::error::ErrorObjectOwned;
 
 fn init_logger() {
 	let _ = tracing_subscriber::FmtSubscriber::builder()
@@ -276,10 +276,9 @@ async fn run_request_with_response(response: String) -> Result<String, Error> {
 }
 
 fn assert_jsonrpc_error_response(err: Error, exp: ErrorObjectOwned) {
-	let exp = CallError::Custom(exp);
 	match &err {
 		Error::Call(err) => {
-			assert_eq!(err.to_string(), exp.to_string());
+			assert_eq!(err, &exp);
 		}
 		e => panic!("Expected error: \"{err}\", got: {e:?}"),
 	};

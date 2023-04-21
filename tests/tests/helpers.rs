@@ -30,12 +30,12 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::core::{Error, RpcResult};
+use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{
 	AllowHosts, PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
-use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::{IntoSubscriptionCloseResponse, SubscriptionCloseResponse};
 use serde::Serialize;
 use tokio::time::interval;
@@ -74,7 +74,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 				let count = match params.one::<usize>().map(|c| c.wrapping_add(1)) {
 					Ok(count) => count,
 					Err(e) => {
-						let _ = pending.reject(ErrorObjectOwned::from(e)).await;
+						let _ = pending.reject(e).await;
 						return Ok(());
 					}
 				};
@@ -159,13 +159,19 @@ pub async fn server() -> SocketAddr {
 	module
 		.register_async_method("slow_hello", |_, _| async {
 			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-			Result::<_, Error>::Ok("hello")
+			"hello"
 		})
 		.unwrap();
 
-	module
-		.register_async_method::<RpcResult<()>, _, _>("err", |_, _| async { Err(Error::Custom("err".to_string())) })
-		.unwrap();
+	struct CustomError;
+
+	impl From<CustomError> for ErrorObjectOwned {
+		fn from(_: CustomError) -> Self {
+			ErrorObject::owned(-32001, "err", None::<()>)
+		}
+	}
+
+	module.register_async_method::<Result<(), CustomError>, _, _>("err", |_, _| async { Err(CustomError) }).unwrap();
 
 	let addr = server.local_addr().unwrap();
 
@@ -227,7 +233,7 @@ pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLay
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 	module.register_method("notif", |_, _| "").unwrap();
 
-	module.register_method("system_health", |_, _| RpcResult::Ok(serde_json::json!({ "health": true }))).unwrap();
+	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
 	let handle = server.start(module).unwrap();
 	(addr, handle)
