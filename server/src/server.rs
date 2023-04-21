@@ -814,8 +814,7 @@ where
 		Either::Right((_, mut conn)) => {
 			// Warning:
 			//
-			// These two lines are required for doing graceful shutdown.
-			// See https://github.com/hyperium/hyper/issues/2939#issuecomment-1213481266 for further information.
+			// The connection should continue to be polled until shutdown can finish.
 			Pin::new(&mut conn).graceful_shutdown();
 			conn.await
 		}
