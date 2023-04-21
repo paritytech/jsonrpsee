@@ -4,6 +4,13 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.17.1] - 2023-04-21
+
+This release fixes HTTP graceful shutdown for the server.
+
+### [Fixed]
+- server: fix http graceful shutdown  ([#1090](https://github.com/paritytech/jsonrpsee/pull/1090))
+
 ## [v0.17.0] - 2023-04-17
 
 This is a significant release and the major breaking changes to be aware of are:
