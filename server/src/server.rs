@@ -36,7 +36,7 @@ use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::logger::{Logger, TransportProtocol};
 use crate::transport::{http, ws};
 
-use futures_util::future::{Either, FutureExt};
+use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
 use futures_util::stream::{FuturesUnordered, StreamExt};
@@ -805,19 +805,20 @@ where
 	<B as HttpBody>::Data: Send,
 {
 	let conn = hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
+	let stopped = stop_handle.shutdown();
 
-	tokio::pin!(conn);
+	tokio::pin!(stopped);
 
-	tokio::select! {
-		res = &mut conn => {
-			if let Err(e) = res {
-				tracing::warn!("HTTP serve connection failed {:?}", e);
-			}
+	let res = match future::select(conn, stopped).await {
+		Either::Left((conn, _)) => conn,
+		Either::Right((_, mut conn)) => {
+			Pin::new(&mut conn).graceful_shutdown();
+			conn.await
 		}
-		_ = stop_handle.shutdown() => {
-			conn.as_mut().graceful_shutdown();
-			let _ = conn.await;
-		}
+	};
+
+	if let Err(e) = res {
+		tracing::warn!("HTTP serve connection failed {:?}", e);
 	}
 }
 
