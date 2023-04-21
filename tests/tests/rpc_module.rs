@@ -34,7 +34,7 @@ use helpers::{init_logger, pipe_from_stream_and_drop};
 use jsonrpsee::core::error::Error;
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::core::{server::*, RpcResult};
-use jsonrpsee::types::error::{ErrorCode, ErrorObject, PARSE_ERROR_CODE};
+use jsonrpsee::types::error::{ErrorCode, ErrorObject, INVALID_PARAMS_MSG, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Params, Response, ResponsePayload};
 use jsonrpsee::SubscriptionMessage;
 use serde::{Deserialize, Serialize};
@@ -115,7 +115,7 @@ async fn calling_method_without_server() {
 	let err = module.call::<_, EmptyServerParams>("foo", (false,)).await.unwrap_err();
 	assert!(matches!(
 		err,
-		Error::Call(err) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
+		Error::Call(err) if err.code() == ErrorCode::InvalidParams.code() && err.message() == INVALID_PARAMS_MSG && err.data().unwrap().get().contains("invalid type: boolean `false`, expected u16 at line 1 column 6")
 	));
 
 	// Call async method with params and context
@@ -207,8 +207,10 @@ async fn calling_method_without_server_using_proc_macro() {
 
 	// Call sync method with bad params
 	let err = module.call::<_, EmptyServerParams>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
+
 	assert!(matches!(err,
-		Error::Call(err) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected a map at line 1 column 5"
+		Error::Call(err) if err.data().unwrap().get().contains("invalid type: boolean `false`, expected a map at line 1 column 5") &&
+		err.code() == ErrorCode::InvalidParams.code() && err.message() == INVALID_PARAMS_MSG
 	));
 
 	// Call async method with params and context
@@ -332,7 +334,9 @@ async fn subscribing_without_server_bad_params() {
 	let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
 
 	assert!(
-		matches!(sub, Error::Call(e) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
+		matches!(sub, Error::Call(e) if e.data().unwrap().get().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code()
+				&& e.message() == INVALID_PARAMS_MSG
+		)
 	);
 }
 

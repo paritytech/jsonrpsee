@@ -36,7 +36,7 @@ use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::types::error::ErrorCode;
+use jsonrpsee::types::error::{ErrorCode, INVALID_PARAMS_MSG};
 
 use jsonrpsee::ws_client::*;
 use serde_json::json;
@@ -313,13 +313,15 @@ async fn calls_with_bad_params() {
 		.unwrap_err();
 
 	assert!(
-		matches!(err, Error::Call(err) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(e) if e.data().unwrap().get().contains("invalid type: string \\\"0x0\\\", expected u32") && e.code() == ErrorCode::InvalidParams.code()
+			&& e.message() == INVALID_PARAMS_MSG)
 	);
 
 	// Call with faulty params as array.
 	let err: Error = client.request::<String, ArrayParams>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(err) if err.message().contains("invalid type: string \"faulty\", expected u8") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(e) if e.data().unwrap().get().contains("invalid type: string \\\"faulty\\\", expected u8") && e.code() == ErrorCode::InvalidParams.code()
+		&& e.message() == INVALID_PARAMS_MSG)
 	);
 
 	// Sub with faulty params as map.
@@ -329,7 +331,9 @@ async fn calls_with_bad_params() {
 	let err: Error =
 		client.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(err) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(e) if e.data().unwrap().get().contains("invalid type: string \\\"0x0\\\", expected u32") && e.code() == ErrorCode::InvalidParams.code()
+				&& e.message() == INVALID_PARAMS_MSG
+		)
 	);
 
 	// Call with faulty params as map.
@@ -338,8 +342,11 @@ async fn calls_with_bad_params() {
 	params.insert("param_b", 2).unwrap();
 
 	let err: Error = client.request::<String, ObjectParams>("foo_foo", params).await.unwrap_err();
+
 	assert!(
-		matches!(err, Error::Call(err) if err.message().contains("invalid type: integer `2`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(e) if e.data().unwrap().get().contains("invalid type: integer `2`, expected a string") && e.code() == ErrorCode::InvalidParams.code()
+				&& e.message() == INVALID_PARAMS_MSG
+		)
 	);
 }
 

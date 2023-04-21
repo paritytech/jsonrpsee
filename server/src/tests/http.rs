@@ -157,7 +157,7 @@ async fn single_method_call_with_multiple_params_of_different_types() {
 async fn single_method_call_with_faulty_params_returns_err() {
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
-	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"this should be a number\", expected u64 at line 1 column 26"},"id":1}"#;
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params","data":"invalid type: string \"this should be a number\", expected u64 at line 1 column 26"},"id":1}"#;
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["this should be a number"],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();

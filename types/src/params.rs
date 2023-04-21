@@ -36,7 +36,7 @@ use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
-use crate::error::ErrorCode;
+use crate::error::{ErrorCode, INVALID_PARAMS_MSG};
 use crate::{ErrorObject, ErrorObjectOwned};
 
 /// JSON-RPC v2 marker type.
@@ -385,7 +385,7 @@ impl<'a> Id<'a> {
 }
 
 fn invalid_params(e: impl ToString) -> ErrorObjectOwned {
-	ErrorObject::owned(ErrorCode::InvalidParams.code(), e.to_string(), None::<()>)
+	ErrorObject::owned(ErrorCode::InvalidParams.code(), INVALID_PARAMS_MSG, Some(e.to_string()))
 }
 
 #[cfg(test)]
