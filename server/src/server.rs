@@ -812,7 +812,8 @@ where
 	let res = match future::select(conn, stopped).await {
 		Either::Left((conn, _)) => conn,
 		Either::Right((_, mut conn)) => {
-			// The connection should continue to be polled until shutdown can finish.
+			// NOTE: the connection should continue to be polled until shutdown can finish.
+			// Thus, both lines below are needed and not a nit.
 			Pin::new(&mut conn).graceful_shutdown();
 			conn.await
 		}
