@@ -812,6 +812,10 @@ where
 	let res = match future::select(conn, stopped).await {
 		Either::Left((conn, _)) => conn,
 		Either::Right((_, mut conn)) => {
+			// Warning:
+			//
+			// These two lines are required for doing graceful shutdown.
+			// See https://github.com/hyperium/hyper/issues/2939#issuecomment-1213481266 for further information.
 			Pin::new(&mut conn).graceful_shutdown();
 			conn.await
 		}
