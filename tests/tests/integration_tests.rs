@@ -1245,6 +1245,6 @@ async fn run_shutdown_test(transport: &str) {
 			let http = Arc::new(HttpClientBuilder::default().build(&format!("http://{addr}")).unwrap());
 			run_shutdown_test_inner(http, handle, call_answered, call_ack).await
 		}
-		_ => todo!(),
+		_ => unreachable!("Only `http` and `ws` supported"),
 	}
 }
