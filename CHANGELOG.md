@@ -4,6 +4,79 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.18.0] - 2023-04-21
+
+This is a breaking release that removes the `CallError` which was used to represent a JSON-RPC error object that
+could happen during JSON-RPC method call and one could assign application specific error code, message and data in a
+specific implementation.
+
+Previously jsonrpsee provided `CallError` that could be converted to/from `jsonrpsee::core::Error`
+and in some scenarios the error code was automatically assigned by jsonrpsee. After jsonrpsee
+added support for custom error types the `CallError` doesn't provide any benefit because one has to implement `Into<ErrorObjectOwned>`
+on the error type anyway.
+
+Thus, `jsonrpsee::core::Error` can't be used in the proc macro API anymore and the type alias
+`RpcResult` has been modified to `Result<(), ErrorObjectOwned>` instead.
+
+Before it was possible to do:
+
+```rust
+#[rpc(server, client)]
+pub trait Rpc
+{
+	#[method(name = "getKeys")]
+	async fn keys(&self) -> Result<String, jsonrpsee::core::Error>;
+}
+
+#[derive(thiserror::Error)]
+enum Error {
+	A,
+	B,
+}
+
+#[async_trait]
+impl RpcServer for () {
+	async fn keys(&self) -> Result<String, jsonrpsee::core::Error> {
+		jsonrpsee:::core::Error::to_call_error(Error::A)
+		// or jsonrpsee:::core::Error::Call(CallError::Custom(ErrorObject::owned(1, "a", None::<()>)))
+	}
+}
+```
+
+After this change one has to do:
+
+```rust
+enum Error {
+	A,
+	B,
+}
+
+impl From<Error> for ErrorObjectOwned {
+	fn from(e: Error) -> Self {
+		match e {
+			Error:::A => ErrorObject::owned(1, "a", None::<()>)
+			Error::B => ErrorObject::owned(2, "b", None::<()>)
+		}
+	}
+}
+
+#[rpc(server, client)]
+pub trait Rpc
+{
+	#[method(name = "getKeys")]
+	async fn keys(&self) -> Result<Vec<StorageKey>, Error>;
+}
+
+
+#[async_trait]
+impl RpcServer for () {
+	async fn keys(&self) -> Result<Vec<StorageKey>, Error> {
+		Error::A
+	}
+}
+```
+
+
 ## [v0.17.1] - 2023-04-21
 
 This release fixes HTTP graceful shutdown for the server.
