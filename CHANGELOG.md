@@ -76,6 +76,8 @@ impl RpcServer for () {
 }
 ```
 
+### [Changed]
+- remove `CallError`  ([#1087](https://github.com/paritytech/jsonrpsee/pull/1087))
 
 ## [v0.17.1] - 2023-04-21
 
