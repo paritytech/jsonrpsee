@@ -45,7 +45,7 @@ use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
@@ -1145,104 +1145,23 @@ async fn subscription_ok_unit_not_sent() {
 }
 
 #[tokio::test]
-async fn graceful_shutdown_ws_works() {
+async fn graceful_shutdown_works() {
 	init_logger();
 
-	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-	let call_answered = Arc::new(AtomicBool::new(false));
-
-	let (handle, addr) = {
-		let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-
-		let mut module = RpcModule::new((tx, call_answered.clone()));
-
-		module
-			.register_async_method("sleep_10s", |_, mut ctx| async move {
-				let ctx = Arc::make_mut(&mut ctx);
-				let _ = ctx.0.send(());
-				tokio::time::sleep(Duration::from_secs(10)).await;
-				ctx.1.store(true, std::sync::atomic::Ordering::SeqCst);
-				"ok"
-			})
-			.unwrap();
-		let addr = server.local_addr().unwrap();
-
-		(server.start(module).unwrap(), addr)
-	};
-
-	let client = Arc::new(
-		WsClientBuilder::default().build(format!("ws://{addr}")).with_default_timeout().await.unwrap().unwrap(),
-	);
-
-	let mut calls: FuturesUnordered<_> = (0..10)
-		.map(|_| {
-			let c = client.clone();
-			async move { c.request::<String, _>("sleep_10s", rpc_params!()).await }
-		})
-		.collect();
-
-	let calls_len = calls.len();
-
-	let res = tokio::spawn(async move {
-		let mut c = 0;
-		while let Some(Ok(_)) = calls.next().await {
-			c += 1;
-		}
-		c
-	});
-
-	// All calls has been received by server => then stop.
-	for _ in 0..calls_len {
-		rx.recv().await.unwrap();
-	}
-
-	// Assert that no calls have been answered yet
-	// The assumption is that the server should be able to read 10 messages < 10s.
-	assert!(!call_answered.load(std::sync::atomic::Ordering::SeqCst));
-
-	// Stop the server.
-	handle.stop().unwrap();
-	handle.stopped().await;
-
-	// The pending calls should be answered before shutdown.
-	assert_eq!(res.await.unwrap(), calls_len);
-
-	// The server should be closed now.
-	assert!(client.request::<String, _>("sleep_10s", rpc_params!()).await.is_err());
+	run_shutdown_test("http").await;
+	run_shutdown_test("ws").await;
 }
 
-#[tokio::test]
-async fn graceful_shutdown_http_works() {
-	init_logger();
-
-	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-	let call_answered = Arc::new(AtomicBool::new(false));
-
-	let (handle, addr) = {
-		let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-
-		let mut module = RpcModule::new((tx, call_answered.clone()));
-
-		module
-			.register_async_method("sleep_10s", |_, mut ctx| async move {
-				let ctx = Arc::make_mut(&mut ctx);
-				let _ = ctx.0.send(());
-				tokio::time::sleep(Duration::from_secs(10)).await;
-				ctx.1.store(true, std::sync::atomic::Ordering::SeqCst);
-				"ok"
-			})
-			.unwrap();
-		let addr = server.local_addr().unwrap();
-
-		(server.start(module).unwrap(), addr)
-	};
-
-	let client = HttpClientBuilder::default().build(format!("http://{addr}")).unwrap();
-
+async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
+	client: Arc<C>,
+	handle: ServerHandle,
+	call_answered: Arc<AtomicBool>,
+	mut call_ack: tokio::sync::mpsc::UnboundedReceiver<()>,
+) {
 	let mut calls: FuturesUnordered<_> = (0..10)
 		.map(|_| {
 			let c = client.clone();
-			async move { c.request::<String, _>("sleep_10s", rpc_params!()).await }
+			async move { c.request::<String, _>("sleep_20s", rpc_params!()).await }
 		})
 		.collect();
 
@@ -1258,7 +1177,7 @@ async fn graceful_shutdown_http_works() {
 
 	// All calls has been received by server => then stop.
 	for _ in 0..calls_len {
-		rx.recv().await.unwrap();
+		call_ack.recv().await.unwrap();
 	}
 
 	// Assert that no calls have been answered yet
@@ -1267,11 +1186,65 @@ async fn graceful_shutdown_http_works() {
 
 	// Stop the server.
 	handle.stop().unwrap();
+
+	// This is to ensure that server main has some time to receive the stop signal.
+	tokio::time::sleep(Duration::from_millis(100)).await;
+
+	// Make a call between the server stop has been requested and until all pending calls have been resolved.
+	let c = client.clone();
+	let call_after_stop = tokio::spawn(async move { c.request::<String, _>("sleep_20s", rpc_params!()).await });
+
 	handle.stopped().await;
+
+	assert!(call_after_stop.await.unwrap().is_err());
 
 	// The pending calls should be answered before shutdown.
 	assert_eq!(res.await.unwrap(), 10);
 
 	// The server should be closed now.
-	assert!(client.request::<String, _>("sleep_10s", rpc_params!()).await.is_err());
+	assert!(client.request::<String, _>("sleep_20s", rpc_params!()).await.is_err());
+}
+
+/// Run shutdown test and it does:
+///
+/// - Make 10 calls that sleeps for 20 seconds
+/// - Once they have all reached the server but before they have responded, stop the server.
+/// - Ensure that no calls handled between the server has been requested to stop and until it has been stopped.
+/// - All calls should be responded to before the server shuts down.
+/// - No calls should be handled after the server has been stopped.
+///
+async fn run_shutdown_test(transport: &str) {
+	let (tx, call_ack) = tokio::sync::mpsc::unbounded_channel();
+	let call_answered = Arc::new(AtomicBool::new(false));
+
+	let (handle, addr) = {
+		let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+
+		let mut module = RpcModule::new((tx, call_answered.clone()));
+
+		module
+			.register_async_method("sleep_20s", |_, mut ctx| async move {
+				let ctx = Arc::make_mut(&mut ctx);
+				let _ = ctx.0.send(());
+				tokio::time::sleep(Duration::from_secs(20)).await;
+				ctx.1.store(true, std::sync::atomic::Ordering::SeqCst);
+				"ok"
+			})
+			.unwrap();
+		let addr = server.local_addr().unwrap();
+
+		(server.start(module).unwrap(), addr)
+	};
+
+	match transport {
+		"ws" => {
+			let ws = Arc::new(WsClientBuilder::default().build(&format!("ws://{addr}")).await.unwrap());
+			run_shutdown_test_inner(ws, handle, call_answered, call_ack).await
+		}
+		"http" => {
+			let http = Arc::new(HttpClientBuilder::default().build(&format!("http://{addr}")).unwrap());
+			run_shutdown_test_inner(http, handle, call_answered, call_ack).await
+		}
+		_ => todo!(),
+	}
 }
