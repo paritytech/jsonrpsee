@@ -4,6 +4,79 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.18.0] - 2023-04-21
+
+This is a breaking release that removes the `CallError` which was used to represent a JSON-RPC error object that
+could happen during JSON-RPC method call and one could assign application specific error code, message and data in a
+specific implementation.
+
+Previously jsonrpsee provided `CallError` that could be converted to/from `jsonrpsee::core::Error`
+and in some scenarios the error code was automatically assigned by jsonrpsee. After jsonrpsee
+added support for custom error types the `CallError` doesn't provide any benefit because one has to implement `Into<ErrorObjectOwned>`
+on the error type anyway.
+
+Thus, `jsonrpsee::core::Error` can't be used in the proc macro API anymore and the type alias
+`RpcResult` has been modified to `Result<(), ErrorObjectOwned>` instead.
+
+Before it was possible to do:
+
+```rust
+#[derive(thiserror::Error)]
+enum Error {
+	A,
+	B,
+}
+
+#[rpc(server, client)]
+pub trait Rpc
+{
+	#[method(name = "getKeys")]
+	async fn keys(&self) -> Result<String, jsonrpsee::core::Error> {
+		Err(jsonrpsee::core::Error::to_call_error(Error::A))
+		// or jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(1, "a", None::<()>)))
+	}
+}
+```
+
+After this change one has to do:
+
+```rust
+pub enum Error {
+	A,
+	B,
+}
+
+impl From<Error> for ErrorObjectOwned {
+	fn from(e: Error) -> Self {
+		match e {
+			Error::A => ErrorObject::owned(1, "a", None::<()>),
+			Error::B => ErrorObject::owned(2, "b", None::<()>),
+		}
+	}
+}
+
+#[rpc(server, client)]
+pub trait Rpc {
+	// Use a custom error type that implements `Into<ErrorObject>`
+	#[method(name = "custom_err_ty")]
+	async fn custom_err_type(&self) -> Result<String, Error> {
+		Err(Error::A)
+	}
+
+	// Use `ErrorObject` as error type directly.
+	#[method(name = "err_obj")]
+	async fn error_obj(&self) -> RpcResult<String> {
+		Err(ErrorObjectOwned::owned(1, "c", None::<()>))
+	}
+}
+```
+
+### [Changed]
+- remove `CallError`  ([#1087](https://github.com/paritytech/jsonrpsee/pull/1087))
+
+### [Fixed]
+- fix(proc macros): support parsing params !Result  ([#1094](https://github.com/paritytech/jsonrpsee/pull/1094))
+
 ## [v0.17.1] - 2023-04-21
 
 This release fixes HTTP graceful shutdown for the server.
