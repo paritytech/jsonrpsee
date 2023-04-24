@@ -21,21 +21,16 @@ Thus, `jsonrpsee::core::Error` can't be used in the proc macro API anymore and t
 Before it was possible to do:
 
 ```rust
-#[rpc(server, client)]
-pub trait Rpc
-{
-	#[method(name = "getKeys")]
-	async fn keys(&self) -> Result<String, jsonrpsee::core::Error>;
-}
-
 #[derive(thiserror::Error)]
 enum Error {
 	A,
 	B,
 }
 
-#[async_trait]
-impl RpcServer for () {
+#[rpc(server, client)]
+pub trait Rpc
+{
+	#[method(name = "getKeys")]
 	async fn keys(&self) -> Result<String, jsonrpsee::core::Error> {
 		Err(jsonrpsee::core::Error::to_call_error(Error::A))
 		// or jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(1, "a", None::<()>)))
@@ -46,7 +41,7 @@ impl RpcServer for () {
 After this change one has to do:
 
 ```rust
-enum Error {
+pub enum Error {
 	A,
 	B,
 }
@@ -62,20 +57,25 @@ impl From<Error> for ErrorObjectOwned {
 
 #[rpc(server, client)]
 pub trait Rpc {
-	#[method(name = "getKeys")]
-	async fn keys(&self) -> Result<String, Error>;
-}
-
-#[async_trait]
-impl RpcServer for () {
-	async fn keys(&self) -> Result<String, Error> {
+	// Use a custom error type that implements `Into<ErrorObject>`
+	#[method(name = "custom_err_ty")]
+	async fn custom_err_type(&self) -> Result<String, Error> {
 		Err(Error::A)
+	}
+
+	// Use `ErrorObject` as error type directly.
+	#[method(name = "err_obj")]
+	async fn error_obj(&self) -> RpcResult<String> {
+		Err(ErrorObjectOwned::owned(1, "c", None::<()>))
 	}
 }
 ```
 
 ### [Changed]
 - remove `CallError`  ([#1087](https://github.com/paritytech/jsonrpsee/pull/1087))
+
+### [Fixed]
+- fix(proc macros): support parsing params !Result  ([#1094](https://github.com/paritytech/jsonrpsee/pull/1094))
 
 ## [v0.17.1] - 2023-04-21
 
