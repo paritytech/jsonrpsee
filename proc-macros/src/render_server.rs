@@ -129,13 +129,15 @@ impl RpcDescription {
 				// called..
 				let (parsing, params_seq) = self.render_params_decoding(&method.params, None);
 
+				let into_response = self.jrps_server_item(quote! { IntoResponse });
+
 				check_name(&rpc_method_name, rust_method_name.span());
 
 				if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
 						rpc.register_async_method(#rpc_method_name, |params, context| async move {
 							#parsing
-							context.as_ref().#rust_method_name(#params_seq).await
+							#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
 						})
 					})
 				} else {
@@ -145,7 +147,7 @@ impl RpcDescription {
 					handle_register_result(quote! {
 						rpc.#register_kind(#rpc_method_name, |params, context| {
 							#parsing
-							context.#rust_method_name(#params_seq)
+							#into_response::into_response(context.#rust_method_name(#params_seq))
 						})
 					})
 				}
@@ -286,7 +288,7 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
-		let err_obj = self.jrps_server_item(quote! { types::ErrorObjectOwned });
+		let response_payload = self.jrps_server_item(quote! { types::ResponsePayload });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -297,7 +299,7 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								#pending.reject(#err_obj::from(e)).await;
+								#pending.reject(e).await;
 								return #sub_err::None;
 							}
 						};
@@ -309,7 +311,7 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								return Err(e.into())
+								return #response_payload::Error(e);
 							}
 						};
 					}
@@ -320,7 +322,7 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								#pending.reject(#err_obj::from(e)).await;
+								#pending.reject(e).await;
 								return #sub_err::None;
 							}
 						};
@@ -332,7 +334,7 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::warn!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								return Err(e.into())
+								return #response_payload::Error(e);
 							}
 						};
 					}
@@ -398,7 +400,7 @@ impl RpcDescription {
 						Ok(p) => p,
 						Err(e) => {
 							#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
-							#pending.reject(#err_obj::from(e)).await;
+							#pending.reject(e).await;
 							return #sub_err::None;
 						}
 					};
@@ -413,10 +415,14 @@ impl RpcDescription {
 						#(#fields)*
 					}
 
-					let parsed: ParamsObject<#(#types,)*> = params.parse().map_err(|e| {
-						#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
-						e
-					})?;
+					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
+						Ok(p) => p,
+						Err(e) => {
+							#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
+							return #response_payload::Error(e);
+						}
+					};
+
 					(#(#destruct),*)
 				}
 			}
