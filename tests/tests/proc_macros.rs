@@ -47,13 +47,21 @@ mod rpc_impl {
 	};
 	use jsonrpsee::core::{async_trait, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::types::ErrorObjectOwned;
+	use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 
 	pub struct CustomSubscriptionRet;
 
 	impl IntoSubscriptionCloseResponse for CustomSubscriptionRet {
 		fn into_response(self) -> SubscriptionCloseResponse {
 			SubscriptionCloseResponse::None
+		}
+	}
+
+	pub struct MyError;
+
+	impl From<MyError> for ErrorObjectOwned {
+		fn from(_: MyError) -> Self {
+			ErrorObject::owned(1, "my_error", None::<()>)
 		}
 	}
 
@@ -113,6 +121,28 @@ mod rpc_impl {
 		fn blocking_call(&self) -> Result<u32, ErrorObjectOwned> {
 			std::thread::sleep(std::time::Duration::from_millis(50));
 			Ok(42)
+		}
+
+		#[method(name = "blocking_call_custom_err", blocking)]
+		fn blocking_call_custom_err(&self) -> Result<usize, MyError> {
+			std::thread::sleep(std::time::Duration::from_millis(50));
+			Ok(42)
+		}
+
+		#[method(name = "blocking_call_custom_err_with_params", blocking)]
+		fn blocking_call_custom_err_with_params(&self, x: usize) -> Result<usize, MyError> {
+			std::thread::sleep(std::time::Duration::from_millis(50));
+			Ok(x)
+		}
+
+		#[method(name = "my_err")]
+		fn custom_error(&self) -> Result<(), MyError> {
+			Err(MyError)
+		}
+
+		#[method(name = "my_err_with_param")]
+		fn custom_error_with_param(&self, _s: String) -> Result<(), MyError> {
+			Err(MyError)
 		}
 	}
 

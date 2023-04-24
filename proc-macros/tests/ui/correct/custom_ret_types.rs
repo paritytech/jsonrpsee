@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, Serialize};
+use jsonrpsee::core::{async_trait, Error, Serialize};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{IntoResponse, ServerBuilder};
 use jsonrpsee::types::ResponsePayload;
@@ -37,23 +37,51 @@ impl IntoResponse for CustomError {
 
 #[rpc(server, namespace = "foo")]
 pub trait Rpc {
-	#[method(name = "method1")]
-	async fn method1(&self) -> CustomError;
+	#[method(name = "async_method1")]
+	async fn async_method1(&self) -> CustomError;
 
-	#[method(name = "method2")]
-	async fn method2(&self) -> CustomError;
+	#[method(name = "async_method2")]
+	async fn async_method2(&self, x: u32) -> CustomError;
+
+	#[method(name = "sync_method1")]
+	fn method1(&self) -> CustomError;
+
+	#[method(name = "sync_method2")]
+	fn method2(&self, x: u32) -> CustomError;
+
+	#[method(name = "blocking_method1", blocking)]
+	fn blocking_method1(&self) -> CustomError;
+
+	#[method(name = "blocking_method2", blocking)]
+	fn blocking_method2(&self, x: u32) -> CustomError;
 }
 
 pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn method1(&self) -> CustomError {
+	async fn async_method1(&self) -> CustomError {
 		CustomError::One
 	}
 
-	async fn method2(&self) -> CustomError {
-		CustomError::Two { custom_data: 123 }
+	async fn async_method2(&self, x: u32) -> CustomError {
+		CustomError::Two { custom_data: x }
+	}
+
+	fn method1(&self) -> CustomError {
+		CustomError::One
+	}
+
+	fn method2(&self, x: u32) -> CustomError {
+		CustomError::Two { custom_data: x }
+	}
+
+	fn blocking_method1(&self) -> CustomError {
+		CustomError::One
+	}
+
+	fn blocking_method2(&self, x: u32) -> CustomError {
+		CustomError::Two { custom_data: x }
 	}
 }
 
@@ -62,11 +90,23 @@ impl RpcServer for RpcServerImpl {
 // The client accepts only return types that are `Result<T, E>`.
 #[rpc(client, namespace = "foo")]
 pub trait RpcClient {
-	#[method(name = "method1")]
-	async fn client_method1(&self) -> RpcResult<serde_json::Value>;
+	#[method(name = "async_method1")]
+	async fn async_method1(&self) -> RpcResult<serde_json::Value>;
 
-	#[method(name = "method2")]
-	async fn client_method2(&self) -> Result<serde_json::Value, ()>;
+	#[method(name = "async_method2")]
+	async fn async_method2(&self, x: u32) -> Result<serde_json::Value, ()>;
+
+	#[method(name = "sync_method1")]
+	async fn sync_method1(&self) -> RpcResult<serde_json::Value>;
+
+	#[method(name = "sync_method2")]
+	async fn sync_method2(&self, x: u32) -> Result<serde_json::Value, ()>;
+
+	#[method(name = "blocking_method1")]
+	async fn blocking_method1(&self) -> RpcResult<serde_json::Value>;
+
+	#[method(name = "blocking_method2")]
+	async fn blocking_method2(&self, x: u32) -> Result<serde_json::Value, ()>;
 }
 
 pub async fn server() -> SocketAddr {
@@ -85,18 +125,43 @@ async fn main() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
+	let error = client.async_method1().await.unwrap_err();
+	assert_method1(error);
+
+	let error = client.async_method2(123).await.unwrap_err();
+	assert_method2(error);
+
+	let error = client.sync_method1().await.unwrap_err();
+	assert_method1(error);
+
+	let error = client.sync_method2(123).await.unwrap_err();
+	assert_method2(error);
+
+	let error = client.blocking_method1().await.unwrap_err();
+	assert_method1(error);
+
+	let error = client.blocking_method2(123).await.unwrap_err();
+	assert_method2(error);
+}
+
+fn assert_method1(error: Error) {
 	let get_error_object = |err| match err {
 		jsonrpsee::core::Error::Call(object) => object,
 		_ => panic!("wrong error kind: {:?}", err),
 	};
 
-	let error = client.client_method1().await.unwrap_err();
 	let error_object = get_error_object(error);
 	assert_eq!(error_object.code(), 101);
 	assert_eq!(error_object.message(), "custom_error");
 	assert!(error_object.data().is_none());
+}
 
-	let error = client.client_method2().await.unwrap_err();
+fn assert_method2(error: Error) {
+	let get_error_object = |err| match err {
+		jsonrpsee::core::Error::Call(object) => object,
+		_ => panic!("wrong error kind: {:?}", err),
+	};
+
 	let error_object = get_error_object(error);
 	assert_eq!(error_object.code(), 102);
 	assert_eq!(error_object.message(), "custom_error");
