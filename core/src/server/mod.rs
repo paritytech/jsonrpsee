@@ -104,6 +104,25 @@ where
 	}
 }
 
+impl<T> IntoResponse for ResponsePayload<'static, T>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = T;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		self
+	}
+}
+
+impl IntoResponse for ErrorObjectOwned {
+	type Output = ErrorObjectOwned;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::Error(self)
+	}
+}
+
 macro_rules! impl_into_response {
 	($($n:ty),*) => {
 		$(
