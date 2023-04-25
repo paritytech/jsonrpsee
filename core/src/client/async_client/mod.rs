@@ -344,6 +344,7 @@ impl ClientT for Client {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
+	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
 		R: DeserializeOwned,
