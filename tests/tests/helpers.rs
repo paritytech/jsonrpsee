@@ -36,7 +36,7 @@ use jsonrpsee::server::{
 	AllowHosts, PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
-use jsonrpsee::{IntoSubscriptionCloseResponse, SubscriptionCloseResponse};
+use jsonrpsee::SubscriptionCloseResponse;
 use serde::Serialize;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -105,25 +105,8 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 
 	module
 		.register_subscription("subscribe_option", "n", "unsubscribe_option", |_, pending, _| async move {
-			enum Response {
-				Nothing,
-				Closed,
-			}
-
-			impl IntoSubscriptionCloseResponse for Response {
-				fn into_response(self) -> jsonrpsee::SubscriptionCloseResponse {
-					match self {
-						Response::Nothing => SubscriptionCloseResponse::None,
-						Response::Closed => SubscriptionCloseResponse::Notif("close".into()),
-					}
-				}
-			}
-
-			let Ok(_sink) = pending.accept().await else {
-				return Response::Nothing;
-			};
-
-			Response::Closed
+			let _ = pending.accept().await;
+			SubscriptionCloseResponse::None
 		})
 		.unwrap();
 
