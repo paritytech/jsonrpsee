@@ -28,7 +28,6 @@ use std::collections::hash_map::Entry;
 use std::fmt::{self, Debug};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::error::Error;
@@ -691,7 +690,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					// response to the subscription call.
 					let (tx, rx) = oneshot::channel();
-					let is_accepted = Arc::new(AtomicBool::new(false));
+					let (accepted_tx, accepted_rx) = oneshot::channel();
 
 					let sub_id = uniq_sub.sub_id.clone();
 					let method = notif_method_name;
@@ -712,18 +711,24 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					// This runs until the subscription callback has completed.
 					let sub_fut = callback(params.into_owned(), sink, ctx.clone());
 
-					let is_accepted2 = is_accepted.clone();
 					tokio::spawn(async move {
-						match sub_fut.await.into_response() {
-							SubscriptionCloseResponse::Notif(msg) if is_accepted2.load(Ordering::SeqCst) => {
+						// This will wait for the subscription future to be resolved
+						let response = match futures_util::try_join!(sub_fut.map(|f| Ok(f)), accepted_rx) {
+							Ok((r, _)) => r.into_response(),
+							// The accept call failed i.e, the subscription was not accepted.
+							Err(_) => return,
+						};
+
+						match response {
+							SubscriptionCloseResponse::Notif(msg) => {
 								let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &sub_id, method);
-								_ = method_sink.send(json).await;
+								let _ = method_sink.send(json).await;
 							}
-							SubscriptionCloseResponse::NotifErr(msg) if is_accepted2.load(Ordering::SeqCst) => {
+							SubscriptionCloseResponse::NotifErr(msg) => {
 								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
-								_ = method_sink.send(json).await;
+								let _ = method_sink.send(json).await;
 							}
-							_ => (),
+							SubscriptionCloseResponse::None => (),
 						}
 					});
 
@@ -732,10 +737,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					Box::pin(async move {
 						match rx.await {
 							Ok(msg) => {
-								// If the subscription is rejected `success` will be set
-								// to false to prevent further notifications to be sent.
+								// If the subscription was accepted then send a message
+								// to subscription task otherwise rely on the drop impl.
 								if msg.success {
-									is_accepted.store(true, Ordering::SeqCst);
+									let _ = accepted_tx.send(());
 								}
 								Ok(msg)
 							}
