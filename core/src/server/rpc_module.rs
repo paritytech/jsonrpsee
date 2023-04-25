@@ -713,7 +713,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					tokio::spawn(async move {
 						// This will wait for the subscription future to be resolved
-						let response = match futures_util::try_join!(sub_fut.map(|f| Ok(f)), accepted_rx) {
+						let response = match futures_util::future::try_join(sub_fut.map(|f| Ok(f)), accepted_rx).await {
 							Ok((r, _)) => r.into_response(),
 							// The accept call failed i.e, the subscription was not accepted.
 							Err(_) => return,
