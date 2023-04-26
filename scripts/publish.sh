@@ -6,12 +6,13 @@
 set -eu
 
 ORDER=(types proc-macros core client/http-client client/transport client/ws-client client/wasm-client server jsonrpsee)
+DIR=$(pwd)
 
 function read_toml () {
 	NAME=""
 	VERSION=""
 	NAME=$(grep "^name" ./Cargo.toml | sed -e 's/.*"\(.*\)"/\1/')
-	VERSION=$(grep "^version" ./Cargo.toml | sed -e 's/.*"\(.*\)"/\1/')
+	VERSION=$(grep "^version" $DIR/Cargo.toml | sed -e 's/.*"\(.*\)"/\1/')
 }
 function remote_version () {
 	REMOTE_VERSION=""
@@ -74,24 +75,11 @@ for CRATE_DIR in ${ORDER[@]}; do
 		fi
 	done
 
-	# Wait again to make sure that the new version is published and available.
-	echo "Waiting for $NAME@$VERSION to become available at the registry..."
-	while : ; do
-		sleep 3
-		remote_version
-		if [ "$REMOTE_VERSION" = "$VERSION" ]; then
-			echo "🥳 $NAME@$VERSION published succesfully."
-			sleep 3
-			break
-		else
-			echo "#### Got $NAME@$REMOTE_VERSION but expected $NAME@$VERSION. Retrying..."
-		fi
-	done
 	cd - > /dev/null
 done
 
 echo "Tagging jsonrpsee@$VERSION"
 set -x
-git tag -a v$VERSION -m "Version $VERSION"
+git tag -a -s v$VERSION -m "Version $VERSION"
 sleep 3
 git push --tags
