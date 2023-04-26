@@ -230,7 +230,7 @@ pub(crate) async fn background_task<L: Logger>(
 	sender: Sender,
 	mut receiver: Receiver,
 	svc: ServiceData<L>,
-) -> Result<(), Error> {
+) -> Result<Shutdown, Error> {
 	let ServiceData {
 		methods,
 		max_request_body_size,
@@ -250,7 +250,7 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
-	let (mut conn_tx, conn_rx) = oneshot::channel();
+	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 	let pending_calls = FuturesUnordered::new();
@@ -272,11 +272,11 @@ pub(crate) async fn background_task<L: Logger>(
 				stopped = stop;
 				permit
 			}
-			None => break Ok(()),
+			None => break Ok(Shutdown::ConnectionClosed),
 		};
 
 		match try_recv(&mut receiver, &mut data, stopped).await {
-			Receive::Shutdown => break Ok(()),
+			Receive::Shutdown => break Ok(Shutdown::Stopped),
 			Receive::Ok(stop) => {
 				stopped = stop;
 			}
@@ -286,7 +286,7 @@ pub(crate) async fn background_task<L: Logger>(
 				match err {
 					SokettoError::Closed => {
 						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
-						break Ok(());
+						break Ok(Shutdown::ConnectionClosed);
 					}
 					SokettoError::MessageTooLarge { current, maximum } => {
 						tracing::debug!(
@@ -330,14 +330,33 @@ pub(crate) async fn background_task<L: Logger>(
 	// This is not strictly not needed because `tokio::spawn` will drive these the completion
 	// but it's preferred that the `stop_handle.stopped()` should not return until all methods has been
 	// executed and the connection has been closed.
-	tokio::select! {
-		// All pending calls executed.
-		_ = pending_calls.for_each(|_| async {}) => {
-			_ = conn_tx.send(());
+	match result {
+		Ok(Shutdown::Stopped) | Err(_) => {
+			// Soketto doesn't have a way to signal when the connection is closed
+			// thus just throw the data and terminate the stream once the connection has
+			// been terminated.
+			//
+			// The receiver is not cancel-safe such that it used in stream to enforce that.
+			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
+				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
+					None
+				} else {
+					Some(((), (receiver, data)))
+				}
+			});
+
+			let pending = pending_calls.for_each(|_| async {});
+			let disconnect = disconnect_stream.for_each(|_| async {});
+
+			tokio::select! {
+				_ = pending => (),
+				_ = disconnect => (),
+			}
 		}
-		// The connection was closed, no point of waiting for the pending calls.
-		_ = conn_tx.closed() => {}
-	}
+		Ok(Shutdown::ConnectionClosed) => (),
+	};
+
+	_ = conn_tx.send(());
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
@@ -557,4 +576,9 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 			sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
 		}
 	};
+}
+
+pub(crate) enum Shutdown {
+	Stopped,
+	ConnectionClosed,
 }
