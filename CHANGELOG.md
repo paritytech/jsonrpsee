@@ -4,6 +4,18 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.18.1] - 2023-04-26
+
+This release fixes a couple bugs and improves the ergonomics for the HTTP client
+when no tower middleware is enabled.
+
+### Changed
+- http client: add default generic param for the backend ([#1099](https://github.com/paritytech/jsonrpsee/pull/1099))
+
+### Fixed
+- rpc module: fix race in subscription close callback  ([#1098](https://github.com/paritytech/jsonrpsee/pull/1098))
+- client: add missing batch request tracing span  ([#1097](https://github.com/paritytech/jsonrpsee/pull/1097))
+
 ## [v0.18.0] - 2023-04-21
 
 This is a breaking release that removes the `CallError` which was used to represent a JSON-RPC error object that
