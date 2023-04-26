@@ -348,6 +348,8 @@ pub(crate) async fn background_task<L: Logger>(
 			let graceful_shutdown = pending_calls.for_each(|_| async {});
 			let disconnect = disconnect_stream.for_each(|_| async {});
 
+			// All pending calls has been finished or the connection closed.
+			// Then it's fine to terminate
 			tokio::select! {
 				_ = graceful_shutdown => (),
 				_ = disconnect => (),
