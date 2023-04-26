@@ -819,7 +819,13 @@ async fn drop_client_with_pending_calls_works() {
 	init_logger();
 
 	let (handle, addr) = {
-		let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+		let server = ServerBuilder::default()
+			.ping_interval(std::time::Duration::from_secs(60 * 60))
+			.build("127.0.0.1:0")
+			.with_default_timeout()
+			.await
+			.unwrap()
+			.unwrap();
 
 		let mut module = RpcModule::new(());
 
