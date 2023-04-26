@@ -371,7 +371,11 @@ async fn send_task(
 	stop: oneshot::Receiver<()>,
 ) {
 	// Interval to send out continuously `pings`.
-	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
+	let mut ping_interval = tokio::time::interval(ping_interval);
+	// This returns immediately so make sure it doesn't resolve before the ping_interval has been elapsed.
+	ping_interval.tick().await;
+
+	let ping_interval = IntervalStream::new(ping_interval);
 	let rx = ReceiverStream::new(rx);
 
 	tokio::pin!(ping_interval, rx, stop);
@@ -403,14 +407,17 @@ async fn send_task(
 			}
 
 			// Handle timer intervals.
-			Either::Right((Either::Left((_, stop)), next_rx)) => {
+			Either::Right((Either::Left((Some(_instant), stop)), next_rx)) => {
 				if let Err(err) = send_ping(&mut ws_sender).await {
 					tracing::debug!("WS transport error: send ping failed: {}", err);
 					break;
 				}
+
 				rx_item = next_rx;
 				futs = future::select(ping_interval.next(), stop);
 			}
+
+			Either::Right((Either::Left((None, _)), _)) => unreachable!("IntervalStream never terminates"),
 
 			// Server is stopped.
 			Either::Right((Either::Right(_), _)) => {

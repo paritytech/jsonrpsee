@@ -24,6 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::time::Duration;
+
 use crate::server::BatchRequestConfig;
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
@@ -816,11 +818,14 @@ async fn notif_is_ignored() {
 
 #[tokio::test]
 async fn drop_client_with_pending_calls_works() {
+	const MAX_TIMEOUT: Duration = Duration::from_secs(60);
+
 	init_logger();
 
 	let (handle, addr) = {
 		let server = ServerBuilder::default()
-			.ping_interval(std::time::Duration::from_secs(60 * 60))
+			// Make sure that the ping_interval doesn't force the connection to be closed
+			.ping_interval(MAX_TIMEOUT.checked_mul(10).unwrap())
 			.build("127.0.0.1:0")
 			.with_default_timeout()
 			.await
@@ -853,5 +858,5 @@ async fn drop_client_with_pending_calls_works() {
 	// Stop the server and ensure that the server doesn't wait for futures to complete
 	// when the connection has already been closed.
 	handle.stop().unwrap();
-	assert!(handle.stopped().with_default_timeout().await.is_ok());
+	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
 }
