@@ -349,7 +349,7 @@ pub(crate) async fn background_task<L: Logger>(
 			let disconnect = disconnect_stream.for_each(|_| async {});
 
 			tokio::select! {
-				_ = pending => (),
+				_ = graceful_shutdown => (),
 				_ = disconnect => (),
 			}
 		}
