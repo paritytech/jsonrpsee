@@ -30,7 +30,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transport::{self, Error as TransportError, HttpTransportClient};
+use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient};
 use crate::types::{NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::body::HttpBody;
@@ -235,7 +235,7 @@ impl Default for HttpClientBuilder<Identity> {
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
-pub struct HttpClient<S> {
+pub struct HttpClient<S = HttpBackend> {
 	/// HTTP transport client.
 	transport: HttpTransportClient<S>,
 	/// Request timeout. Defaults to 60sec.
