@@ -404,7 +404,7 @@ async fn rejected_subscription_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
-			let _ = pending.reject(err.into_owned()).await;
+			pending.reject(err.into_owned()).await;
 			Ok(())
 		})
 		.unwrap();
@@ -533,4 +533,53 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 		),
 		sub_resp
 	);
+}
+
+#[tokio::test]
+async fn subscription_close_response_works() {
+	use jsonrpsee::SubscriptionCloseResponse;
+
+	init_logger();
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| async move {
+			let x = match params.one::<usize>() {
+				Ok(op) => op,
+				Err(e) => {
+					pending.reject(e).await;
+					return SubscriptionCloseResponse::None;
+				}
+			};
+
+			let _sink = pending.accept().await.unwrap();
+
+			SubscriptionCloseResponse::Notif(SubscriptionMessage::from_json(&x).unwrap())
+		})
+		.unwrap();
+
+	// ensure subscription with raw_json_request works.
+	{
+		let (rp, mut stream) =
+			module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","params":[1],"id":0}"#, 1).await.unwrap();
+		let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
+
+		let sub_id = match resp.payload {
+			ResponsePayload::Result(val) => val,
+			_ => panic!("Expected valid response"),
+		};
+
+		assert_eq!(
+			format!(r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"result":1}}}}"#, sub_id),
+			stream.recv().await.unwrap()
+		);
+	}
+
+	// ensure subscribe API works.
+	{
+		let mut sub = module.subscribe_unbounded("my_sub", [1]).await.unwrap();
+		let (rx, _id) = sub.next::<usize>().await.unwrap().unwrap();
+		assert_eq!(rx, 1);
+	}
 }
