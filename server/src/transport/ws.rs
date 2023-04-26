@@ -336,7 +336,7 @@ pub(crate) async fn background_task<L: Logger>(
 			// thus just throw away the data and terminate the stream once the connection has
 			// been terminated.
 			//
-			// The receiver is not cancel-safe such that it used in a stream to enforce that.
+			// The receiver is not cancel-safe such that it's used in a stream to enforce that.
 			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
 				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
 					None
@@ -345,11 +345,13 @@ pub(crate) async fn background_task<L: Logger>(
 				}
 			});
 
-			let pending = pending_calls.for_each(|_| async {});
+			let graceful_shutdown = pending_calls.for_each(|_| async {});
 			let disconnect = disconnect_stream.for_each(|_| async {});
 
+			// All pending calls has been finished or the connection closed.
+			// Then it's fine to terminate
 			tokio::select! {
-				_ = pending => (),
+				_ = graceful_shutdown => (),
 				_ = disconnect => (),
 				_ = conn_tx.closed() => (),
 			}
