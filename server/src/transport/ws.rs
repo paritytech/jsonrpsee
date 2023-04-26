@@ -333,7 +333,7 @@ pub(crate) async fn background_task<L: Logger>(
 	match result {
 		Ok(Shutdown::Stopped) | Err(_) => {
 			// Soketto doesn't have a way to signal when the connection is closed
-			// thus just throw the data and terminate the stream once the connection has
+			// thus just throw away the data and terminate the stream once the connection has
 			// been terminated.
 			//
 			// The receiver is not cancel-safe such that it used in stream to enforce that.
