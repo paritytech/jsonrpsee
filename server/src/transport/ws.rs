@@ -345,7 +345,7 @@ pub(crate) async fn background_task<L: Logger>(
 				}
 			});
 
-			let pending = pending_calls.for_each(|_| async {});
+			let graceful_shutdown = pending_calls.for_each(|_| async {});
 			let disconnect = disconnect_stream.for_each(|_| async {});
 
 			tokio::select! {
