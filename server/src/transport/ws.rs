@@ -336,7 +336,7 @@ pub(crate) async fn background_task<L: Logger>(
 			// thus just throw away the data and terminate the stream once the connection has
 			// been terminated.
 			//
-			// The receiver is not cancel-safe such that it used in a stream to enforce that.
+			// The receiver is not cancel-safe such that it's used in a stream to enforce that.
 			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
 				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
 					None
