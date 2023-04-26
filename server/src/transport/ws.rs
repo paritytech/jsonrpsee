@@ -250,13 +250,13 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
-	let (mut conn_tx, conn_rx) = oneshot::channel();
+	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 	let pending_calls = FuturesUnordered::new();
 
 	// Spawn another task that sends out the responses on the Websocket.
-	tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
+	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -326,40 +326,8 @@ pub(crate) async fn background_task<L: Logger>(
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	//
-	// This is not strictly not needed because `tokio::spawn` will drive these the completion
-	// but it's preferred that the `stop_handle.stopped()` should not return until all methods has been
-	// executed and the connection has been closed.
-	match result {
-		Ok(Shutdown::Stopped) | Err(_) => {
-			// Soketto doesn't have a way to signal when the connection is closed
-			// thus just throw away the data and terminate the stream once the connection has
-			// been terminated.
-			//
-			// The receiver is not cancel-safe such that it's used in a stream to enforce that.
-			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
-				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
-					None
-				} else {
-					Some(((), (receiver, data)))
-				}
-			});
-
-			let graceful_shutdown = pending_calls.for_each(|_| async {});
-			let disconnect = disconnect_stream.for_each(|_| async {});
-
-			// All pending calls has been finished or the connection closed.
-			// Then it's fine to terminate
-			tokio::select! {
-				_ = graceful_shutdown => (),
-				_ = disconnect => (),
-				_ = conn_tx.closed() => (),
-			}
-		}
-		Ok(Shutdown::ConnectionClosed) => (),
-	};
-
-	_ = conn_tx.send(());
+	graceful_shutdown(&result, pending_calls, receiver, data, conn_tx, send_task_handle).await;
+	tracing::trace!("ws conn task dropped");
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
@@ -588,7 +556,55 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 	};
 }
 
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum Shutdown {
 	Stopped,
 	ConnectionClosed,
+}
+
+/// Enforce a graceful shutdown.
+///
+/// This will return once the connection has been terminated or all pending calls have been executed.
+async fn graceful_shutdown<F: Future>(
+	result: &Result<Shutdown, Error>,
+	pending_calls: FuturesUnordered<F>,
+	receiver: Receiver,
+	data: Vec<u8>,
+	mut conn_tx: oneshot::Sender<()>,
+	send_task_handle: tokio::task::JoinHandle<()>,
+) {
+	match result {
+		Ok(Shutdown::ConnectionClosed) => (),
+		Ok(Shutdown::Stopped) | Err(_) => {
+			// Soketto doesn't have a way to signal when the connection is closed
+			// thus just throw away the data and terminate the stream once the connection has
+			// been terminated.
+			//
+			// The receiver is not cancel-safe such that it's used in a stream to enforce that.
+			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
+				let rx = receiver.receive(&mut data).await;
+				if let Err(SokettoError::Closed) = rx {
+					None
+				} else {
+					Some(((), (receiver, data)))
+				}
+			});
+
+			let graceful_shutdown = pending_calls.for_each(|_| async {});
+			let disconnect = disconnect_stream.for_each(|_| async {});
+
+			// All pending calls has been finished or the connection closed.
+			// Fine to terminate
+			tokio::select! {
+				_ = graceful_shutdown => {}
+				_ = disconnect => {}
+				_ = conn_tx.closed() => {}
+			}
+		}
+	};
+
+	// Send a message to close down the "send task".
+	_ = conn_tx.send(());
+	// Ensure that send task has been closed.
+	_ = send_task_handle.await;
 }

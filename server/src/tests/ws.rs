@@ -817,34 +817,11 @@ async fn notif_is_ignored() {
 }
 
 #[tokio::test]
-async fn drop_client_with_pending_calls_works() {
+async fn close_client_with_pending_calls_works() {
 	const MAX_TIMEOUT: Duration = Duration::from_secs(60);
-
 	init_logger();
 
-	let (handle, addr) = {
-		let server = ServerBuilder::default()
-			// Make sure that the ping_interval doesn't force the connection to be closed
-			.ping_interval(MAX_TIMEOUT.checked_mul(10).unwrap())
-			.build("127.0.0.1:0")
-			.with_default_timeout()
-			.await
-			.unwrap()
-			.unwrap();
-
-		let mut module = RpcModule::new(());
-
-		module
-			.register_async_method("infinite_call", |_, _| async move {
-				futures_util::future::pending::<()>().await;
-				"ok"
-			})
-			.unwrap();
-		let addr = server.local_addr().unwrap();
-
-		(server.start(module).unwrap(), addr)
-	};
-
+	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap()).await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	for _ in 0..10 {
@@ -859,4 +836,50 @@ async fn drop_client_with_pending_calls_works() {
 	// when the connection has already been closed.
 	handle.stop().unwrap();
 	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
+}
+
+#[tokio::test]
+async fn drop_client_with_pending_calls_works() {
+	const MAX_TIMEOUT: Duration = Duration::from_secs(60);
+
+	init_logger();
+	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap()).await;
+
+	{
+		let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+		for _ in 0..10 {
+			let req = r#"{"jsonrpc":"2.0","method":"infinite_call","id":1}"#;
+			client.send(req).with_default_timeout().await.unwrap().unwrap();
+		}
+		tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+	}
+
+	// Stop the server and ensure that the server doesn't wait for futures to complete
+	// when the connection has already been closed.
+	handle.stop().unwrap();
+	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
+}
+
+async fn server_with_infinite_call(timeout: Duration) -> (crate::ServerHandle, std::net::SocketAddr) {
+	let server = ServerBuilder::default()
+		// Make sure that the ping_interval doesn't force the connection to be closed
+		.ping_interval(timeout)
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_async_method("infinite_call", |_, _| async move {
+			futures_util::future::pending::<()>().await;
+			"ok"
+		})
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+
+	(server.start(module).unwrap(), addr)
 }
