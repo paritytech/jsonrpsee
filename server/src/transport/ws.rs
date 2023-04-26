@@ -250,7 +250,7 @@ pub(crate) async fn background_task<L: Logger>(
 	} = svc;
 
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
-	let (conn_tx, conn_rx) = oneshot::channel();
+	let (mut conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 	let pending_calls = FuturesUnordered::new();
@@ -351,6 +351,7 @@ pub(crate) async fn background_task<L: Logger>(
 			tokio::select! {
 				_ = pending => (),
 				_ = disconnect => (),
+				_ = conn_tx.closed() => (),
 			}
 		}
 		Ok(Shutdown::ConnectionClosed) => (),
