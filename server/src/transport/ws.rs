@@ -226,11 +226,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 	response
 }
 
-pub(crate) async fn background_task<L: Logger>(
-	sender: Sender,
-	mut receiver: Receiver,
-	svc: ServiceData<L>,
-) -> Result<Shutdown, Error> {
+pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Receiver, svc: ServiceData<L>) {
 	let ServiceData {
 		methods,
 		max_request_body_size,
@@ -300,7 +296,7 @@ pub(crate) async fn background_task<L: Logger>(
 					}
 					err => {
 						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn_id);
-						break Err(err.into());
+						break Err(err);
 					}
 				};
 			}
@@ -326,12 +322,11 @@ pub(crate) async fn background_task<L: Logger>(
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	graceful_shutdown(&result, pending_calls, receiver, data, conn_tx, send_task_handle).await;
+	graceful_shutdown(result, pending_calls, receiver, data, conn_tx, send_task_handle).await;
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
 	drop(stop_handle);
-	result
 }
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
@@ -566,7 +561,7 @@ pub(crate) enum Shutdown {
 ///
 /// This will return once the connection has been terminated or all pending calls have been executed.
 async fn graceful_shutdown<F: Future>(
-	result: &Result<Shutdown, Error>,
+	result: Result<Shutdown, SokettoError>,
 	pending_calls: FuturesUnordered<F>,
 	receiver: Receiver,
 	data: Vec<u8>,
@@ -574,7 +569,7 @@ async fn graceful_shutdown<F: Future>(
 	send_task_handle: tokio::task::JoinHandle<()>,
 ) {
 	match result {
-		Ok(Shutdown::ConnectionClosed) => (),
+		Ok(Shutdown::ConnectionClosed) | Err(SokettoError::Closed) => (),
 		Ok(Shutdown::Stopped) | Err(_) => {
 			// Soketto doesn't have a way to signal when the connection is closed
 			// thus just throw away the data and terminate the stream once the connection has
