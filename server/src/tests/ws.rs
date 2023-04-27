@@ -24,6 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::time::Duration;
+
 use crate::server::BatchRequestConfig;
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
@@ -815,30 +817,24 @@ async fn notif_is_ignored() {
 }
 
 #[tokio::test]
-async fn drop_client_with_pending_calls_works() {
+async fn close_client_with_pending_calls_works() {
+	const MAX_TIMEOUT: Duration = Duration::from_secs(60);
+	const CONCURRENT_CALLS: usize = 10;
 	init_logger();
 
-	let (handle, addr) = {
-		let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-		let mut module = RpcModule::new(());
-
-		module
-			.register_async_method("infinite_call", |_, _| async move {
-				futures_util::future::pending::<()>().await;
-				"ok"
-			})
-			.unwrap();
-		let addr = server.local_addr().unwrap();
-
-		(server.start(module).unwrap(), addr)
-	};
-
+	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap(), tx).await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	for _ in 0..10 {
 		let req = r#"{"jsonrpc":"2.0","method":"infinite_call","id":1}"#;
 		client.send(req).with_default_timeout().await.unwrap().unwrap();
+	}
+
+	// Assert that the server has received the calls.
+	for _ in 0..CONCURRENT_CALLS {
+		assert!(rx.recv().await.is_some());
 	}
 
 	client.close().await.unwrap();
@@ -847,5 +843,61 @@ async fn drop_client_with_pending_calls_works() {
 	// Stop the server and ensure that the server doesn't wait for futures to complete
 	// when the connection has already been closed.
 	handle.stop().unwrap();
-	assert!(handle.stopped().with_default_timeout().await.is_ok());
+	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
+}
+
+#[tokio::test]
+async fn drop_client_with_pending_calls_works() {
+	const MAX_TIMEOUT: Duration = Duration::from_secs(60);
+	const CONCURRENT_CALLS: usize = 10;
+	init_logger();
+
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap(), tx).await;
+
+	{
+		let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+		for _ in 0..CONCURRENT_CALLS {
+			let req = r#"{"jsonrpc":"2.0","method":"infinite_call","id":1}"#;
+			client.send(req).with_default_timeout().await.unwrap().unwrap();
+		}
+		// Assert that the server has received the calls.
+		for _ in 0..CONCURRENT_CALLS {
+			assert!(rx.recv().await.is_some());
+		}
+	}
+
+	// Stop the server and ensure that the server doesn't wait for futures to complete
+	// when the connection has already been closed.
+	handle.stop().unwrap();
+	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
+}
+
+async fn server_with_infinite_call(
+	timeout: Duration,
+	tx: tokio::sync::mpsc::UnboundedSender<()>,
+) -> (crate::ServerHandle, std::net::SocketAddr) {
+	let server = ServerBuilder::default()
+		// Make sure that the ping_interval doesn't force the connection to be closed
+		.ping_interval(timeout)
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	let mut module = RpcModule::new(tx);
+
+	module
+		.register_async_method("infinite_call", |_, mut ctx| async move {
+			let tx = std::sync::Arc::make_mut(&mut ctx);
+			tx.send(()).unwrap();
+			futures_util::future::pending::<()>().await;
+			"ok"
+		})
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+
+	(server.start(module).unwrap(), addr)
 }
