@@ -852,7 +852,7 @@ async fn drop_client_with_pending_calls_works() {
 			let req = r#"{"jsonrpc":"2.0","method":"infinite_call","id":1}"#;
 			client.send(req).with_default_timeout().await.unwrap().unwrap();
 		}
-       // Assumption: the calls would be ACK:ed by server after 10 seconds (no way knowing that)
+		// Assumption: the calls would be ACK:ed by server after 10 seconds (no way knowing that except parsing CLI output)
 		tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 	}
 
