@@ -819,14 +819,22 @@ async fn notif_is_ignored() {
 #[tokio::test]
 async fn close_client_with_pending_calls_works() {
 	const MAX_TIMEOUT: Duration = Duration::from_secs(60);
+	const CONCURRENT_CALLS: usize = 10;
 	init_logger();
 
-	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap()).await;
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap(), tx).await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	for _ in 0..10 {
 		let req = r#"{"jsonrpc":"2.0","method":"infinite_call","id":1}"#;
 		client.send(req).with_default_timeout().await.unwrap().unwrap();
+	}
+
+	// Assert that the server has received the calls.
+	for _ in 0..CONCURRENT_CALLS {
+		assert!(rx.recv().await.is_some());
 	}
 
 	client.close().await.unwrap();
@@ -841,19 +849,23 @@ async fn close_client_with_pending_calls_works() {
 #[tokio::test]
 async fn drop_client_with_pending_calls_works() {
 	const MAX_TIMEOUT: Duration = Duration::from_secs(60);
-
+	const CONCURRENT_CALLS: usize = 10;
 	init_logger();
-	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap()).await;
+
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap(), tx).await;
 
 	{
 		let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-		for _ in 0..10 {
+		for _ in 0..CONCURRENT_CALLS {
 			let req = r#"{"jsonrpc":"2.0","method":"infinite_call","id":1}"#;
 			client.send(req).with_default_timeout().await.unwrap().unwrap();
 		}
-		// Assumption: the calls would be ACK:ed by server after 10 seconds (no way knowing that except parsing CLI output)
-		tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+		// Assert that the server has received the calls.
+		for _ in 0..CONCURRENT_CALLS {
+			assert!(rx.recv().await.is_some());
+		}
 	}
 
 	// Stop the server and ensure that the server doesn't wait for futures to complete
@@ -862,7 +874,10 @@ async fn drop_client_with_pending_calls_works() {
 	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
 }
 
-async fn server_with_infinite_call(timeout: Duration) -> (crate::ServerHandle, std::net::SocketAddr) {
+async fn server_with_infinite_call(
+	timeout: Duration,
+	tx: tokio::sync::mpsc::UnboundedSender<()>,
+) -> (crate::ServerHandle, std::net::SocketAddr) {
 	let server = ServerBuilder::default()
 		// Make sure that the ping_interval doesn't force the connection to be closed
 		.ping_interval(timeout)
@@ -872,10 +887,12 @@ async fn server_with_infinite_call(timeout: Duration) -> (crate::ServerHandle, s
 		.unwrap()
 		.unwrap();
 
-	let mut module = RpcModule::new(());
+	let mut module = RpcModule::new(tx);
 
 	module
-		.register_async_method("infinite_call", |_, _| async move {
+		.register_async_method("infinite_call", |_, mut ctx| async move {
+			let tx = std::sync::Arc::make_mut(&mut ctx);
+			tx.send(()).unwrap();
 			futures_util::future::pending::<()>().await;
 			"ok"
 		})
