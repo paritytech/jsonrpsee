@@ -15,6 +15,7 @@ when no tower middleware is enabled.
 ### Fixed
 - rpc module: fix race in subscription close callback  ([#1098](https://github.com/paritytech/jsonrpsee/pull/1098))
 - client: add missing batch request tracing span  ([#1097](https://github.com/paritytech/jsonrpsee/pull/1097))
+- ws server: don't wait graceful shutdown when connection closed  ([#1103](https://github.com/paritytech/jsonrpsee/pull/1103))
 
 ## [v0.18.0] - 2023-04-21
 
