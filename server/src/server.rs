@@ -654,7 +654,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 							ws_builder.set_max_message_size(data.max_request_body_size as usize);
 							let (sender, receiver) = ws_builder.finish();
 
-							let _ = ws::background_task::<L>(sender, receiver, data).await;
+							ws::background_task::<L>(sender, receiver, data).await;
 						}
 						.in_current_span(),
 					);

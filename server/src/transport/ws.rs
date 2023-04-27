@@ -226,11 +226,7 @@ pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData
 	response
 }
 
-pub(crate) async fn background_task<L: Logger>(
-	sender: Sender,
-	mut receiver: Receiver,
-	svc: ServiceData<L>,
-) -> Result<Shutdown, Error> {
+pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Receiver, svc: ServiceData<L>) {
 	let ServiceData {
 		methods,
 		max_request_body_size,
@@ -256,11 +252,11 @@ pub(crate) async fn background_task<L: Logger>(
 	let pending_calls = FuturesUnordered::new();
 
 	// Spawn another task that sends out the responses on the Websocket.
-	tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
+	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
-	let stopped = stop_handle.shutdown();
+	let stopped = stop_handle.clone().shutdown();
 
 	tokio::pin!(stopped);
 
@@ -300,7 +296,7 @@ pub(crate) async fn background_task<L: Logger>(
 					}
 					err => {
 						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn_id);
-						break Err(err.into());
+						break Err(err);
 					}
 				};
 			}
@@ -326,41 +322,11 @@ pub(crate) async fn background_task<L: Logger>(
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	//
-	// This is not strictly not needed because `tokio::spawn` will drive these the completion
-	// but it's preferred that the `stop_handle.stopped()` should not return until all methods has been
-	// executed and the connection has been closed.
-	match result {
-		Ok(Shutdown::Stopped) | Err(_) => {
-			// Soketto doesn't have a way to signal when the connection is closed
-			// thus just throw the data and terminate the stream once the connection has
-			// been terminated.
-			//
-			// The receiver is not cancel-safe such that it used in stream to enforce that.
-			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
-				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
-					None
-				} else {
-					Some(((), (receiver, data)))
-				}
-			});
-
-			let pending = pending_calls.for_each(|_| async {});
-			let disconnect = disconnect_stream.for_each(|_| async {});
-
-			tokio::select! {
-				_ = pending => (),
-				_ = disconnect => (),
-			}
-		}
-		Ok(Shutdown::ConnectionClosed) => (),
-	};
-
-	_ = conn_tx.send(());
+	graceful_shutdown(result, pending_calls, receiver, data, conn_tx, send_task_handle).await;
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
-	result
+	drop(stop_handle);
 }
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
@@ -371,7 +337,11 @@ async fn send_task(
 	stop: oneshot::Receiver<()>,
 ) {
 	// Interval to send out continuously `pings`.
-	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
+	let mut ping_interval = tokio::time::interval(ping_interval);
+	// This returns immediately so make sure it doesn't resolve before the ping_interval has been elapsed.
+	ping_interval.tick().await;
+
+	let ping_interval = IntervalStream::new(ping_interval);
 	let rx = ReceiverStream::new(rx);
 
 	tokio::pin!(ping_interval, rx, stop);
@@ -403,14 +373,17 @@ async fn send_task(
 			}
 
 			// Handle timer intervals.
-			Either::Right((Either::Left((_, stop)), next_rx)) => {
+			Either::Right((Either::Left((Some(_instant), stop)), next_rx)) => {
 				if let Err(err) = send_ping(&mut ws_sender).await {
 					tracing::debug!("WS transport error: send ping failed: {}", err);
 					break;
 				}
+
 				rx_item = next_rx;
 				futs = future::select(ping_interval.next(), stop);
 			}
+
+			Either::Right((Either::Left((None, _)), _)) => unreachable!("IntervalStream never terminates"),
 
 			// Server is stopped.
 			Either::Right((Either::Right(_), _)) => {
@@ -578,7 +551,54 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 	};
 }
 
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum Shutdown {
 	Stopped,
 	ConnectionClosed,
+}
+
+/// Enforce a graceful shutdown.
+///
+/// This will return once the connection has been terminated or all pending calls have been executed.
+async fn graceful_shutdown<F: Future>(
+	result: Result<Shutdown, SokettoError>,
+	pending_calls: FuturesUnordered<F>,
+	receiver: Receiver,
+	data: Vec<u8>,
+	mut conn_tx: oneshot::Sender<()>,
+	send_task_handle: tokio::task::JoinHandle<()>,
+) {
+	match result {
+		Ok(Shutdown::ConnectionClosed) | Err(SokettoError::Closed) => (),
+		Ok(Shutdown::Stopped) | Err(_) => {
+			// Soketto doesn't have a way to signal when the connection is closed
+			// thus just throw away the data and terminate the stream once the connection has
+			// been terminated.
+			//
+			// The receiver is not cancel-safe such that it's used in a stream to enforce that.
+			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
+				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
+					None
+				} else {
+					Some(((), (receiver, data)))
+				}
+			});
+
+			let graceful_shutdown = pending_calls.for_each(|_| async {});
+			let disconnect = disconnect_stream.for_each(|_| async {});
+
+			// All pending calls has been finished or the connection closed.
+			// Fine to terminate
+			tokio::select! {
+				_ = graceful_shutdown => {}
+				_ = disconnect => {}
+				_ = conn_tx.closed() => {}
+			}
+		}
+	};
+
+	// Send a message to close down the "send task".
+	_ = conn_tx.send(());
+	// Ensure that send task has been closed.
+	_ = send_task_handle.await;
 }
