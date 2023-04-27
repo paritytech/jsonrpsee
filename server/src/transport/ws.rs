@@ -260,7 +260,7 @@ pub(crate) async fn background_task<L: Logger>(
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
-	let stopped = stop_handle.shutdown();
+	let stopped = stop_handle.clone().shutdown();
 
 	tokio::pin!(stopped);
 
@@ -327,10 +327,10 @@ pub(crate) async fn background_task<L: Logger>(
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
 	graceful_shutdown(&result, pending_calls, receiver, data, conn_tx, send_task_handle).await;
-	tracing::trace!("ws conn task dropped");
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
+	drop(stop_handle);
 	result
 }
 
@@ -582,8 +582,7 @@ async fn graceful_shutdown<F: Future>(
 			//
 			// The receiver is not cancel-safe such that it's used in a stream to enforce that.
 			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
-				let rx = receiver.receive(&mut data).await;
-				if let Err(SokettoError::Closed) = rx {
+				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
 					None
 				} else {
 					Some(((), (receiver, data)))
