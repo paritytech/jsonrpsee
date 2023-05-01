@@ -27,7 +27,6 @@
 //! Host header validation.
 
 use crate::server::host_filtering::matcher::{Matcher, Pattern};
-use crate::Error;
 
 const SPLIT_PROOF: &str = "split always returns non-empty iterator.";
 
@@ -149,12 +148,16 @@ pub enum AllowHosts {
 	Only(Vec<Host>),
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("host `{0}` rejected because it's not whitelisted")]
+pub struct AllowHostError(String);
+
 impl AllowHosts {
 	/// Verify a host.
-	pub fn verify(&self, value: &str) -> Result<(), Error> {
+	pub fn verify(&self, value: &str) -> Result<(), AllowHostError> {
 		if let AllowHosts::Only(list) = self {
 			if !list.iter().any(|o| o.matches(value)) {
-				return Err(Error::HttpHeaderRejected("host", value.into()));
+				return Err(AllowHostError(value.to_string()));
 			}
 		}
 

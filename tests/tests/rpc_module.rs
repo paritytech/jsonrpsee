@@ -31,7 +31,6 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
-use jsonrpsee::core::error::Error;
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::core::{server::*, RpcResult};
 use jsonrpsee::types::error::{ErrorCode, ErrorObject, INVALID_PARAMS_MSG, PARSE_ERROR_CODE};
@@ -115,7 +114,7 @@ async fn calling_method_without_server() {
 	let err = module.call::<_, EmptyServerParams>("foo", (false,)).await.unwrap_err();
 	assert!(matches!(
 		err,
-		Error::Call(err) if err.code() == ErrorCode::InvalidParams.code() && err.message() == INVALID_PARAMS_MSG && err.data().unwrap().get().contains("invalid type: boolean `false`, expected u16 at line 1 column 6")
+		CallError::JsonRpc(err) if err.code() == ErrorCode::InvalidParams.code() && err.message() == INVALID_PARAMS_MSG && err.data().unwrap().get().contains("invalid type: boolean `false`, expected u16 at line 1 column 6")
 	));
 
 	// Call async method with params and context
@@ -209,7 +208,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	let err = module.call::<_, EmptyServerParams>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
 
 	assert!(matches!(err,
-		Error::Call(err) if err.data().unwrap().get().contains("invalid type: boolean `false`, expected a map at line 1 column 5") &&
+		CallError::JsonRpc(err) if err.data().unwrap().get().contains("invalid type: boolean `false`, expected a map at line 1 column 5") &&
 		err.code() == ErrorCode::InvalidParams.code() && err.message() == INVALID_PARAMS_MSG
 	));
 
@@ -228,7 +227,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	// Call async method with option which should `Err`.
 	let err = module.call::<_, Option<String>>("can_have_options", vec![2]).await.unwrap_err();
 	assert!(matches!(err,
-		Error::Call(err) if err.message() == "too big number"
+		CallError::JsonRpc(err) if err.message() == "too big number"
 	));
 }
 
@@ -250,7 +249,7 @@ async fn subscribing_without_server() {
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
 
-			Err(Error::Custom("closed successfully".into()).into())
+			Err("closed successfully".into())
 		})
 		.unwrap();
 
@@ -334,7 +333,7 @@ async fn subscribing_without_server_bad_params() {
 	let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
 
 	assert!(
-		matches!(sub, Error::Call(e) if e.data().unwrap().get().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code()
+		matches!(sub, CallError::JsonRpc(e) if e.data().unwrap().get().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code()
 				&& e.message() == INVALID_PARAMS_MSG
 		)
 	);
@@ -410,7 +409,9 @@ async fn rejected_subscription_without_server() {
 		.unwrap();
 
 	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
-	assert!(matches!(sub_err, Error::Call(e) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE));
+	assert!(
+		matches!(sub_err, CallError::JsonRpc(e) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
+	);
 }
 
 #[tokio::test]

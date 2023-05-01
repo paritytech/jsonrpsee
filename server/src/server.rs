@@ -45,7 +45,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
 use jsonrpsee_core::server::{AllowHosts, Methods};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{http_helpers, TEN_MB_SIZE_BYTES};
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -79,8 +79,8 @@ impl<L> std::fmt::Debug for Server<L> {
 
 impl<B, L> Server<B, L> {
 	/// Returns socket address to which the server is bound.
-	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
-		self.listener.local_addr().map_err(Into::into)
+	pub fn local_addr(&self) -> std::io::Result<SocketAddr> {
+		self.listener.local_addr()
 	}
 }
 
@@ -102,7 +102,7 @@ where
 	/// Start responding to connections requests.
 	///
 	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
-	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
+	pub fn start(mut self, methods: impl Into<Methods>) -> ServerHandle {
 		let methods = methods.into();
 		let (stop_tx, stop_rx) = watch::channel(());
 
@@ -113,7 +113,7 @@ where
 			None => tokio::spawn(self.start_inner(methods, stop_handle)),
 		};
 
-		Ok(ServerHandle::new(stop_tx))
+		ServerHandle::new(stop_tx)
 	}
 
 	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
@@ -501,7 +501,7 @@ impl<B, L> Builder<B, L> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> std::io::Result<Server<B, L>> {
 		let listener = TcpListener::bind(addrs).await?;
 
 		Ok(Server {
@@ -536,7 +536,7 @@ impl<B, L> Builder<B, L> {
 	///   let server = ServerBuilder::new().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<B, L>, Error> {
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> std::io::Result<Server<B, L>> {
 		let listener = TcpListener::from_std(listener.into())?;
 
 		Ok(Server {

@@ -37,7 +37,10 @@ use std::{
 	ops::Range,
 };
 
-use crate::{client::BatchEntry, Error};
+use crate::{
+	client::BatchEntry,
+	client::{error::RegisterMethodError, Error},
+};
 use jsonrpsee_types::{Id, SubscriptionId};
 use rustc_hash::FxHashMap;
 use serde_json::value::Value as JsonValue;
@@ -187,17 +190,13 @@ impl RequestManager {
 			handle.insert(send_back);
 			Ok(())
 		} else {
-			Err(Error::MethodAlreadyRegistered(method.to_owned()))
+			Err(Error::RegisterMethod(RegisterMethodError::AlreadyRegistered(method.to_owned())))
 		}
 	}
 
 	/// Removes a notification handler.
-	pub(crate) fn remove_notification_handler(&mut self, method: String) -> Result<(), Error> {
-		if self.notification_handlers.remove(&method).is_some() {
-			Ok(())
-		} else {
-			Err(Error::UnregisteredNotification(method))
-		}
+	pub(crate) fn remove_notification_handler<'a>(&mut self, method: &'a str) -> Option<SubscriptionSink> {
+		self.notification_handlers.remove(method)
 	}
 
 	/// Tries to complete a pending subscription.

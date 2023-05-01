@@ -54,12 +54,14 @@ cfg_server! {
 
 cfg_client! {
 	pub mod client;
+
+	pub use client::Error as ClientError;
 }
 
 /// Shared tracing helpers to trace RPC calls.
 pub mod tracing;
 pub use async_trait::async_trait;
-pub use error::{Error, GenericTransportError, StringError};
+//pub use error::{Error, GenericTransportError, StringError};
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, jsonrpsee_types::ErrorObjectOwned>;
@@ -87,4 +89,4 @@ pub use serde_json::{
 pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 
 /// The return type if the subscription wants to return `Result`.
-pub type SubscriptionResult = Result<(), StringError>;
+pub type SubscriptionResult = Result<(), error::StringError>;

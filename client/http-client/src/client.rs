@@ -37,12 +37,12 @@ use hyper::body::HttpBody;
 use hyper::http::HeaderMap;
 use hyper::Body;
 use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription,
+	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, Error, IdKind, RequestIdManager, Subscription,
 	SubscriptionClientT,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
-use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
@@ -315,7 +315,8 @@ where
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
-		let batch = batch.build()?;
+		// TODO fix unwrap.
+		let batch = batch.build().unwrap();
 		let guard = self.id_manager.next_request_id()?;
 		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
 

@@ -30,7 +30,6 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{
 	AllowHosts, PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
@@ -91,7 +90,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
 			let _sink = pending.accept().await?;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			Err(Error::Custom("Server closed the stream because it was lazy".to_string()).into())
+			Err("Server closed the stream because it was lazy".to_string().into())
 		})
 		.unwrap();
 
@@ -119,7 +118,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	(addr, server_handle)
 }
@@ -158,7 +157,7 @@ pub async fn server() -> SocketAddr {
 
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	tokio::spawn(server_handle.stopped());
 
@@ -186,7 +185,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 			res.map_err(Into::into)
 		})
 		.unwrap();
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	tokio::spawn(handle.stopped());
 
@@ -218,7 +217,7 @@ pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLay
 
 	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 	(addr, handle)
 }
 

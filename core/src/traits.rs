@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::Error;
 use jsonrpsee_types::SubscriptionId;
 use serde::Serialize;
 use serde_json::value::RawValue;
@@ -50,9 +49,9 @@ use serde_json::value::RawValue;
 /// struct ManualParam;
 ///
 /// impl ToRpcParams for ManualParam {
-///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 ///         // Manually define a valid JSONRPC parameter.
-///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(Some).map_err(Error::ParseError)
+///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(Some)
 ///     }
 /// }
 /// ```
@@ -63,7 +62,6 @@ use serde_json::value::RawValue;
 /// use jsonrpsee_core::traits::ToRpcParams;
 /// use serde_json::value::RawValue;
 /// use serde::Serialize;
-/// use jsonrpsee_core::Error;
 ///
 /// #[derive(Serialize)]
 /// struct SerParam {
@@ -72,7 +70,7 @@ use serde_json::value::RawValue;
 /// };
 ///
 /// impl ToRpcParams for SerParam {
-///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 ///         let s = String::from_utf8(serde_json::to_vec(&self)?).expect("Valid UTF8 format");
 ///         RawValue::from_string(s).map(Some).map_err(Error::ParseError)
 ///     }
@@ -80,16 +78,16 @@ use serde_json::value::RawValue;
 /// ```
 pub trait ToRpcParams {
 	/// Consume and serialize the type as a JSON raw value.
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error>;
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error>;
 }
 
 // To not bound the `ToRpcParams: Serialize` define a custom implementation
 // for types which are serializable.
 macro_rules! to_rpc_params_impl {
 	() => {
-		fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
-			let json = serde_json::to_string(&self).map_err(Error::ParseError)?;
-			RawValue::from_string(json).map(Some).map_err(Error::ParseError)
+		fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+			let json = serde_json::to_string(&self)?;
+			RawValue::from_string(json).map(Some)
 		}
 	};
 }

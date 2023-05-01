@@ -26,7 +26,6 @@
 
 //! Utilities for handling async code.
 
-use jsonrpsee_core::Error;
 use std::sync::Arc;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 
@@ -61,8 +60,8 @@ impl ServerHandle {
 	}
 
 	/// Tell the server to stop without waiting for the server to stop.
-	pub fn stop(&self) -> Result<(), Error> {
-		self.0.send(()).map_err(|_| Error::AlreadyStopped)
+	pub fn stop(&self) -> Result<(), ()> {
+		self.0.send(()).map_err(|_| ())
 	}
 
 	/// Wait for the server to stop.

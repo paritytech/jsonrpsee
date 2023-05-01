@@ -17,7 +17,7 @@ use jsonrpsee_core::server::{
 };
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{Error, JsonRawValue};
+use jsonrpsee_core::JsonRawValue;
 use jsonrpsee_types::error::{
 	reject_too_big_batch_request, reject_too_big_request, reject_too_many_subscriptions, ErrorCode,
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
@@ -36,12 +36,12 @@ pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded
 
 type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
 
-pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
+pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), SokettoError> {
 	sender.send_text_owned(response).await?;
 	sender.flush().await.map_err(Into::into)
 }
 
-pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
+pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), SokettoError> {
 	tracing::debug!("Send ping");
 	// Submit empty slice as "optional" parameter.
 	let slice: &[u8] = &[];

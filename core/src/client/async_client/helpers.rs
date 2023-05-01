@@ -25,10 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
-use crate::client::{RequestMessage, TransportSenderT};
+use crate::client::{Error, RequestMessage, TransportSenderT};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
-use crate::Error;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
@@ -153,7 +152,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
-				let _ = manager.remove_notification_handler(notif.method.into_owned());
+				let _ = manager.remove_notification_handler(&notif.method);
 				Err(Error::Custom(err.to_string()))
 			}
 		},

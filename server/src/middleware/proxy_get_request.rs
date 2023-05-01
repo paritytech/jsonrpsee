@@ -5,7 +5,6 @@ use crate::transport::http;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Body, Method, Request, Response, Uri};
-use jsonrpsee_core::error::Error as RpcError;
 use jsonrpsee_types::{Id, RequestSer};
 use std::error::Error;
 use std::future::Future;
@@ -13,6 +12,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
+
+/// Error that occur if the specified path doesn't start with `/<path>`
+#[derive(Debug, thiserror::Error)]
+#[error("ProxyGetRequestLayer path must start with `/`, got `{0}`")]
+pub struct InvalidPath(String);
 
 /// Layer that applies [`ProxyGetRequest`] which proxies the `GET /path` requests to
 /// specific RPC method calls and that strips the response.
@@ -28,10 +32,10 @@ impl ProxyGetRequestLayer {
 	/// Creates a new [`ProxyGetRequestLayer`].
 	///
 	/// See [`ProxyGetRequest`] for more details.
-	pub fn new(path: impl Into<String>, method: impl Into<String>) -> Result<Self, RpcError> {
+	pub fn new(path: impl Into<String>, method: impl Into<String>) -> Result<Self, InvalidPath> {
 		let path = path.into();
 		if !path.starts_with('/') {
-			return Err(RpcError::Custom("ProxyGetRequestLayer path must start with `/`".to_string()));
+			return Err(InvalidPath(path));
 		}
 
 		Ok(Self { path, method: method.into() })
@@ -70,9 +74,9 @@ impl<S> ProxyGetRequest<S> {
 	///
 	/// The request `GET /path` is redirected to the provided method.
 	/// Fails if the path does not start with `/`.
-	pub fn new(inner: S, path: &str, method: &str) -> Result<Self, RpcError> {
+	pub fn new(inner: S, path: &str, method: &str) -> Result<Self, InvalidPath> {
 		if !path.starts_with('/') {
-			return Err(RpcError::Custom(format!("ProxyGetRequest path must start with `/`, got: {path}")));
+			return Err(InvalidPath(path.to_string()));
 		}
 
 		Ok(Self { inner, path: Arc::from(path), method: Arc::from(method) })

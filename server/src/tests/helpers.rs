@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 
-use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
+use jsonrpsee_core::{error::StringError, DeserializeOwned, RpcResult};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::{error::ErrorCode, ErrorObject, ErrorObjectOwned, Response, ResponseSuccess};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
@@ -118,7 +118,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 	(addr, server_handle)
 }
 
@@ -160,7 +160,7 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(rpc_module).unwrap();
+	let handle = server.start(rpc_module);
 
 	tokio::spawn(handle.stopped());
 	addr

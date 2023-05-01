@@ -26,12 +26,12 @@
 
 use std::time::Duration;
 
-use crate::server::BatchRequestConfig;
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
+use crate::{BatchRequestConfig, RegisterMethodError};
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
-use jsonrpsee_core::{traits::IdProvider, Error};
+use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -50,7 +50,7 @@ async fn can_set_the_max_request_body_size() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(100)).unwrap();
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -78,7 +78,7 @@ async fn can_set_the_max_response_body_size() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(101)).unwrap();
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -101,7 +101,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(51)).unwrap();
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -125,7 +125,7 @@ async fn can_set_max_connections() {
 	module.register_method("anything", |_p, _cx| ()).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	let conn1 = WebSocketTestClient::new(addr).await;
 	let conn2 = WebSocketTestClient::new(addr).await;
@@ -438,7 +438,7 @@ async fn register_same_subscribe_unsubscribe_is_err() {
 	assert!(matches!(
 		module
 			.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { Ok(()) }),
-		Err(Error::SubscriptionNameConflict(_))
+		Err(RegisterMethodError::SubscriptionNameConflict(_))
 	));
 }
 
@@ -508,7 +508,7 @@ async fn can_register_modules() {
 
 	assert_eq!(mod1.method_names().count(), 2);
 	let err = mod1.merge(mod2).unwrap_err();
-	assert!(matches!(err, Error::MethodAlreadyRegistered(err) if err == "bla"));
+	assert!(matches!(err, RegisterMethodError::AlreadyRegistered(err) if err == "bla"));
 	assert_eq!(mod1.method_names().count(), 2);
 }
 
@@ -575,7 +575,7 @@ async fn custom_subscription_id_works() {
 			}
 		})
 		.unwrap();
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
@@ -600,7 +600,7 @@ async fn disabled_batches() {
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -630,7 +630,7 @@ async fn batch_limit_works() {
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -767,7 +767,7 @@ async fn ws_server_backpressure_works() {
 		.unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let _server_handle = server.start(module).unwrap();
+	let _server_handle = server.start(module);
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -899,5 +899,5 @@ async fn server_with_infinite_call(
 		.unwrap();
 	let addr = server.local_addr().unwrap();
 
-	(server.start(module).unwrap(), addr)
+	(server.start(module), addr)
 }

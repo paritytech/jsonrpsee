@@ -27,12 +27,13 @@
 mod helpers;
 
 use std::collections::HashMap;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use helpers::init_logger;
-use jsonrpsee::core::{client::ClientT, Error};
+use jsonrpsee::core::client::{ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
@@ -112,20 +113,20 @@ fn test_module() -> RpcModule<()> {
 	().into_rpc()
 }
 
-async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketAddr, ServerHandle), Error> {
+async fn websocket_server(module: RpcModule<()>, counter: Counter) -> io::Result<(SocketAddr, ServerHandle)> {
 	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	Ok((addr, handle))
 }
 
-async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketAddr, ServerHandle), Error> {
+async fn http_server(module: RpcModule<()>, counter: Counter) -> io::Result<(SocketAddr, ServerHandle)> {
 	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	Ok((addr, handle))
 }

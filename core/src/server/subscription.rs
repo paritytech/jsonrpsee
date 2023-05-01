@@ -29,7 +29,7 @@
 use super::helpers::{MethodResponse, MethodSink};
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{traits::IdProvider, Error, StringError};
+use crate::{error::StringError, traits::IdProvider};
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorObjectOwned, Id, ResponsePayload, SubscriptionId, SubscriptionResponse,
 };
@@ -411,7 +411,9 @@ impl Subscription {
 	}
 
 	/// Receives the next value on the subscription if value could be decoded as T.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), Error>> {
+	///
+	// todo fix error type.
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), String>> {
 		let raw = self.rx.recv().await?;
 
 		tracing::debug!("[Subscription::next]: rx {}", raw);
@@ -419,7 +421,7 @@ impl Subscription {
 			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
 			Err(e) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {
 				Ok(_) => None,
-				Err(_) => Some(Err(e.into())),
+				Err(_) => Some(Err(e.to_string())),
 			},
 		};
 		res

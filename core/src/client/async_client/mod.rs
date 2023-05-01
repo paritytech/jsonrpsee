@@ -5,10 +5,9 @@ mod manager;
 
 use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
 use crate::client::{
-	BatchMessage, BatchResponse, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage, Subscription,
-	SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
+	BatchMessage, BatchResponse, ClientT, Error, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
+	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
 };
-use crate::error::Error;
 use crate::params::BatchRequestBuilder;
 use crate::tracing::{rx_log_from_json, tx_log_from_str};
 use crate::traits::ToRpcParams;
@@ -35,6 +34,7 @@ use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
+use super::error::RegisterMethodError;
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
 /// Wrapper over a [`oneshot::Receiver`](tokio::sync::oneshot::Receiver) that reads
@@ -349,7 +349,8 @@ impl ClientT for Client {
 	where
 		R: DeserializeOwned,
 	{
-		let batch = batch.build()?;
+		// TODO: remove unwrap
+		let batch = batch.build().unwrap();
 		let guard = self.id_manager.next_request_id()?;
 		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
 
@@ -428,7 +429,9 @@ impl SubscriptionClientT for Client {
 		Notif: DeserializeOwned,
 	{
 		if subscribe_method == unsubscribe_method {
-			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
+			return Err(Error::RegisterMethod(RegisterMethodError::SubscriptionNameConflict(
+				unsubscribe_method.to_owned(),
+			)));
 		}
 
 		let guard = self.id_manager.next_request_two_ids()?;
@@ -682,12 +685,13 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
 			} else {
-				let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
+				let _ =
+					reg.send_back.send(Err(Error::RegisterMethod(RegisterMethodError::AlreadyRegistered(reg.method))));
 			}
 		}
 		// User dropped the NotificationHandler for this method
 		FrontToBack::UnregisterNotification(method) => {
-			let _ = manager.remove_notification_handler(method);
+			let _ = manager.remove_notification_handler(&method);
 		}
 	}
 }

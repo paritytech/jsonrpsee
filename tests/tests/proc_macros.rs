@@ -31,8 +31,7 @@ mod helpers;
 use std::net::SocketAddr;
 
 use helpers::init_logger;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::{client::SubscriptionClientT, Error};
+use jsonrpsee::core::client::{ClientT, Error, SubscriptionClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::ServerBuilder;
@@ -195,7 +194,7 @@ use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
 pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(RpcServerImpl.into_rpc()).unwrap();
+	let handle = server.start(RpcServerImpl.into_rpc());
 
 	tokio::spawn(handle.stopped());
 
@@ -318,7 +317,7 @@ async fn subscriptions_do_not_work_for_http_servers() {
 	let htserver = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = htserver.local_addr().unwrap();
 	let htserver_url = format!("http://{}", addr);
-	let _handle = htserver.start(RpcServerImpl.into_rpc()).unwrap();
+	let _handle = htserver.start(RpcServerImpl.into_rpc());
 
 	let htclient = HttpClientBuilder::default().build(&htserver_url).unwrap();
 
@@ -385,7 +384,7 @@ async fn calls_with_object_params_works() {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
 	let server_url = format!("ws://{}", addr);
-	let _handle = server.start(RpcServerImpl.into_rpc()).unwrap();
+	let _handle = server.start(RpcServerImpl.into_rpc());
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	// snake_case params

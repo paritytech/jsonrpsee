@@ -96,7 +96,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module.register_method("say_hello", |_, _| "lo").unwrap();
 	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	// In this example we don't care about doing shutdown so let's it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.

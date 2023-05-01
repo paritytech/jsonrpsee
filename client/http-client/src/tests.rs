@@ -29,7 +29,7 @@ use crate::types::error::{ErrorCode, ErrorObject};
 use crate::HttpClientBuilder;
 use jsonrpsee_core::client::{BatchResponse, ClientT, IdKind};
 use jsonrpsee_core::params::BatchRequestBuilder;
-use jsonrpsee_core::Error;
+use jsonrpsee_core::ClientError;
 use jsonrpsee_core::{rpc_params, DeserializeOwned};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
@@ -59,8 +59,8 @@ async fn method_call_with_wrong_id_kind() {
 		http_server_with_hardcoded_response(ok_response(exp.into(), Id::Num(0))).with_default_timeout().await.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
-	let res: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
-	assert!(matches!(res, Err(Error::InvalidRequestId)));
+	let res: Result<String, _> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
+	assert!(matches!(res, Err(ClientError::InvalidRequestId)));
 }
 
 #[tokio::test]
@@ -96,7 +96,7 @@ async fn response_with_wrong_id() {
 		.await
 		.unwrap()
 		.unwrap_err();
-	assert!(matches!(err, Error::InvalidRequestId));
+	assert!(matches!(err, ClientError::InvalidRequestId));
 }
 
 #[tokio::test]
@@ -137,7 +137,7 @@ async fn internal_error_works() {
 async fn subscription_response_to_request() {
 	let req = r#"{"jsonrpc":"2.0","method":"subscribe_hello","params":{"subscription":"3px4FrtxSYQ1zBKW154NoVnrDhrq764yQNCXEgZyM6Mu","result":"hello my friend"}}"#.to_string();
 	let err = run_request_with_response(req).with_default_timeout().await.unwrap().unwrap_err();
-	assert!(matches!(err, Error::ParseError(_)));
+	assert!(matches!(err, ClientError::ParseError(_)));
 }
 
 #[tokio::test]
@@ -261,23 +261,23 @@ async fn batch_request_out_of_order_response() {
 async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
-) -> Result<BatchResponse<T>, Error> {
+) -> Result<BatchResponse<T>, ClientError> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client.batch_request(batch).with_default_timeout().await.unwrap()
 }
 
-async fn run_request_with_response(response: String) -> Result<String, Error> {
+async fn run_request_with_response(response: String) -> Result<String, ClientError> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap()
 }
 
-fn assert_jsonrpc_error_response(err: Error, exp: ErrorObjectOwned) {
+fn assert_jsonrpc_error_response(err: ClientError, exp: ErrorObjectOwned) {
 	match &err {
-		Error::Call(err) => {
+		ClientError::Call(err) => {
 			assert_eq!(err, &exp);
 		}
 		e => panic!("Expected error: \"{err}\", got: {e:?}"),
