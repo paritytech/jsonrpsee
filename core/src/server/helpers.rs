@@ -367,7 +367,7 @@ mod tests {
 
 		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
 
-		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
+		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of 63"},"id":null}"#;
 		assert_eq!(batch, exp_err);
 	}
 }
