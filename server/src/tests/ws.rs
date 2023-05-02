@@ -108,7 +108,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	// Two response will end up in a response bigger than 100 bytes.
 	let req = r#"[{"jsonrpc":"2.0", "method":"anything", "id":1},{"jsonrpc":"2.0", "method":"anything", "id":2}]"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, invalid_request(Id::Null));
+	assert_eq!(response, batch_response_too_large(100));
 
 	server_handle.stop().unwrap();
 	server_handle.stopped().await;
