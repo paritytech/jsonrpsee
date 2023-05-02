@@ -28,7 +28,9 @@ use std::io;
 use std::time::Duration;
 
 use crate::tracing::tx_log_from_str;
-use jsonrpsee_types::error::{ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
+use jsonrpsee_types::error::{
+	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
+};
 use jsonrpsee_types::{Id, InvalidRequest, Response, ResponsePayload};
 use serde::Serialize;
 use serde_json::value::to_raw_value;
@@ -268,7 +270,7 @@ impl BatchResponseBuilder {
 		let len = response.result.len() + self.result.len() + 1;
 
 		if len > self.max_response_size {
-			Err(batch_response_error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest)))
+			Err(batch_response_error(Id::Null, reject_too_big_batch_response(self.max_response_size)))
 		} else {
 			self.result.push_str(&response.result);
 			self.result.push(',');

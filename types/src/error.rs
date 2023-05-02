@@ -135,7 +135,9 @@ pub const OVERSIZED_RESPONSE_CODE: i32 = -32008;
 /// Server is busy error code.
 pub const SERVER_IS_BUSY_CODE: i32 = -32009;
 /// Batch request limit was exceed.
-pub const TOO_BIG_BATCH_CODE: i32 = -32010;
+pub const TOO_BIG_BATCH_REQUEST_CODE: i32 = -32010;
+/// Batch request limit was exceed.
+pub const TOO_BIG_BATCH_RESPONSE_CODE: i32 = -32011;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
@@ -160,7 +162,9 @@ pub const BATCHES_NOT_SUPPORTED_MSG: &str = "Batched requests are not supported 
 /// Subscription limit per connection was exceeded.
 pub const TOO_MANY_SUBSCRIPTIONS_MSG: &str = "Too many subscriptions on the connection";
 /// Batched requests limit was exceed.
-pub const TOO_BIG_BATCH_MSG: &str = "The batch request was too large";
+pub const TOO_BIG_BATCH_REQUEST_MSG: &str = "The batch request was too large";
+/// Batch request response limit was exceed.
+pub const TOO_BIG_BATCH_RESPONSE_MSG: &str = "The batch response was too large";
 
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
@@ -276,7 +280,20 @@ pub fn reject_too_big_request(limit: u32) -> ErrorObjectOwned {
 
 /// Helper to get a `JSON-RPC` error object when the maximum batch request size have been exceeded.
 pub fn reject_too_big_batch_request(limit: usize) -> ErrorObjectOwned {
-	ErrorObjectOwned::owned(TOO_BIG_BATCH_CODE, TOO_BIG_BATCH_MSG, Some(format!("Exceeded max limit of {limit}")))
+	ErrorObjectOwned::owned(
+		TOO_BIG_BATCH_REQUEST_CODE,
+		TOO_BIG_BATCH_REQUEST_MSG,
+		Some(format!("Exceeded max limit of {limit}")),
+	)
+}
+
+/// Helper to get a `JSON-RPC` error object when the maximum batch response size have been exceeded.
+pub fn reject_too_big_batch_response(limit: usize) -> ErrorObjectOwned {
+	ErrorObjectOwned::owned(
+		TOO_BIG_BATCH_RESPONSE_CODE,
+		TOO_BIG_BATCH_RESPONSE_MSG,
+		Some(format!("Exceeded max limit of {limit}")),
+	)
 }
 
 #[cfg(test)]
