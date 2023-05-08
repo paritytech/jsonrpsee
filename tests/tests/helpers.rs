@@ -32,6 +32,7 @@ use std::time::Duration;
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
+use jsonrpsee::server::middleware::request_middleware::{RequestMiddlewareAction, RequestMiddlewareLayer};
 use jsonrpsee::server::{
 	AllowHosts, PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
@@ -202,6 +203,14 @@ pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLay
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
+		.layer(RequestMiddlewareLayer::new(|req: hyper::Request<hyper::Body>| {
+			if req.uri() == "/foo" {
+				RequestMiddlewareAction::Respond(Box::pin(async { Ok(hyper::Response::new(hyper::Body::from("bar"))) }))
+			} else {
+				// same as RequestMiddlewareAction::Proceed(req)
+				req.into()
+			}
+		}))
 		// Add `CORS` layer.
 		.layer(cors);
 

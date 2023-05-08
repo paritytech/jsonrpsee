@@ -1019,6 +1019,42 @@ async fn http_health_api_works() {
 }
 
 #[tokio::test]
+async fn http_request_middleware_foo_path() {
+	use hyper::{Body, Client, Request};
+
+	init_logger();
+
+	let (server_addr, _handle) = server_with_health_api().await;
+
+	let http_client = Client::new();
+	let uri = format!("http://{}", server_addr);
+
+	let req_foo =
+		Request::builder().method("GET").uri(&format!("{uri}/foo")).body(Body::empty()).expect("request builder");
+	let req_hello = hyper::Request::builder()
+		.method("POST")
+		.uri(uri)
+		.header("Content-Type", "application/json")
+		.body(hyper::Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"say_hello"}"#))
+		.expect("request builder");
+
+	let res_foo = http_client.request(req_foo).await.unwrap();
+	let res_hello = http_client.request(req_hello).await.unwrap();
+
+	assert!(res_foo.status().is_success());
+	assert!(res_hello.status().is_success());
+
+	let bytes = hyper::body::to_bytes(res_foo.into_body()).await.unwrap();
+	let out = String::from_utf8(bytes.to_vec()).unwrap();
+	assert_eq!(out.as_str(), "bar");
+
+	let bytes = hyper::body::to_bytes(res_hello.into_body()).await.unwrap();
+	let out = String::from_utf8(bytes.to_vec()).unwrap();
+
+	assert_eq!(out.as_str(), r#"{"jsonrpc":"2.0","result":"hello","id":1}"#);
+}
+
+#[tokio::test]
 async fn ws_host_filtering_wildcard_works() {
 	use jsonrpsee::server::*;
 

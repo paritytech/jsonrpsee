@@ -33,6 +33,15 @@ pub trait RequestMiddleware: Send + Sync + 'static {
 	fn on_request(&self, req: hyper::Request<hyper::Body>) -> RequestMiddlewareAction;
 }
 
+impl<F> RequestMiddleware for F
+where
+	F: Fn(hyper::Request<hyper::Body>) -> RequestMiddlewareAction + Sync + Send + 'static,
+{
+	fn on_request(&self, request: hyper::Request<hyper::Body>) -> RequestMiddlewareAction {
+		(*self)(request)
+	}
+}
+
 /// Layer that applies [`RequestMiddlewareService`] which proxies the `GET /path` requests to
 /// specific RPC method calls and that strips the response.
 ///
