@@ -30,7 +30,8 @@ impl RequestMiddleware for MyMiddleware {
 		if req.uri() == "/foo" {
 			RequestMiddlewareAction::Respond(Box::pin(async { Ok(hyper::Response::new(hyper::Body::from("bar"))) }))
 		} else {
-			RequestMiddlewareAction::Proceed(req)
+			// same as RequestMiddlewareAction::Proceed(req)
+			req.into()
 		}
 	}
 }
@@ -80,10 +81,7 @@ async fn main() -> anyhow::Result<()> {
 	let client = hyper::Client::new();
 
 	assert_eq!("bar", &request_foo_path(&client, &base_uri).await?);
-	assert_eq!(
-		r#"{"jsonrpc":"2.0","result":"hi","id":1}"#,
-		&request_say_hi_method(&client, &base_uri).await?
-	);
+	assert_eq!(r#"{"jsonrpc":"2.0","result":"hi","id":1}"#, &request_say_hi_method(&client, &base_uri).await?);
 
 	Ok(())
 }

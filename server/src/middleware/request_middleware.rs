@@ -21,6 +21,12 @@ impl From<hyper::Response<hyper::Body>> for RequestMiddlewareAction {
 	}
 }
 
+impl From<hyper::Request<hyper::Body>> for RequestMiddlewareAction {
+	fn from(req: hyper::Request<hyper::Body>) -> Self {
+		Self::Proceed(req)
+	}
+}
+
 /// Allows to intercept request and handle it differently.
 pub trait RequestMiddleware: Send + Sync + 'static {
 	/// Takes a request and decides how to proceed with it.
