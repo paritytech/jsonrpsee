@@ -10,7 +10,7 @@ use tower::{Layer, Service};
 /// Action undertaken by a middleware.
 pub enum RequestMiddlewareAction {
 	/// Proceed with standard RPC handling
-	Proceed,
+	Proceed(hyper::Request<hyper::Body>),
 	/// Intercept the request and respond differently.
 	Respond(Pin<Box<dyn Future<Output = hyper::Result<hyper::Response<hyper::Body>>> + Send>>),
 }
@@ -24,7 +24,7 @@ impl From<hyper::Response<hyper::Body>> for RequestMiddlewareAction {
 /// Allows to intercept request and handle it differently.
 pub trait RequestMiddleware: Send + Sync + 'static {
 	/// Takes a request and decides how to proceed with it.
-	fn on_request(&self, request: &hyper::Request<hyper::Body>) -> RequestMiddlewareAction;
+	fn on_request(&self, req: hyper::Request<hyper::Body>) -> RequestMiddlewareAction;
 }
 
 /// Layer that applies [`RequestMiddlewareService`] which proxies the `GET /path` requests to
@@ -73,16 +73,14 @@ where
 	}
 
 	fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
-		let RequestMiddlewareAction::Respond(res) = self.req_middleware.on_request(&req) else {
-            let fut = self.inner.call(req);
-            let fut = async move {
-                fut.await.map_err(|err| err.into())
-            };
+		match self.req_middleware.on_request(req) {
+			RequestMiddlewareAction::Respond(res) => Box::pin(async { res.await.map_err(|err| err.into()) }),
+			RequestMiddlewareAction::Proceed(req) => {
+				let fut = self.inner.call(req);
+				let fut = async move { fut.await.map_err(|err| err.into()) };
 
-            return Box::pin(fut);
-
-        };
-
-		Box::pin(async { res.await.map_err(|err| err.into()) })
+				Box::pin(fut)
+			}
+		}
 	}
 }
