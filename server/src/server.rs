@@ -207,6 +207,7 @@ struct Settings {
 	message_buffer_capacity: u32,
 }
 
+/// Configration for batch request handling.
 #[derive(Debug, Copy, Clone)]
 pub enum BatchRequestConfig {
 	/// Batch requests are disabled.
