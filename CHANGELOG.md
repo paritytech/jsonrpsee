@@ -5,17 +5,13 @@ The format is based on [Keep a Changelog].
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
 
-## [v0.18.2] - 2023-04-26
+## [v0.18.2] - 2023-05-10
 
-This release fixes a couple bugs around batch requests and connection shutdowns.
-
-### Added
-- server: export BatchRequestConfig  ([#1112](https://github.com/paritytech/jsonrpsee/pull/1112))
+This release improves error message for `too big batch response` and exposes the `BatchRequestConfig type` in order to make it possible to use `ServerBuilder::set_batch_request_config`
 
 ### Fixed
+- server: export BatchRequestConfig  ([#1112](https://github.com/paritytech/jsonrpsee/pull/1112))
 - fix(server): improve too big batch response msg  ([#1107](https://github.com/paritytech/jsonrpsee/pull/1107))
-- fix: `publish script` to work for workspace members  ([#1101](https://github.com/paritytech/jsonrpsee/pull/1101))
-- fix(ws server): fix shutdown on connection closed  ([#1103](https://github.com/paritytech/jsonrpsee/pull/1103))
 
 ## [v0.18.1] - 2023-04-26
 
