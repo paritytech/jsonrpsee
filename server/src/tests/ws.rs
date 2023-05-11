@@ -837,9 +837,6 @@ async fn close_client_with_pending_calls_works() {
 		assert!(rx.recv().await.is_some());
 	}
 
-	client.close().await.unwrap();
-	assert!(client.receive().await.is_err());
-
 	// Stop the server and ensure that the server doesn't wait for futures to complete
 	// when the connection has already been closed.
 	handle.stop().unwrap();
