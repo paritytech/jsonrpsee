@@ -43,12 +43,13 @@ See [our tracking milestone](https://github.com/paritytech/jsonrpsee/milestone/2
 ## Users
 
 If your project uses `jsonrpsee` we would like to know. Please open a pull request and add your project to the list below:
-- [subxt](https://github.com/paritytech/subxt)
 - [parity bridges common](https://github.com/paritytech/parity-bridges-common)
 - [remote externalities](https://github.com/paritytech/substrate/tree/master/utils/frame/remote-externalities)
 - [substrate](https://github.com/paritytech/substrate)
-- [subwasm](https://github.com/chevdor/subwasm)
 - [substrate-api-client](https://github.com/scs/substrate-api-client)
+- [subwasm](https://github.com/chevdor/subwasm)
+- [subxt](https://github.com/paritytech/subxt)
+- [Trin]([https://github.com/scs/substrate-api-client](https://github.com/ethereum/trin))
 
 ## Benchmarks
 
