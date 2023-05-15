@@ -48,6 +48,7 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 - [substrate](https://github.com/paritytech/substrate)
 - [substrate-api-client](https://github.com/scs/substrate-api-client)
 - [subwasm](https://github.com/chevdor/subwasm)
+- [subway](https://github.com/AcalaNetwork/subway)
 - [subxt](https://github.com/paritytech/subxt)
 - [Trin](https://github.com/ethereum/trin)
 
