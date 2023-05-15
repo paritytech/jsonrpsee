@@ -44,7 +44,7 @@ pub(crate) async fn reject_connection(socket: tokio::net::TcpStream) {
 
 	if let Err(e) = hyper::server::conn::Http::new().serve_connection(socket, hyper::service::service_fn(reject)).await
 	{
-		tracing::warn!("Error when trying to deny connection: {:?}", e);
+		tracing::debug!("HTTP serve connection failed {:?}", e);
 	}
 }
 
