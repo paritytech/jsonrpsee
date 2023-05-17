@@ -626,7 +626,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 		};
 
 		if let Err(e) = self.inner.allow_hosts.verify(host) {
-			tracing::warn!("Denied request: {}", e);
+			tracing::debug!("Denied request: {}", e);
 			return async { Ok(http::response::host_not_allowed()) }.boxed();
 		}
 
@@ -645,7 +645,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 							let upgraded = match hyper::upgrade::on(request).await {
 								Ok(u) => u,
 								Err(e) => {
-									tracing::warn!("Could not upgrade connection: {}", e);
+									tracing::debug!("Could not upgrade connection: {}", e);
 									return;
 								}
 							};
@@ -758,7 +758,7 @@ fn process_connection<'a, L: Logger, B, U>(
 	let conn = match connection_guard.try_acquire() {
 		Some(conn) => conn,
 		None => {
-			tracing::warn!("Too many connections. Please try again later.");
+			tracing::debug!("Too many connections. Please try again later.");
 			connections.push(tokio::spawn(http::reject_connection(socket).in_current_span()));
 			return;
 		}
@@ -821,7 +821,7 @@ where
 	};
 
 	if let Err(e) = res {
-		tracing::warn!("HTTP serve connection failed {:?}", e);
+		tracing::debug!("HTTP serve connection failed {:?}", e);
 	}
 }
 
