@@ -310,7 +310,6 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 			max_log_length,
 			max_response_body_size,
 			sink: sink.clone(),
-			sink_permit,
 			id_provider: id_provider.clone(),
 			logger: logger.clone(),
 			data: std::mem::take(&mut data),
@@ -461,7 +460,6 @@ struct ExecuteCallParams<L: Logger> {
 	max_response_body_size: u32,
 	max_log_length: u32,
 	sink: MethodSink,
-	sink_permit: MethodSinkPermit,
 	logger: L,
 }
 
@@ -471,7 +469,6 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 		conn_id,
 		data,
 		sink,
-		sink_permit,
 		max_response_body_size,
 		max_log_length,
 		methods,
@@ -505,7 +502,7 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 
 					CallOrSubscription::Call(r) => {
 						logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-						sink_permit.send_raw(r.result);
+						_ = sink.send(r.result).await;
 					}
 				}
 			}
@@ -518,7 +515,7 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 						ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 					);
 					logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-					sink_permit.send_raw(response.result);
+					_ = sink.send(response.result).await;
 					return;
 				}
 				BatchRequestConfig::Limit(limit) => limit as usize,
@@ -542,11 +539,11 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 			if let Some(response) = response {
 				tx_log_from_str(&response, max_log_length);
 				logger.on_response(&response, request_start, TransportProtocol::WebSocket);
-				sink_permit.send_raw(response);
+				_ = sink.send(response).await;
 			}
 		}
 		_ => {
-			sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
+			_ = sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
 		}
 	};
 }
