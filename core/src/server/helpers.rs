@@ -34,7 +34,7 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{Id, InvalidRequest, Response, ResponsePayload};
 use serde::Serialize;
 use serde_json::value::to_raw_value;
-use tokio::sync::mpsc::{self, Permit};
+use tokio::sync::mpsc;
 
 use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
@@ -140,7 +140,7 @@ impl MethodSink {
 	}
 
 	/// Send a JSON-RPC error to the client
-	pub async fn send_error<'a>(self, id: Id<'a>, err: ErrorObject<'a>) -> Result<(), DisconnectError> {
+	pub async fn send_error<'a>(&self, id: Id<'a>, err: ErrorObject<'a>) -> Result<(), DisconnectError> {
 		let json =
 			serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err), id)).expect("valid JSON; qed");
 
@@ -153,28 +153,14 @@ impl MethodSink {
 		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
 	}
 
-	/// Waits for channel capacity. Once capacity to send one message is available, it is reserved for the caller.
-	pub async fn reserve(&self) -> Result<MethodSinkPermit, DisconnectError> {
+	/// Waits for channel capacity. Once capacity to send one message is available.
+	pub async fn has_capacity(&self) -> Result<(), DisconnectError> {
 		match self.tx.reserve().await {
-			Ok(permit) => Ok(MethodSinkPermit { tx: permit }),
+			// The permit is thrown away here because it's just
+			// a way to ensure that underlying buffer is not empty.
+			Ok(_) => Ok(()),
 			Err(_) => Err(DisconnectError(SubscriptionMessage::empty())),
 		}
-	}
-}
-
-/// A method sink with reserved spot in the bounded queue.
-#[derive(Debug)]
-pub struct MethodSinkPermit<'a> {
-	tx: Permit<'a, String>,
-}
-
-impl<'a> MethodSinkPermit<'a> {
-	/// Send a JSON-RPC error to the client
-	pub fn send_error(self, id: Id, err: ErrorObject) {
-		let json =
-			serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err), id)).expect("valid JSON; qed");
-
-		self.tx.send(json);
 	}
 }
 
