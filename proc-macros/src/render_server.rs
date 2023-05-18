@@ -298,7 +298,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								#pending.reject(e).await;
 								return #sub_err::None;
 							}
@@ -310,7 +310,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return #response_payload::Error(e);
 							}
 						};
@@ -321,7 +321,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::warn!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								#pending.reject(e).await;
 								return #sub_err::None;
 							}
@@ -333,7 +333,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::warn!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::debug!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return #response_payload::Error(e);
 							}
 						};
@@ -399,7 +399,7 @@ impl RpcDescription {
 					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
 						Ok(p) => p,
 						Err(e) => {
-							#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
+							#tracing::debug!("Failed to parse JSON-RPC params as object: {}", e);
 							#pending.reject(e).await;
 							return #sub_err::None;
 						}
@@ -418,7 +418,7 @@ impl RpcDescription {
 					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
 						Ok(p) => p,
 						Err(e) => {
-							#tracing::warn!("Failed to parse JSON-RPC params as object: {}", e);
+							#tracing::debug!("Failed to parse JSON-RPC params as object: {}", e);
 							return #response_payload::Error(e);
 						}
 					};

@@ -82,7 +82,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 		Err(GenericTransportError::TooLarge) => return response::too_large(max_request_body_size),
 		Err(GenericTransportError::Malformed) => return response::malformed(),
 		Err(GenericTransportError::Inner(e)) => {
-			tracing::error!("Internal error reading request body: {}", e);
+			tracing::warn!("Internal error reading request body: {}", e);
 			return response::internal_error();
 		}
 	};
@@ -250,7 +250,7 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 			}
 			MethodCallback::Subscription(_) | MethodCallback::Unsubscription(_) => {
 				logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::Http);
-				tracing::error!("Subscriptions not supported on HTTP");
+				tracing::warn!("Subscriptions not supported on HTTP");
 				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
 			}
 		},
