@@ -261,11 +261,11 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let result = loop {
 		data.clear();
 
-		// This is a guard to ensure that underlying socket is only "read" if connection buffer has capacity
-		// to send further messages.
+		// This is a guard to ensure that the underlying socket is only read if there is space in 
+		// the buffer for messages to be sent back to them.
 		//
-		// This, this check enforces that if the client can't keep up with connection
-		// no new messages are handled before the existing ones are read.
+		// Thus, this check enforces that if the client can't keep up with receiving messages,
+		// then no new messages will be read from them.
 		//
 		// TCP retransmission mechanism will take of the rest and adjust the window size accordingly.
 		let Some(stop) = wait_until_connection_buffer_has_capacity(&sink, stopped).await else {
