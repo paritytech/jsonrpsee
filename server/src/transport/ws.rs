@@ -261,7 +261,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let result = loop {
 		data.clear();
 
-		// This is a guard to ensure that the underlying socket is only read if there is space in 
+		// This is a guard to ensure that the underlying socket is only read if there is space in
 		// the buffer for messages to be sent back to them.
 		//
 		// Thus, this check enforces that if the client can't keep up with receiving messages,
