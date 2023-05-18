@@ -153,11 +153,11 @@ impl MethodSink {
 		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
 	}
 
-	/// Waits for channel capacity. Once capacity to send one message is available.
+	/// Waits for there to be space on the return channel.
 	pub async fn has_capacity(&self) -> Result<(), DisconnectError> {
 		match self.tx.reserve().await {
 			// The permit is thrown away here because it's just
-			// a way to ensure that underlying buffer is not empty.
+			// a way to ensure that the return buffer has space.
 			Ok(_) => Ok(()),
 			Err(_) => Err(DisconnectError(SubscriptionMessage::empty())),
 		}
