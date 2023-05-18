@@ -12,9 +12,7 @@ use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse, MethodSink,
 };
-use jsonrpsee_core::server::{
-	BoundedSubscriptions, CallOrSubscription, MethodCallback, MethodSinkPermit, Methods, SubscriptionState,
-};
+use jsonrpsee_core::server::{BoundedSubscriptions, CallOrSubscription, MethodCallback, Methods, SubscriptionState};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, JsonRawValue};
@@ -263,13 +261,18 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let result = loop {
 		data.clear();
 
-		let sink_permit = match wait_for_permit(&sink, stopped).await {
-			Some((permit, stop)) => {
-				stopped = stop;
-				permit
-			}
-			None => break Ok(Shutdown::ConnectionClosed),
+		// This is a guard to ensure that the underlying socket is only read if there is space in
+		// the buffer for messages to be sent back to them.
+		//
+		// Thus, this check enforces that if the client can't keep up with receiving messages,
+		// then no new messages will be read from them.
+		//
+		// TCP retransmission mechanism will take of the rest and adjust the window size accordingly.
+		let Some(stop) = wait_until_connection_buffer_has_capacity(&sink, stopped).await else {
+			break Ok(Shutdown::ConnectionClosed)
 		};
+
+		stopped = stop;
 
 		match try_recv(&mut receiver, &mut data, stopped).await {
 			Receive::Shutdown => break Ok(Shutdown::Stopped),
@@ -290,7 +293,9 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 							current,
 							maximum
 						);
-						sink_permit.send_error(Id::Null, reject_too_big_request(max_request_body_size));
+						if sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)).await.is_err() {
+							break Ok(Shutdown::ConnectionClosed);
+						}
 
 						continue;
 					}
@@ -310,7 +315,6 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 			max_log_length,
 			max_response_body_size,
 			sink: sink.clone(),
-			sink_permit,
 			id_provider: id_provider.clone(),
 			logger: logger.clone(),
 			data: std::mem::take(&mut data),
@@ -403,21 +407,18 @@ enum Receive<S> {
 	Ok(S),
 }
 
-// Wait until there is a slot in the bounded channel.
-//
-// This will force the client to read socket on the other side
-// otherwise the socket will not be read again.
+// Wait until there is capacity in connection buffer to send one message.
 //
 // Fails if the server was stopped.
-async fn wait_for_permit<S>(sink: &MethodSink, stopped: S) -> Option<(MethodSinkPermit, S)>
+async fn wait_until_connection_buffer_has_capacity<S>(sink: &MethodSink, stopped: S) -> Option<S>
 where
 	S: Future<Output = ()> + Unpin,
 {
-	let reserve = sink.reserve();
+	let reserve = sink.has_capacity();
 	tokio::pin!(reserve);
 
 	match futures_util::future::select(reserve, stopped).await {
-		Either::Left((Ok(sink), s)) => Some((sink, s)),
+		Either::Left((Ok(_), s)) => Some(s),
 		_ => None,
 	}
 }
@@ -461,7 +462,6 @@ struct ExecuteCallParams<L: Logger> {
 	max_response_body_size: u32,
 	max_log_length: u32,
 	sink: MethodSink,
-	sink_permit: MethodSinkPermit,
 	logger: L,
 }
 
@@ -471,7 +471,6 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 		conn_id,
 		data,
 		sink,
-		sink_permit,
 		max_response_body_size,
 		max_log_length,
 		methods,
@@ -505,7 +504,7 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 
 					CallOrSubscription::Call(r) => {
 						logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-						sink_permit.send_raw(r.result);
+						_ = sink.send(r.result).await;
 					}
 				}
 			}
@@ -518,7 +517,7 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 						ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 					);
 					logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-					sink_permit.send_raw(response.result);
+					_ = sink.send(response.result).await;
 					return;
 				}
 				BatchRequestConfig::Limit(limit) => limit as usize,
@@ -542,11 +541,11 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 			if let Some(response) = response {
 				tx_log_from_str(&response, max_log_length);
 				logger.on_response(&response, request_start, TransportProtocol::WebSocket);
-				sink_permit.send_raw(response);
+				_ = sink.send(response).await;
 			}
 		}
 		_ => {
-			sink_permit.send_error(Id::Null, ErrorCode::ParseError.into());
+			_ = sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
 		}
 	};
 }

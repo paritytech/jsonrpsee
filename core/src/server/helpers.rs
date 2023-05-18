@@ -34,7 +34,7 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{Id, InvalidRequest, Response, ResponsePayload};
 use serde::Serialize;
 use serde_json::value::to_raw_value;
-use tokio::sync::mpsc::{self, OwnedPermit};
+use tokio::sync::mpsc;
 
 use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
@@ -139,42 +139,28 @@ impl MethodSink {
 		self.tx.send(msg).await.map_err(Into::into)
 	}
 
+	/// Send a JSON-RPC error to the client
+	pub async fn send_error<'a>(&self, id: Id<'a>, err: ErrorObject<'a>) -> Result<(), DisconnectError> {
+		let json =
+			serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err), id)).expect("valid JSON; qed");
+
+		self.send(json).await
+	}
+
 	/// Similar to to `MethodSink::send` but only waits for a limited time.
 	pub async fn send_timeout(&self, msg: String, timeout: Duration) -> Result<(), SendTimeoutError> {
 		tx_log_from_str(&msg, self.max_log_length);
 		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
 	}
 
-	/// Waits for channel capacity. Once capacity to send one message is available, it is reserved for the caller.
-	pub async fn reserve(&self) -> Result<MethodSinkPermit, DisconnectError> {
-		match self.tx.clone().reserve_owned().await {
-			Ok(permit) => Ok(MethodSinkPermit { tx: permit, max_log_length: self.max_log_length }),
+	/// Waits for there to be space on the return channel.
+	pub async fn has_capacity(&self) -> Result<(), DisconnectError> {
+		match self.tx.reserve().await {
+			// The permit is thrown away here because it's just
+			// a way to ensure that the return buffer has space.
+			Ok(_) => Ok(()),
 			Err(_) => Err(DisconnectError(SubscriptionMessage::empty())),
 		}
-	}
-}
-
-/// A method sink with reserved spot in the bounded queue.
-#[derive(Debug)]
-pub struct MethodSinkPermit {
-	tx: OwnedPermit<String>,
-	max_log_length: u32,
-}
-
-impl MethodSinkPermit {
-	/// Send a JSON-RPC error to the client
-	pub fn send_error(self, id: Id, err: ErrorObject) {
-		let json = serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err.into_owned()), id))
-			.expect("valid JSON; qed");
-
-		self.send_raw(json)
-	}
-
-	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check the validity
-	/// of the JSON being sent.
-	pub fn send_raw(self, json: String) {
-		self.tx.send(json.clone());
-		tx_log_from_str(&json, self.max_log_length);
 	}
 }
 
