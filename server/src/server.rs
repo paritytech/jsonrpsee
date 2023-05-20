@@ -161,7 +161,7 @@ where
 					stopped = stop;
 				}
 				AcceptConnection::Err((e, stop)) => {
-					tracing::error!("Error while awaiting a new connection: {:?}", e);
+					tracing::debug!("Error while awaiting a new connection: {:?}", e);
 					stopped = stop;
 				}
 				AcceptConnection::Shutdown => break,
@@ -663,7 +663,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 					response.map(|()| hyper::Body::empty())
 				}
 				Err(e) => {
-					tracing::error!("Could not upgrade connection: {}", e);
+					tracing::debug!("Could not upgrade connection: {}", e);
 					hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}")))
 				}
 			};
