@@ -4,6 +4,18 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.19.0] - 2023-05-23
+
+This is mainly a patch release to fix a backpressure issue on concurrent subscriptions but because it removes the `reserve API` from the `MethodSink`
+and replaces it with a new API called `has_capacity` it's treated as a breaking release.
+
+In addition it downgrades server logging to `DEBUG/TRACE` for instance when parsing JSON-RPC params failed or
+connection related issues.
+
+### Changed
+- downgrade more logs to `debug`  ([#1127](https://github.com/paritytech/jsonrpsee/pull/1127))
+- server: downgrade connection logs to debug  ([#1123](https://github.com/paritytech/jsonrpsee/pull/1123))
+- replace `MethodSinkPermit` with `has_capacity` ([#1126](https://github.com/paritytech/jsonrpsee/pull/1126))
 
 ## [v0.18.2] - 2023-05-10
 
