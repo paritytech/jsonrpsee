@@ -83,14 +83,12 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default().build("127.0.0.1:0", RpcServerImpl.into_rpc()).await?;
+	let addr = server.local_addr().map_err(|e| anyhow::anyhow!("{}", e))?;
 
-	let addr = server.local_addr()?;
-	let handle = server.start(RpcServerImpl.into_rpc())?;
-
-	// In this example we don't care about doing shutdown so let's it run forever.
+	// In this example we don't care about doing a stopping the server so let it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.
-	tokio::spawn(handle.stopped());
+	tokio::spawn(server.stopped());
 
 	Ok(addr)
 }

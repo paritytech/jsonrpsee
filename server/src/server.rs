@@ -26,6 +26,7 @@
 
 use std::error::Error as StdError;
 use std::future::Future;
+use std::io;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -45,7 +46,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
 use jsonrpsee_core::server::{AllowHosts, Methods};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{http_helpers, TEN_MB_SIZE_BYTES};
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -79,8 +80,8 @@ impl<L> std::fmt::Debug for Server<L> {
 
 impl<B, L> Server<B, L> {
 	/// Returns socket address to which the server is bound.
-	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
-		self.listener.local_addr().map_err(Into::into)
+	pub fn local_addr(&self) -> io::Result<SocketAddr> {
+		self.listener.local_addr()
 	}
 }
 
@@ -102,9 +103,10 @@ where
 	/// Start responding to connections requests.
 	///
 	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
-	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
+	pub fn start(mut self, methods: impl Into<Methods>) -> ServerHandle {
 		let methods = methods.into();
 		let (stop_tx, stop_rx) = watch::channel(());
+		let local_addr = self.local_addr();
 
 		let stop_handle = StopHandle::new(stop_rx);
 
@@ -113,7 +115,7 @@ where
 			None => tokio::spawn(self.start_inner(methods, stop_handle)),
 		};
 
-		Ok(ServerHandle::new(stop_tx))
+		ServerHandle::new(stop_tx, local_addr.map_err(|e| e.to_string()))
 	}
 
 	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
@@ -239,11 +241,11 @@ impl Default for Settings {
 
 /// Builder to configure and create a JSON-RPC server
 #[derive(Debug)]
-pub struct Builder<B = Identity, L = ()> {
+pub struct Builder<S = Identity, L = ()> {
 	settings: Settings,
 	logger: L,
 	id_provider: Arc<dyn IdProvider>,
-	service_builder: tower::ServiceBuilder<B>,
+	service_builder: tower::ServiceBuilder<S>,
 }
 
 impl Default for Builder {
@@ -264,7 +266,7 @@ impl Builder {
 	}
 }
 
-impl<B, L> Builder<B, L> {
+impl<S, L> Builder<S, L> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -339,7 +341,7 @@ impl<B, L> Builder<B, L> {
 	///
 	/// let builder = ServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<B, T> {
+	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<S, T> {
 		Builder {
 			settings: self.settings,
 			logger,
@@ -484,8 +486,24 @@ impl<B, L> Builder<B, L> {
 		self.settings.max_log_length = max;
 		self
 	}
+}
 
-	/// Finalize the configuration of the server. Consumes the [`Builder`].
+impl<S, B, L> Builder<S, L>
+where
+	L: Logger,
+	S: Layer<TowerService<L>> + Send + 'static,
+	<S as Layer<TowerService<L>>>::Service: Send
+		+ Service<
+			hyper::Request<hyper::Body>,
+			Response = hyper::Response<B>,
+			Error = Box<(dyn StdError + Send + Sync + 'static)>,
+		>,
+	<<S as Layer<TowerService<L>>>::Service as Service<hyper::Request<hyper::Body>>>::Future: Send,
+	B: HttpBody + Send + 'static,
+	<B as HttpBody>::Error: Send + Sync + StdError,
+	<B as HttpBody>::Data: Send,
+{
+	/// Finalize the configuration and starts the server.
 	///
 	/// ```rust
 	/// #[tokio::main]
@@ -501,16 +519,18 @@ impl<B, L> Builder<B, L> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs, rpc_module: impl Into<Methods>) -> io::Result<ServerHandle> {
 		let listener = TcpListener::bind(addrs).await?;
 
-		Ok(Server {
+		let server = Server {
 			listener,
 			cfg: self.settings,
 			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
-		})
+		};
+
+		Ok(server.start(rpc_module))
 	}
 
 	/// Finalizes the configuration of the server with customized TCP settings on the socket.
@@ -536,7 +556,7 @@ impl<B, L> Builder<B, L> {
 	///   let server = ServerBuilder::new().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<B, L>, Error> {
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> io::Result<Server<S, L>> {
 		let listener = TcpListener::from_std(listener.into())?;
 
 		Ok(Server {

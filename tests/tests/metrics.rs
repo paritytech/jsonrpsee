@@ -112,22 +112,16 @@ fn test_module() -> RpcModule<()> {
 	().into_rpc()
 }
 
-async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketAddr, ServerHandle), Error> {
-	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
+async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<ServerHandle, Error> {
+	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0", module).await?;
 
-	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
-
-	Ok((addr, handle))
+	Ok(server)
 }
 
-async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketAddr, ServerHandle), Error> {
-	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
+async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<ServerHandle, Error> {
+	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0", module).await?;
 
-	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
-
-	Ok((addr, handle))
+	Ok(server)
 }
 
 #[tokio::test]
@@ -135,9 +129,9 @@ async fn ws_server_logger() {
 	init_logger();
 
 	let counter = Counter::default();
-	let (server_addr, server_handle) = websocket_server(test_module(), counter.clone()).await.unwrap();
+	let server = websocket_server(test_module(), counter.clone()).await.unwrap();
 
-	let server_url = format!("ws://{}", server_addr);
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
@@ -163,8 +157,8 @@ async fn ws_server_logger() {
 		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
 	}
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 
 	assert_eq!(counter.inner.lock().unwrap().connections, (1, 1));
 }
@@ -174,9 +168,9 @@ async fn http_server_logger() {
 	init_logger();
 
 	let counter = Counter::default();
-	let (server_addr, server_handle) = http_server(test_module(), counter.clone()).await.unwrap();
+	let server = http_server(test_module(), counter.clone()).await.unwrap();
 
-	let server_url = format!("http://{}", server_addr);
+	let server_url = format!("http://{}", server.local_addr().unwrap());
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
@@ -200,8 +194,8 @@ async fn http_server_logger() {
 		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
 	}
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 
 	// HTTP server doesn't track connections
 	let inner = counter.inner.lock().unwrap();

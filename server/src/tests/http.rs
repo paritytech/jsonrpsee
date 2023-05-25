@@ -85,7 +85,7 @@ async fn server() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 	(addr, server_handle)
 }
 
@@ -461,7 +461,7 @@ async fn can_set_the_max_request_body_size() {
 	module.register_method("anything", |_p, _cx| "a".repeat(100)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	// Invalid: too long
 	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
@@ -486,7 +486,7 @@ async fn can_set_the_max_response_size() {
 	module.register_method("anything", |_p, _cx| "a".repeat(101)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	// Oversized response.
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
@@ -500,21 +500,22 @@ async fn can_set_the_max_response_size() {
 #[tokio::test]
 async fn can_set_the_max_response_size_to_batch() {
 	let addr = "127.0.0.1:0";
-	// Set the max response size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(51)).unwrap();
-	let addr = server.local_addr().unwrap();
-	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+
+	// Set the max response size to 100 bytes
+	let server = ServerBuilder::default().max_response_body_size(100).build(addr, module).await.unwrap();
+
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	// Two response will end up in a response of 102 bytes which is too big.
 	let req = r#"[{"jsonrpc":"2.0", "method":"anything", "id":1},{"jsonrpc":"2.0", "method":"anything", "id":2}]"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.body, batch_response_too_large(100));
 
-	handle.stop().unwrap();
-	handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
@@ -527,7 +528,7 @@ async fn disabled_batches() {
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	// Send a valid batch.
 	let req = r#"[
@@ -544,14 +545,18 @@ async fn disabled_batches() {
 #[tokio::test]
 async fn batch_limit_works() {
 	let addr = "127.0.0.1:0";
-	// Disable batches support.
-	let server =
-		ServerBuilder::default().set_batch_request_config(BatchRequestConfig::Limit(1)).build(addr).await.unwrap();
+
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
-	let addr = server.local_addr().unwrap();
-	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+
+	// Disable batches support.
+	let server = ServerBuilder::default()
+		.set_batch_request_config(BatchRequestConfig::Limit(1))
+		.build(addr, module)
+		.await
+		.unwrap();
+
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	// Send a valid batch.
 	let req = r#"[

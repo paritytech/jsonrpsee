@@ -104,19 +104,19 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.layer(cors)
 		.timeout(Duration::from_secs(2));
 
-	let server =
-		ServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
-
-	let addr = server.local_addr()?;
-
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo").unwrap();
 
-	let handle = server.start(module)?;
+	let server = ServerBuilder::new()
+		.set_middleware(service_builder)
+		.build("127.0.0.1:0".parse::<SocketAddr>()?, module)
+		.await?;
+
+	let addr = server.local_addr().map_err(|e| anyhow::anyhow!("{}", e))?;
 
 	// In this example we don't care about doing shutdown so let's it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.
-	tokio::spawn(handle.stopped());
+	tokio::spawn(server.stopped());
 
 	Ok(addr)
 }

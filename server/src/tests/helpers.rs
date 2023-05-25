@@ -30,7 +30,6 @@ pub(crate) async fn server() -> SocketAddr {
 ///
 /// Returns the address together with handle for the server.
 pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
-	let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	module
@@ -116,16 +115,15 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 
-	let addr = server.local_addr().unwrap();
+	let server = ServerBuilder::default().build("127.0.0.1:0", module).with_default_timeout().await.unwrap().unwrap();
 
-	let server_handle = server.start(module).unwrap();
-	(addr, server_handle)
+	let local_addr = server.local_addr().unwrap();
+
+	(local_addr, server)
 }
 
 /// Run server with user provided context.
 pub(crate) async fn server_with_context() -> SocketAddr {
-	let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-
 	let ctx = TestContext;
 	let mut rpc_module = RpcModule::new(ctx);
 
@@ -159,10 +157,12 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 		})
 		.unwrap();
 
-	let addr = server.local_addr().unwrap();
-	let handle = server.start(rpc_module).unwrap();
+	let server =
+		ServerBuilder::default().build("127.0.0.1:0", rpc_module).with_default_timeout().await.unwrap().unwrap();
 
-	tokio::spawn(handle.stopped());
+	let addr = server.local_addr().unwrap();
+
+	tokio::spawn(server.stopped());
 	addr
 }
 

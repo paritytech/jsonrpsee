@@ -458,7 +458,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 		)
 		.unwrap();
 
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -490,7 +490,7 @@ async fn ws_server_stop_subscription_when_dropped() {
 		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
 		.unwrap();
 
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	assert!(client.subscribe::<String, ArrayParams>("subscribe_nop", rpc_params![], "unsubscribe_nop").await.is_err());
@@ -754,7 +754,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let c2 = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -809,7 +809,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -1031,7 +1031,7 @@ async fn ws_host_filtering_wildcard_works() {
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 
 	let server_url = format!("ws://{}", addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -1052,7 +1052,7 @@ async fn http_host_filtering_wildcard_works() {
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 
 	let server_url = format!("http://{}", addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
@@ -1073,7 +1073,7 @@ async fn deny_invalid_host() {
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 
 	// HTTP
 	{
@@ -1233,7 +1233,7 @@ async fn run_shutdown_test(transport: &str) {
 			.unwrap();
 		let addr = server.local_addr().unwrap();
 
-		(server.start(module).unwrap(), addr)
+		(server.start(module), addr)
 	};
 
 	match transport {

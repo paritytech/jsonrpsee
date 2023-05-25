@@ -49,7 +49,6 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:9944").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 	module.register_method("memory_call", |_, _| "A".repeat(1024 * 1024))?;
@@ -58,12 +57,12 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		"lo"
 	})?;
 
-	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let server = ServerBuilder::default().build("127.0.0.1:9944", module).await?;
+	let addr = server.local_addr().map_err(|e| anyhow::anyhow!("{}", e))?;
 
 	// In this example we don't care about doing a stopping the server so let it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.
-	tokio::spawn(handle.stopped());
+	tokio::spawn(server.stopped());
 
 	Ok(addr)
 }

@@ -82,6 +82,12 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.allow_headers([hyper::header::CONTENT_TYPE]);
 	let middleware = tower::ServiceBuilder::new().layer(cors);
 
+	let mut module = RpcModule::new(());
+	module.register_method("say_hello", |_, _| {
+		println!("say_hello method called!");
+		"Hello there!!"
+	})?;
+
 	// The RPC exposes the access control for filtering and the middleware for
 	// modifying requests / responses. These features are independent of one another
 	// and can also be used separately.
@@ -89,21 +95,14 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = ServerBuilder::default()
 		.set_host_filtering(AllowHosts::Any)
 		.set_middleware(middleware)
-		.build("127.0.0.1:0".parse::<SocketAddr>()?)
+		.build("127.0.0.1:0".parse::<SocketAddr>()?, module)
 		.await?;
 
-	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| {
-		println!("say_hello method called!");
-		"Hello there!!"
-	})?;
-
-	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let addr = server.local_addr().map_err(|e| anyhow::anyhow!("{}", e))?;
 
 	// In this example we don't care about doing shutdown so let's it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.
-	tokio::spawn(handle.stopped());
+	tokio::spawn(server.stopped());
 
 	Ok(addr)
 }

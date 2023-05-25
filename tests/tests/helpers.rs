@@ -119,7 +119,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	(addr, server_handle)
 }
@@ -158,7 +158,7 @@ pub async fn server() -> SocketAddr {
 
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	tokio::spawn(server_handle.stopped());
 
@@ -186,7 +186,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 			res.map_err(Into::into)
 		})
 		.unwrap();
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	tokio::spawn(handle.stopped());
 
@@ -198,28 +198,27 @@ pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
 	server_with_access_control(AllowHosts::Any, CorsLayer::new()).await
 }
 
-pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLayer) -> (SocketAddr, ServerHandle) {
+pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLayer) -> ServerHandle {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
 		// Add `CORS` layer.
 		.layer(cors);
 
-	let server = ServerBuilder::default()
-		.set_host_filtering(allowed_hosts)
-		.set_middleware(middleware)
-		.build("127.0.0.1:0")
-		.await
-		.unwrap();
 	let mut module = RpcModule::new(());
-	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 	module.register_method("notif", |_, _| "").unwrap();
 
 	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
-	let handle = server.start(module).unwrap();
-	(addr, handle)
+	let server = ServerBuilder::default()
+		.set_host_filtering(allowed_hosts)
+		.set_middleware(middleware)
+		.build("127.0.0.1:0", module)
+		.await
+		.unwrap();
+
+	server
 }
 
 pub fn init_logger() {

@@ -50,7 +50,7 @@ async fn can_set_the_max_request_body_size() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(100)).unwrap();
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -78,7 +78,7 @@ async fn can_set_the_max_response_body_size() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(101)).unwrap();
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -101,7 +101,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(51)).unwrap();
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -125,7 +125,7 @@ async fn can_set_max_connections() {
 	module.register_method("anything", |_p, _cx| ()).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	let conn1 = WebSocketTestClient::new(addr).await;
 	let conn2 = WebSocketTestClient::new(addr).await;
@@ -575,7 +575,7 @@ async fn custom_subscription_id_works() {
 			}
 		})
 		.unwrap();
-	let _handle = server.start(module).unwrap();
+	let _handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
@@ -600,7 +600,7 @@ async fn disabled_batches() {
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -630,7 +630,7 @@ async fn batch_limit_works() {
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -767,7 +767,7 @@ async fn ws_server_backpressure_works() {
 		.unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let _server_handle = server.start(module).unwrap();
+	let _server_handle = server.start(module);
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -877,16 +877,7 @@ async fn drop_client_with_pending_calls_works() {
 async fn server_with_infinite_call(
 	timeout: Duration,
 	tx: tokio::sync::mpsc::UnboundedSender<()>,
-) -> (crate::ServerHandle, std::net::SocketAddr) {
-	let server = ServerBuilder::default()
-		// Make sure that the ping_interval doesn't force the connection to be closed
-		.ping_interval(timeout)
-		.build("127.0.0.1:0")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
-
+) -> crate::ServerHandle {
 	let mut module = RpcModule::new(tx);
 
 	module
@@ -897,7 +888,15 @@ async fn server_with_infinite_call(
 			"ok"
 		})
 		.unwrap();
-	let addr = server.local_addr().unwrap();
 
-	(server.start(module).unwrap(), addr)
+	let server = ServerBuilder::default()
+		// Make sure that the ping_interval doesn't force the connection to be closed
+		.ping_interval(timeout)
+		.build("127.0.0.1:0", module)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	server
 }
