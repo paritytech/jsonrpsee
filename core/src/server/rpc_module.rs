@@ -739,7 +739,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							Ok(msg) => {
 								// If the subscription was accepted then send a message
 								// to subscription task otherwise rely on the drop impl.
-								if msg.success {
+								if msg.is_success() {
 									let _ = accepted_tx.send(());
 								}
 								Ok(msg)

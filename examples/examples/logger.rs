@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params, TransportProtocol};
+use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params, SuccessOrError, TransportProtocol};
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
@@ -52,8 +52,19 @@ impl logger::Logger for Timings {
 		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
-	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant, _t: TransportProtocol) {
-		println!("[Logger::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
+	fn on_result(
+		&self,
+		name: &str,
+		success_or_error: SuccessOrError,
+		started_at: Self::Instant,
+		_t: TransportProtocol,
+	) {
+		println!(
+			"[Logger::on_result] '{}', worked? {}, time elapsed {:?}",
+			name,
+			success_or_error.is_success(),
+			started_at.elapsed()
+		);
 	}
 
 	fn on_response(&self, result: &str, started_at: Self::Instant, _t: TransportProtocol) {
