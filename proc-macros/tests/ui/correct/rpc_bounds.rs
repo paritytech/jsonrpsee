@@ -123,14 +123,14 @@ pub async fn websocket_servers() -> (SocketAddr, SocketAddr) {
 	// Start server from `MyRpcS` trait.
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr_server_only = server.local_addr().unwrap();
-	let server_handle = server.start(ServerOnlyImpl.into_rpc()).unwrap();
+	let server_handle = server.start(ServerOnlyImpl.into_rpc());
 
 	tokio::spawn(server_handle.stopped());
 
 	// Start server from `MyRpcSC` trait.
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr_server_client = server.local_addr().unwrap();
-	let server_handle = server.start(ServerClientServerImpl.into_rpc()).unwrap();
+	let server_handle = server.start(ServerClientServerImpl.into_rpc());
 
 	tokio::spawn(server_handle.stopped());
 
