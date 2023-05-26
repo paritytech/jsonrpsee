@@ -179,7 +179,51 @@ pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
 	pub result: String,
 	/// Indicates whether the call was successful or not.
-	pub success: bool,
+	pub success_or_error: MethodResponseResult,
+}
+
+impl MethodResponse {
+	/// Returns whether the call was successful.
+	pub fn is_success(&self) -> bool {
+		self.success_or_error.is_success()
+	}
+
+	/// Returns whether the call failed.
+	pub fn is_error(&self) -> bool {
+		self.success_or_error.is_success()
+	}
+}
+
+/// Represent the outcome of method call i.e, success or failed.
+///
+/// If the call failed then the JSON-RPC error code is embedded
+/// to be used for logging and metrics.
+#[derive(Debug, Copy, Clone)]
+pub enum MethodResponseResult {
+	/// The method call was successful.
+	Success,
+	/// The method call failed and the error code can used in the RpcLogger.
+	Failed(i32),
+}
+
+impl MethodResponseResult {
+	/// Returns whether the call was successful.
+	pub fn is_success(&self) -> bool {
+		matches!(self, MethodResponseResult::Success)
+	}
+
+	/// Returns whether the call failed.
+	pub fn is_error(&self) -> bool {
+		matches!(self, MethodResponseResult::Failed(_))
+	}
+
+	/// Get the error code.
+	pub fn as_error_code(&self) -> Option<i32> {
+		match self {
+			Self::Failed(e) => Some(*e),
+			_ => None,
+		}
+	}
 }
 
 impl MethodResponse {
@@ -191,11 +235,18 @@ impl MethodResponse {
 	{
 		let mut writer = BoundedWriter::new(max_response_size);
 
+		let success_or_error = if let ResponsePayload::Error(ref e) = result {
+			MethodResponseResult::Failed(e.code())
+		} else {
+			MethodResponseResult::Success
+		};
+
 		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
 			Ok(_) => {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
-				Self { result, success: true }
+
+				Self { result, success_or_error }
 			}
 			Err(err) => {
 				tracing::error!("Error serializing response: {:?}", err);
@@ -210,11 +261,11 @@ impl MethodResponse {
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self { result, success: false }
+					Self { result, success_or_error: MethodResponseResult::Failed(OVERSIZED_RESPONSE_CODE) }
 				} else {
 					let result = serde_json::to_string(&Response::new(ErrorCode::InternalError.into(), id))
 						.expect("JSON serialization infallible; qed");
-					Self { result, success: false }
+					Self { result, success_or_error: MethodResponseResult::Failed(ErrorCode::InternalError.code()) }
 				}
 			}
 		}
@@ -224,7 +275,7 @@ impl MethodResponse {
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
 		let err = ResponsePayload::error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
-		Self { result, success: false }
+		Self { result, success_or_error: MethodResponseResult::Failed(ErrorCode::InternalError.code()) }
 	}
 }
 
