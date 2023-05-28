@@ -42,7 +42,7 @@ use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::ws_client::WsClientBuilder;
 
 #[tokio::main]
@@ -104,8 +104,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.layer(cors)
 		.timeout(Duration::from_secs(2));
 
-	let server =
-		ServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let server = Server::builder().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
 	let addr = server.local_addr()?;
 

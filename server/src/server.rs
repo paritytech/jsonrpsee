@@ -67,6 +67,13 @@ pub struct Server<B = Identity, L = ()> {
 	service_builder: tower::ServiceBuilder<B>,
 }
 
+impl Server<Identity, ()> {
+	/// Create a builder for the server.
+	pub fn builder() -> Builder {
+		Builder::new()
+	}
+}
+
 impl<L> std::fmt::Debug for Server<L> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Server")
@@ -81,11 +88,6 @@ impl<B, L> Server<B, L> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
-	}
-
-	/// Create a builder for the server.
-	pub fn builder() -> Builder {
-		Builder::new()
 	}
 }
 

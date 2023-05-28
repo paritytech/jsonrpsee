@@ -28,10 +28,9 @@
 //! with access control allowing requests from all hosts.
 
 use hyper::Method;
+use jsonrpsee::server::{AllowHosts, RpcModule, Server};
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
-
-use jsonrpsee::server::{AllowHosts, RpcModule, ServerBuilder};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -86,7 +85,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	// modifying requests / responses. These features are independent of one another
 	// and can also be used separately.
 	// In this example, we use both features.
-	let server = ServerBuilder::default()
+	let server = Server::builder()
 		.set_host_filtering(AllowHosts::Any)
 		.set_middleware(middleware)
 		.build("127.0.0.1:0".parse::<SocketAddr>()?)
