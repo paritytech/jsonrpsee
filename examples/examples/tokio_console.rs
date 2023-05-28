@@ -36,7 +36,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::Server;
 use jsonrpsee::RpcModule;
 
 #[tokio::main]
@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:9944").await?;
+	let server = Server::builder().build("127.0.0.1:9944").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 	module.register_method("memory_call", |_, _| "A".repeat(1024 * 1024))?;
@@ -59,7 +59,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	})?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	// In this example we don't care about doing a stopping the server so let it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.

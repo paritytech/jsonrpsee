@@ -116,7 +116,7 @@ async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<(So
 	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	Ok((addr, handle))
 }
@@ -125,7 +125,7 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	Ok((addr, handle))
 }

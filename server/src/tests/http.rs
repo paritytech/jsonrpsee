@@ -85,7 +85,7 @@ async fn server() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 	(addr, server_handle)
 }
 
@@ -461,7 +461,7 @@ async fn can_set_the_max_request_body_size() {
 	module.register_method("anything", |_p, _cx| "a".repeat(100)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	// Invalid: too long
 	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
@@ -486,7 +486,7 @@ async fn can_set_the_max_response_size() {
 	module.register_method("anything", |_p, _cx| "a".repeat(101)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	// Oversized response.
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
@@ -506,7 +506,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	module.register_method("anything", |_p, _cx| "a".repeat(51)).unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	// Two response will end up in a response of 102 bytes which is too big.
 	let req = r#"[{"jsonrpc":"2.0", "method":"anything", "id":1},{"jsonrpc":"2.0", "method":"anything", "id":2}]"#;
@@ -527,7 +527,7 @@ async fn disabled_batches() {
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	// Send a valid batch.
 	let req = r#"[
@@ -551,7 +551,7 @@ async fn batch_limit_works() {
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	// Send a valid batch.
 	let req = r#"[
