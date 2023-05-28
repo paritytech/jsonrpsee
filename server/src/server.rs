@@ -82,6 +82,11 @@ impl<B, L> Server<B, L> {
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
 	}
+
+	/// Create a builder for the server.
+	pub fn builder() -> Builder {
+		Builder::new()
+	}
 }
 
 impl<S, B, L> Server<S, L>

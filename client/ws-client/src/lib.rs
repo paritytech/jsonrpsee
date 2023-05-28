@@ -109,6 +109,11 @@ impl Default for WsClientBuilder {
 }
 
 impl WsClientBuilder {
+	/// Create a new WebSocket client builder.
+	pub fn new() -> WsClientBuilder {
+		WsClientBuilder::default()
+	}
+
 	/// Force to use the rustls native certificate store.
 	///
 	/// Since multiple certificate stores can be optionally enabled, this option will
