@@ -59,10 +59,24 @@ use tracing::{instrument, Instrument};
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u32 = 100;
 
-/// Server handle.
+/// Represents a running server that will run until all
+/// server handles has been dropped or the stop has been called.
 ///
-/// When all [`StopHandle`]'s have been `dropped` or `stop` has been called
-/// the server will be stopped.
+///
+/// ```rust
+/// use jsonrpsee_server::{Server, RpcModule};
+///
+/// #[tokio::main]
+/// async fn main() {
+///   let api = {
+///      let mut module = RpcModule::new(());
+///      module.register_method("say_hello", |_, _| { "hello" }).unwrap();
+///      module
+///   };
+///   let server = Server::builder().build("127.0.0.1:0", api).await.unwrap();
+///	  tokio::spawn(server.stopped());
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct Server {
 	stop: Arc<watch::Sender<()>>,
@@ -542,16 +556,24 @@ where
 	/// Finalize the configuration and starts the server.
 	///
 	/// ```rust
+	/// use jsonrpsee_server::{Server, RpcModule};
+	///
 	/// #[tokio::main]
 	/// async fn main() {
+	///   let api = {
+	///      let mut module = RpcModule::new(());
+	///      module.register_method("say_hello", |_, _| { "hello" }).unwrap();
+	///      module
+	///   };
+	///
 	///   let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
 	///   let occupied_addr = listener.local_addr().unwrap();
 	///   let addrs: &[std::net::SocketAddr] = &[
 	///       occupied_addr,
 	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   assert!(jsonrpsee_server::Server::builder().build(occupied_addr).await.is_err());
-	///   assert!(jsonrpsee_server::Server::builder().build(addrs).await.is_ok());
+	///   assert!(Server::builder().build(occupied_addr, api.clone()).await.is_err());
+	///   assert!(Server::builder().build(addrs, api).await.is_ok());
 	/// }
 	/// ```
 	///
@@ -569,16 +591,21 @@ where
 		Ok(server.start(rpc_module))
 	}
 
-	/// Finalizes the configuration of the server with customized TCP settings on the socket.
+	/// Finalize the configuration and starts the server with custom TCP settings.
 	///
 	///
 	/// ```rust
-	/// use jsonrpsee_server::ServerBuilder;
+	/// use jsonrpsee_server::{Server, RpcModule};
 	/// use socket2::{Domain, Socket, Type};
 	/// use std::time::Duration;
 	///
 	/// #[tokio::main]
 	/// async fn main() {
+	///   let api = {
+	///      let mut module = RpcModule::new(());
+	///      module.register_method("say_hello", |_, _| { "hello" }).unwrap();
+	///      module
+	///   };
 	///   let addr = "127.0.0.1:0".parse().unwrap();
 	///   let domain = Domain::for_address(addr);
 	///   let socket = Socket::new(domain, Type::STREAM, None).unwrap();
@@ -589,7 +616,7 @@ where
 	///
 	///   socket.listen(4096).unwrap();
 	///
-	///   let server = ServerBuilder::new().build_from_tcp(socket).unwrap();
+	///   let server = Server::builder().build_from_tcp(socket, api).unwrap();
 	/// }
 	/// ```
 	pub fn build_from_tcp(
