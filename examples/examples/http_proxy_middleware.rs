@@ -45,7 +45,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::{RpcModule, Server};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -91,15 +91,13 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module.register_method("say_hello", |_, _| "lo").unwrap();
 	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
-	let server = ServerBuilder::new()
-		.set_middleware(service_builder)
-		.build("127.0.0.1:0".parse::<SocketAddr>()?, module)
-		.await?;
+	let server =
+		Server::builder().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?, module).await?;
 
 	let addr = server.local_addr().map_err(|e| anyhow::anyhow!("{}", e))?;
 
 	// In this example we don't care about doing shutdown so let's it run forever.
-	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	// You may use the `Server` to shut it down or manage it yourself.
 	tokio::spawn(server.stopped());
 
 	Ok(addr)

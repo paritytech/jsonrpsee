@@ -41,7 +41,6 @@ pub mod middleware;
 #[cfg(test)]
 mod tests;
 
-pub use future::ServerHandle;
 pub use jsonrpsee_core::server::*;
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;

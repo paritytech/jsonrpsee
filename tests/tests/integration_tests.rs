@@ -45,7 +45,7 @@ use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
+use jsonrpsee::server::Server;
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
@@ -53,6 +53,8 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
+
+use crate::helpers::RANDOM_ADDR;
 
 #[tokio::test]
 async fn ws_subscription_works() {
@@ -395,8 +397,8 @@ async fn server_should_be_able_to_close_subscriptions() {
 async fn ws_close_pending_subscription_when_server_terminated() {
 	init_logger();
 
-	let (server_addr, server_handle) = server_with_subscription_and_handle().await;
-	let server_url = format!("ws://{}", server_addr);
+	let server = server_with_subscription_and_handle().await;
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -405,8 +407,8 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	assert!(matches!(sub.next().await, Some(Ok(_))));
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 
 	let sub2: Result<Subscription<String>, _> =
 		c1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await;
@@ -430,12 +432,9 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 #[tokio::test]
 async fn ws_server_should_stop_subscription_after_client_drop() {
 	use futures::{channel::mpsc, SinkExt, StreamExt};
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{server::Server, RpcModule};
 
 	init_logger();
-
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let (tx, mut rx) = mpsc::channel(1);
 	let mut module = RpcModule::new(tx);
@@ -458,7 +457,8 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 		)
 		.unwrap();
 
-	let _handle = server.start(module);
+	let server = Server::builder().build(RANDOM_ADDR, module).await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -477,12 +477,9 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 #[tokio::test]
 async fn ws_server_stop_subscription_when_dropped() {
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{server::Server, RpcModule};
 
 	init_logger();
-
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());
 
@@ -490,7 +487,8 @@ async fn ws_server_stop_subscription_when_dropped() {
 		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
 		.unwrap();
 
-	let _handle = server.start(module);
+	let server = Server::builder().build(RANDOM_ADDR, module).await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	assert!(client.subscribe::<String, ArrayParams>("subscribe_nop", rpc_params![], "unsubscribe_nop").await.is_err());
@@ -502,8 +500,8 @@ async fn ws_server_notify_client_on_disconnect() {
 
 	init_logger();
 
-	let (server_addr, server_handle) = server_with_subscription_and_handle().await;
-	let server_url = format!("ws://{}", server_addr);
+	let server = server_with_subscription_and_handle().await;
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let (up_tx, up_rx) = oneshot::channel();
 	let (dis_tx, mut dis_rx) = oneshot::channel();
@@ -541,8 +539,8 @@ async fn ws_server_notify_client_on_disconnect() {
 	// Make sure the `on_disconnect` method did not return before stopping the server.
 	assert_eq!(dis_rx.try_recv().unwrap(), None);
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 
 	// The `on_disconnect()` method returned.
 	dis_rx.await.unwrap();
@@ -555,16 +553,16 @@ async fn ws_server_notify_client_on_disconnect() {
 async fn ws_server_notify_client_on_disconnect_with_closed_server() {
 	init_logger();
 
-	let (server_addr, server_handle) = server_with_subscription_and_handle().await;
-	let server_url = format!("ws://{}", server_addr);
+	let server = server_with_subscription_and_handle().await;
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	// Validate server is up.
 	client.request::<String, ArrayParams>("say_hello", rpc_params![]).await.unwrap();
 
 	// Stop the server.
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 
 	// Ensure `on_disconnect` returns when the call is made after the server is closed.
 	client.on_disconnect().await;
@@ -737,12 +735,9 @@ async fn http_batch_works() {
 async fn ws_server_limit_subs_per_conn_works() {
 	use futures::StreamExt;
 	use jsonrpsee::types::error::{TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{server::Server, RpcModule};
 
 	init_logger();
-
-	let server = ServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
-	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());
 
@@ -754,7 +749,9 @@ async fn ws_server_limit_subs_per_conn_works() {
 			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
-	let _handle = server.start(module);
+
+	let server = Server::builder().max_subscriptions_per_connection(10).build(RANDOM_ADDR, module).await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let c2 = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -792,12 +789,9 @@ async fn ws_server_limit_subs_per_conn_works() {
 async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	use futures::StreamExt;
 	use jsonrpsee::core::client::SubscriptionKind;
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{server::Server, RpcModule};
 
 	init_logger();
-
-	let server = ServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
-	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());
 
@@ -809,7 +803,9 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
 		})
 		.unwrap();
-	let _handle = server.start(module);
+
+	let server = Server::builder().max_subscriptions_per_connection(10).build(RANDOM_ADDR, module).await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -922,10 +918,10 @@ async fn http_cors_preflight_works() {
 		.allow_methods([Method::POST])
 		.allow_origin("https://foo.com".parse::<HeaderValue>().unwrap())
 		.allow_headers([hyper::header::CONTENT_TYPE]);
-	let (server_addr, _handle) = server_with_access_control(AllowHosts::Any, cors).await;
+	let server = server_with_access_control(AllowHosts::Any, cors).await;
 
 	let http_client = Client::new();
-	let uri = format!("http://{}", server_addr);
+	let uri = format!("http://{}", server.local_addr().unwrap());
 
 	// First, make a preflight request.
 	// See https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#preflighted_requests for examples.
@@ -1003,10 +999,10 @@ async fn http_health_api_works() {
 
 	init_logger();
 
-	let (server_addr, _handle) = server_with_health_api().await;
+	let server = server_with_health_api().await;
 
 	let http_client = Client::new();
-	let uri = format!("http://{}/health", server_addr);
+	let uri = format!("http://{}/health", server.local_addr().unwrap());
 
 	let req = Request::builder().method("GET").uri(&uri).body(Body::empty()).expect("request builder");
 	let res = http_client.request(req).await.unwrap();
@@ -1026,14 +1022,13 @@ async fn ws_host_filtering_wildcard_works() {
 
 	let acl = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
 
-	let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
-	let addr = server.local_addr().unwrap();
+
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
-	let _handle = server.start(module);
+	let server = Server::builder().set_host_filtering(acl).build(RANDOM_ADDR, module).await.unwrap();
 
-	let server_url = format!("ws://{}", addr);
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	assert!(client.request::<String, ArrayParams>("say_hello", rpc_params![]).await.is_ok());
@@ -1047,14 +1042,12 @@ async fn http_host_filtering_wildcard_works() {
 
 	let allowed_hosts = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
 
-	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
-	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
-	let _handle = server.start(module);
+	let server = Server::builder().set_host_filtering(allowed_hosts).build(RANDOM_ADDR, module).await.unwrap();
 
-	let server_url = format!("http://{}", addr);
+	let server_url = format!("http://{}", server.local_addr().unwrap());
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
 	assert!(client.request::<String, ArrayParams>("say_hello", rpc_params![]).await.is_ok());
@@ -1068,12 +1061,12 @@ async fn deny_invalid_host() {
 
 	let allowed_hosts = AllowHosts::Only(vec!["http://example.com".into()]);
 
-	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
-	let addr = server.local_addr().unwrap();
+
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
-	let _handle = server.start(module);
+	let server = Server::builder().set_host_filtering(allowed_hosts).build("127.0.0.1:0", module).await.unwrap();
+	let addr = server.local_addr().unwrap();
 
 	// HTTP
 	{
@@ -1154,7 +1147,7 @@ async fn graceful_shutdown_works() {
 
 async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 	client: Arc<C>,
-	handle: ServerHandle,
+	handle: Server,
 	call_answered: Arc<AtomicBool>,
 	mut call_ack: tokio::sync::mpsc::UnboundedReceiver<()>,
 ) {
@@ -1217,9 +1210,7 @@ async fn run_shutdown_test(transport: &str) {
 	let (tx, call_ack) = tokio::sync::mpsc::unbounded_channel();
 	let call_answered = Arc::new(AtomicBool::new(false));
 
-	let (handle, addr) = {
-		let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-
+	let module = {
 		let mut module = RpcModule::new((tx, call_answered.clone()));
 
 		module
@@ -1231,19 +1222,21 @@ async fn run_shutdown_test(transport: &str) {
 				"ok"
 			})
 			.unwrap();
-		let addr = server.local_addr().unwrap();
 
-		(server.start(module), addr)
+		module
 	};
+
+	let server = Server::builder().build(RANDOM_ADDR, module).with_default_timeout().await.unwrap().unwrap();
+	let addr = server.local_addr().unwrap();
 
 	match transport {
 		"ws" => {
 			let ws = Arc::new(WsClientBuilder::default().build(&format!("ws://{addr}")).await.unwrap());
-			run_shutdown_test_inner(ws, handle, call_answered, call_ack).await
+			run_shutdown_test_inner(ws, server, call_answered, call_ack).await
 		}
 		"http" => {
 			let http = Arc::new(HttpClientBuilder::default().build(&format!("http://{addr}")).unwrap());
-			run_shutdown_test_inner(http, handle, call_answered, call_ack).await
+			run_shutdown_test_inner(http, server, call_answered, call_ack).await
 		}
 		_ => unreachable!("Only `http` and `ws` supported"),
 	}

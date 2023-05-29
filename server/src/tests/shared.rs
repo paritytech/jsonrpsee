@@ -9,9 +9,9 @@ use std::time::Duration;
 #[tokio::test]
 async fn stop_works() {
 	init_logger();
-	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	let (_addr, server) = server_with_handles().with_default_timeout().await.unwrap();
 
-	let handle = server_handle.clone();
+	let handle = server.clone();
 	handle.stop().unwrap();
 	handle.stopped().await;
 
@@ -19,7 +19,7 @@ async fn stop_works() {
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
 
 	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(server_handle.stop(), Err(Error::AlreadyStopped)));
+	assert!(matches!(server.stop(), Err(Error::AlreadyStopped)));
 }
 
 #[tokio::test]
@@ -27,24 +27,22 @@ async fn run_forever() {
 	const TIMEOUT: Duration = Duration::from_millis(200);
 
 	init_logger();
-	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	let (_addr, server1) = server_with_handles().with_default_timeout().await.unwrap();
 
-	assert!(matches!(server_handle.stopped().with_timeout(TIMEOUT).await, Err(_timeout_err)));
+	assert!(matches!(server1.stopped().with_timeout(TIMEOUT).await, Err(_timeout_err)));
 
-	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	let (_addr, server2) = server_with_handles().with_default_timeout().await.unwrap();
 
-	server_handle.stop().unwrap();
+	server2.stop().unwrap();
 
 	// Send the shutdown request from one handle and await the server on the second one.
-	server_handle.stopped().with_timeout(TIMEOUT).await.unwrap();
+	assert!(server2.stopped().with_timeout(TIMEOUT).await.is_ok());
 }
 
 #[tokio::test]
 async fn http_only_works() {
-	use crate::{RpcModule, ServerBuilder};
+	use crate::{RpcModule, Server};
 
-	let server =
-		ServerBuilder::default().http_only().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _| {
@@ -53,8 +51,9 @@ async fn http_only_works() {
 		})
 		.unwrap();
 
+	let server =
+		Server::builder().http_only().build("127.0.0.1:0", module).with_default_timeout().await.unwrap().unwrap();
 	let addr = server.local_addr().unwrap();
-	let _server_handle = server.start(module);
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
 	let response = http_request(req.into(), to_http_uri(addr)).with_default_timeout().await.unwrap().unwrap();
@@ -67,9 +66,8 @@ async fn http_only_works() {
 
 #[tokio::test]
 async fn ws_only_works() {
-	use crate::{RpcModule, ServerBuilder};
+	use crate::{RpcModule, Server};
 
-	let server = ServerBuilder::default().ws_only().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _| {
@@ -78,8 +76,9 @@ async fn ws_only_works() {
 		})
 		.unwrap();
 
+	let server =
+		Server::builder().ws_only().build("127.0.0.1:0", module).with_default_timeout().await.unwrap().unwrap();
 	let addr = server.local_addr().unwrap();
-	let _server_handle = server.start(module);
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
 	let response = http_request(req.into(), to_http_uri(addr)).with_default_timeout().await.unwrap().unwrap();

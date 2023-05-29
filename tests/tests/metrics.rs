@@ -31,13 +31,13 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use helpers::init_logger;
+use helpers::{init_logger, RANDOM_ADDR};
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, TransportProtocol};
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
+use jsonrpsee::server::Server;
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::RpcModule;
@@ -112,14 +112,14 @@ fn test_module() -> RpcModule<()> {
 	().into_rpc()
 }
 
-async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<ServerHandle, Error> {
-	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0", module).await?;
+async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<Server, Error> {
+	let server = Server::builder().set_logger(counter).build(RANDOM_ADDR, module).await?;
 
 	Ok(server)
 }
 
-async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<ServerHandle, Error> {
-	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0", module).await?;
+async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<Server, Error> {
+	let server = Server::builder().set_logger(counter).build(RANDOM_ADDR, module).await?;
 
 	Ok(server)
 }

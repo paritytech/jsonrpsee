@@ -1,12 +1,14 @@
 use std::fmt;
 use std::net::SocketAddr;
 
-use crate::{RpcModule, ServerBuilder, ServerHandle};
+use crate::{RpcModule, Server};
 
 use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::{error::ErrorCode, ErrorObject, ErrorObjectOwned, Response, ResponseSuccess};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
+
+pub(crate) const RANDOM_ADDR: &str = "127.0.0.1:0";
 
 pub(crate) struct TestContext;
 
@@ -29,7 +31,7 @@ pub(crate) async fn server() -> SocketAddr {
 /// Spawns a dummy JSON-RPC server.
 ///
 /// Returns the address together with handle for the server.
-pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
+pub(crate) async fn server_with_handles() -> (SocketAddr, Server) {
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	module
@@ -115,7 +117,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 
-	let server = ServerBuilder::default().build("127.0.0.1:0", module).with_default_timeout().await.unwrap().unwrap();
+	let server = Server::builder().build("127.0.0.1:0", module).with_default_timeout().await.unwrap().unwrap();
 
 	let local_addr = server.local_addr().unwrap();
 
@@ -157,8 +159,7 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 		})
 		.unwrap();
 
-	let server =
-		ServerBuilder::default().build("127.0.0.1:0", rpc_module).with_default_timeout().await.unwrap().unwrap();
+	let server = Server::builder().build("127.0.0.1:0", rpc_module).with_default_timeout().await.unwrap().unwrap();
 
 	let addr = server.local_addr().unwrap();
 

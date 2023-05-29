@@ -30,12 +30,12 @@ mod helpers;
 
 use std::net::SocketAddr;
 
-use helpers::init_logger;
+use helpers::{init_logger, RANDOM_ADDR};
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::Server;
 use jsonrpsee::types::error::{ErrorCode, INVALID_PARAMS_MSG};
 
 use jsonrpsee::ws_client::*;
@@ -193,11 +193,10 @@ use jsonrpsee::core::params::{ArrayParams, ObjectParams};
 use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
 
 pub async fn server() -> SocketAddr {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server = Server::builder().build(RANDOM_ADDR, RpcServerImpl.into_rpc()).await.unwrap();
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(RpcServerImpl.into_rpc());
 
-	tokio::spawn(handle.stopped());
+	tokio::spawn(server.stopped());
 
 	addr
 }
@@ -315,7 +314,7 @@ async fn multiple_blocking_calls_overlap() {
 
 #[tokio::test]
 async fn subscriptions_do_not_work_for_http_servers() {
-	let htserver = ServerBuilder::default().build("127.0.0.1:0", RpcServerImpl.into_rpc()).await.unwrap();
+	let htserver = Server::builder().build(RANDOM_ADDR, RpcServerImpl.into_rpc()).await.unwrap();
 	let addr = htserver.local_addr().unwrap();
 	let htserver_url = format!("http://{}", addr);
 
@@ -381,10 +380,8 @@ async fn calls_with_bad_params() {
 
 #[tokio::test]
 async fn calls_with_object_params_works() {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	let addr = server.local_addr().unwrap();
-	let server_url = format!("ws://{}", addr);
-	let _handle = server.start(RpcServerImpl.into_rpc());
+	let server = Server::builder().build(RANDOM_ADDR, RpcServerImpl.into_rpc()).await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	// snake_case params

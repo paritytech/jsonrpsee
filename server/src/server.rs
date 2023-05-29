@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
+use crate::future::{ConnectionGuard, StopHandle};
 use crate::logger::{Logger, TransportProtocol};
 use crate::transport::{http, ws};
 
@@ -46,7 +46,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
 use jsonrpsee_core::server::{AllowHosts, Methods};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{http_helpers, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -59,8 +59,51 @@ use tracing::{instrument, Instrument};
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u32 = 100;
 
+/// Server handle.
+///
+/// When all [`StopHandle`]'s have been `dropped` or `stop` has been called
+/// the server will be stopped.
+#[derive(Debug, Clone)]
+pub struct Server {
+	stop: Arc<watch::Sender<()>>,
+	// NOTE: `io::Error` is not clone so it's put in an Arc to workaround that.
+	local_addr: Result<SocketAddr, Arc<io::Error>>,
+}
+
+impl Server {
+	/// Create a new server handle.
+	fn new(stop: watch::Sender<()>, local_addr: Result<SocketAddr, Arc<io::Error>>) -> Self {
+		Self { stop: Arc::new(stop), local_addr }
+	}
+
+	/// Create a builder for the server
+	pub fn builder() -> Builder<Identity, ()> {
+		Builder::default()
+	}
+
+	/// Tell the server to stop without waiting for the server to stop.
+	pub fn stop(&self) -> Result<(), Error> {
+		self.stop.send(()).map_err(|_| Error::AlreadyStopped)
+	}
+
+	/// Wait for the server to stop.
+	pub async fn stopped(self) {
+		self.stop.closed().await
+	}
+
+	/// Check if the server has been stopped.
+	pub fn is_stopped(&self) -> bool {
+		self.stop.is_closed()
+	}
+
+	/// Get the local address of the server.
+	pub fn local_addr(&self) -> Result<SocketAddr, Arc<io::Error>> {
+		self.local_addr.clone()
+	}
+}
+
 /// JSON RPC server.
-pub struct Server<B = Identity, L = ()> {
+struct ServerNotStarted<B = Identity, L = ()> {
 	listener: TcpListener,
 	cfg: Settings,
 	logger: L,
@@ -68,7 +111,7 @@ pub struct Server<B = Identity, L = ()> {
 	service_builder: tower::ServiceBuilder<B>,
 }
 
-impl<L> std::fmt::Debug for Server<L> {
+impl<L> std::fmt::Debug for ServerNotStarted<L> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Server")
 			.field("listener", &self.listener)
@@ -78,14 +121,7 @@ impl<L> std::fmt::Debug for Server<L> {
 	}
 }
 
-impl<B, L> Server<B, L> {
-	/// Returns socket address to which the server is bound.
-	pub fn local_addr(&self) -> io::Result<SocketAddr> {
-		self.listener.local_addr()
-	}
-}
-
-impl<S, B, L> Server<S, L>
+impl<S, B, L> ServerNotStarted<S, L>
 where
 	L: Logger,
 	S: Layer<TowerService<L>> + Send + 'static,
@@ -102,11 +138,11 @@ where
 {
 	/// Start responding to connections requests.
 	///
-	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
-	pub fn start(mut self, methods: impl Into<Methods>) -> ServerHandle {
+	/// This will run on the tokio runtime until the server is stopped or the `Server` is dropped.
+	fn start(mut self, methods: impl Into<Methods>) -> Server {
 		let methods = methods.into();
 		let (stop_tx, stop_rx) = watch::channel(());
-		let local_addr = self.local_addr();
+		let local_addr = self.listener.local_addr();
 
 		let stop_handle = StopHandle::new(stop_rx);
 
@@ -115,7 +151,7 @@ where
 			None => tokio::spawn(self.start_inner(methods, stop_handle)),
 		};
 
-		ServerHandle::new(stop_tx, local_addr.map_err(|e| e.to_string()))
+		Server::new(stop_tx, local_addr.map_err(|e| Arc::new(e)))
 	}
 
 	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
@@ -372,7 +408,7 @@ impl<S, L> Builder<S, L> {
 	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// // Set the ping interval to 10 seconds.
-	/// let builder = ServerBuilder::default().ping_interval(Duration::from_secs(10));
+	/// let builder = Server::builder().ping_interval(Duration::from_secs(10));
 	/// ```
 	pub fn ping_interval(mut self, interval: Duration) -> Self {
 		self.settings.ping_interval = interval;
@@ -393,10 +429,10 @@ impl<S, L> Builder<S, L> {
 	/// use jsonrpsee_server::{ServerBuilder, RandomStringIdProvider, IdProvider};
 	///
 	/// // static dispatch
-	/// let builder1 = ServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
+	/// let builder1 = Server::builder().set_id_provider(RandomStringIdProvider::new(16));
 	///
 	/// // or dynamic dispatch
-	/// let builder2 = ServerBuilder::default().set_id_provider(Box::new(RandomStringIdProvider::new(16)));
+	/// let builder2 = Server::builder().set_id_provider(Box::new(RandomStringIdProvider::new(16)));
 	/// ```
 	///
 	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
@@ -514,15 +550,15 @@ where
 	///       occupied_addr,
 	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   assert!(jsonrpsee_server::ServerBuilder::default().build(occupied_addr).await.is_err());
-	///   assert!(jsonrpsee_server::ServerBuilder::default().build(addrs).await.is_ok());
+	///   assert!(jsonrpsee_server::Server::builder().build(occupied_addr).await.is_err());
+	///   assert!(jsonrpsee_server::Server::builder().build(addrs).await.is_ok());
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs, rpc_module: impl Into<Methods>) -> io::Result<ServerHandle> {
+	pub async fn build(self, addrs: impl ToSocketAddrs, rpc_module: impl Into<Methods>) -> io::Result<Server> {
 		let listener = TcpListener::bind(addrs).await?;
 
-		let server = Server {
+		let server = ServerNotStarted {
 			listener,
 			cfg: self.settings,
 			logger: self.logger,
@@ -556,16 +592,22 @@ where
 	///   let server = ServerBuilder::new().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> io::Result<Server<S, L>> {
+	pub fn build_from_tcp(
+		self,
+		listener: impl Into<StdTcpListener>,
+		rpc_module: impl Into<Methods>,
+	) -> io::Result<Server> {
 		let listener = TcpListener::from_std(listener.into())?;
 
-		Ok(Server {
+		let server = ServerNotStarted {
 			listener,
 			cfg: self.settings,
 			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
-		})
+		};
+
+		Ok(server.start(rpc_module))
 	}
 }
 

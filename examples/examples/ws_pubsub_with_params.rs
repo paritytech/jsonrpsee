@@ -30,7 +30,7 @@ use std::time::Duration;
 use futures::{Stream, StreamExt};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::Serialize;
-use jsonrpsee::server::{RpcModule, ServerBuilder, SubscriptionMessage, TrySendError};
+use jsonrpsee::server::{RpcModule, Server, SubscriptionMessage, TrySendError};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 use tokio::time::interval;
@@ -63,7 +63,6 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| async move {
@@ -95,11 +94,11 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		})
 		.unwrap();
 
-	let server = ServerBuilder::default().set_message_buffer_capacity(10).build("127.0.0.1:0", module).await?;
+	let server = Server::builder().set_message_buffer_capacity(10).build("127.0.0.1:0", module).await?;
 	let addr = server.local_addr().map_err(|e| anyhow::anyhow!("{}", e))?;
 
 	// In this example we don't care about doing shutdown so let's it run forever.
-	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	// You may use the `Server` to shut it down or manage it yourself.
 	tokio::spawn(server.stopped());
 
 	Ok(addr)

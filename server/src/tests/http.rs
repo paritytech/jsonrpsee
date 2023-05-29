@@ -24,10 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::net::SocketAddr;
-
 use crate::server::BatchRequestConfig;
-use crate::{RpcModule, ServerBuilder, ServerHandle};
+use crate::tests::helpers::RANDOM_ADDR;
+use crate::{RpcModule, Server};
 use jsonrpsee_core::{Error, RpcResult};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode};
@@ -43,57 +42,58 @@ fn init_logger() {
 		.try_init();
 }
 
-async fn server() -> (SocketAddr, ServerHandle) {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	let ctx = TestContext;
-	let mut module = RpcModule::new(ctx);
-	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "lo").unwrap();
-	module.register_async_method("say_hello_async", |_, _| async move { RpcResult::Ok("lo") }).unwrap();
-	module
-		.register_method("add", |params, _| {
-			let params: Vec<u64> = params.parse()?;
-			let sum: u64 = params.into_iter().sum();
-			RpcResult::Ok(sum)
-		})
-		.unwrap();
-	module
-		.register_method::<Result<String, ErrorObjectOwned>, _>("multiparam", |params, _| {
-			let params: (String, String, Vec<u8>) = params.parse()?;
-			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
-			Ok(r)
-		})
-		.unwrap();
-	module.register_method("notif", |_, _| "").unwrap();
-	module
-		.register_method("should_err", |_, ctx| {
-			ctx.err()?;
-			Ok::<_, MyAppError>("err")
-		})
-		.unwrap();
+async fn server() -> Server {
+	let module = {
+		let mut module = RpcModule::new(TestContext);
 
-	module
-		.register_method("should_ok", |_, ctx| {
-			ctx.ok()?;
-			Ok::<_, MyAppError>("ok")
-		})
-		.unwrap();
-	module
-		.register_async_method("should_ok_async", |_p, ctx| async move {
-			ctx.ok()?;
-			Ok::<_, MyAppError>("ok")
-		})
-		.unwrap();
+		module.register_method("say_hello", |_, _| "lo").unwrap();
+		module.register_async_method("say_hello_async", |_, _| async move { RpcResult::Ok("lo") }).unwrap();
+		module
+			.register_method("add", |params, _| {
+				let params: Vec<u64> = params.parse()?;
+				let sum: u64 = params.into_iter().sum();
+				RpcResult::Ok(sum)
+			})
+			.unwrap();
+		module
+			.register_method::<Result<String, ErrorObjectOwned>, _>("multiparam", |params, _| {
+				let params: (String, String, Vec<u8>) = params.parse()?;
+				let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
+				Ok(r)
+			})
+			.unwrap();
+		module.register_method("notif", |_, _| "").unwrap();
+		module
+			.register_method("should_err", |_, ctx| {
+				ctx.err()?;
+				Ok::<_, MyAppError>("err")
+			})
+			.unwrap();
 
-	let server_handle = server.start(module);
-	(addr, server_handle)
+		module
+			.register_method("should_ok", |_, ctx| {
+				ctx.ok()?;
+				Ok::<_, MyAppError>("ok")
+			})
+			.unwrap();
+		module
+			.register_async_method("should_ok_async", |_p, ctx| async move {
+				ctx.ok()?;
+				Ok::<_, MyAppError>("ok")
+			})
+			.unwrap();
+
+		module
+	};
+
+	Server::builder().build("127.0.0.1:0", module).await.unwrap()
 }
 
 #[tokio::test]
 async fn single_method_call_works() {
 	init_logger();
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	for i in 0..10 {
 		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{i}}}"#);
@@ -106,8 +106,8 @@ async fn single_method_call_works() {
 #[tokio::test]
 async fn async_method_call_works() {
 	init_logger();
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	for i in 0..10 {
 		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello_async","id":{i}}}"#);
@@ -120,8 +120,8 @@ async fn async_method_call_works() {
 #[tokio::test]
 async fn invalid_single_method_call() {
 	init_logger();
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":1, "params": "bar"}"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
@@ -131,8 +131,8 @@ async fn invalid_single_method_call() {
 
 #[tokio::test]
 async fn single_method_call_with_params() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -142,8 +142,8 @@ async fn single_method_call_with_params() {
 
 #[tokio::test]
 async fn single_method_call_with_multiple_params_of_different_types() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"multiparam", "params":["Hello", "World", [0,1,2,3]],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -153,8 +153,8 @@ async fn single_method_call_with_multiple_params_of_different_types() {
 
 #[tokio::test]
 async fn single_method_call_with_faulty_params_returns_err() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params","data":"invalid type: string \"this should be a number\", expected u64 at line 1 column 26"},"id":1}"#;
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["this should be a number"],"id":1}"#;
@@ -165,8 +165,8 @@ async fn single_method_call_with_faulty_params_returns_err() {
 
 #[tokio::test]
 async fn single_method_call_with_faulty_context() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err","params":[],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -176,8 +176,8 @@ async fn single_method_call_with_faulty_context() {
 
 #[tokio::test]
 async fn single_method_call_with_ok_context() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -187,8 +187,8 @@ async fn single_method_call_with_ok_context() {
 
 #[tokio::test]
 async fn async_method_call_with_ok_context() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok_async", "params":[],"id":1}"#;
 	let response = http_request(req.into(), uri).await.unwrap();
@@ -200,8 +200,8 @@ async fn async_method_call_with_ok_context() {
 async fn valid_batched_method_calls() {
 	init_logger();
 
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"[
 		{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1},
@@ -221,8 +221,8 @@ async fn valid_batched_method_calls() {
 async fn batched_notifications() {
 	init_logger();
 
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"[{"jsonrpc": "2.0", "method": "notif", "params": [1,2,4]},{"jsonrpc": "2.0", "method": "notif", "params": [7]}]"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -235,8 +235,8 @@ async fn batched_notifications() {
 async fn invalid_batch_calls() {
 	init_logger();
 
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	// batch with no requests
 	let req = r#"[]"#;
@@ -270,8 +270,9 @@ async fn invalid_batch_calls() {
 async fn batch_with_mixed_calls() {
 	init_logger();
 
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
+
 	// mixed notifications, method calls and valid json should be valid.
 	let req = r#"[
 			{"jsonrpc": "2.0", "method": "add", "params": [1,2,4], "id": "1"},
@@ -289,8 +290,9 @@ async fn batch_with_mixed_calls() {
 async fn batch_notif_without_params_works() {
 	init_logger();
 
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
+
 	// mixed notifications, method calls and valid json should be valid.
 	let req = r#"[
 			{"jsonrpc": "2.0", "method": "add", "params": [1,2,4], "id": "1"},
@@ -304,8 +306,8 @@ async fn batch_notif_without_params_works() {
 
 #[tokio::test]
 async fn garbage_request_fails() {
-	let (addr, _handle) = server().await;
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"dsdfs fsdsfds"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
@@ -342,8 +344,8 @@ async fn garbage_request_fails() {
 
 #[tokio::test]
 async fn whitespace_is_not_significant() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
@@ -373,8 +375,8 @@ async fn whitespace_is_not_significant() {
 
 #[tokio::test]
 async fn should_return_method_not_found() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":"foo"}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -384,8 +386,8 @@ async fn should_return_method_not_found() {
 
 #[tokio::test]
 async fn invalid_json_id_missing_value() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -396,8 +398,8 @@ async fn invalid_json_id_missing_value() {
 
 #[tokio::test]
 async fn invalid_request_object() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"method":"bar","id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -407,8 +409,8 @@ async fn invalid_request_object() {
 
 #[tokio::test]
 async fn unknown_field_is_ok() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1,"is_not_request_object":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -418,8 +420,8 @@ async fn unknown_field_is_ok() {
 
 #[tokio::test]
 async fn notif_works() {
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"bar"}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
@@ -454,14 +456,14 @@ async fn can_register_modules() {
 
 #[tokio::test]
 async fn can_set_the_max_request_body_size() {
-	let addr = "127.0.0.1:0";
-	// Rejects all requests larger than 100 bytes
-	let server = ServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(100)).unwrap();
+
+	// Rejects all requests larger than 100 bytes
+	let server = Server::builder().max_request_body_size(100).build(RANDOM_ADDR, module).await.unwrap();
+
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
-	let handle = server.start(module);
 
 	// Invalid: too long
 	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
@@ -473,39 +475,35 @@ async fn can_set_the_max_request_body_size() {
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.body, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
-	handle.stop().unwrap();
-	handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
 async fn can_set_the_max_response_size() {
-	let addr = "127.0.0.1:0";
-	// Set the max response size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(101)).unwrap();
-	let addr = server.local_addr().unwrap();
-	let uri = to_http_uri(addr);
-	let handle = server.start(module);
+
+	// Set the max response size to 100 bytes
+	let server = Server::builder().max_response_body_size(100).build(RANDOM_ADDR, module).await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	// Oversized response.
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.body, oversized_response(Id::Num(1), 100));
 
-	handle.stop().unwrap();
-	handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
 async fn can_set_the_max_response_size_to_batch() {
-	let addr = "127.0.0.1:0";
-
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(51)).unwrap();
 
 	// Set the max response size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr, module).await.unwrap();
+	let server = Server::builder().max_response_body_size(100).build(RANDOM_ADDR, module).await.unwrap();
 
 	let uri = to_http_uri(server.local_addr().unwrap());
 
@@ -520,15 +518,16 @@ async fn can_set_the_max_response_size_to_batch() {
 
 #[tokio::test]
 async fn disabled_batches() {
-	let addr = "127.0.0.1:0";
-	// Disable batches support.
-	let server =
-		ServerBuilder::default().set_batch_request_config(BatchRequestConfig::Disabled).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
-	let addr = server.local_addr().unwrap();
-	let uri = to_http_uri(addr);
-	let handle = server.start(module);
+
+	// Disable batches support.
+	let server = Server::builder()
+		.set_batch_request_config(BatchRequestConfig::Disabled)
+		.build(RANDOM_ADDR, module)
+		.await
+		.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	// Send a valid batch.
 	let req = r#"[
@@ -538,21 +537,19 @@ async fn disabled_batches() {
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.body, batches_not_supported());
 
-	handle.stop().unwrap();
-	handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
 async fn batch_limit_works() {
-	let addr = "127.0.0.1:0";
-
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 
 	// Disable batches support.
-	let server = ServerBuilder::default()
+	let server = Server::builder()
 		.set_batch_request_config(BatchRequestConfig::Limit(1))
-		.build(addr, module)
+		.build(RANDOM_ADDR, module)
 		.await
 		.unwrap();
 
@@ -566,16 +563,16 @@ async fn batch_limit_works() {
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.body, batches_too_large(1));
 
-	handle.stop().unwrap();
-	handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
 async fn http2_method_call_works() {
 	init_logger();
 
-	let (addr, _handle) = server().with_default_timeout().await.unwrap();
-	let uri = to_http_uri(addr);
+	let server = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = http2_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();

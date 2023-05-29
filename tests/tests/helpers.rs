@@ -32,9 +32,7 @@ use std::time::Duration;
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::server::{
-	AllowHosts, PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
-};
+use jsonrpsee::server::{AllowHosts, PendingSubscriptionSink, RpcModule, Server, SubscriptionMessage, TrySendError};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::SubscriptionCloseResponse;
 use serde::Serialize;
@@ -42,10 +40,10 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
-#[allow(dead_code)]
-pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+pub const RANDOM_ADDR: &str = "127.0.0.1:0";
 
+#[allow(dead_code)]
+pub async fn server_with_subscription_and_handle() -> Server {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
@@ -118,24 +116,21 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		})
 		.unwrap();
 
-	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module);
-
-	(addr, server_handle)
+	Server::builder().build(RANDOM_ADDR, module).await.unwrap()
 }
 
 #[allow(dead_code)]
 pub async fn server_with_subscription() -> SocketAddr {
-	let (addr, handle) = server_with_subscription_and_handle().await;
+	let server = server_with_subscription_and_handle().await;
+	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(handle.stopped());
+	tokio::spawn(server.stopped());
 
 	addr
 }
 
 #[allow(dead_code)]
 pub async fn server() -> SocketAddr {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
@@ -156,11 +151,10 @@ pub async fn server() -> SocketAddr {
 
 	module.register_async_method::<Result<(), CustomError>, _, _>("err", |_, _| async { Err(CustomError) }).unwrap();
 
+	let server = Server::builder().build(RANDOM_ADDR, module).await.unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module);
-
-	tokio::spawn(server_handle.stopped());
+	tokio::spawn(server.stopped());
 
 	addr
 }
@@ -168,9 +162,6 @@ pub async fn server() -> SocketAddr {
 /// Yields one item then sleeps for an hour.
 #[allow(dead_code)]
 pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	let addr = server.local_addr().unwrap();
-
 	let mut module = RpcModule::new(tx);
 
 	module
@@ -186,19 +177,21 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 			res.map_err(Into::into)
 		})
 		.unwrap();
-	let handle = server.start(module);
 
-	tokio::spawn(handle.stopped());
+	let server = Server::builder().build(RANDOM_ADDR, module).await.unwrap();
+	let addr = server.local_addr().unwrap();
+
+	tokio::spawn(server.stopped());
 
 	addr
 }
 
 #[allow(dead_code)]
-pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
+pub async fn server_with_health_api() -> Server {
 	server_with_access_control(AllowHosts::Any, CorsLayer::new()).await
 }
 
-pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLayer) -> ServerHandle {
+pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLayer) -> Server {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
@@ -211,7 +204,7 @@ pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLay
 
 	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
-	let server = ServerBuilder::default()
+	let server = Server::builder()
 		.set_host_filtering(allowed_hosts)
 		.set_middleware(middleware)
 		.build("127.0.0.1:0", module)

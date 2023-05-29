@@ -26,8 +26,7 @@
 
 //! Utilities for handling async code.
 
-use jsonrpsee_core::Error;
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 
 /// Represent a stop handle which is a wrapper over a `multi-consumer receiver`
@@ -44,44 +43,6 @@ impl StopHandle {
 	/// it consumes the stop handle.
 	pub(crate) async fn shutdown(mut self) {
 		let _ = self.0.changed().await;
-	}
-}
-
-/// Server handle.
-///
-/// When all [`StopHandle`]'s have been `dropped` or `stop` has been called
-/// the server will be stopped.
-#[derive(Debug, Clone)]
-pub struct ServerHandle {
-	stop: Arc<watch::Sender<()>>,
-	// NOTE: this is a Option because the error is not Clone.
-	local_addr: Result<SocketAddr, String>,
-}
-
-impl ServerHandle {
-	/// Create a new server handle.
-	pub fn new(stop: watch::Sender<()>, local_addr: Result<SocketAddr, String>) -> Self {
-		Self { stop: Arc::new(stop), local_addr }
-	}
-
-	/// Tell the server to stop without waiting for the server to stop.
-	pub fn stop(&self) -> Result<(), Error> {
-		self.stop.send(()).map_err(|_| Error::AlreadyStopped)
-	}
-
-	/// Wait for the server to stop.
-	pub async fn stopped(self) {
-		self.stop.closed().await
-	}
-
-	/// Check if the server has been stopped.
-	pub fn is_stopped(&self) -> bool {
-		self.stop.is_closed()
-	}
-
-	/// Get the local address of the server.
-	pub fn local_addr(&self) -> Result<SocketAddr, String> {
-		self.local_addr.clone()
 	}
 }
 

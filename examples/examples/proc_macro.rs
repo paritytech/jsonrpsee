@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, client::Subscription, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder, SubscriptionMessage};
+use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -99,11 +99,11 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0", RpcServerImpl.into_rpc()).await?;
+	let server = Server::builder().build("127.0.0.1:0", RpcServerImpl.into_rpc()).await?;
 	let addr = server.local_addr().map_err(|e| anyhow::anyhow!("{}", e))?;
 
 	// In this example we don't care about doing shutdown so let's it run forever.
-	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	// You may use the `Server` to shut it down or manage it yourself.
 	tokio::spawn(server.stopped());
 
 	Ok(addr)

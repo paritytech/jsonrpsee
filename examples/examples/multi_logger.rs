@@ -33,7 +33,7 @@ use std::time::Instant;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::logger::{HttpRequest, MethodKind, TransportProtocol};
-use jsonrpsee::server::{logger, RpcModule, ServerBuilder};
+use jsonrpsee::server::{logger, RpcModule, Server};
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -152,11 +152,11 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		""
 	})?;
 
-	let server = ServerBuilder::new().set_logger((Timings, ThreadWatcher)).build("127.0.0.1:0", module).await?;
+	let server = Server::builder().set_logger((Timings, ThreadWatcher)).build("127.0.0.1:0", module).await?;
 	let addr = server.local_addr().map_err(|e| anyhow::anyhow!("{}", e))?;
 
 	// In this example we don't care about doing a stopping the server so let it run forever.
-	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	// You may use the `Server` to shut it down or manage it yourself.
 	tokio::spawn(server.stopped());
 
 	Ok(addr)

@@ -27,9 +27,9 @@
 use std::time::Duration;
 
 use crate::server::BatchRequestConfig;
-use crate::tests::helpers::{deser_call, init_logger, server_with_context};
+use crate::tests::helpers::{deser_call, init_logger, server_with_context, RANDOM_ADDR};
 use crate::types::SubscriptionId;
-use crate::{RpcModule, ServerBuilder};
+use crate::{RpcModule, Server};
 use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
 use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
@@ -44,13 +44,12 @@ use super::helpers::server;
 async fn can_set_the_max_request_body_size() {
 	init_logger();
 
-	let addr = "127.0.0.1:0";
-	// Rejects all requests larger than 100 bytes
-	let server = ServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(100)).unwrap();
+
+	// Rejects all requests larger than 100 bytes
+	let server = Server::builder().max_request_body_size(100).build(RANDOM_ADDR, module).await.unwrap();
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -64,21 +63,20 @@ async fn can_set_the_max_request_body_size() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
-	handle.stop().unwrap();
-	handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
 async fn can_set_the_max_response_body_size() {
 	init_logger();
 
-	let addr = "127.0.0.1:0";
-	// Set the max response body size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(101)).unwrap();
+
+	// Set the max response body size to 100 bytes
+	let server = Server::builder().max_response_body_size(100).build(RANDOM_ADDR, module).await.unwrap();
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -87,21 +85,20 @@ async fn can_set_the_max_response_body_size() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, oversized_response(Id::Num(1), 100));
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
 async fn can_set_the_max_response_size_to_batch() {
 	init_logger();
 
-	let addr = "127.0.0.1:0";
-	// Set the max response body size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| "a".repeat(51)).unwrap();
+
+	// Set the max response body size to 100 bytes
+	let server = Server::builder().max_response_body_size(100).build(RANDOM_ADDR, module).await.unwrap();
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module);
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -110,22 +107,20 @@ async fn can_set_the_max_response_size_to_batch() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, batch_response_too_large(100));
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
 async fn can_set_max_connections() {
 	init_logger();
 
-	let addr = "127.0.0.1:0";
-	// Server that accepts max 2 connections
-	let server = ServerBuilder::default().max_connections(2).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| ()).unwrap();
-	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module);
+	// Server that accepts max 2 connections
+	let server = Server::builder().max_connections(2).build(RANDOM_ADDR, module).await.unwrap();
+	let addr = server.local_addr().unwrap();
 
 	let conn1 = WebSocketTestClient::new(addr).await;
 	let conn2 = WebSocketTestClient::new(addr).await;
@@ -147,8 +142,8 @@ async fn can_set_max_connections() {
 	let conn4 = WebSocketTestClient::new(addr).await;
 	assert!(conn4.is_ok());
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
@@ -544,6 +539,8 @@ async fn unsubscribe_wrong_sub_id_type() {
 
 #[tokio::test]
 async fn custom_subscription_id_works() {
+	init_logger();
+
 	#[derive(Debug, Clone)]
 	struct HardcodedSubscriptionId;
 
@@ -553,15 +550,6 @@ async fn custom_subscription_id_works() {
 		}
 	}
 
-	init_logger();
-	let server = ServerBuilder::default()
-		.set_id_provider(HardcodedSubscriptionId)
-		.build("127.0.0.1:0")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
-	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| async {
@@ -575,7 +563,15 @@ async fn custom_subscription_id_works() {
 			}
 		})
 		.unwrap();
-	let _handle = server.start(module);
+
+	let server = Server::builder()
+		.set_id_provider(HardcodedSubscriptionId)
+		.build(RANDOM_ADDR, module)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let addr = server.local_addr().unwrap();
 
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
@@ -587,20 +583,18 @@ async fn custom_subscription_id_works() {
 
 #[tokio::test]
 async fn disabled_batches() {
+	let mut module = RpcModule::new(());
+	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
+
 	// Disable batches support.
-	let server = ServerBuilder::default()
+	let server = Server::builder()
 		.set_batch_request_config(BatchRequestConfig::Disabled)
-		.build("127.0.0.1:0")
+		.build(RANDOM_ADDR, module)
 		.with_default_timeout()
 		.await
 		.unwrap()
 		.unwrap();
-
-	let mut module = RpcModule::new(());
-	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
-
-	let server_handle = server.start(module);
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -611,26 +605,24 @@ async fn disabled_batches() {
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, batches_not_supported());
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
 async fn batch_limit_works() {
+	let mut module = RpcModule::new(());
+	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
+
 	// Disable batches support.
-	let server = ServerBuilder::default()
+	let server = Server::builder()
 		.set_batch_request_config(BatchRequestConfig::Limit(1))
-		.build("127.0.0.1:0")
+		.build(RANDOM_ADDR, module)
 		.with_default_timeout()
 		.await
 		.unwrap()
 		.unwrap();
-
-	let mut module = RpcModule::new(());
-	module.register_method("should_ok", |_, _ctx| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
-
-	let server_handle = server.start(module);
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -641,8 +633,8 @@ async fn batch_limit_works() {
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, batches_too_large(1));
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server.stop().unwrap();
+	server.stopped().await;
 }
 
 #[tokio::test]
@@ -716,14 +708,6 @@ async fn ws_server_backpressure_works() {
 
 	let (backpressure_tx, mut backpressure_rx) = tokio::sync::mpsc::channel::<()>(1);
 
-	let server = ServerBuilder::default()
-		.set_message_buffer_capacity(5)
-		.build("127.0.0.1:0")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
-
 	let mut module = RpcModule::new(backpressure_tx);
 
 	module
@@ -765,9 +749,15 @@ async fn ws_server_backpressure_works() {
 			},
 		)
 		.unwrap();
-	let addr = server.local_addr().unwrap();
 
-	let _server_handle = server.start(module);
+	let server = Server::builder()
+		.set_message_buffer_capacity(5)
+		.build(RANDOM_ADDR, module)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let addr = server.local_addr().unwrap();
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -824,8 +814,9 @@ async fn close_client_with_pending_calls_works() {
 
 	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap(), tx).await;
-	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let server = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap(), tx).await;
+	let mut client =
+		WebSocketTestClient::new(server.local_addr().unwrap()).with_default_timeout().await.unwrap().unwrap();
 
 	for _ in 0..10 {
 		let req = r#"{"jsonrpc":"2.0","method":"infinite_call","id":1}"#;
@@ -842,8 +833,8 @@ async fn close_client_with_pending_calls_works() {
 
 	// Stop the server and ensure that the server doesn't wait for futures to complete
 	// when the connection has already been closed.
-	handle.stop().unwrap();
-	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
+	server.stop().unwrap();
+	assert!(server.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
 }
 
 #[tokio::test]
@@ -853,7 +844,8 @@ async fn drop_client_with_pending_calls_works() {
 	init_logger();
 
 	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-	let (handle, addr) = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap(), tx).await;
+	let server = server_with_infinite_call(MAX_TIMEOUT.checked_mul(10).unwrap(), tx).await;
+	let addr = server.local_addr().unwrap();
 
 	{
 		let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -870,14 +862,11 @@ async fn drop_client_with_pending_calls_works() {
 
 	// Stop the server and ensure that the server doesn't wait for futures to complete
 	// when the connection has already been closed.
-	handle.stop().unwrap();
-	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
+	server.stop().unwrap();
+	assert!(server.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
 }
 
-async fn server_with_infinite_call(
-	timeout: Duration,
-	tx: tokio::sync::mpsc::UnboundedSender<()>,
-) -> crate::ServerHandle {
+async fn server_with_infinite_call(timeout: Duration, tx: tokio::sync::mpsc::UnboundedSender<()>) -> crate::Server {
 	let mut module = RpcModule::new(tx);
 
 	module
@@ -889,7 +878,7 @@ async fn server_with_infinite_call(
 		})
 		.unwrap();
 
-	let server = ServerBuilder::default()
+	let server = Server::builder()
 		// Make sure that the ping_interval doesn't force the connection to be closed
 		.ping_interval(timeout)
 		.build("127.0.0.1:0", module)
