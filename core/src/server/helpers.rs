@@ -272,9 +272,11 @@ impl MethodResponse {
 
 	/// Create a `MethodResponse` from an error.
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
+		let err: ErrorObject = err.into();
+		let err_code = err.code();
 		let err = ResponsePayload::error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
-		Self { result, success_or_error: MethodResponseResult::Failed(ErrorCode::InternalError.code()) }
+		Self { result, success_or_error: MethodResponseResult::Failed(err_code) }
 	}
 }
 
