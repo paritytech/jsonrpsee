@@ -199,7 +199,7 @@ impl MethodResponse {
 pub enum MethodResponseResult {
 	/// The method call was successful.
 	Success,
-	/// The method call with error code.
+	/// The method call failed with error code.
 	Failed(i32),
 }
 
