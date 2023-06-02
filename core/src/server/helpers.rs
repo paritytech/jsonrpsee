@@ -173,7 +173,7 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	}
 }
 
-/// Represent the response to method call.
+/// Represent the response to a method call.
 #[derive(Debug, Clone)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
@@ -194,15 +194,12 @@ impl MethodResponse {
 	}
 }
 
-/// Represent the outcome of method call i.e, success or failed.
-///
-/// If the call failed then the JSON-RPC error code is embedded
-/// to be used for logging and metrics.
+/// Represent the outcome of a method call success or failed.
 #[derive(Debug, Copy, Clone)]
 pub enum MethodResponseResult {
 	/// The method call was successful.
 	Success,
-	/// The method call failed and the error code can used in the RpcLogger.
+	/// The method call with error code.
 	Failed(i32),
 }
 
@@ -217,7 +214,9 @@ impl MethodResponseResult {
 		matches!(self, MethodResponseResult::Failed(_))
 	}
 
-	/// Get the error code.
+	/// Get the error code
+	///
+	/// Returns `Some(error code)` if the call failed.
 	pub fn as_error_code(&self) -> Option<i32> {
 		match self {
 			Self::Failed(e) => Some(*e),
