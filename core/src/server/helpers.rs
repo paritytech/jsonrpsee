@@ -252,19 +252,22 @@ impl MethodResponse {
 
 				if err.is_io() {
 					let data = to_raw_value(&format!("Exceeded max limit of {max_response_size}")).ok();
+					let err_code = OVERSIZED_RESPONSE_CODE;
+
 					let err = ResponsePayload::error_borrowed(ErrorObject::borrowed(
-						OVERSIZED_RESPONSE_CODE,
+						err_code,
 						&OVERSIZED_RESPONSE_MSG,
 						data.as_deref(),
 					));
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self { result, success_or_error: MethodResponseResult::Failed(OVERSIZED_RESPONSE_CODE) }
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code) }
 				} else {
-					let result = serde_json::to_string(&Response::new(ErrorCode::InternalError.into(), id))
+					let err_code = ErrorCode::InternalError;
+					let result = serde_json::to_string(&Response::new(err_code.into(), id))
 						.expect("JSON serialization infallible; qed");
-					Self { result, success_or_error: MethodResponseResult::Failed(ErrorCode::InternalError.code()) }
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code.code()) }
 				}
 			}
 		}
