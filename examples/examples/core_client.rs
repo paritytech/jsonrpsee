@@ -29,7 +29,7 @@ use std::net::SocketAddr;
 use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
 use jsonrpsee::core::client::{Client, ClientBuilder, ClientT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::{RpcModule, Server};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -50,12 +50,12 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = Server::builder().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 	let addr = server.local_addr()?;
 
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	// In this example we don't care about doing shutdown so let's it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.

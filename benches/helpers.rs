@@ -125,7 +125,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 	let module = gen_rpc_module();
 
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 	(format!("http://{}", addr), handle)
 }
 
@@ -161,7 +161,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::se
 		.unwrap();
 
 	let addr = format!("ws://{}", server.local_addr().unwrap());
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 	(addr, handle)
 }
 

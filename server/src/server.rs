@@ -67,6 +67,13 @@ pub struct Server<B = Identity, L = ()> {
 	service_builder: tower::ServiceBuilder<B>,
 }
 
+impl Server<Identity, ()> {
+	/// Create a builder for the server.
+	pub fn builder() -> Builder {
+		Builder::new()
+	}
+}
+
 impl<L> std::fmt::Debug for Server<L> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Server")
@@ -102,7 +109,7 @@ where
 	/// Start responding to connections requests.
 	///
 	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
-	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
+	pub fn start(mut self, methods: impl Into<Methods>) -> ServerHandle {
 		let methods = methods.into();
 		let (stop_tx, stop_rx) = watch::channel(());
 
@@ -113,7 +120,7 @@ where
 			None => tokio::spawn(self.start_inner(methods, stop_handle)),
 		};
 
-		Ok(ServerHandle::new(stop_tx))
+		ServerHandle::new(stop_tx)
 	}
 
 	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
