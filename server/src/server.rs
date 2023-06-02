@@ -310,7 +310,7 @@ impl<B, L> Builder<B, L> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_server::logger::{Logger, HttpRequest, MethodKind, Params, TransportProtocol};
+	/// use jsonrpsee_server::logger::{Logger, HttpRequest, MethodKind, Params, TransportProtocol, SuccessOrError};
 	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -331,8 +331,8 @@ impl<B, L> Builder<B, L> {
 	///          println!("[MyLogger::on_call] method: '{}' params: {:?}, kind: {:?}, transport: {}", method_name, params, kind, transport);
 	///     }
 	///
-	///     fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant, transport: TransportProtocol) {
-	///          println!("[MyLogger::on_result] '{}', worked? {}, time elapsed {:?}, transport: {}", method_name, success, started_at.elapsed(), transport);
+	///     fn on_result(&self, method_name: &str, success_or_error: SuccessOrError, started_at: Self::Instant, transport: TransportProtocol) {
+	///          println!("[MyLogger::on_result] '{}', worked? {}, time elapsed {:?}, transport: {}", method_name, success_or_error.is_success(), started_at.elapsed(), transport);
 	///     }
 	///
 	///     fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {

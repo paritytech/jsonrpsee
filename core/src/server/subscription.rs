@@ -261,7 +261,7 @@ impl PendingSubscriptionSink {
 			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
 		);
-		let success = response.success;
+		let success = response.is_success();
 
 		// TODO: #1052
 		//

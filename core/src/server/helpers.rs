@@ -173,13 +173,56 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	}
 }
 
-/// Represent the response to method call.
+/// Represent the response to a method call.
 #[derive(Debug, Clone)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
 	pub result: String,
 	/// Indicates whether the call was successful or not.
-	pub success: bool,
+	pub success_or_error: MethodResponseResult,
+}
+
+impl MethodResponse {
+	/// Returns whether the call was successful.
+	pub fn is_success(&self) -> bool {
+		self.success_or_error.is_success()
+	}
+
+	/// Returns whether the call failed.
+	pub fn is_error(&self) -> bool {
+		self.success_or_error.is_success()
+	}
+}
+
+/// Represent the outcome of a method call success or failed.
+#[derive(Debug, Copy, Clone)]
+pub enum MethodResponseResult {
+	/// The method call was successful.
+	Success,
+	/// The method call failed with error code.
+	Failed(i32),
+}
+
+impl MethodResponseResult {
+	/// Returns whether the call was successful.
+	pub fn is_success(&self) -> bool {
+		matches!(self, MethodResponseResult::Success)
+	}
+
+	/// Returns whether the call failed.
+	pub fn is_error(&self) -> bool {
+		matches!(self, MethodResponseResult::Failed(_))
+	}
+
+	/// Get the error code
+	///
+	/// Returns `Some(error code)` if the call failed.
+	pub fn as_error_code(&self) -> Option<i32> {
+		match self {
+			Self::Failed(e) => Some(*e),
+			_ => None,
+		}
+	}
 }
 
 impl MethodResponse {
@@ -191,30 +234,40 @@ impl MethodResponse {
 	{
 		let mut writer = BoundedWriter::new(max_response_size);
 
+		let success_or_error = if let ResponsePayload::Error(ref e) = result {
+			MethodResponseResult::Failed(e.code())
+		} else {
+			MethodResponseResult::Success
+		};
+
 		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
 			Ok(_) => {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
-				Self { result, success: true }
+
+				Self { result, success_or_error }
 			}
 			Err(err) => {
 				tracing::error!("Error serializing response: {:?}", err);
 
 				if err.is_io() {
 					let data = to_raw_value(&format!("Exceeded max limit of {max_response_size}")).ok();
+					let err_code = OVERSIZED_RESPONSE_CODE;
+
 					let err = ResponsePayload::error_borrowed(ErrorObject::borrowed(
-						OVERSIZED_RESPONSE_CODE,
+						err_code,
 						&OVERSIZED_RESPONSE_MSG,
 						data.as_deref(),
 					));
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self { result, success: false }
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code) }
 				} else {
-					let result = serde_json::to_string(&Response::new(ErrorCode::InternalError.into(), id))
+					let err_code = ErrorCode::InternalError;
+					let result = serde_json::to_string(&Response::new(err_code.into(), id))
 						.expect("JSON serialization infallible; qed");
-					Self { result, success: false }
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code.code()) }
 				}
 			}
 		}
@@ -222,9 +275,11 @@ impl MethodResponse {
 
 	/// Create a `MethodResponse` from an error.
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
+		let err: ErrorObject = err.into();
+		let err_code = err.code();
 		let err = ResponsePayload::error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
-		Self { result, success: false }
+		Self { result, success_or_error: MethodResponseResult::Failed(err_code) }
 	}
 }
 
