@@ -36,10 +36,13 @@ use tokio::sync::{mpsc, oneshot};
 
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, Id, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
+	ErrorObject, Id, InvalidRequestId, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId,
+	SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
 use std::ops::Range;
+
+use super::ThreadSafeRequestManager;
 
 #[derive(Debug, Clone)]
 pub(crate) struct InnerBatchResponse {
@@ -63,7 +66,7 @@ pub(crate) fn process_batch_response(
 		Some(state) => state,
 		None => {
 			tracing::warn!("Received unknown batch response");
-			return Err(Error::InvalidRequestId);
+			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)).into());
 		}
 	};
 
@@ -79,7 +82,7 @@ pub(crate) fn process_batch_response(
 		if let Some(elem) = maybe_elem {
 			*elem = rp.result;
 		} else {
-			return Err(Error::InvalidRequestId);
+			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into());
 		}
 	}
 
@@ -95,7 +98,7 @@ pub(crate) fn process_batch_response(
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
-) -> Result<(), Option<RequestMessage>> {
+) -> Result<(), Option<SubscriptionId<'static>>> {
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
@@ -110,9 +113,7 @@ pub(crate) fn process_subscription_response(
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
-				let msg = build_unsubscribe_message(manager, request_id, sub_id)
-					.expect("request ID and subscription ID valid checked above; qed");
-				Err(Some(msg))
+				Err(Some(sub_id))
 			}
 		},
 		None => {
@@ -179,18 +180,19 @@ pub(crate) fn process_single_response(
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
-			let send_back_oneshot = match manager.complete_pending_call(response_id) {
+			let send_back_oneshot = match manager.complete_pending_call(response_id.clone()) {
 				Some(Some(send)) => send,
 				Some(None) => return Ok(None),
-				None => return Err(Error::InvalidRequestId),
+				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into()),
 			};
 
 			let _ = send_back_oneshot.send(result);
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
-			let (unsub_id, send_back_oneshot, unsubscribe_method) =
-				manager.complete_pending_subscription(response_id.clone()).ok_or(Error::InvalidRequestId)?;
+			let (unsub_id, send_back_oneshot, unsubscribe_method) = manager
+				.complete_pending_subscription(response_id.clone())
+				.ok_or(InvalidRequestId::NotPendingRequest(response_id.to_string()))?;
 
 			let sub_id = result.map(|r| SubscriptionId::try_from(r).ok());
 
@@ -220,7 +222,9 @@ pub(crate) fn process_single_response(
 				Ok(None)
 			}
 		}
-		RequestStatus::Subscription | RequestStatus::Invalid => Err(Error::InvalidRequestId),
+		RequestStatus::Subscription | RequestStatus::Invalid => {
+			Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into())
+		}
 	}
 }
 
@@ -228,15 +232,15 @@ pub(crate) fn process_single_response(
 /// that the client is not interested in the subscription anymore.
 //
 // NOTE: we don't count this a concurrent request as it's part of a subscription.
-pub(crate) async fn stop_subscription(
-	sender: &mut impl TransportSenderT,
-	manager: &mut RequestManager,
+pub(crate) async fn stop_subscription<S: TransportSenderT>(
+	sender: &mut S,
+	manager: ThreadSafeRequestManager,
 	unsub: RequestMessage,
-) {
-	if let Err(e) = sender.send(unsub.raw).await {
-		tracing::error!("Send unsubscribe request failed: {:?}", e);
-		let _ = manager.complete_pending_call(unsub.id);
-	}
+) -> Result<(), S::Error> {
+	sender.send(unsub.raw).await?;
+	let _ = manager.lock().await.complete_pending_call(unsub.id);
+
+	Ok(())
 }
 
 /// Builds an unsubscription message.

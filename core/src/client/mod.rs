@@ -487,7 +487,7 @@ impl IdKind {
 
 /// Generate a range of IDs to be used in a batch request.
 pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<Range<u64>, Error> {
-	let id_start = guard.inner().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+	let id_start = guard.inner().try_parse_inner_as_number()?;
 	let id_end = id_start
 		.checked_add(len)
 		.ok_or_else(|| Error::Custom("BatchID range wrapped; restart the client or try again later".to_string()))?;

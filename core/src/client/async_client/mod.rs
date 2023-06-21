@@ -20,8 +20,9 @@ use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
-use jsonrpsee_types::{ResponseSuccess, TwoPointZero};
+use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
+use std::sync::Arc;
 
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -36,6 +37,8 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
+
+type ThreadSafeRequestManager = Arc<Mutex<RequestManager>>;
 
 /// Wrapper over a [`oneshot::Receiver`](tokio::sync::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -174,18 +177,41 @@ impl ClientBuilder {
 		let ping_interval = self.ping_interval;
 		let (on_exit_tx, on_exit_rx) = oneshot::channel();
 
+		let (sync_send_recv_task_tx, sync_send_recv_task_rx) = mpsc::channel::<()>(1);
+
+		let manager = ThreadSafeRequestManager::default();
+
+		let send_task_handle = tokio::spawn(send_task(SendTaskParams {
+			sender,
+			from_frontend: from_front,
+			rx_task_closed: sync_send_recv_task_rx,
+			on_exit: on_exit_rx,
+			manager: manager.clone(),
+			max_buffer_capacity_per_subscription,
+			ping_interval,
+		}));
+		let rx_task_handle = tokio::spawn(read_task(ReadTaskParams {
+			receiver,
+			send_task_closed: sync_send_recv_task_tx,
+			to_send_task: to_back.clone(),
+			manager,
+			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+		}));
+
+		async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T, Error>>) -> Result<T, Error> {
+			match handle.await {
+				Ok(Ok(result)) => Ok(result),
+				Ok(Err(err)) => Err(err),
+				Err(err) => Err(Error::Custom(format!("{:?}", err))),
+			}
+		}
+
 		tokio::spawn(async move {
-			background_task(
-				sender,
-				receiver,
-				from_front,
-				err_tx,
-				max_buffer_capacity_per_subscription,
-				ping_interval,
-				on_exit_rx,
-			)
-			.await;
+			if let Err(e) = tokio::try_join!(flatten(send_task_handle), flatten(rx_task_handle)) {
+				let _ = err_tx.send(e);
+			}
 		});
+
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
@@ -209,18 +235,32 @@ impl ClientBuilder {
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (on_exit_tx, on_exit_rx) = oneshot::channel();
 
-		wasm_bindgen_futures::spawn_local(async move {
-			background_task(
-				sender,
-				receiver,
-				from_front,
-				err_tx,
-				max_buffer_capacity_per_subscription,
-				None,
-				on_exit_rx,
-			)
-			.await;
-		});
+		let send_task_handle = wasm_bindgen_futures::spawn_local(send_task(SendTaskParams {
+			sender,
+			from_frontend: from_front,
+			rx_task_closed: sync_send_recv_task_rx,
+			on_exit: on_exit_rx,
+			manager: manager.clone(),
+			max_buffer_capacity_per_subscription,
+			ping_interval,
+		}));
+
+		let rx_task_handle = wasm_bindgen_futures::spawn_local(read_task(ReadTaskParams {
+			receiver,
+			send_task_closed: sync_send_recv_task_tx,
+			to_send_task: to_back.clone(),
+			manager,
+			max_buffer_capacity_per_subscription,
+		}));
+
+		async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T, Error>>) -> Result<T, Error> {
+			match handle.await {
+				Ok(Ok(result)) => Ok(result),
+				Ok(Err(err)) => Err(err),
+				Err(err) => Err(Error::Custom(format!("{:?}", err))),
+			}
+		}
+
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
@@ -249,7 +289,7 @@ pub struct Client {
 	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
 	/// When the client is dropped a message is sent to the background thread.
-	on_exit: Option<tokio::sync::oneshot::Sender<()>>,
+	on_exit: Option<oneshot::Sender<()>>,
 }
 
 impl Client {
@@ -513,17 +553,17 @@ impl SubscriptionClientT for Client {
 /// Handle backend messages.
 ///
 /// Returns an error if the main background loop should be terminated.
-async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
+async fn handle_backend_messages<R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
-	manager: &mut RequestManager,
-	sender: &mut S,
+	manager: &ThreadSafeRequestManager,
+	sender: &mpsc::Sender<FrontToBack>,
 	max_buffer_capacity_per_subscription: usize,
 ) -> Result<(), Error> {
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
-	async fn handle_recv_message<S: TransportSenderT>(
+	async fn handle_recv_message(
 		raw: &[u8],
-		manager: &mut RequestManager,
-		sender: &mut S,
+		manager: &ThreadSafeRequestManager,
+		sender: &mpsc::Sender<FrontToBack>,
 		max_buffer_capacity_per_subscription: usize,
 	) -> Result<(), Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
@@ -532,27 +572,35 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			Some(b'{') => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
-					match process_single_response(manager, single, max_buffer_capacity_per_subscription) {
+					match process_single_response(
+						&mut *manager.lock().await,
+						single,
+						max_buffer_capacity_per_subscription,
+					) {
 						Ok(Some(unsub)) => {
-							stop_subscription(sender, manager, unsub).await;
+							// The send task is closed but the main loop will terminate.
+							let _ = sender.send(FrontToBack::Request(unsub)).await;
 						}
 						Ok(None) => (),
-						Err(err) => return Err(err),
+						Err(err) => {
+							tracing::warn!("[backend]: read message err={err}");
+						}
 					}
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
-					if let Err(Some(unsub)) = process_subscription_response(manager, response) {
-						stop_subscription(sender, manager, unsub).await;
+					if let Err(Some(sub_id)) = process_subscription_response(&mut *manager.lock().await, response) {
+						// The send task is closed but the main loop will terminate.
+						let _ = sender.send(FrontToBack::SubscriptionClosed(sub_id)).await;
 					}
 				}
 				// Subscription error response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
-					let _ = process_subscription_close_response(manager, response);
+					let _ = process_subscription_close_response(&mut *manager.lock().await, response);
 				}
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
-					let _ = process_notification(manager, notif);
+					let _ = process_notification(&mut *manager.lock().await, notif)?;
 				} else {
 					return Err(unparse_error(raw));
 				}
@@ -569,7 +617,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 							return Err(unparse_error(raw));
 						};
 
-						let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+						let id = response.id.try_parse_inner_as_number()?;
 						let result = ResponseSuccess::try_from(response).map(|s| s.result);
 						batch.push(InnerBatchResponse { id, result });
 
@@ -587,7 +635,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 					if let Some(mut range) = range {
 						// the range is exclusive so need to add one.
 						range.end += 1;
-						process_batch_response(manager, batch, range)?;
+						process_batch_response(&mut *manager.lock().await, batch, range)?;
 					} else {
 						return Err(Error::EmptyBatchRequest);
 					}
@@ -627,69 +675,71 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 /// Handle frontend messages.
 async fn handle_frontend_messages<S: TransportSenderT>(
 	message: FrontToBack,
-	manager: &mut RequestManager,
+	manager: &ThreadSafeRequestManager,
 	sender: &mut S,
 	max_buffer_capacity_per_subscription: usize,
-) {
+) -> Result<(), S::Error> {
 	match message {
 		FrontToBack::Batch(batch) => {
-			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
+			if let Err(send_back) = manager.lock().await.insert_pending_batch(batch.ids.clone(), batch.send_back) {
 				tracing::warn!("[backend]: Batch request already pending: {:?}", batch.ids);
-				let _ = send_back.send(Err(Error::InvalidRequestId));
-				return;
+				let _ = send_back.send(Err(InvalidRequestId::NotPendingRequest(format!("{:?}", batch.ids)).into()));
+				return Ok(());
 			}
 
-			if let Err(e) = sender.send(batch.raw).await {
-				tracing::warn!("[backend]: Batch request failed: {:?}", e);
-				manager.complete_pending_batch(batch.ids);
-			}
+			sender.send(batch.raw).await?;
 		}
 		// User called `notification` on the front-end
 		FrontToBack::Notification(notif) => {
-			if let Err(e) = sender.send(notif).await {
-				tracing::warn!("[backend]: Notification failed: {:?}", e);
-			}
+			sender.send(notif).await?;
 		}
 		// User called `request` on the front-end
-		FrontToBack::Request(request) => match sender.send(request.raw).await {
-			Ok(_) => manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed"),
-			Err(e) => {
-				tracing::warn!("[backend]: Request failed: {:?}", e);
-				let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
+		FrontToBack::Request(request) => {
+			sender.send(request.raw).await?;
+			if manager.lock().await.insert_pending_call(request.id.clone(), request.send_back).is_err() {
+				tracing::warn!("Denied duplicate method call");
 			}
-		},
+		}
 		// User called `subscribe` on the front-end.
-		FrontToBack::Subscribe(sub) => match sender.send(sub.raw).await {
-			Ok(_) => manager
+		FrontToBack::Subscribe(sub) => {
+			sender.send(sub.raw).await?;
+
+			if manager
+				.lock()
+				.await
 				.insert_pending_subscription(
-					sub.subscribe_id,
+					sub.subscribe_id.clone(),
 					sub.unsubscribe_id,
 					sub.send_back,
 					sub.unsubscribe_method,
 				)
-				.expect("Request ID unused checked above; qed"),
-			Err(e) => {
-				tracing::warn!("[backend]: Subscription failed: {:?}", e);
-				let _ = sub.send_back.send(Err(Error::Transport(e.into())));
+				.is_err()
+			{
+				tracing::warn!("Denied duplicate subscription");
 			}
-		},
+		}
 		// User dropped a subscription.
 		FrontToBack::SubscriptionClosed(sub_id) => {
 			tracing::trace!("[backend]: Closing subscription: {:?}", sub_id);
 			// NOTE: The subscription may have been closed earlier if
 			// the channel was full or disconnected.
-			if let Some(unsub) = manager
-				.get_request_id_by_subscription_id(&sub_id)
-				.and_then(|req_id| build_unsubscribe_message(manager, req_id, sub_id))
-			{
-				stop_subscription(sender, manager, unsub).await;
+
+			let maybe_unsub = {
+				let m = &mut *manager.lock().await;
+
+				m.get_request_id_by_subscription_id(&sub_id)
+					.and_then(|req_id| build_unsubscribe_message(m, req_id, sub_id))
+			};
+
+			if let Some(unsub) = maybe_unsub {
+				stop_subscription::<S>(sender, manager.clone(), unsub).await?;
 			}
 		}
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
 
-			if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
+			if manager.lock().await.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
 			} else {
 				let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
@@ -697,115 +747,11 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User dropped the NotificationHandler for this method
 		FrontToBack::UnregisterNotification(method) => {
-			let _ = manager.remove_notification_handler(method);
+			let _ = manager.lock().await.remove_notification_handler(method);
 		}
-	}
-}
+	};
 
-/// Function being run in the background that processes messages from the frontend.
-async fn background_task<S, R>(
-	mut sender: S,
-	receiver: R,
-	frontend: mpsc::Receiver<FrontToBack>,
-	front_error: oneshot::Sender<Error>,
-	max_buffer_capacity_per_subscription: usize,
-	ping_interval: Option<Duration>,
-	on_exit: oneshot::Receiver<()>,
-) where
-	S: TransportSenderT,
-	R: TransportReceiverT,
-{
-	// Create either a valid delay fuse triggered every provided `duration`,
-	// or create a terminated fuse that's never selected if the provided `duration` is None.
-	fn ping_fut(ping_interval: Option<Duration>) -> Fuse<Delay> {
-		if let Some(duration) = ping_interval {
-			Delay::new(duration).fuse()
-		} else {
-			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
-			Fuse::<Delay>::terminated()
-		}
-	}
-
-	let mut manager = RequestManager::new();
-
-	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
-		let res = receiver.receive().await;
-		Some((res, receiver))
-	});
-	let frontend = tokio_stream::wrappers::ReceiverStream::new(frontend);
-
-	tokio::pin!(backend_event, frontend);
-
-	// Place frontend and backend messages into their own select.
-	// This implies that either messages are received (both front or backend),
-	// or the submitted ping timer expires (if provided).
-	let mut message_fut = future::select(frontend.next(), backend_event.next());
-	let mut exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
-
-	loop {
-		match future::select(message_fut, exit_or_ping_fut).await {
-			// Message received from the frontend.
-			Either::Left((Either::Left((frontend_value, backend)), exit_or_ping)) => {
-				let frontend_value = if let Some(value) = frontend_value {
-					value
-				} else {
-					// User dropped the sender side of the channel.
-					// There is nothing to do just terminate.
-					tracing::debug!("[backend]: Client dropped");
-					break;
-				};
-
-				handle_frontend_messages(
-					frontend_value,
-					&mut manager,
-					&mut sender,
-					max_buffer_capacity_per_subscription,
-				)
-				.await;
-
-				// Advance frontend, save backend.
-				message_fut = future::select(frontend.next(), backend);
-				exit_or_ping_fut = exit_or_ping;
-			}
-			// Message received from the backend.
-			Either::Left((Either::Right((backend_value, frontend)), exit_or_ping)) => {
-				if let Err(err) = handle_backend_messages::<S, R>(
-					backend_value,
-					&mut manager,
-					&mut sender,
-					max_buffer_capacity_per_subscription,
-				)
-				.await
-				{
-					tracing::error!("[backend]: {}", err);
-					let _ = front_error.send(err);
-					break;
-				}
-				// Advance backend, save frontend.
-				message_fut = future::select(frontend, backend_event.next());
-				exit_or_ping_fut = exit_or_ping;
-			}
-			// The client is closed.
-			Either::Right((Either::Left((_, _)), _)) => {
-				break;
-			}
-			// Submit ping interval was triggered if enabled.
-			Either::Right((Either::Right((_, on_exit)), msg)) => {
-				if let Err(err) = sender.send_ping().await {
-					tracing::error!("[backend]: Could not send ping frame: {}", err);
-					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
-					break;
-				}
-				message_fut = msg;
-				exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
-			}
-		};
-	}
-
-	// Wake the `on_disconnect` method.
-	frontend.close();
-	// Send close message to the server.
-	_ = sender.close().await;
+	Ok(())
 }
 
 fn unparse_error(raw: &[u8]) -> Error {
@@ -817,4 +763,135 @@ fn unparse_error(raw: &[u8]) -> Error {
 	};
 
 	Error::Custom(format!("Unparseable message: {json_str}"))
+}
+
+struct SendTaskParams<S: TransportSenderT> {
+	sender: S,
+	from_frontend: mpsc::Receiver<FrontToBack>,
+	rx_task_closed: mpsc::Receiver<()>,
+	on_exit: oneshot::Receiver<()>,
+	manager: ThreadSafeRequestManager,
+	max_buffer_capacity_per_subscription: usize,
+	ping_interval: Option<Duration>,
+}
+
+async fn send_task<S: TransportSenderT>(params: SendTaskParams<S>) -> Result<(), Error> {
+	// Create either a valid delay fuse triggered every provided `duration`,
+	// or create a terminated fuse that's never selected if the provided `duration` is None.
+	fn ping_fut(ping_interval: Option<Duration>) -> Fuse<Delay> {
+		if let Some(duration) = ping_interval {
+			Delay::new(duration).fuse()
+		} else {
+			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
+			Fuse::<Delay>::terminated()
+		}
+	}
+
+	let SendTaskParams {
+		mut sender,
+		from_frontend,
+		rx_task_closed,
+		on_exit,
+		manager,
+		max_buffer_capacity_per_subscription,
+		ping_interval,
+	} = params;
+
+	let mut frontend = tokio_stream::wrappers::ReceiverStream::new(from_frontend);
+	let mut unsubscribe = tokio_stream::wrappers::ReceiverStream::new(rx_task_closed);
+
+	let mut frontend_or_unsubscribe = future::select(frontend.next(), unsubscribe.next());
+	let mut exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
+
+	let res = loop {
+		match future::select(frontend_or_unsubscribe, exit_or_ping_fut).await {
+			// Message received from the frontend.
+			Either::Left((Either::Left((msg, unsubscribe)), exit_or_ping)) => {
+				let Some(msg) = msg else {
+					break Ok(());
+				};
+
+				if let Err(e) =
+					handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+				{
+					tracing::error!("Could not send message: {e}");
+					break Err(Error::Transport(e.into()));
+				}
+
+				exit_or_ping_fut = exit_or_ping;
+				frontend_or_unsubscribe = future::select(frontend.next(), unsubscribe);
+			}
+
+			// The receive task is closed.
+			Either::Left((Either::Right(_), _)) => {
+				break Ok(());
+			}
+
+			// Ping
+			Either::Right((Either::Right((_, on_exit)), frontend_or_close)) => {
+				if let Err(err) = sender.send_ping().await {
+					tracing::error!("[backend]: Could not send ping frame: {err}");
+					break Err(Error::Custom("Could not send ping frame".into()));
+				}
+				exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
+				frontend_or_unsubscribe = frontend_or_close;
+			}
+
+			// Exit
+			Either::Right((Either::Left(_), _)) => {
+				break Ok(());
+			}
+		}
+	};
+
+	frontend.close();
+	let _ = sender.close();
+
+	res
+}
+
+struct ReadTaskParams<R: TransportReceiverT> {
+	receiver: R,
+	send_task_closed: mpsc::Sender<()>,
+	to_send_task: mpsc::Sender<FrontToBack>,
+	manager: ThreadSafeRequestManager,
+	max_buffer_capacity_per_subscription: usize,
+}
+
+async fn read_task<R: TransportReceiverT>(params: ReadTaskParams<R>) -> Result<(), Error> {
+	let ReadTaskParams { receiver, send_task_closed, to_send_task, manager, max_buffer_capacity_per_subscription } =
+		params;
+
+	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
+		let res = receiver.receive().await;
+		Some((res, receiver))
+	});
+
+	let closed = send_task_closed.closed();
+
+	tokio::pin!(backend_event, closed);
+
+	let mut rx_item = backend_event.next();
+
+	loop {
+		match future::select(closed, Box::pin(rx_item)).await {
+			Either::Left(_) => break Ok(()),
+			Either::Right((Some(msg), c)) => {
+				if let Err(e) = handle_backend_messages::<R>(
+					Some(msg),
+					&manager,
+					&to_send_task,
+					max_buffer_capacity_per_subscription,
+				)
+				.await
+				{
+					tracing::error!("[backend]: Failed to read message: {e}");
+					break Err(e);
+				}
+				closed = c;
+				rx_item = backend_event.next();
+			}
+			Either::Right((None, _)) => break Ok(()),
+		}
+	}
 }

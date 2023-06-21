@@ -95,6 +95,7 @@ pub(crate) struct RequestManager {
 
 impl RequestManager {
 	/// Create a new `RequestManager`.
+	#[allow(unused)]
 	pub(crate) fn new() -> Self {
 		Self::default()
 	}
