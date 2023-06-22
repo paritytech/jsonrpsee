@@ -251,7 +251,8 @@ impl RequestManager {
 		}
 	}
 
-	/// Tries to remove a subscription.
+	/// Initiates an unsubscribe which is not completed until the unsubscribe call
+	/// has been acknowledged.
 	///
 	/// Returns `Some` if the subscription was removed otherwise `None`.
 	pub(crate) fn remove_subscription(
@@ -260,10 +261,11 @@ impl RequestManager {
 		subscription_id: SubscriptionId<'static>,
 	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId)> {
 		match (self.requests.entry(request_id), self.subscriptions.entry(subscription_id)) {
-			(Entry::Occupied(request), Entry::Occupied(subscription))
+			(Entry::Occupied(mut request), Entry::Occupied(subscription))
 				if matches!(request.get(), Kind::Subscription(_)) =>
 			{
-				let (_req_id, kind) = request.remove_entry();
+				// Mark the request ID as pending unsubscription.
+				let kind = std::mem::replace(request.get_mut(), Kind::PendingMethodCall(None));
 				let (sub_id, _req_id) = subscription.remove_entry();
 				if let Kind::Subscription((unsub_req_id, send_back, unsub)) = kind {
 					Some((unsub_req_id, send_back, unsub, sub_id))

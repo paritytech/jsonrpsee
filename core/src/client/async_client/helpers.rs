@@ -42,8 +42,6 @@ use jsonrpsee_types::{
 use serde_json::Value as JsonValue;
 use std::ops::Range;
 
-use super::ThreadSafeRequestManager;
-
 #[derive(Debug, Clone)]
 pub(crate) struct InnerBatchResponse {
 	pub(crate) id: u64,
@@ -125,42 +123,42 @@ pub(crate) fn process_subscription_response(
 
 /// Attempts to close a subscription when a [`SubscriptionError`] is received.
 ///
-/// Returns `Ok(())` if the subscription was removed
-/// Return `Err(e)` if the subscription was not found.
+/// If the notification is not found it's just logged as a warning and the connection
+/// will continue.
+///
+/// It's possible that user close down the subscription because the actual close response is received
 pub(crate) fn process_subscription_close_response(
 	manager: &mut RequestManager,
 	response: SubscriptionError<JsonValue>,
-) -> Result<(), Error> {
+) {
 	let sub_id = response.params.subscription.into_owned();
-	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
-		Some(request_id) => request_id,
-		None => {
-			tracing::error!("The server tried to close an invalid subscription: {:?}", sub_id);
-			return Err(Error::InvalidSubscriptionId);
+	match manager.get_request_id_by_subscription_id(&sub_id) {
+		Some(request_id) => {
+			manager.remove_subscription(request_id, sub_id).expect("Both request ID and sub ID in RequestManager; qed");
 		}
-	};
-
-	manager.remove_subscription(request_id, sub_id).expect("Both request ID and sub ID in RequestManager; qed");
-	Ok(())
+		None => {
+			tracing::debug!("The server tried to close an non-pending subscription: {:?}", sub_id);
+		}
+	}
 }
 
 /// Attempts to process an incoming notification
 ///
-/// Returns Ok() if the response was successfully handled
-/// Returns Err() if there was no handler for the method
-pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) -> Result<(), Error> {
+/// If the notification is not found it's just logged as a warning and the connection
+/// will continue.
+///
+/// It's possible that user close down the subscription before this notification is received.
+pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
-			Ok(()) => Ok(()),
+			Ok(()) => (),
 			Err(err) => {
-				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
+				tracing::warn!("Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
 				let _ = manager.remove_notification_handler(notif.method.into_owned());
-				Err(Error::Custom(err.to_string()))
 			}
 		},
 		None => {
-			tracing::error!("Notification: {:?} not a registered method", notif.method);
-			Err(Error::UnregisteredNotification(notif.method.into_owned()))
+			tracing::debug!("Notification: {:?} not a registered method", notif.method);
 		}
 	}
 }
@@ -222,6 +220,7 @@ pub(crate) fn process_single_response(
 				Ok(None)
 			}
 		}
+
 		RequestStatus::Subscription | RequestStatus::Invalid => {
 			Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into())
 		}
@@ -234,12 +233,9 @@ pub(crate) fn process_single_response(
 // NOTE: we don't count this a concurrent request as it's part of a subscription.
 pub(crate) async fn stop_subscription<S: TransportSenderT>(
 	sender: &mut S,
-	manager: ThreadSafeRequestManager,
 	unsub: RequestMessage,
 ) -> Result<(), S::Error> {
 	sender.send(unsub.raw).await?;
-	let _ = manager.lock().await.complete_pending_call(unsub.id);
-
 	Ok(())
 }
 

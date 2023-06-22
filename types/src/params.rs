@@ -328,15 +328,15 @@ impl<'a> SubscriptionId<'a> {
 #[derive(Debug, thiserror::Error)]
 pub enum InvalidRequestId {
 	/// The request ID was parsed as valid ID but not a pending request.
-	#[error("request ID `{0}` was parsed as valid ID but not a pending request")]
+	#[error("request ID={0} is not a pending call")]
 	NotPendingRequest(String),
 
 	/// The request ID format was invalid.
-	#[error("request ID `{0}` is invalid")]
+	#[error("request ID={0} is invalid")]
 	Invalid(String),
 
 	/// All request IDs must be parseable as integers,
-	#[error("request ID `{0}` is invalid")]
+	#[error("request ID={0} is invalid")]
 	NotInteger(String),
 }
 

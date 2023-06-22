@@ -69,7 +69,7 @@ async fn method_call_with_wrong_id_kind() {
 		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
 
 	let err: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
-	assert!(matches!(err, Err(Error::RestartNeeded(e)) if e == "Invalid request ID"));
+	assert!(matches!(err, Err(Error::RestartNeeded(e)) if e == "request ID=0 is not a pending call"));
 }
 
 #[tokio::test]
@@ -191,6 +191,8 @@ async fn notification_handler_works() {
 
 #[tokio::test]
 async fn notification_without_polling_doesnt_make_client_unuseable() {
+	init_logger();
+
 	let server = WebSocketTestServer::with_hardcoded_notification(
 		"127.0.0.1:0".parse().unwrap(),
 		server_notification("test", "server originated notification".into()),

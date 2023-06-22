@@ -568,39 +568,41 @@ async fn handle_backend_messages<R: TransportReceiverT>(
 	) -> Result<(), Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
 
+		tracing::trace!(
+			"[backend]: rx={}",
+			serde_json::from_slice::<serde_json::Value>(raw)
+				.map_or("<invalid JSON>".to_string(), |json| serde_json::to_string(&json).expect("valid JSON; qed"))
+		);
+
 		match first_non_whitespace {
 			Some(b'{') => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
-					match process_single_response(
+					let maybe_unsub = process_single_response(
 						&mut *manager.lock().await,
 						single,
 						max_buffer_capacity_per_subscription,
-					) {
-						Ok(Some(unsub)) => {
-							// The send task is closed but the main loop will terminate.
-							let _ = sender.send(FrontToBack::Request(unsub)).await;
-						}
-						Ok(None) => (),
-						Err(err) => {
-							tracing::warn!("[backend]: read message err={err}");
-						}
+					)?;
+
+					if let Some(unsub) = maybe_unsub {
+						// The error is ignored here but the main loop takes care of that.
+						let _ = sender.send(FrontToBack::Request(unsub)).await;
 					}
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
 					if let Err(Some(sub_id)) = process_subscription_response(&mut *manager.lock().await, response) {
-						// The send task is closed but the main loop will terminate.
+						// The error is ignored here but the main loop takes care of that.
 						let _ = sender.send(FrontToBack::SubscriptionClosed(sub_id)).await;
 					}
 				}
 				// Subscription error response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
-					let _ = process_subscription_close_response(&mut *manager.lock().await, response);
+					process_subscription_close_response(&mut *manager.lock().await, response);
 				}
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
-					let _ = process_notification(&mut *manager.lock().await, notif)?;
+					process_notification(&mut *manager.lock().await, notif);
 				} else {
 					return Err(unparse_error(raw));
 				}
@@ -732,7 +734,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			};
 
 			if let Some(unsub) = maybe_unsub {
-				stop_subscription::<S>(sender, manager.clone(), unsub).await?;
+				stop_subscription::<S>(sender, unsub).await?;
 			}
 		}
 		// User called `register_notification` on the front-end.
