@@ -38,7 +38,18 @@ use tracing::instrument;
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
-type ThreadSafeRequestManager = Arc<AsyncMutex<RequestManager>>;
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ThreadSafeRequestManager(Arc<std::sync::Mutex<RequestManager>>);
+
+impl ThreadSafeRequestManager {
+	pub(crate) fn new() -> Self {
+		Self::default()
+	}
+
+	pub(crate) fn lock(&self) -> std::sync::MutexGuard<RequestManager> {
+		self.0.lock().expect("Not poisoned; qed")
+	}
+}
 
 /// Wrapper over a [`oneshot::Receiver`](tokio::sync::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -177,7 +188,7 @@ impl ClientBuilder {
 		let ping_interval = self.ping_interval;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
-		let manager = ThreadSafeRequestManager::default();
+		let manager = ThreadSafeRequestManager::new();
 
 		tokio::spawn(send_task(SendTaskParams {
 			sender,
@@ -222,7 +233,7 @@ impl ClientBuilder {
 		let ping_interval = self.ping_interval;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
-		let manager = ThreadSafeRequestManager::default();
+		let manager = ThreadSafeRequestManager::new();
 
 		wasm_bindgen_futures::spawn_local(send_task(SendTaskParams {
 			sender,
@@ -539,56 +550,43 @@ impl SubscriptionClientT for Client {
 /// Handle backend messages.
 ///
 /// Returns an error if the main background loop should be terminated.
-async fn handle_backend_messages<R: TransportReceiverT>(
+fn handle_backend_messages<R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
 	manager: &ThreadSafeRequestManager,
-	sender: &mpsc::Sender<FrontToBack>,
 	max_buffer_capacity_per_subscription: usize,
-) -> Result<(), Error> {
+) -> Result<Option<FrontToBack>, Error> {
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
-	async fn handle_recv_message(
+	fn handle_recv_message(
 		raw: &[u8],
 		manager: &ThreadSafeRequestManager,
-		sender: &mpsc::Sender<FrontToBack>,
 		max_buffer_capacity_per_subscription: usize,
-	) -> Result<(), Error> {
+	) -> Result<Option<FrontToBack>, Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
-
-		tracing::trace!(
-			"[backend]: rx={}",
-			serde_json::from_slice::<serde_json::Value>(raw)
-				.map_or("<invalid JSON>".to_string(), |json| serde_json::to_string(&json).expect("valid JSON; qed"))
-		);
 
 		match first_non_whitespace {
 			Some(b'{') => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
-					let maybe_unsub = process_single_response(
-						&mut *manager.lock().await,
-						single,
-						max_buffer_capacity_per_subscription,
-					)?;
+					let maybe_unsub =
+						process_single_response(&mut manager.lock(), single, max_buffer_capacity_per_subscription)?;
 
 					if let Some(unsub) = maybe_unsub {
-						// The error is ignored here but the main loop takes care of that.
-						let _ = sender.send(FrontToBack::Request(unsub)).await;
+						return Ok(Some(FrontToBack::Request(unsub)));
 					}
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
-					if let Err(Some(sub_id)) = process_subscription_response(&mut *manager.lock().await, response) {
-						// The error is ignored here but the main loop takes care of that.
-						let _ = sender.send(FrontToBack::SubscriptionClosed(sub_id)).await;
+					if let Err(Some(sub_id)) = process_subscription_response(&mut manager.lock(), response) {
+						return Ok(Some(FrontToBack::SubscriptionClosed(sub_id)));
 					}
 				}
 				// Subscription error response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
-					process_subscription_close_response(&mut *manager.lock().await, response);
+					process_subscription_close_response(&mut manager.lock(), response);
 				}
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
-					process_notification(&mut *manager.lock().await, notif);
+					process_notification(&mut manager.lock(), notif);
 				} else {
 					return Err(unparse_error(raw));
 				}
@@ -623,7 +621,7 @@ async fn handle_backend_messages<R: TransportReceiverT>(
 					if let Some(mut range) = range {
 						// the range is exclusive so need to add one.
 						range.end += 1;
-						process_batch_response(&mut *manager.lock().await, batch, range)?;
+						process_batch_response(&mut manager.lock(), batch, range)?;
 					} else {
 						return Err(Error::EmptyBatchRequest);
 					}
@@ -636,7 +634,7 @@ async fn handle_backend_messages<R: TransportReceiverT>(
 			}
 		};
 
-		Ok(())
+		Ok(None)
 	}
 
 	match message {
@@ -644,10 +642,10 @@ async fn handle_backend_messages<R: TransportReceiverT>(
 			tracing::debug!("Received pong");
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, sender, max_buffer_capacity_per_subscription).await?;
+			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)?;
 		}
 		Some(Ok(ReceivedMessage::Text(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, sender, max_buffer_capacity_per_subscription).await?;
+			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)?;
 		}
 		Some(Err(e)) => {
 			return Err(Error::Transport(e.into()));
@@ -657,7 +655,7 @@ async fn handle_backend_messages<R: TransportReceiverT>(
 		}
 	}
 
-	Ok(())
+	Ok(None)
 }
 
 /// Handle frontend messages.
@@ -669,7 +667,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 ) -> Result<(), S::Error> {
 	match message {
 		FrontToBack::Batch(batch) => {
-			if let Err(send_back) = manager.lock().await.insert_pending_batch(batch.ids.clone(), batch.send_back) {
+			if let Err(send_back) = manager.lock().insert_pending_batch(batch.ids.clone(), batch.send_back) {
 				tracing::warn!("[backend]: Batch request already pending: {:?}", batch.ids);
 				let _ = send_back.send(Err(InvalidRequestId::NotPendingRequest(format!("{:?}", batch.ids)).into()));
 				return Ok(());
@@ -684,7 +682,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		// User called `request` on the front-end
 		FrontToBack::Request(request) => {
 			sender.send(request.raw).await?;
-			if manager.lock().await.insert_pending_call(request.id.clone(), request.send_back).is_err() {
+			if manager.lock().insert_pending_call(request.id.clone(), request.send_back).is_err() {
 				tracing::warn!("Denied duplicate method call");
 			}
 		}
@@ -694,7 +692,6 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 
 			if manager
 				.lock()
-				.await
 				.insert_pending_subscription(
 					sub.subscribe_id.clone(),
 					sub.unsubscribe_id,
@@ -713,7 +710,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			// the channel was full or disconnected.
 
 			let maybe_unsub = {
-				let m = &mut *manager.lock().await;
+				let m = &mut *manager.lock();
 
 				m.get_request_id_by_subscription_id(&sub_id)
 					.and_then(|req_id| build_unsubscribe_message(m, req_id, sub_id))
@@ -727,7 +724,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		FrontToBack::RegisterNotification(reg) => {
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
 
-			if manager.lock().await.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
+			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
 			} else {
 				let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
@@ -735,7 +732,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User dropped the NotificationHandler for this method
 		FrontToBack::UnregisterNotification(method) => {
-			let _ = manager.lock().await.remove_notification_handler(method);
+			let _ = manager.lock().remove_notification_handler(method);
 		}
 	};
 
@@ -864,16 +861,17 @@ where
 		match future::select(closed, rx_item).await {
 			Either::Left(_) => break Ok(()),
 			Either::Right((Some(msg), c)) => {
-				if let Err(e) = handle_backend_messages::<R>(
-					Some(msg),
-					&manager,
-					&to_send_task,
-					max_buffer_capacity_per_subscription,
-				)
-				.await
-				{
-					tracing::error!("[backend]: Failed to read message: {e}");
-					break Err(e);
+				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
+					Ok(Some(msg)) => {
+						if to_send_task.send(msg).await.is_err() {
+							break Ok(());
+						}
+					}
+					Err(e) => {
+						tracing::error!("[backend]: Failed to read message: {e}");
+						break Err(e);
+					}
+					Ok(None) => (),
 				}
 				closed = c;
 				rx_item = backend_event.next();
