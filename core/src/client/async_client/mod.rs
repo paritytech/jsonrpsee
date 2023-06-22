@@ -172,50 +172,48 @@ impl ClientBuilder {
 		R: TransportReceiverT + Send,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_tx, err_rx) = oneshot::channel();
+		let (err_to_front, err_from_back) = oneshot::channel();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let ping_interval = self.ping_interval;
 		let (on_exit_tx, on_exit_rx) = oneshot::channel();
-
-		let (sync_send_recv_task_tx, sync_send_recv_task_rx) = mpsc::channel::<()>(1);
-
+		let (close_tx, mut close_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::default();
 
-		let send_task_handle = tokio::spawn(send_task(SendTaskParams {
+		tokio::spawn(send_task(SendTaskParams {
 			sender,
 			from_frontend: from_front,
-			rx_task_closed: sync_send_recv_task_rx,
-			on_exit: on_exit_rx,
+			close_tx: close_tx.clone(),
 			manager: manager.clone(),
 			max_buffer_capacity_per_subscription,
 			ping_interval,
 		}));
-		let rx_task_handle = tokio::spawn(read_task(ReadTaskParams {
+
+		tokio::spawn(read_task(ReadTaskParams {
 			receiver,
-			send_task_closed: sync_send_recv_task_tx,
+			close_tx,
 			to_send_task: to_back.clone(),
 			manager,
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
 		}));
 
-		async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T, Error>>) -> Result<T, Error> {
-			match handle.await {
-				Ok(Ok(result)) => Ok(result),
-				Ok(Err(err)) => Err(err),
-				Err(err) => Err(Error::Custom(format!("{:?}", err))),
-			}
-		}
-
 		tokio::spawn(async move {
-			if let Err(e) = tokio::try_join!(flatten(send_task_handle), flatten(rx_task_handle)) {
-				let _ = err_tx.send(e);
-			}
+			let rx_item = close_rx.recv();
+
+			tokio::pin!(rx_item);
+
+			match future::select(rx_item, on_exit_rx).await {
+				Either::Left((Some(Err(err)), _)) => {
+					let _ = err_to_front.send(err);
+				}
+				// The client was stopped without error.
+				_ => (),
+			};
 		});
 
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
-			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
+			error: Mutex::new(ErrorFromBack::Unread(err_from_back)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
 			on_exit: Some(on_exit_tx),
@@ -231,35 +229,43 @@ impl ClientBuilder {
 		R: TransportReceiverT,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_tx, err_rx) = oneshot::channel();
+		let (err_to_front, err_from_back) = oneshot::channel();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
+		let ping_interval = self.ping_interval;
 		let (on_exit_tx, on_exit_rx) = oneshot::channel();
+		let (err_tx, mut err_rx) = mpsc::channel::<Error>(1);
+		let manager = ThreadSafeRequestManager::default();
 
-		let send_task_handle = wasm_bindgen_futures::spawn_local(send_task(SendTaskParams {
+		wasm_bindgen_futures::spawn_local(send_task(SendTaskParams {
 			sender,
 			from_frontend: from_front,
-			rx_task_closed: sync_send_recv_task_rx,
-			on_exit: on_exit_rx,
+			err_tx: err_tx.clone(),
 			manager: manager.clone(),
 			max_buffer_capacity_per_subscription,
 			ping_interval,
 		}));
 
-		let rx_task_handle = wasm_bindgen_futures::spawn_local(read_task(ReadTaskParams {
+		wasm_bindgen_futures::spawn_local(read_task(ReadTaskParams {
 			receiver,
-			send_task_closed: sync_send_recv_task_tx,
+			err_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			max_buffer_capacity_per_subscription,
+			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
 		}));
 
-		async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T, Error>>) -> Result<T, Error> {
-			match handle.await {
-				Ok(Ok(result)) => Ok(result),
-				Ok(Err(err)) => Err(err),
-				Err(err) => Err(Error::Custom(format!("{:?}", err))),
-			}
-		}
+		wasm_bindgen_futures::spawn_local(async move {
+			let err_item = err_rx.recv();
+			tokio::pin!(err_item);
+
+			match future::select(err_item, on_exit_rx).await {
+				Either::Left((Some(err), _)) => {
+					// The client could have been dropped as this point.
+					let _ = err_to_front.send(err);
+				}
+				// The client was stopped without error.
+				_ => (),
+			};
+		});
 
 		Client {
 			to_back,
@@ -770,14 +776,16 @@ fn unparse_error(raw: &[u8]) -> Error {
 struct SendTaskParams<S: TransportSenderT> {
 	sender: S,
 	from_frontend: mpsc::Receiver<FrontToBack>,
-	rx_task_closed: mpsc::Receiver<()>,
-	on_exit: oneshot::Receiver<()>,
+	close_tx: mpsc::Sender<Result<(), Error>>,
 	manager: ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
 	ping_interval: Option<Duration>,
 }
 
-async fn send_task<S: TransportSenderT>(params: SendTaskParams<S>) -> Result<(), Error> {
+async fn send_task<S>(params: SendTaskParams<S>)
+where
+	S: TransportSenderT,
+{
 	// Create either a valid delay fuse triggered every provided `duration`,
 	// or create a terminated fuse that's never selected if the provided `duration` is None.
 	fn ping_fut(ping_interval: Option<Duration>) -> Fuse<Delay> {
@@ -792,23 +800,24 @@ async fn send_task<S: TransportSenderT>(params: SendTaskParams<S>) -> Result<(),
 	let SendTaskParams {
 		mut sender,
 		from_frontend,
-		rx_task_closed,
-		on_exit,
+		close_tx,
 		manager,
 		max_buffer_capacity_per_subscription,
 		ping_interval,
 	} = params;
 
 	let mut frontend = tokio_stream::wrappers::ReceiverStream::new(from_frontend);
-	let mut unsubscribe = tokio_stream::wrappers::ReceiverStream::new(rx_task_closed);
+	let mut rx_item = frontend.next();
+	let closed = close_tx.closed();
 
-	let mut frontend_or_unsubscribe = future::select(frontend.next(), unsubscribe.next());
-	let mut exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
+	tokio::pin!(closed);
+
+	let mut exit_or_ping_fut = future::select(closed, ping_fut(ping_interval));
 
 	let res = loop {
-		match future::select(frontend_or_unsubscribe, exit_or_ping_fut).await {
+		match future::select(rx_item, exit_or_ping_fut).await {
 			// Message received from the frontend.
-			Either::Left((Either::Left((msg, unsubscribe)), exit_or_ping)) => {
+			Either::Left((msg, exit_or_ping)) => {
 				let Some(msg) = msg else {
 					break Ok(());
 				};
@@ -821,25 +830,20 @@ async fn send_task<S: TransportSenderT>(params: SendTaskParams<S>) -> Result<(),
 				}
 
 				exit_or_ping_fut = exit_or_ping;
-				frontend_or_unsubscribe = future::select(frontend.next(), unsubscribe);
-			}
-
-			// The receive task is closed.
-			Either::Left((Either::Right(_), _)) => {
-				break Ok(());
+				rx_item = frontend.next();
 			}
 
 			// Ping
-			Either::Right((Either::Right((_, on_exit)), frontend_or_close)) => {
+			Either::Right((Either::Right((_, on_exit)), rx)) => {
 				if let Err(err) = sender.send_ping().await {
 					tracing::error!("[backend]: Could not send ping frame: {err}");
 					break Err(Error::Custom("Could not send ping frame".into()));
 				}
 				exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
-				frontend_or_unsubscribe = frontend_or_close;
+				rx_item = rx;
 			}
 
-			// Exit
+			// Closed
 			Either::Right((Either::Left(_), _)) => {
 				break Ok(());
 			}
@@ -849,34 +853,36 @@ async fn send_task<S: TransportSenderT>(params: SendTaskParams<S>) -> Result<(),
 	frontend.close();
 	let _ = sender.close();
 
-	res
+	let _ = close_tx.send(res).await;
 }
 
 struct ReadTaskParams<R: TransportReceiverT> {
 	receiver: R,
-	send_task_closed: mpsc::Sender<()>,
+	close_tx: mpsc::Sender<Result<(), Error>>,
 	to_send_task: mpsc::Sender<FrontToBack>,
 	manager: ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
 }
 
-async fn read_task<R: TransportReceiverT>(params: ReadTaskParams<R>) -> Result<(), Error> {
-	let ReadTaskParams { receiver, send_task_closed, to_send_task, manager, max_buffer_capacity_per_subscription } =
-		params;
+async fn read_task<R>(params: ReadTaskParams<R>)
+where
+	R: TransportReceiverT,
+{
+	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription } = params;
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
 		Some((res, receiver))
 	});
 
-	let closed = send_task_closed.closed();
+	let closed = close_tx.closed();
 
 	tokio::pin!(backend_event, closed);
 
 	let mut rx_item = backend_event.next();
 
-	loop {
-		match future::select(closed, Box::pin(rx_item)).await {
+	let res = loop {
+		match future::select(closed, rx_item).await {
 			Either::Left(_) => break Ok(()),
 			Either::Right((Some(msg), c)) => {
 				if let Err(e) = handle_backend_messages::<R>(
@@ -895,5 +901,7 @@ async fn read_task<R: TransportReceiverT>(params: ReadTaskParams<R>) -> Result<(
 			}
 			Either::Right((None, _)) => break Ok(()),
 		}
-	}
+	};
+
+	let _ = close_tx.send(res).await;
 }
