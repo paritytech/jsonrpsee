@@ -24,7 +24,7 @@ use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
 use std::sync::Arc;
 
-use async_lock::Mutex;
+use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
@@ -38,7 +38,7 @@ use tracing::instrument;
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
-type ThreadSafeRequestManager = Arc<Mutex<RequestManager>>;
+type ThreadSafeRequestManager = Arc<AsyncMutex<RequestManager>>;
 
 /// Wrapper over a [`oneshot::Receiver`](tokio::sync::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -172,17 +172,17 @@ impl ClientBuilder {
 		R: TransportReceiverT + Send,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_to_front, err_from_back) = oneshot::channel();
+		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let ping_interval = self.ping_interval;
-		let (on_exit_tx, on_exit_rx) = oneshot::channel();
-		let (close_tx, mut close_rx) = mpsc::channel(1);
+		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
+		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::default();
 
 		tokio::spawn(send_task(SendTaskParams {
 			sender,
 			from_frontend: from_front,
-			close_tx: close_tx.clone(),
+			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
 			max_buffer_capacity_per_subscription,
 			ping_interval,
@@ -190,33 +190,21 @@ impl ClientBuilder {
 
 		tokio::spawn(read_task(ReadTaskParams {
 			receiver,
-			close_tx,
+			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
 		}));
 
-		tokio::spawn(async move {
-			let rx_item = close_rx.recv();
-
-			tokio::pin!(rx_item);
-
-			match future::select(rx_item, on_exit_rx).await {
-				Either::Left((Some(Err(err)), _)) => {
-					let _ = err_to_front.send(err);
-				}
-				// The client was stopped without error.
-				_ => (),
-			};
-		});
+		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, err_to_front));
 
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
-			error: Mutex::new(ErrorFromBack::Unread(err_from_back)),
+			error: AsyncMutex::new(ErrorFromBack::Unread(err_from_back)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
-			on_exit: Some(on_exit_tx),
+			on_exit: Some(client_dropped_tx),
 		}
 	}
 
@@ -229,17 +217,17 @@ impl ClientBuilder {
 		R: TransportReceiverT,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_to_front, err_from_back) = oneshot::channel();
+		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let ping_interval = self.ping_interval;
-		let (on_exit_tx, on_exit_rx) = oneshot::channel();
-		let (err_tx, mut err_rx) = mpsc::channel::<Error>(1);
+		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
+		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::default();
 
 		wasm_bindgen_futures::spawn_local(send_task(SendTaskParams {
 			sender,
 			from_frontend: from_front,
-			err_tx: err_tx.clone(),
+			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
 			max_buffer_capacity_per_subscription,
 			ping_interval,
@@ -247,33 +235,25 @@ impl ClientBuilder {
 
 		wasm_bindgen_futures::spawn_local(read_task(ReadTaskParams {
 			receiver,
-			err_tx,
+			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
 		}));
 
-		wasm_bindgen_futures::spawn_local(async move {
-			let err_item = err_rx.recv();
-			tokio::pin!(err_item);
-
-			match future::select(err_item, on_exit_rx).await {
-				Either::Left((Some(err), _)) => {
-					// The client could have been dropped as this point.
-					let _ = err_to_front.send(err);
-				}
-				// The client was stopped without error.
-				_ => (),
-			};
-		});
+		wasm_bindgen_futures::spawn_local(wait_for_shutdown(
+			send_receive_task_sync_rx,
+			client_dropped_rx,
+			err_to_front,
+		));
 
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
-			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
+			error: Mutex::new(ErrorFromBack::Unread(err_from_back)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
-			on_exit: Some(on_exit_tx),
+			on_exit: Some(client_dropped_tx),
 		}
 	}
 }
@@ -285,7 +265,7 @@ pub struct Client {
 	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
-	error: Mutex<ErrorFromBack>,
+	error: AsyncMutex<ErrorFromBack>,
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
@@ -851,8 +831,7 @@ where
 	};
 
 	frontend.close();
-	let _ = sender.close();
-
+	let _ = sender.close().await;
 	let _ = close_tx.send(res).await;
 }
 
@@ -904,4 +883,19 @@ where
 	};
 
 	let _ = close_tx.send(res).await;
+}
+
+async fn wait_for_shutdown(
+	mut close_rx: mpsc::Receiver<Result<(), Error>>,
+	client_dropped: oneshot::Receiver<()>,
+	err_to_front: oneshot::Sender<Error>,
+) {
+	let rx_item = close_rx.recv();
+
+	tokio::pin!(rx_item);
+
+	// Send an error to the frontend if the send or receive task completed with an error.
+	if let Either::Left((Some(Err(err)), _)) = future::select(rx_item, client_dropped).await {
+		let _ = err_to_front.send(err);
+	}
 }
