@@ -250,7 +250,7 @@ impl ClientBuilder {
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
-			error: Mutex::new(ErrorFromBack::Unread(err_from_back)),
+			error: AsyncMutex::new(ErrorFromBack::Unread(err_from_back)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
