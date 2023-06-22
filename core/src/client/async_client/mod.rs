@@ -640,22 +640,17 @@ fn handle_backend_messages<R: TransportReceiverT>(
 	match message {
 		Some(Ok(ReceivedMessage::Pong)) => {
 			tracing::debug!("Received pong");
+			Ok(None)
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)?;
+			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)
 		}
 		Some(Ok(ReceivedMessage::Text(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)?;
+			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)
 		}
-		Some(Err(e)) => {
-			return Err(Error::Transport(e.into()));
-		}
-		None => {
-			return Err(Error::Custom("TransportReceiver dropped".into()));
-		}
+		Some(Err(e)) => Err(Error::Transport(e.into())),
+		None => Err(Error::Custom("TransportReceiver dropped".into())),
 	}
-
-	Ok(None)
 }
 
 /// Handle frontend messages.
