@@ -133,6 +133,7 @@ pub struct SubscriptionPayloadError<'a, T> {
 /// "result":<value>
 /// "error":{"code":<code>,"message":<msg>,"data":<data>}
 /// ```
+#[derive(Debug, Clone, PartialEq)]
 pub enum ResponsePayload<'a, T>
 where
 	T: Clone,
@@ -159,28 +160,6 @@ impl<'a, T: Clone> ResponsePayload<'a, T> {
 		match self {
 			Self::Error(e) => ResponsePayload::Error(e.into_owned()),
 			Self::Result(r) => ResponsePayload::Result(StdCow::Owned(r.into_owned())),
-		}
-	}
-}
-
-impl<'a, T> fmt::Debug for ResponsePayload<'a, T>
-where
-	T: fmt::Debug + Clone,
-{
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!("{:?}", self))
-	}
-}
-
-impl<'a, T> PartialEq for ResponsePayload<'a, T>
-where
-	T: PartialEq + Clone,
-{
-	fn eq(&self, other: &Self) -> bool {
-		match (self, other) {
-			(ResponsePayload::Error(a), ResponsePayload::Error(b)) => a == b,
-			(ResponsePayload::Result(a), ResponsePayload::Result(b)) => a == b,
-			_ => false,
 		}
 	}
 }

@@ -54,7 +54,7 @@ async fn http_only_works() {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	let _server_handle = server.start(module).unwrap();
+	let _server_handle = server.start(module);
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
 	let response = http_request(req.into(), to_http_uri(addr)).with_default_timeout().await.unwrap().unwrap();
@@ -79,7 +79,7 @@ async fn ws_only_works() {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	let _server_handle = server.start(module).unwrap();
+	let _server_handle = server.start(module);
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
 	let response = http_request(req.into(), to_http_uri(addr)).with_default_timeout().await.unwrap().unwrap();

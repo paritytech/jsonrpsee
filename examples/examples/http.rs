@@ -31,7 +31,7 @@ use hyper::body::Bytes;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::{RpcModule, Server};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -67,12 +67,12 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let server = Server::builder().build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	// In this example we don't care about doing shutdown so let's it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.

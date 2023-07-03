@@ -119,7 +119,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	(addr, server_handle)
 }
@@ -158,7 +158,7 @@ pub async fn server() -> SocketAddr {
 
 	let addr = server.local_addr().unwrap();
 
-	let server_handle = server.start(module).unwrap();
+	let server_handle = server.start(module);
 
 	tokio::spawn(server_handle.stopped());
 
@@ -186,7 +186,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 			res.map_err(Into::into)
 		})
 		.unwrap();
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 
 	tokio::spawn(handle.stopped());
 
@@ -218,7 +218,7 @@ pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLay
 
 	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
-	let handle = server.start(module).unwrap();
+	let handle = server.start(module);
 	(addr, handle)
 }
 

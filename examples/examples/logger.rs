@@ -28,8 +28,8 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params, TransportProtocol};
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params, SuccessOrError, TransportProtocol};
+use jsonrpsee::server::Server;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
 
@@ -52,8 +52,19 @@ impl logger::Logger for Timings {
 		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
-	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant, _t: TransportProtocol) {
-		println!("[Logger::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
+	fn on_result(
+		&self,
+		name: &str,
+		success_or_error: SuccessOrError,
+		started_at: Self::Instant,
+		_t: TransportProtocol,
+	) {
+		println!(
+			"[Logger::on_result] '{}', worked? {}, time elapsed {:?}",
+			name,
+			success_or_error.is_success(),
+			started_at.elapsed()
+		);
 	}
 
 	fn on_response(&self, result: &str, started_at: Self::Instant, _t: TransportProtocol) {
@@ -85,12 +96,12 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
+	let server = Server::builder().set_logger(Timings).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 	let addr = server.local_addr()?;
 
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	// In this example we don't care about doing shutdown so let's it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.

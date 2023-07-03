@@ -233,6 +233,13 @@ impl Default for HttpClientBuilder<Identity> {
 	}
 }
 
+impl HttpClientBuilder<Identity> {
+	/// Create a new builder.
+	pub fn new() -> HttpClientBuilder<Identity> {
+		HttpClientBuilder::default()
+	}
+}
+
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
 pub struct HttpClient<S = HttpBackend> {
@@ -242,6 +249,13 @@ pub struct HttpClient<S = HttpBackend> {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
+}
+
+impl<S> HttpClient<S> {
+	/// Create a builder for the HttpClient.
+	pub fn builder() -> HttpClientBuilder {
+		HttpClientBuilder::new()
+	}
 }
 
 #[async_trait]

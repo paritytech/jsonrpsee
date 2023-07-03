@@ -67,6 +67,13 @@ pub struct Server<B = Identity, L = ()> {
 	service_builder: tower::ServiceBuilder<B>,
 }
 
+impl Server<Identity, ()> {
+	/// Create a builder for the server.
+	pub fn builder() -> Builder {
+		Builder::new()
+	}
+}
+
 impl<L> std::fmt::Debug for Server<L> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Server")
@@ -102,7 +109,7 @@ where
 	/// Start responding to connections requests.
 	///
 	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
-	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
+	pub fn start(mut self, methods: impl Into<Methods>) -> ServerHandle {
 		let methods = methods.into();
 		let (stop_tx, stop_rx) = watch::channel(());
 
@@ -113,7 +120,7 @@ where
 			None => tokio::spawn(self.start_inner(methods, stop_handle)),
 		};
 
-		Ok(ServerHandle::new(stop_tx))
+		ServerHandle::new(stop_tx)
 	}
 
 	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
@@ -303,7 +310,7 @@ impl<B, L> Builder<B, L> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_server::logger::{Logger, HttpRequest, MethodKind, Params, TransportProtocol};
+	/// use jsonrpsee_server::logger::{Logger, HttpRequest, MethodKind, Params, TransportProtocol, SuccessOrError};
 	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -324,8 +331,8 @@ impl<B, L> Builder<B, L> {
 	///          println!("[MyLogger::on_call] method: '{}' params: {:?}, kind: {:?}, transport: {}", method_name, params, kind, transport);
 	///     }
 	///
-	///     fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant, transport: TransportProtocol) {
-	///          println!("[MyLogger::on_result] '{}', worked? {}, time elapsed {:?}, transport: {}", method_name, success, started_at.elapsed(), transport);
+	///     fn on_result(&self, method_name: &str, success_or_error: SuccessOrError, started_at: Self::Instant, transport: TransportProtocol) {
+	///          println!("[MyLogger::on_result] '{}', worked? {}, time elapsed {:?}, transport: {}", method_name, success_or_error.is_success(), started_at.elapsed(), transport);
 	///     }
 	///
 	///     fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {

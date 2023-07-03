@@ -92,6 +92,11 @@ impl Default for ClientBuilder {
 }
 
 impl ClientBuilder {
+	/// Create a builder for the client.
+	pub fn new() -> ClientBuilder {
+		ClientBuilder::default()
+	}
+
 	/// Set request timeout (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
@@ -248,6 +253,11 @@ pub struct Client {
 }
 
 impl Client {
+	/// Create a builder for the server.
+	pub fn builder() -> ClientBuilder {
+		ClientBuilder::new()
+	}
+
 	/// Checks if the client is connected to the target.
 	pub fn is_connected(&self) -> bool {
 		!self.to_back.is_closed()

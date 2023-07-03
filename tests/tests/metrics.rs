@@ -36,9 +36,9 @@ use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, TransportProtocol};
+use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, SuccessOrError, TransportProtocol};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
-use jsonrpsee::types::Params;
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Params};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::RpcModule;
 use tokio::time::sleep;
@@ -82,8 +82,8 @@ impl Logger for Counter {
 		entry.0 += 1;
 	}
 
-	fn on_result(&self, name: &str, success: bool, n: u32, _t: TransportProtocol) {
-		if success {
+	fn on_result(&self, name: &str, success_or_error: SuccessOrError, n: u32, _t: TransportProtocol) {
+		if success_or_error.is_success() {
 			self.inner.lock().unwrap().calls.get_mut(name).unwrap().1.push(n);
 		}
 	}
@@ -105,6 +105,11 @@ fn test_module() -> RpcModule<()> {
 			sleep(Duration::from_millis(50)).await;
 			"hello".to_string()
 		}
+
+		#[method(name = "err")]
+		async fn err(&self) -> Result<String, ErrorObjectOwned> {
+			Err(ErrorObject::owned(1, "err", None::<()>))
+		}
 	}
 
 	impl RpcServer for () {}
@@ -116,7 +121,7 @@ async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<(So
 	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	Ok((addr, handle))
 }
@@ -125,7 +130,7 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	Ok((addr, handle))
 }
@@ -154,12 +159,16 @@ async fn ws_server_logger() {
 	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
+	let res: Result<String, Error> = client.request("err", rpc_params![]).await;
+	assert!(res.is_err());
+
 	{
 		let inner = counter.inner.lock().unwrap();
 
 		assert_eq!(inner.connections, (1, 0));
-		assert_eq!(inner.requests, (5, 5));
+		assert_eq!(inner.requests, (6, 6));
 		assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
+		assert_eq!(inner.calls["err"], (1, vec![]));
 		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
 	}
 
@@ -193,17 +202,20 @@ async fn http_server_logger() {
 	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
+	let res: Result<String, Error> = client.request("err", rpc_params![]).await;
+	assert!(res.is_err());
+
 	{
 		let inner = counter.inner.lock().unwrap();
-		assert_eq!(inner.requests, (5, 5));
+		assert_eq!(inner.requests, (6, 6));
 		assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
 		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
+		assert_eq!(inner.calls["err"], (1, vec![]));
 	}
 
 	server_handle.stop().unwrap();
 	server_handle.stopped().await;
 
-	// HTTP server doesn't track connections
 	let inner = counter.inner.lock().unwrap();
-	assert_eq!(inner.connections, (5, 5));
+	assert_eq!(inner.connections, (6, 6));
 }

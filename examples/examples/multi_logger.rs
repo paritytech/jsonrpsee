@@ -32,8 +32,8 @@ use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::logger::{HttpRequest, MethodKind, TransportProtocol};
-use jsonrpsee::server::{logger, RpcModule, ServerBuilder};
+use jsonrpsee::server::logger::{HttpRequest, MethodKind, SuccessOrError, TransportProtocol};
+use jsonrpsee::server::{logger, RpcModule, Server};
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -56,8 +56,19 @@ impl logger::Logger for Timings {
 		println!("[Timings:on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
-	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant, _t: TransportProtocol) {
-		println!("[Timings] call={}, worked? {}, duration {:?}", name, success, started_at.elapsed());
+	fn on_result(
+		&self,
+		name: &str,
+		success_or_error: SuccessOrError,
+		started_at: Self::Instant,
+		_t: TransportProtocol,
+	) {
+		println!(
+			"[Timings] call={}, worked? {}, duration {:?}",
+			name,
+			success_or_error.is_success(),
+			started_at.elapsed()
+		);
 	}
 
 	fn on_response(&self, _result: &str, started_at: Self::Instant, _t: TransportProtocol) {
@@ -106,7 +117,13 @@ impl logger::Logger for ThreadWatcher {
 		threads as isize
 	}
 
-	fn on_result(&self, _name: &str, _succees: bool, started_at: Self::Instant, _t: TransportProtocol) {
+	fn on_result(
+		&self,
+		_name: &str,
+		_success_or_error: SuccessOrError,
+		started_at: Self::Instant,
+		_t: TransportProtocol,
+	) {
 		let current_nr_threads = Self::count_threads() as isize;
 		println!("[ThreadWatcher::on_result] {} threads", current_nr_threads - started_at);
 	}
@@ -142,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::new().set_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
+	let server = Server::builder().set_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 	module.register_method("thready", |params, _| {
@@ -153,7 +170,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		""
 	})?;
 	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	let handle = server.start(module);
 
 	// In this example we don't care about doing shutdown so let's it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.

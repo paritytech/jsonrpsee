@@ -31,6 +31,7 @@ use std::net::SocketAddr;
 /// HTTP request.
 pub type HttpRequest = hyper::Request<Body>;
 pub use hyper::{Body, HeaderMap as Headers};
+pub use jsonrpsee_core::server::helpers::MethodResponseResult as SuccessOrError;
 pub use jsonrpsee_types::Params;
 
 /// The type JSON-RPC v2 call, it can be a subscription, method call or unknown.
@@ -99,7 +100,13 @@ pub trait Logger: Send + Sync + Clone + 'static {
 	fn on_call(&self, method_name: &str, params: Params, kind: MethodKind, transport: TransportProtocol);
 
 	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple times.
-	fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant, transport: TransportProtocol);
+	fn on_result(
+		&self,
+		method_name: &str,
+		success_or_error: SuccessOrError,
+		started_at: Self::Instant,
+		transport: TransportProtocol,
+	);
 
 	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
 	fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol);
@@ -117,7 +124,7 @@ impl Logger for () {
 
 	fn on_call(&self, _: &str, _: Params, _: MethodKind, _p: TransportProtocol) {}
 
-	fn on_result(&self, _: &str, _: bool, _: Self::Instant, _p: TransportProtocol) {}
+	fn on_result(&self, _: &str, _: SuccessOrError, _: Self::Instant, _p: TransportProtocol) {}
 
 	fn on_response(&self, _: &str, _: Self::Instant, _p: TransportProtocol) {}
 
@@ -145,9 +152,15 @@ where
 		self.1.on_call(method_name, params, kind, transport);
 	}
 
-	fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant, transport: TransportProtocol) {
-		self.0.on_result(method_name, success, started_at.0, transport);
-		self.1.on_result(method_name, success, started_at.1, transport);
+	fn on_result(
+		&self,
+		method_name: &str,
+		success_or_error: SuccessOrError,
+		started_at: Self::Instant,
+		transport: TransportProtocol,
+	) {
+		self.0.on_result(method_name, success_or_error, started_at.0, transport);
+		self.1.on_result(method_name, success_or_error, started_at.1, transport);
 	}
 
 	fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {

@@ -81,6 +81,11 @@ impl Default for WasmClientBuilder {
 }
 
 impl WasmClientBuilder {
+	/// Create a new WASM client builder.
+	pub fn new() -> WasmClientBuilder {
+		WasmClientBuilder::default()
+	}
+
 	/// See documentation [`ClientBuilder::request_timeout`] (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
