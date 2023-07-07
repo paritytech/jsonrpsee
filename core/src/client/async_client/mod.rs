@@ -22,14 +22,16 @@ use helpers::{
 };
 use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
-use futures_util::stream::StreamExt;
-use futures_util::FutureExt;
+use futures_util::stream::{FuturesUnordered, StreamExt};
+use futures_util::{Future, FutureExt, Stream};
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
@@ -847,20 +849,20 @@ where
 	});
 
 	let closed = close_tx.closed();
+	let pending_unsubscribes = MaybePendingFutures::new();
 
-	tokio::pin!(backend_event, closed);
+	tokio::pin!(backend_event, closed, pending_unsubscribes);
 
-	let mut rx_item = backend_event.next();
+	let rx_item = backend_event.next();
+	let mut rx_or_closed = future::select(rx_item, closed);
 
 	let res = loop {
-		match future::select(closed, rx_item).await {
-			Either::Left(_) => break Ok(()),
-			Either::Right((Some(msg), c)) => {
+		match future::select(rx_or_closed, pending_unsubscribes.next()).await {
+			// New message received to process.
+			Either::Left((Either::Left((Some(msg), closed_fut)), _)) => {
 				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
 					Ok(Some(msg)) => {
-						if to_send_task.send(msg).await.is_err() {
-							break Ok(());
-						}
+						pending_unsubscribes.push(to_send_task.send(msg));
 					}
 					Err(e) => {
 						tracing::error!("[backend]: Failed to read message: {e}");
@@ -868,11 +870,15 @@ where
 					}
 					Ok(None) => (),
 				}
-				closed = c;
-				rx_item = backend_event.next();
+				rx_or_closed = future::select(backend_event.next(), closed_fut);
 			}
-			Either::Right((None, _)) => break Ok(()),
-		}
+			// Unsubscribe completed.
+			Either::Right((Some(Ok(_)), rx_or_closed_fut)) => {
+				rx_or_closed = rx_or_closed_fut;
+			}
+			// Closed.
+			_ => break Ok(()),
+		};
 	};
 
 	let _ = close_tx.send(res).await;
@@ -890,5 +896,32 @@ async fn wait_for_shutdown(
 	// Send an error to the frontend if the send or receive task completed with an error.
 	if let Either::Left((Some(Err(err)), _)) = future::select(rx_item, client_dropped).await {
 		let _ = err_to_front.send(err);
+	}
+}
+
+/// A wrapper around `FuturesUnordered` that doesn't return `None` when it's empty.
+struct MaybePendingFutures<Fut> {
+	futs: FuturesUnordered<Fut>,
+}
+
+impl<Fut> MaybePendingFutures<Fut> {
+	fn new() -> Self {
+		Self { futs: FuturesUnordered::new() }
+	}
+
+	fn push(&mut self, fut: Fut) {
+		self.futs.push(fut);
+	}
+}
+
+impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
+	type Item = Fut::Output;
+
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		if self.futs.is_empty() {
+			return Poll::Pending;
+		}
+
+		self.futs.poll_next_unpin(cx)
 	}
 }
