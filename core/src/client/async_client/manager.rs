@@ -94,6 +94,12 @@ pub(crate) struct RequestManager {
 }
 
 impl RequestManager {
+	/// Create a new `RequestManager`.
+	#[allow(unused)]
+	pub(crate) fn new() -> Self {
+		Self::default()
+	}
+
 	/// Tries to insert a new pending request.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
