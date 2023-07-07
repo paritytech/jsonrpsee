@@ -55,6 +55,7 @@ client = ["futures-util/sink", "tokio/sync"]
 async-client = [
 	"async-lock",
 	"client",
+	"futures-util/alloc",
 	"rustc-hash",
 	"tokio/macros",
 	"tokio/rt",
@@ -64,6 +65,7 @@ async-client = [
 async-wasm-client = [
 	"async-lock",
 	"client",
+	"futures-util/alloc",
 	"wasm-bindgen-futures",
 	"rustc-hash/std",
 	"futures-timer/wasm-bindgen",
