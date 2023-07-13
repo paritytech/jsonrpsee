@@ -50,7 +50,8 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 - [subwasm](https://github.com/chevdor/subwasm)
 - [subway](https://github.com/AcalaNetwork/subway)
 - [subxt](https://github.com/paritytech/subxt)
-- [Trin](https://github.com/ethereum/trin)
+- [Trin](https://github.com/ethereum/trin)   
+- [Uptest](https://github.com/uptest-sc/uptest)   
 
 ## Benchmarks
 
