@@ -182,12 +182,14 @@ where
 			}
 		}
 
-		// Drop the last notifier
+		// Drop the last Sender
 		drop(drop_on_completion);
 
-		// Wait for completion of connection processing tasks.
-		// We will stop waiting here once all senders are dropped
-		let _ = process_connection_awaiter.recv().await;
+		// Once this channel is closed it is safe to assume that all connections have been gracefully shutdown
+		while process_connection_awaiter.recv().await.is_some() {
+			// Generally, messages should not be sent across this channel,
+			// but we'll loop here to wait for `None` just to be on the safe side
+		}
 	}
 }
 
