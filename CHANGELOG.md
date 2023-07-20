@@ -19,12 +19,6 @@ The format is based on [Keep a Changelog].
 - server: downgrade connection logs to debug  ([#1123](https://github.com/paritytech/jsonrpsee/pull/1123))
 - refactor(server): make `Server::start` infallible and add `fn builder()`  ([#1137](https://github.com/paritytech/jsonrpsee/pull/1137))
 
-### [Added]
-
-- added uptest new rust lib  ([#1151](https://github.com/paritytech/jsonrpsee/pull/1151))
-- Add subway  ([#1124](https://github.com/paritytech/jsonrpsee/pull/1124))
-- Add Trin to users and sort list alphabetically  ([#1119](https://github.com/paritytech/jsonrpsee/pull/1119))
-
 ## [v0.18.2] - 2023-05-10
 
 This release improves error message for `too big batch response` and exposes the `BatchRequestConfig type` in order to make it possible to use `ServerBuilder::set_batch_request_config`
