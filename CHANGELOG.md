@@ -4,12 +4,33 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.18.3] - 2023-07-20
+
+### [Fixed]
+
+- Fixed connections processing await on server shutdown  ([#1153](https://github.com/paritytech/jsonrpsee/pull/1153))
+- fix: include error code in RpcLogger  ([#1135](https://github.com/paritytech/jsonrpsee/pull/1135))
+- fix: downgrade more logs to `debug`  ([#1127](https://github.com/paritytech/jsonrpsee/pull/1127))
+- fix(server): remove `MethodSinkPermit` to fix backpressure issue on concurrent subscriptions  ([#1126](https://github.com/paritytech/jsonrpsee/pull/1126))
+- fix readme links  ([#1152](https://github.com/paritytech/jsonrpsee/pull/1152))
+
+### [Changed]
+
+- server: downgrade connection logs to debug  ([#1123](https://github.com/paritytech/jsonrpsee/pull/1123))
+- refactor(server): make `Server::start` infallible and add `fn builder()`  ([#1137](https://github.com/paritytech/jsonrpsee/pull/1137))
+
+### [Added]
+
+- added uptest new rust lib  ([#1151](https://github.com/paritytech/jsonrpsee/pull/1151))
+- Add subway  ([#1124](https://github.com/paritytech/jsonrpsee/pull/1124))
+- Add Trin to users and sort list alphabetically  ([#1119](https://github.com/paritytech/jsonrpsee/pull/1119))
 
 ## [v0.18.2] - 2023-05-10
 
 This release improves error message for `too big batch response` and exposes the `BatchRequestConfig type` in order to make it possible to use `ServerBuilder::set_batch_request_config`
 
-### Fixed
+### [Fixed]
+
 - server: export BatchRequestConfig  ([#1112](https://github.com/paritytech/jsonrpsee/pull/1112))
 - fix(server): improve too big batch response msg  ([#1107](https://github.com/paritytech/jsonrpsee/pull/1107))
 
@@ -18,10 +39,12 @@ This release improves error message for `too big batch response` and exposes the
 This release fixes a couple bugs and improves the ergonomics for the HTTP client
 when no tower middleware is enabled.
 
-### Changed
+### [Changed]
+
 - http client: add default generic param for the backend ([#1099](https://github.com/paritytech/jsonrpsee/pull/1099))
 
-### Fixed
+### [Fixed]
+
 - rpc module: fix race in subscription close callback  ([#1098](https://github.com/paritytech/jsonrpsee/pull/1098))
 - client: add missing batch request tracing span  ([#1097](https://github.com/paritytech/jsonrpsee/pull/1097))
 - ws server: don't wait for graceful shutdown when connection already closed  ([#1103](https://github.com/paritytech/jsonrpsee/pull/1103))
