@@ -73,7 +73,7 @@ impl<'a> ErrorObject<'a> {
 	}
 
 	/// Create a new [`ErrorObject`] with optional data.
-	pub fn borrowed(code: i32, message: &'a impl AsRef<str>, data: Option<&'a RawValue>) -> ErrorObject<'a> {
+	pub fn borrowed(code: i32, message: &'a (impl AsRef<str> + ?Sized), data: Option<&'a RawValue>) -> ErrorObject<'a> {
 		ErrorObject { code: code.into(), message: StdCow::Borrowed(message.as_ref()), data: data.map(StdCow::Borrowed) }
 	}
 
