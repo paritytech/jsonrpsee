@@ -209,12 +209,12 @@ impl RequestManager {
 		request_id: RequestId,
 	) -> Option<(RequestId, PendingSubscriptionOneshot, UnsubscribeMethod)> {
 		match self.requests.entry(request_id) {
-			Entry::Occupied(request) if matches!(request.get(), Kind::PendingSubscription(_)) => {
+			Entry::Occupied(request) => {
 				let (_req_id, kind) = request.remove_entry();
 				if let Kind::PendingSubscription(send_back) = kind {
 					Some(send_back)
 				} else {
-					unreachable!("Pending subscription is Pending subscription checked above; qed");
+					None
 				}
 			}
 			_ => None,
@@ -239,12 +239,12 @@ impl RequestManager {
 	/// Returns `Some` if the call was completed otherwise `None`.
 	pub(crate) fn complete_pending_call(&mut self, request_id: RequestId) -> Option<PendingCallOneshot> {
 		match self.requests.entry(request_id) {
-			Entry::Occupied(request) if matches!(request.get(), Kind::PendingMethodCall(_)) => {
+			Entry::Occupied(request) => {
 				let (_req_id, kind) = request.remove_entry();
 				if let Kind::PendingMethodCall(send_back) = kind {
 					Some(send_back)
 				} else {
-					unreachable!("Pending call is Pending call checked above; qed");
+					None
 				}
 			}
 			_ => None,
@@ -261,16 +261,14 @@ impl RequestManager {
 		subscription_id: SubscriptionId<'static>,
 	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId)> {
 		match (self.requests.entry(request_id), self.subscriptions.entry(subscription_id)) {
-			(Entry::Occupied(mut request), Entry::Occupied(subscription))
-				if matches!(request.get(), Kind::Subscription(_)) =>
-			{
+			(Entry::Occupied(mut request), Entry::Occupied(subscription)) => {
 				// Mark the request ID as pending unsubscription.
 				let kind = std::mem::replace(request.get_mut(), Kind::PendingMethodCall(None));
 				let (sub_id, _req_id) = subscription.remove_entry();
 				if let Kind::Subscription((unsub_req_id, send_back, unsub)) = kind {
 					Some((unsub_req_id, send_back, unsub, sub_id))
 				} else {
-					unreachable!("Subscription is Subscription checked above; qed");
+					None
 				}
 			}
 			_ => None,
