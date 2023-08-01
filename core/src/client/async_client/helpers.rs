@@ -126,7 +126,7 @@ pub(crate) fn process_subscription_response(
 /// If the notification is not found it's just logged as a warning and the connection
 /// will continue.
 ///
-/// It's possible that user close down the subscription because the actual close response is received
+/// It's possible that the user closed down the subscription before the actual close response is received
 pub(crate) fn process_subscription_close_response(
 	manager: &mut RequestManager,
 	response: SubscriptionError<JsonValue>,
@@ -245,7 +245,7 @@ pub(crate) fn build_unsubscribe_message(
 	sub_req_id: Id<'static>,
 	sub_id: SubscriptionId<'static>,
 ) -> Option<RequestMessage> {
-	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
+	let (unsub_req_id, _, unsub, sub_id) = manager.unsubscribe(sub_req_id, sub_id)?;
 
 	let mut params = ArrayParams::new();
 	params.insert(sub_id).ok()?;
