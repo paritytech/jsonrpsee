@@ -334,6 +334,10 @@ pub enum InvalidRequestId {
 	/// The request ID format was invalid.
 	#[error("request ID={0} is invalid")]
 	Invalid(String),
+
+	/// All request IDs must be parseable as integers,
+	#[error("request ID={0} is invalid")]
+	NotInteger(String),
 }
 
 /// Request Id
