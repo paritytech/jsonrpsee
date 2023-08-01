@@ -39,7 +39,6 @@ use crate::transport::{http, ws};
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
-use futures_util::stream::{FuturesUnordered, StreamExt};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
@@ -49,7 +48,7 @@ use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::{watch, OwnedSemaphorePermit};
+use tokio::sync::{mpsc, watch, OwnedSemaphorePermit};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -137,9 +136,10 @@ where
 		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
 		let listener = self.listener;
 
-		let mut connections = FuturesUnordered::new();
 		let stopped = stop_handle.clone().shutdown();
 		tokio::pin!(stopped);
+
+		let (drop_on_completion, mut process_connection_awaiter) = mpsc::channel::<()>(1);
 
 		loop {
 			match try_accept_conn(&listener, stopped).await {
@@ -163,7 +163,14 @@ where
 						enable_ws: self.cfg.enable_ws,
 						message_buffer_capacity: self.cfg.message_buffer_capacity,
 					};
-					process_connection(&self.service_builder, &connection_guard, data, socket, &mut connections);
+
+					process_connection(
+						&self.service_builder,
+						&connection_guard,
+						data,
+						socket,
+						drop_on_completion.clone(),
+					);
 					id = id.wrapping_add(1);
 					stopped = stop;
 				}
@@ -175,11 +182,14 @@ where
 			}
 		}
 
-		// FuturesUnordered won't poll anything until this line but because the
-		// tasks are spawned (so that they can progress independently)
-		// then this just makes sure that all tasks are completed before
-		// returning from this function.
-		while connections.next().await.is_some() {}
+		// Drop the last Sender
+		drop(drop_on_completion);
+
+		// Once this channel is closed it is safe to assume that all connections have been gracefully shutdown
+		while process_connection_awaiter.recv().await.is_some() {
+			// Generally, messages should not be sent across this channel,
+			// but we'll loop here to wait for `None` just to be on the safe side
+		}
 	}
 }
 
@@ -743,7 +753,7 @@ fn process_connection<'a, L: Logger, B, U>(
 	connection_guard: &ConnectionGuard,
 	cfg: ProcessConnection<L>,
 	socket: TcpStream,
-	connections: &mut FuturesUnordered<tokio::task::JoinHandle<()>>,
+	drop_on_completion: mpsc::Sender<()>,
 ) where
 	B: Layer<TowerService<L>> + Send + 'static,
 	<B as Layer<TowerService<L>>>::Service: Send
@@ -766,7 +776,10 @@ fn process_connection<'a, L: Logger, B, U>(
 		Some(conn) => conn,
 		None => {
 			tracing::debug!("Too many connections. Please try again later.");
-			connections.push(tokio::spawn(http::reject_connection(socket).in_current_span()));
+			tokio::spawn(async {
+				http::reject_connection(socket).in_current_span().await;
+				drop(drop_on_completion);
+			});
 			return;
 		}
 	};
@@ -799,7 +812,10 @@ fn process_connection<'a, L: Logger, B, U>(
 
 	let service = service_builder.service(tower_service);
 
-	connections.push(tokio::spawn(to_http_service(socket, service, cfg.stop_handle).in_current_span()));
+	tokio::spawn(async {
+		to_http_service(socket, service, cfg.stop_handle).in_current_span().await;
+		drop(drop_on_completion)
+	});
 }
 
 // Attempts to create a HTTP connection from a socket.
