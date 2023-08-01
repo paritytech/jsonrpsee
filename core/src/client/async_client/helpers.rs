@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::client::async_client::manager::RequestStatus;
+use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::{RequestMessage, TransportSenderT};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
@@ -42,8 +42,6 @@ use jsonrpsee_types::{
 use serde_json::Value as JsonValue;
 use std::ops::Range;
 
-use super::ThreadSafeRequestManager;
-
 #[derive(Debug, Clone)]
 pub(crate) struct InnerBatchResponse {
 	pub(crate) id: u64,
@@ -54,7 +52,7 @@ pub(crate) struct InnerBatchResponse {
 ///
 /// On success the result is sent to the frontend.
 pub(crate) fn process_batch_response(
-	manager: &ThreadSafeRequestManager,
+	manager: &mut RequestManager,
 	rps: Vec<InnerBatchResponse>,
 	range: Range<u64>,
 ) -> Result<(), Error> {
@@ -96,7 +94,7 @@ pub(crate) fn process_batch_response(
 /// Return `Err(None)` if the subscription was not found.
 /// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
 pub(crate) fn process_subscription_response(
-	manager: &ThreadSafeRequestManager,
+	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
 ) -> Result<(), Option<SubscriptionId<'static>>> {
 	let sub_id = response.params.subscription.into_owned();
@@ -130,7 +128,7 @@ pub(crate) fn process_subscription_response(
 ///
 /// It's possible that the user closed down the subscription before the actual close response is received
 pub(crate) fn process_subscription_close_response(
-	manager: &ThreadSafeRequestManager,
+	manager: &mut RequestManager,
 	response: SubscriptionError<JsonValue>,
 ) {
 	let sub_id = response.params.subscription.into_owned();
@@ -150,7 +148,7 @@ pub(crate) fn process_subscription_close_response(
 /// will continue.
 ///
 /// It's possible that user close down the subscription before this notification is received.
-pub(crate) fn process_notification(manager: &ThreadSafeRequestManager, notif: Notification<JsonValue>) {
+pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => (),
@@ -171,7 +169,7 @@ pub(crate) fn process_notification(manager: &ThreadSafeRequestManager, notif: No
 /// Returns `Ok(Some(_))` if the response got an error but could be handled.
 /// Returns `Err(_)` if the response couldn't be handled.
 pub(crate) fn process_single_response(
-	manager: &ThreadSafeRequestManager,
+	manager: &mut RequestManager,
 	response: Response<JsonValue>,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
@@ -243,7 +241,7 @@ pub(crate) async fn stop_subscription<S: TransportSenderT>(
 
 /// Builds an unsubscription message.
 pub(crate) fn build_unsubscribe_message(
-	manager: &ThreadSafeRequestManager,
+	manager: &mut RequestManager,
 	sub_req_id: Id<'static>,
 	sub_id: SubscriptionId<'static>,
 ) -> Option<RequestMessage> {
