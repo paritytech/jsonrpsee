@@ -287,6 +287,11 @@ impl PendingSubscriptionSink {
 			panic!("The subscription response was too big; adjust the `max_response_size` or change Subscription ID generation");
 		}
 	}
+
+	/// Returns connection identifier, which was used to perform pending subscription request
+	pub fn connection_id(&self) -> ConnectionId {
+		self.uniq_sub.conn_id
+	}
 }
 
 /// Represents a single subscription that hasn't been processed yet.
