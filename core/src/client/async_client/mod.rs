@@ -29,9 +29,9 @@ use std::task::{Context, Poll};
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use futures_timer::Delay;
-use futures_util::future::{self, Either, Fuse};
+use futures_util::future::{self, Either};
 use futures_util::stream::{FuturesUnordered, StreamExt};
-use futures_util::{Future, FutureExt, Stream};
+use futures_util::{Future, Stream};
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
@@ -760,71 +760,67 @@ async fn send_task<S>(params: SendTaskParams<S>)
 where
 	S: TransportSenderT,
 {
-	// Create either a valid delay fuse triggered every provided `duration`,
-	// or create a terminated fuse that's never selected if the provided `duration` is None.
-	fn ping_fut(ping_interval: Option<Duration>) -> Fuse<Delay> {
-		if let Some(duration) = ping_interval {
-			Delay::new(duration).fuse()
-		} else {
-			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
-			Fuse::<Delay>::terminated()
-		}
-	}
-
 	let SendTaskParams {
 		mut sender,
-		from_frontend,
+		mut from_frontend,
 		close_tx,
 		manager,
 		max_buffer_capacity_per_subscription,
 		ping_interval,
 	} = params;
 
-	let mut frontend = tokio_stream::wrappers::ReceiverStream::new(from_frontend);
-	let mut rx_item = frontend.next();
-	let closed = close_tx.closed();
+	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver` 
+	// are cancel-safe.
+	let res = if let Some(ping_interval) = ping_interval {
+		let start = tokio::time::Instant::now() + ping_interval;
+		let mut ping = tokio::time::interval_at(start, ping_interval);
 
-	tokio::pin!(closed);
+		loop {
+			tokio::select! {
+				biased;
+				_ = close_tx.closed() => break Ok(()),
+				maybe_msg = from_frontend.recv() => {
+					let Some(msg) = maybe_msg else {
+						break Ok(());
+					};
 
-	let mut exit_or_ping_fut = future::select(closed, ping_fut(ping_interval));
-
-	let res = loop {
-		match future::select(rx_item, exit_or_ping_fut).await {
-			// Message received from the frontend.
-			Either::Left((msg, exit_or_ping)) => {
-				let Some(msg) = msg else {
-					break Ok(());
-				};
-
-				if let Err(e) =
-					handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
-				{
-					tracing::error!("Could not send message: {e}");
-					break Err(Error::Transport(e.into()));
+					if let Err(e) =
+						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+					{
+						tracing::error!("Could not send message: {e}");
+						break Err(Error::Transport(e.into()));
+					}
 				}
-
-				exit_or_ping_fut = exit_or_ping;
-				rx_item = frontend.next();
-			}
-
-			// Ping
-			Either::Right((Either::Right((_, on_exit)), rx)) => {
-				if let Err(err) = sender.send_ping().await {
-					tracing::error!("[backend]: Could not send ping frame: {err}");
-					break Err(Error::Custom("Could not send ping frame".into()));
+				_ = ping.tick() => {
+					if let Err(err) = sender.send_ping().await {
+						tracing::error!("[backend]: Could not send ping frame: {err}");
+						break Err(Error::Custom("Could not send ping frame".into()));
+					}
 				}
-				exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
-				rx_item = rx;
 			}
+		}
+	} else {
+		loop {
+			tokio::select! {
+				biased;
+				_ = close_tx.closed() => break Ok(()),
+				maybe_msg = from_frontend.recv() => {
+					let Some(msg) = maybe_msg else {
+						break Ok(());
+					};
 
-			// Closed
-			Either::Right((Either::Left(_), _)) => {
-				break Ok(());
+					if let Err(e) =
+						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+					{
+						tracing::error!("Could not send message: {e}");
+						break Err(Error::Transport(e.into()));
+					}
+				}
 			}
 		}
 	};
 
-	frontend.close();
+	from_frontend.close();
 	let _ = sender.close().await;
 	let _ = close_tx.send(res).await;
 }
@@ -848,18 +844,22 @@ where
 		Some((res, receiver))
 	});
 
-	let closed = close_tx.closed();
 	let pending_unsubscribes = MaybePendingFutures::new();
 
-	tokio::pin!(backend_event, closed, pending_unsubscribes);
+	tokio::pin!(backend_event, pending_unsubscribes);
 
-	let rx_item = backend_event.next();
-	let mut rx_or_closed = future::select(rx_item, closed);
-
+	// This is safe because futures::Stream and tokio::mpsc::Sender are cancel-safe.
 	let res = loop {
-		match future::select(rx_or_closed, pending_unsubscribes.next()).await {
-			// New message received to process.
-			Either::Left((Either::Left((Some(msg), closed_fut)), _)) => {
+		tokio::select! {
+			// Closed.
+			biased;
+			_ = close_tx.closed() => break Ok(()),
+			// Unsubscribe completed.
+			_ = pending_unsubscribes.next() => (),
+			// New message received.
+			maybe_msg = backend_event.next() => {
+				let Some(msg) = maybe_msg else { break Ok(()) };
+
 				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
 					Ok(Some(msg)) => {
 						pending_unsubscribes.push(to_send_task.send(msg));
@@ -870,15 +870,9 @@ where
 					}
 					Ok(None) => (),
 				}
-				rx_or_closed = future::select(backend_event.next(), closed_fut);
+
 			}
-			// Unsubscribe completed.
-			Either::Right((Some(Ok(_)), rx_or_closed_fut)) => {
-				rx_or_closed = rx_or_closed_fut;
-			}
-			// Closed.
-			_ => break Ok(()),
-		};
+		}
 	};
 
 	let _ = close_tx.send(res).await;
