@@ -70,6 +70,7 @@ async-wasm-client = [
 	"rustc-hash/std",
 	"futures-timer/wasm-bindgen",
 	"tokio-stream",
+	"tokio/macros",
 ]
 
 [dev-dependencies]
