@@ -24,7 +24,7 @@ use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
@@ -769,7 +769,7 @@ where
 		ping_interval,
 	} = params;
 
-	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver` 
+	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
 	// are cancel-safe.
 	let res = if let Some(ping_interval) = ping_interval {
 		let start = tokio::time::Instant::now() + ping_interval;
@@ -896,15 +896,20 @@ async fn wait_for_shutdown(
 /// A wrapper around `FuturesUnordered` that doesn't return `None` when it's empty.
 struct MaybePendingFutures<Fut> {
 	futs: FuturesUnordered<Fut>,
+	waker: Option<Waker>,
 }
 
 impl<Fut> MaybePendingFutures<Fut> {
 	fn new() -> Self {
-		Self { futs: FuturesUnordered::new() }
+		Self { futs: FuturesUnordered::new(), waker: None }
 	}
 
 	fn push(&mut self, fut: Fut) {
 		self.futs.push(fut);
+
+		if let Some(w) = self.waker.take() {
+			w.wake();
+		}
 	}
 }
 
@@ -913,6 +918,8 @@ impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
 		if self.futs.is_empty() {
+			self.waker.get_or_insert_with(|| cx.waker().clone());
+
 			return Poll::Pending;
 		}
 
