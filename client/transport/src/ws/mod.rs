@@ -31,7 +31,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures_util::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT};
+use futures_util::{AsyncRead, AsyncWrite};
+use jsonrpsee_core::client::{CertificateStore, MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
 use soketto::connection::Error::Utf8;
@@ -48,18 +49,18 @@ pub use url::Url;
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
-pub struct Sender {
-	inner: connection::Sender<BufReader<BufWriter<EitherStream>>>,
+pub struct Sender<T> {
+	inner: connection::Sender<BufReader<BufWriter<T>>>,
 	max_request_size: u32,
 }
 
 /// Receiving end of WebSocket transport.
 #[derive(Debug)]
-pub struct Receiver {
-	inner: connection::Receiver<BufReader<BufWriter<EitherStream>>>,
+pub struct Receiver<T> {
+	inner: connection::Receiver<BufReader<BufWriter<T>>>,
 }
 
-/// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
+/// Builder for a WebSocket transport [`Sender`] and [`Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder {
 	/// What certificate store to use
@@ -190,6 +191,15 @@ pub enum WsHandshakeError {
 		status_code: u16,
 	},
 
+	/// Server redirected to other location.
+	#[error("Connection redirected with status code: {status_code} and location: {location}")]
+	Redirected {
+		/// HTTP status code that the server returned.
+		status_code: u16,
+		/// The location URL redirected to.
+		location: String,
+	},
+
 	/// Timeout while trying to connect.
 	#[error("Connection timeout exceeded: {0:?}")]
 	Timeout(Duration),
@@ -215,7 +225,10 @@ pub enum WsError {
 }
 
 #[async_trait]
-impl TransportSenderT for Sender {
+impl<T> TransportSenderT for Sender<T>
+where
+	T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+{
 	type Error = WsError;
 
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
@@ -252,7 +265,10 @@ impl TransportSenderT for Sender {
 }
 
 #[async_trait]
-impl TransportReceiverT for Receiver {
+impl<T> TransportReceiverT for Receiver<T>
+where
+	T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+{
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
@@ -276,12 +292,18 @@ impl TransportReceiverT for Receiver {
 
 impl WsTransportClientBuilder {
 	/// Try to establish the connection.
-	pub async fn build(self, uri: Url) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let target: Target = uri.try_into()?;
-		self.try_connect(target).await
+	///
+	/// Uses the default connection over TCP.
+	pub async fn build(self, uri: Url) -> Result<(Sender<EitherStream>, Receiver<EitherStream>), WsHandshakeError> {
+		self.try_connect_over_tcp(uri).await
 	}
 
-	async fn try_connect(self, mut target: Target) -> Result<(Sender, Receiver), WsHandshakeError> {
+	// Try to establish the connection over TCP.
+	async fn try_connect_over_tcp(
+		&self,
+		uri: Url,
+	) -> Result<(Sender<EitherStream>, Receiver<EitherStream>), WsHandshakeError> {
+		let mut target: Target = uri.try_into()?;
 		let mut err = None;
 
 		// Only build TLS connector if `wss` in URL.
@@ -317,37 +339,10 @@ impl WsTransportClientBuilder {
 					}
 				};
 
-				let mut client = WsHandshakeClient::new(
-					BufReader::new(BufWriter::new(tcp_stream)),
-					&target.host_header,
-					&target.path_and_query,
-				);
+				match self.try_connect(&target, tcp_stream).await {
+					Ok(result) => return Ok(result),
 
-				let headers: Vec<_> = self
-					.headers
-					.iter()
-					.map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() })
-					.collect();
-				client.set_headers(&headers);
-
-				// Perform the initial handshake.
-				match client.handshake().await {
-					Ok(ServerResponse::Accepted { .. }) => {
-						tracing::debug!("Connection established to target: {:?}", target);
-						let mut builder = client.into_builder();
-						builder.set_max_message_size(self.max_response_size as usize);
-						let (sender, receiver) = builder.finish();
-						return Ok((
-							Sender { inner: sender, max_request_size: self.max_request_size },
-							Receiver { inner: receiver },
-						));
-					}
-
-					Ok(ServerResponse::Rejected { status_code }) => {
-						tracing::debug!("Connection rejected: {:?}", status_code);
-						err = Some(Err(WsHandshakeError::Rejected { status_code }));
-					}
-					Ok(ServerResponse::Redirect { status_code, location }) => {
+					Err(WsHandshakeError::Redirected { status_code, location }) => {
 						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
 						match Url::parse(&location) {
 							// redirection with absolute path => need to lookup.
@@ -396,13 +391,70 @@ impl WsTransportClientBuilder {
 							}
 						};
 					}
+
 					Err(e) => {
-						err = Some(Err(e.into()));
+						err = Some(Err(e));
 					}
 				};
 			}
 		}
 		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host)))
+	}
+
+	/// Try to establish the connection over the given data stream.
+	pub async fn build_with_stream<T>(
+		self,
+		uri: Url,
+		data_stream: T,
+	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
+	where
+		T: AsyncRead + AsyncWrite + Unpin,
+	{
+		let target: Target = uri.try_into()?;
+		self.try_connect(&target, data_stream).await
+	}
+
+	/// Try to establish the handshake over the given data stream.
+	async fn try_connect<T>(
+		&self,
+		target: &Target,
+		data_stream: T,
+	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
+	where
+		T: AsyncRead + AsyncWrite + Unpin,
+	{
+		let mut client = WsHandshakeClient::new(
+			BufReader::new(BufWriter::new(data_stream)),
+			&target.host_header,
+			&target.path_and_query,
+		);
+
+		let headers: Vec<_> =
+			self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() }).collect();
+		client.set_headers(&headers);
+
+		// Perform the initial handshake.
+		match client.handshake().await {
+			Ok(ServerResponse::Accepted { .. }) => {
+				tracing::debug!("Connection established to target: {:?}", target);
+				let mut builder = client.into_builder();
+				builder.set_max_message_size(self.max_response_size as usize);
+				let (sender, receiver) = builder.finish();
+				Ok((Sender { inner: sender, max_request_size: self.max_request_size }, Receiver { inner: receiver }))
+			}
+
+			Ok(ServerResponse::Rejected { status_code }) => {
+				tracing::debug!("Connection rejected: {:?}", status_code);
+				Err(WsHandshakeError::Rejected { status_code })
+			}
+
+			Ok(ServerResponse::Redirect { status_code, location }) => {
+				tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
+				Err(WsHandshakeError::Redirected { status_code, location })
+			}
+
+			Err(e) => Err(e.into()),
+		}
 	}
 }
 
