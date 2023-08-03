@@ -35,7 +35,6 @@ tokio = { version = "1.16", optional = true }
 wasm-bindgen-futures = { version = "0.4.19", optional = true }
 futures-timer = { version = "3", optional = true }
 globset = { version = "0.4", optional = true }
-tokio-stream = { version = "0.1", optional = true }
 
 [features]
 default = []
@@ -55,19 +54,22 @@ client = ["futures-util/sink", "tokio/sync"]
 async-client = [
 	"async-lock",
 	"client",
+	"futures-util/alloc",
 	"rustc-hash",
 	"tokio/macros",
 	"tokio/rt",
-	"tokio-stream",
+	"tokio/time",
 	"futures-timer",
 ]
 async-wasm-client = [
 	"async-lock",
 	"client",
+	"futures-util/alloc",
 	"wasm-bindgen-futures",
 	"rustc-hash/std",
 	"futures-timer/wasm-bindgen",
-	"tokio-stream",
+	"tokio/macros",
+	"tokio/time",
 ]
 
 [dev-dependencies]

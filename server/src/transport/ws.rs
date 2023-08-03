@@ -269,7 +269,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 		//
 		// TCP retransmission mechanism will take of the rest and adjust the window size accordingly.
 		let Some(stop) = wait_until_connection_buffer_has_capacity(&sink, stopped).await else {
-			break Ok(Shutdown::ConnectionClosed)
+			break Ok(Shutdown::ConnectionClosed);
 		};
 
 		stopped = stop;

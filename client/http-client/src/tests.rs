@@ -60,7 +60,7 @@ async fn method_call_with_wrong_id_kind() {
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
 	let res: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
-	assert!(matches!(res, Err(Error::InvalidRequestId)));
+	assert!(matches!(res, Err(Error::InvalidRequestId(_))));
 }
 
 #[tokio::test]
@@ -96,7 +96,7 @@ async fn response_with_wrong_id() {
 		.await
 		.unwrap()
 		.unwrap_err();
-	assert!(matches!(err, Error::InvalidRequestId));
+	assert!(matches!(err, Error::InvalidRequestId(_)));
 }
 
 #[tokio::test]

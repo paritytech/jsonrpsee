@@ -324,6 +324,22 @@ impl<'a> SubscriptionId<'a> {
 	}
 }
 
+/// Represent a request that failed because of an invalid request id.
+#[derive(Debug, thiserror::Error)]
+pub enum InvalidRequestId {
+	/// The request ID was parsed as valid ID but not a pending request.
+	#[error("request ID={0} is not a pending call")]
+	NotPendingRequest(String),
+
+	/// The request ID was already assigned to a pending call.
+	#[error("request ID={0} is already occupied by a pending call")]
+	Occupied(String),
+
+	/// The request ID format was invalid.
+	#[error("request ID={0} is invalid")]
+	Invalid(String),
+}
+
 /// Request Id
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize, PartialOrd, Ord)]
 #[serde(deny_unknown_fields)]
@@ -375,11 +391,21 @@ impl<'a> Id<'a> {
 	}
 
 	/// Extract the underlying number from the ID.
-	pub fn try_parse_inner_as_number(&self) -> Option<u64> {
+	pub fn try_parse_inner_as_number(&self) -> Result<u64, InvalidRequestId> {
 		match self {
-			Id::Null => None,
-			Id::Number(num) => Some(*num),
-			Id::Str(s) => s.parse().ok(),
+			Id::Null => Err(InvalidRequestId::Invalid("null".to_string())),
+			Id::Number(num) => Ok(*num),
+			Id::Str(s) => s.parse().map_err(|_| InvalidRequestId::Invalid(s.as_ref().to_owned())),
+		}
+	}
+}
+
+impl<'a> std::fmt::Display for Id<'a> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Id::Null => f.write_str("null"),
+			Id::Number(n) => f.write_str(&n.to_string()),
+			Id::Str(s) => f.write_str(s),
 		}
 	}
 }

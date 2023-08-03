@@ -26,7 +26,7 @@
 
 use std::fmt;
 
-use jsonrpsee_types::error::ErrorObjectOwned;
+use jsonrpsee_types::{params::InvalidRequestId, ErrorObjectOwned};
 
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,8 +65,8 @@ pub enum Error {
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionId,
 	/// Invalid request ID.
-	#[error("Invalid request ID")]
-	InvalidRequestId,
+	#[error("{0}")]
+	InvalidRequestId(#[from] InvalidRequestId),
 	/// Client received a notification with an unregistered method
 	#[error("Unregistered notification method")]
 	UnregisteredNotification(String),

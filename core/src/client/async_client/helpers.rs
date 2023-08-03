@@ -36,7 +36,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, Id, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
+	ErrorObject, Id, InvalidRequestId, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId,
+	SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
 use std::ops::Range;
@@ -63,7 +64,7 @@ pub(crate) fn process_batch_response(
 		Some(state) => state,
 		None => {
 			tracing::warn!("Received unknown batch response");
-			return Err(Error::InvalidRequestId);
+			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)).into());
 		}
 	};
 
@@ -79,7 +80,7 @@ pub(crate) fn process_batch_response(
 		if let Some(elem) = maybe_elem {
 			*elem = rp.result;
 		} else {
-			return Err(Error::InvalidRequestId);
+			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into());
 		}
 	}
 
@@ -95,7 +96,7 @@ pub(crate) fn process_batch_response(
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
-) -> Result<(), Option<RequestMessage>> {
+) -> Result<(), Option<SubscriptionId<'static>>> {
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
@@ -110,9 +111,7 @@ pub(crate) fn process_subscription_response(
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
-				let msg = build_unsubscribe_message(manager, request_id, sub_id)
-					.expect("request ID and subscription ID valid checked above; qed");
-				Err(Some(msg))
+				Err(Some(sub_id))
 			}
 		},
 		None => {
@@ -124,42 +123,42 @@ pub(crate) fn process_subscription_response(
 
 /// Attempts to close a subscription when a [`SubscriptionError`] is received.
 ///
-/// Returns `Ok(())` if the subscription was removed
-/// Return `Err(e)` if the subscription was not found.
+/// If the notification is not found it's just logged as a warning and the connection
+/// will continue.
+///
+/// It's possible that the user closed down the subscription before the actual close response is received
 pub(crate) fn process_subscription_close_response(
 	manager: &mut RequestManager,
 	response: SubscriptionError<JsonValue>,
-) -> Result<(), Error> {
+) {
 	let sub_id = response.params.subscription.into_owned();
-	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
-		Some(request_id) => request_id,
-		None => {
-			tracing::error!("The server tried to close an invalid subscription: {:?}", sub_id);
-			return Err(Error::InvalidSubscriptionId);
+	match manager.get_request_id_by_subscription_id(&sub_id) {
+		Some(request_id) => {
+			manager.remove_subscription(request_id, sub_id).expect("Both request ID and sub ID in RequestManager; qed");
 		}
-	};
-
-	manager.remove_subscription(request_id, sub_id).expect("Both request ID and sub ID in RequestManager; qed");
-	Ok(())
+		None => {
+			tracing::debug!("The server tried to close an non-pending subscription: {:?}", sub_id);
+		}
+	}
 }
 
 /// Attempts to process an incoming notification
 ///
-/// Returns Ok() if the response was successfully handled
-/// Returns Err() if there was no handler for the method
-pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) -> Result<(), Error> {
+/// If the notification is not found it's just logged as a warning and the connection
+/// will continue.
+///
+/// It's possible that user close down the subscription before this notification is received.
+pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
-			Ok(()) => Ok(()),
+			Ok(()) => (),
 			Err(err) => {
-				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
+				tracing::warn!("Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
 				let _ = manager.remove_notification_handler(notif.method.into_owned());
-				Err(Error::Custom(err.to_string()))
 			}
 		},
 		None => {
-			tracing::error!("Notification: {:?} not a registered method", notif.method);
-			Err(Error::UnregisteredNotification(notif.method.into_owned()))
+			tracing::debug!("Notification: {:?} not a registered method", notif.method);
 		}
 	}
 }
@@ -179,18 +178,19 @@ pub(crate) fn process_single_response(
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
-			let send_back_oneshot = match manager.complete_pending_call(response_id) {
+			let send_back_oneshot = match manager.complete_pending_call(response_id.clone()) {
 				Some(Some(send)) => send,
 				Some(None) => return Ok(None),
-				None => return Err(Error::InvalidRequestId),
+				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into()),
 			};
 
 			let _ = send_back_oneshot.send(result);
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
-			let (unsub_id, send_back_oneshot, unsubscribe_method) =
-				manager.complete_pending_subscription(response_id.clone()).ok_or(Error::InvalidRequestId)?;
+			let (unsub_id, send_back_oneshot, unsubscribe_method) = manager
+				.complete_pending_subscription(response_id.clone())
+				.ok_or(InvalidRequestId::NotPendingRequest(response_id.to_string()))?;
 
 			let sub_id = result.map(|r| SubscriptionId::try_from(r).ok());
 
@@ -220,7 +220,10 @@ pub(crate) fn process_single_response(
 				Ok(None)
 			}
 		}
-		RequestStatus::Subscription | RequestStatus::Invalid => Err(Error::InvalidRequestId),
+
+		RequestStatus::Subscription | RequestStatus::Invalid => {
+			Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into())
+		}
 	}
 }
 
@@ -228,15 +231,12 @@ pub(crate) fn process_single_response(
 /// that the client is not interested in the subscription anymore.
 //
 // NOTE: we don't count this a concurrent request as it's part of a subscription.
-pub(crate) async fn stop_subscription(
-	sender: &mut impl TransportSenderT,
-	manager: &mut RequestManager,
+pub(crate) async fn stop_subscription<S: TransportSenderT>(
+	sender: &mut S,
 	unsub: RequestMessage,
-) {
-	if let Err(e) = sender.send(unsub.raw).await {
-		tracing::error!("Send unsubscribe request failed: {:?}", e);
-		let _ = manager.complete_pending_call(unsub.id);
-	}
+) -> Result<(), S::Error> {
+	sender.send(unsub.raw).await?;
+	Ok(())
 }
 
 /// Builds an unsubscription message.
@@ -245,7 +245,7 @@ pub(crate) fn build_unsubscribe_message(
 	sub_req_id: Id<'static>,
 	sub_id: SubscriptionId<'static>,
 ) -> Option<RequestMessage> {
-	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
+	let (unsub_req_id, _, unsub, sub_id) = manager.unsubscribe(sub_req_id, sub_id)?;
 
 	let mut params = ArrayParams::new();
 	params.insert(sub_id).ok()?;

@@ -72,7 +72,7 @@ impl RpcDescription {
 	/// Verify and rewrite the return type (for methods).
 	fn return_result_type(&self, mut ty: syn::Type) -> TokenStream2 {
 		// We expect a valid type path.
-		let syn::Type::Path(ref mut type_path) = ty else  {
+		let syn::Type::Path(ref mut type_path) = ty else {
 			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here. (1)"));
 		};
 
@@ -82,7 +82,8 @@ impl RpcDescription {
 		};
 
 		// Get the generic args eg the <T, E> in Result<T, E>.
-		let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &mut type_name.arguments else {
+		let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &mut type_name.arguments
+		else {
 			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here, but got no generic args (eg no '<Foo,Err>')."));
 		};
 

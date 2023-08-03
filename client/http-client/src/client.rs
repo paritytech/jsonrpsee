@@ -43,7 +43,7 @@ use jsonrpsee_core::client::{
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::{ErrorObject, ResponseSuccess, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -320,7 +320,7 @@ where
 		if response.id == id {
 			Ok(result)
 		} else {
-			Err(Error::InvalidRequestId)
+			Err(InvalidRequestId::NotPendingRequest(response.id.to_string()).into())
 		}
 	}
 
@@ -363,7 +363,7 @@ where
 		}
 
 		for rp in json_rps {
-			let id = rp.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+			let id = rp.id.try_parse_inner_as_number()?;
 
 			let res = match ResponseSuccess::try_from(rp) {
 				Ok(r) => {
@@ -385,7 +385,7 @@ where
 			if let Some(elem) = maybe_elem {
 				*elem = res;
 			} else {
-				return Err(Error::InvalidRequestId);
+				return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
 			}
 		}
 
