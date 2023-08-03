@@ -666,7 +666,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		FrontToBack::Batch(batch) => {
 			if let Err(send_back) = manager.lock().insert_pending_batch(batch.ids.clone(), batch.send_back) {
 				tracing::warn!("[backend]: Batch request already pending: {:?}", batch.ids);
-				let _ = send_back.send(Err(InvalidRequestId::NotPendingRequest(format!("{:?}", batch.ids)).into()));
+				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!("{:?}", batch.ids)).into()));
 				return Ok(());
 			}
 
@@ -678,27 +678,36 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `request` on the front-end
 		FrontToBack::Request(request) => {
-			sender.send(request.raw).await?;
-			if manager.lock().insert_pending_call(request.id.clone(), request.send_back).is_err() {
+			if let Err(send_back) = manager.lock().insert_pending_call(request.id.clone(), request.send_back) {
 				tracing::warn!("Denied duplicate method call");
+
+				if let Some(s) = send_back {
+					let _ = s.send(Err(InvalidRequestId::Occupied(request.id.to_string()).into()));
+				}
+				return Ok(());
 			}
+
+			sender.send(request.raw).await?;
 		}
 		// User called `subscribe` on the front-end.
 		FrontToBack::Subscribe(sub) => {
-			sender.send(sub.raw).await?;
-
-			if manager
-				.lock()
-				.insert_pending_subscription(
-					sub.subscribe_id.clone(),
-					sub.unsubscribe_id,
-					sub.send_back,
-					sub.unsubscribe_method,
-				)
-				.is_err()
-			{
+			if let Err(send_back) = manager.lock().insert_pending_subscription(
+				sub.subscribe_id.clone(),
+				sub.unsubscribe_id.clone(),
+				sub.send_back,
+				sub.unsubscribe_method,
+			) {
 				tracing::warn!("Denied duplicate subscription");
+
+				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!(
+					"sub_id={}:req_id={}",
+					sub.subscribe_id, sub.unsubscribe_id
+				))
+				.into()));
+				return Ok(());
 			}
+
+			sender.send(sub.raw).await?;
 		}
 		// User dropped a subscription.
 		FrontToBack::SubscriptionClosed(sub_id) => {
@@ -772,8 +781,7 @@ where
 	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
 	// are cancel-safe.
 	let res = if let Some(ping_interval) = ping_interval {
-		let start = tokio::time::Instant::now() + ping_interval;
-		let mut ping = tokio::time::interval_at(start, ping_interval);
+		let mut ping = tokio::time::interval_at(tokio::time::Instant::now() + ping_interval, ping_interval);
 
 		loop {
 			tokio::select! {
@@ -844,6 +852,11 @@ where
 		Some((res, receiver))
 	});
 
+	// These "unsubscription" occurs if a subscription gets dropped by frontend before ack:ed or that if
+	// a subscription couldn't keep with the server.
+	//
+	// Thus, these needs to be sent to the server inorder to tell the server to not bother
+	// with those messages anymore.
 	let pending_unsubscribes = MaybePendingFutures::new();
 
 	tokio::pin!(backend_event, pending_unsubscribes);

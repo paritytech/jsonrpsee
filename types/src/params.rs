@@ -331,6 +331,10 @@ pub enum InvalidRequestId {
 	#[error("request ID={0} is not a pending call")]
 	NotPendingRequest(String),
 
+	/// The request ID was already assigned to a pending call.
+	#[error("request ID={0} is already occupied by a pending call")]
+	Occupied(String),
+
 	/// The request ID format was invalid.
 	#[error("request ID={0} is invalid")]
 	Invalid(String),
