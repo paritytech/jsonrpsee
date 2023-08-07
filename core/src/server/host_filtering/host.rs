@@ -32,12 +32,12 @@ use crate::Error;
 const SPLIT_PROOF: &str = "split always returns non-empty iterator.";
 
 /// Port pattern
-#[derive(Clone, Hash, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
 pub enum Port {
 	/// No port specified (default port)
-	None,
-	/// Port specified as a wildcard pattern
-	Pattern(String),
+	Default,
+	/// Wildcard i.e, `*` matches any port.
+	Any,
 	/// Fixed numeric port
 	Fixed(u16),
 }
@@ -46,7 +46,7 @@ impl From<Option<u16>> for Port {
 	fn from(opt: Option<u16>) -> Self {
 		match opt {
 			Some(port) => Port::Fixed(port),
-			None => Port::None,
+			None => Port::Default,
 		}
 	}
 }
@@ -61,9 +61,8 @@ impl From<u16> for Port {
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
 pub struct Host {
 	hostname: String,
-	port: Port,
-	host_with_port: String,
 	matcher: Matcher,
+	port: Port,
 }
 
 impl<T: AsRef<str>> From<T> for Host {
@@ -73,70 +72,26 @@ impl<T: AsRef<str>> From<T> for Host {
 }
 
 impl Host {
-	/// Creates a new `Host` given hostname and port number.
-	pub fn new<T: Into<Port>>(hostname: &str, port: T) -> Self {
-		let port = port.into();
-		let hostname = Self::pre_process(hostname);
-		let host_with_port = Self::from_str(&hostname, &port);
-		let matcher = Matcher::new(&host_with_port);
-
-		Host { hostname, port, host_with_port, matcher }
-	}
-
 	/// Attempts to parse given string as a `Host`.
 	/// NOTE: This method always succeeds and falls back to sensible defaults.
 	pub fn parse(hostname: &str) -> Self {
-		let hostname = Self::pre_process(hostname);
-		let mut hostname = hostname.split(':');
-		let host = hostname.next().expect(SPLIT_PROOF);
-		let port = match hostname.next() {
-			None => Port::None,
-			Some(port) => match port.parse::<u16>().ok() {
-				Some(num) => Port::Fixed(num),
-				None => Port::Pattern(port.into()),
-			},
+		let (hostname, port) = parse_host(hostname);
+		Self::new(hostname, port)
+	}
+
+	pub fn new(host: String, port: Port) -> Self {
+		Self { matcher: Matcher::new(&host), hostname: host.to_string(), port }
+	}
+
+	fn matches(&self, other_host: &str, other_port: Port) -> bool {
+		let port_matches = match (&self.port, &other_port) {
+			(Port::Any, _) => true,
+			(Port::Default, Port::Default) => true,
+			(Port::Fixed(p), Port::Fixed(o)) if p == o => true,
+			_ => false,
 		};
 
-		Host::new(host, port)
-	}
-
-	fn pre_process(host: &str) -> String {
-		// Remove possible protocol definition
-		let mut it = host.split("://");
-		let protocol = it.next().expect(SPLIT_PROOF);
-		let host = match it.next() {
-			Some(data) => data,
-			None => protocol,
-		};
-
-		let mut it = host.split('/');
-		it.next().expect(SPLIT_PROOF).to_lowercase()
-	}
-
-	fn from_str(hostname: &str, port: &Port) -> String {
-		format!(
-			"{}{}",
-			hostname,
-			match *port {
-				Port::Fixed(port) => format!(":{port}"),
-				Port::Pattern(ref port) => format!(":{port}"),
-				Port::None => "".into(),
-			},
-		)
-	}
-}
-
-impl Pattern for Host {
-	fn matches<T: AsRef<str>>(&self, other: T) -> bool {
-		self.matcher.matches(other)
-	}
-}
-
-impl std::ops::Deref for Host {
-	type Target = str;
-
-	fn deref(&self) -> &Self::Target {
-		&self.host_with_port
+		port_matches && self.matcher.matches(other_host)
 	}
 }
 
@@ -152,8 +107,10 @@ pub enum AllowHosts {
 impl AllowHosts {
 	/// Verify a host.
 	pub fn verify(&self, value: &str) -> Result<(), Error> {
+		let (host, port) = parse_host(value);
+
 		if let AllowHosts::Only(list) = self {
-			if !list.iter().any(|o| o.matches(value)) {
+			if !list.iter().any(|o| o.matches(&host, port)) {
 				return Err(Error::HttpHeaderRejected("host", value.into()));
 			}
 		}
@@ -162,20 +119,42 @@ impl AllowHosts {
 	}
 }
 
+fn parse_host(input: &str) -> (String, Port) {
+	// Remove possible protocol definition such as `wss://<hostname>:<port>/<route>`.
+	let with_route = input.split("://").last().expect(SPLIT_PROOF);
+
+	// Remove everything beyond `/` which is part of the route such as `<hostname>:<port>/<route>`.
+	let mut it = with_route.split('/');
+	let host_and_port = it.next().expect(SPLIT_PROOF).to_lowercase();
+
+	// The rest is `host:<optional port>`.
+	let mut it = host_and_port.split(":");
+
+	let host = it.next().expect(SPLIT_PROOF).to_string();
+
+	let port = match it.next() {
+		None => Port::Default,
+		Some("*") => Port::Any,
+		Some(p) => Port::Fixed(p.parse().expect("Port must be u16; qed")),
+	};
+
+	(host, port)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{AllowHosts, Host, Port};
 
 	#[test]
 	fn should_parse_host() {
-		assert_eq!(Host::parse("http://parity.io"), Host::new("parity.io", None));
-		assert_eq!(Host::parse("https://parity.io:8443"), Host::new("parity.io", Some(8443)));
-		assert_eq!(Host::parse("chrome-extension://124.0.0.1"), Host::new("124.0.0.1", None));
-		assert_eq!(Host::parse("parity.io/somepath"), Host::new("parity.io", None));
-		assert_eq!(Host::parse("127.0.0.1:8545/somepath"), Host::new("127.0.0.1", Some(8545)));
+		assert_eq!(Host::parse("http://parity.io"), Host::new("parity.io".into(), Port::Default));
+		assert_eq!(Host::parse("https://parity.io:8443"), Host::new("parity.io".into(), Port::Fixed(8443)));
+		assert_eq!(Host::parse("chrome-extension://124.0.0.1"), Host::new("124.0.0.1".into(), Port::Default));
+		assert_eq!(Host::parse("parity.io/somepath"), Host::new("parity.io".into(), Port::Default));
+		assert_eq!(Host::parse("127.0.0.1:8545/somepath"), Host::new("127.0.0.1".into(), Port::Fixed(8545)));
 
 		let host = Host::parse("*.domain:*/somepath");
-		assert_eq!(host.port, Port::Pattern("*".into()));
+		assert_eq!(host.port, Port::Any);
 		assert_eq!(host.hostname.as_str(), "*.domain");
 	}
 
@@ -203,5 +182,6 @@ mod tests {
 	#[test]
 	fn should_support_wildcards() {
 		assert!((AllowHosts::Only(vec!["*.web3.site:*".into()])).verify("parity.web3.site:8180").is_ok());
+		assert!((AllowHosts::Only(vec!["*.web3.site:*".into()])).verify("parity.web3.site").is_ok());
 	}
 }
