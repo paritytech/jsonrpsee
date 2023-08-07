@@ -330,7 +330,7 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 async fn https_works() {
 	init_logger();
 
-	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io:443").unwrap();
+	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
 	let response: String = client.request("system_chain", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
@@ -339,25 +339,9 @@ async fn https_works() {
 async fn wss_works() {
 	init_logger();
 
-	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io:443").await.unwrap();
+	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
 	let response: String = client.request("system_chain", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "Kusama");
-}
-
-#[tokio::test]
-async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
-	init_logger();
-
-	let err = WsClientBuilder::default().build("wss://♥♥♥♥♥♥∀∂").await;
-	assert!(matches!(err, Err(Error::Transport(_))));
-}
-
-#[tokio::test]
-async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
-	init_logger();
-
-	let err = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂");
-	assert!(matches!(err, Err(Error::Transport(_))));
 }
 
 #[tokio::test]

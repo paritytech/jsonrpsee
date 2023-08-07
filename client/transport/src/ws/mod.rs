@@ -27,7 +27,7 @@
 mod stream;
 
 use std::io;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures_util::io::{BufReader, BufWriter};
@@ -44,6 +44,7 @@ use tokio::net::TcpStream;
 
 pub use http::{uri::InvalidUri, HeaderMap, HeaderValue, Uri};
 pub use soketto::handshake::client::Header;
+pub use url::Url;
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
@@ -275,7 +276,7 @@ impl TransportReceiverT for Receiver {
 
 impl WsTransportClientBuilder {
 	/// Try to establish the connection.
-	pub async fn build(self, uri: Uri) -> Result<(Sender, Receiver), WsHandshakeError> {
+	pub async fn build(self, uri: Url) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let target: Target = uri.try_into()?;
 		self.try_connect(target).await
 	}
@@ -348,54 +349,49 @@ impl WsTransportClientBuilder {
 					}
 					Ok(ServerResponse::Redirect { status_code, location }) => {
 						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
-						match location.parse::<Uri>() {
+						match url::Url::parse(&location) {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
-								if uri.scheme().is_some() {
-									target = uri.try_into().map_err(|e| {
-										tracing::error!("Redirection failed: {:?}", e);
-										e
-									})?;
+								target = uri.try_into().map_err(|e| {
+									tracing::error!("Redirection failed: {:?}", e);
+									e
+								})?;
 
-									// Only build TLS connector if `wss` in redirection URL.
-									#[cfg(feature = "__tls")]
-									match target._mode {
-										Mode::Tls if connector.is_none() => {
-											connector = Some(build_tls_config(&self.certificate_store)?);
-										}
-										Mode::Tls => (),
-										// Drop connector if it was configured previously.
-										Mode::Plain => {
-											connector = None;
+								// Only build TLS connector if `wss` in redirection URL.
+								#[cfg(feature = "__tls")]
+								match target._mode {
+									Mode::Tls if connector.is_none() => {
+										connector = Some(build_tls_config(&self.certificate_store)?);
+									}
+									Mode::Tls => (),
+									// Drop connector if it was configured previously.
+									Mode::Plain => {
+										connector = None;
+									}
+								};
+							}
+
+							// Relative URI.
+							Err(url::ParseError::RelativeUrlWithoutBase)
+							| Err(url::ParseError::RelativeUrlWithCannotBeABaseBase) => {
+								// Replace the entire path_and_query if `location` starts with `/` or `//`.
+								if location.starts_with('/') {
+									target.path_and_query = location;
+								} else {
+									match target.path_and_query.rfind('/') {
+										Some(offset) => target.path_and_query.replace_range(offset + 1.., &location),
+										None => {
+											let e = format!("path_and_query: {location}; this is a bug it must contain `/` please open issue");
+											err = Some(Err(WsHandshakeError::Url(e.into())));
+											continue;
 										}
 									};
 								}
-								// Relative URI.
-								else {
-									// Replace the entire path_and_query if `location` starts with `/` or `//`.
-									if location.starts_with('/') {
-										target.path_and_query = location;
-									} else {
-										match target.path_and_query.rfind('/') {
-											Some(offset) => {
-												target.path_and_query.replace_range(offset + 1.., &location)
-											}
-											None => {
-												err = Some(Err(WsHandshakeError::Url(
-													format!(
-														"path_and_query: {location}; this is a bug it must contain `/` please open issue"
-													)
-													.into(),
-												)));
-												continue;
-											}
-										};
-									}
-									target.sockaddrs = sockaddrs;
-								}
+								target.sockaddrs = sockaddrs;
 								break;
 							}
+
 							Err(e) => {
 								err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
 							}
@@ -488,38 +484,36 @@ pub struct Target {
 	path_and_query: String,
 }
 
-impl TryFrom<Uri> for Target {
+impl TryFrom<url::Url> for Target {
 	type Error = WsHandshakeError;
 
-	fn try_from(uri: Uri) -> Result<Self, Self::Error> {
-		let _mode = match uri.scheme_str() {
-			Some("ws") => Mode::Plain,
+	fn try_from(url: Url) -> Result<Self, Self::Error> {
+		let _mode = match url.scheme() {
+			"ws" => Mode::Plain,
 			#[cfg(feature = "__tls")]
-			Some("wss") => Mode::Tls,
+			"wss" => Mode::Tls,
 			invalid_scheme => {
-				let scheme = invalid_scheme.unwrap_or("no scheme");
 				#[cfg(feature = "__tls")]
-				let err = format!("`{scheme}` not supported, expects 'ws' or 'wss'");
+				let err = format!("`{invalid_scheme}` not supported, expects 'ws' or 'wss'");
 				#[cfg(not(feature = "__tls"))]
 				let err = format!("`{}` not supported, expects 'ws' ('wss' requires the tls feature)", scheme);
 				return Err(WsHandshakeError::Url(err.into()));
 			}
 		};
-		let host = uri.host().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
-		let port = uri
-			.port_u16()
-			.ok_or_else(|| WsHandshakeError::Url("No port number in URL (default port is not supported)".into()))?;
-		let host_header = format!("{host}:{port}");
-		let parts = uri.into_parts();
-		let path_and_query = parts.path_and_query.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
-		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self {
-			sockaddrs: sockaddrs.collect(),
-			host,
-			host_header,
-			_mode,
-			path_and_query: path_and_query.to_string(),
-		})
+		let host =
+			url.host_str().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
+		let port = url.port_or_known_default().ok_or_else(|| WsHandshakeError::Url("Invalid port in URL".into()))?;
+
+		let host_header = if port == 80 || port == 443 { host.clone() } else { format!("{host}:{port}") };
+
+		let mut path_and_query = url.path().to_owned();
+		if let Some(query) = url.query() {
+			path_and_query.push('?');
+			path_and_query.push_str(query);
+		}
+
+		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
+		Ok(Self { sockaddrs, host, host_header, _mode, path_and_query: path_and_query.to_string() })
 	}
 }
 
@@ -567,8 +561,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 
 #[cfg(test)]
 mod tests {
-	use super::{Mode, Target, Uri, WsHandshakeError};
-	use http::uri::InvalidUri;
+	use super::{Mode, Target, Url, WsHandshakeError};
 
 	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
 		assert_eq!(&target.host, host);
@@ -578,7 +571,7 @@ mod tests {
 	}
 
 	fn parse_target(uri: &str) -> Result<Target, WsHandshakeError> {
-		uri.parse::<Uri>().map_err(|e: InvalidUri| WsHandshakeError::Url(e.to_string().into()))?.try_into()
+		Url::parse(uri).map_err(|e| WsHandshakeError::Url(e.to_string().into()))?.try_into()
 	}
 
 	#[test]
@@ -587,11 +580,17 @@ mod tests {
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
 	}
 
+	#[test]
+	fn ws_default_port_works() {
+		let target = parse_target("ws://127.0.0.1").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/");
+	}
+
 	#[cfg(feature = "__tls")]
 	#[test]
 	fn wss_works() {
-		let target = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap();
-		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:443", Mode::Tls, "/");
+		let target = parse_target("wss://kusama-rpc.polkadot.io").unwrap();
+		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io", Mode::Tls, "/");
 	}
 
 	#[cfg(not(feature = "__tls"))]
@@ -618,18 +617,18 @@ mod tests {
 	#[test]
 	fn url_with_path_works() {
 		let target = parse_target("ws://127.0.0.1:443/my-special-path").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my-special-path");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
 		let target = parse_target("ws://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my?name1=value1&name2=value2");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
 		let target = parse_target("ws://127.0.0.1:443/my.htm#ignore").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my.htm");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my.htm");
 	}
 }
