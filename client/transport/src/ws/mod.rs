@@ -318,7 +318,7 @@ impl WsTransportClientBuilder {
 
 				let mut client = WsHandshakeClient::new(
 					BufReader::new(BufWriter::new(tcp_stream)),
-					&target.host_header,
+					&target.host,
 					&target.path_and_query,
 				);
 
@@ -480,8 +480,6 @@ pub struct Target {
 	sockaddrs: Vec<SocketAddr>,
 	/// The host name (domain or IP address).
 	host: String,
-	/// The Host request header specifies the host and port number of the server to which the request is being sent.
-	host_header: String,
 	/// WebSocket stream mode, see [`Mode`] for further documentation.
 	_mode: Mode,
 	/// The path and query parts from an URL.
@@ -509,17 +507,10 @@ impl TryFrom<Uri> for Target {
 		let port = uri
 			.port_u16()
 			.ok_or_else(|| WsHandshakeError::Url("No port number in URL (default port is not supported)".into()))?;
-		let host_header = format!("{host}:{port}");
 		let parts = uri.into_parts();
 		let path_and_query = parts.path_and_query.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
-		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self {
-			sockaddrs: sockaddrs.collect(),
-			host,
-			host_header,
-			_mode,
-			path_and_query: path_and_query.to_string(),
-		})
+		let sockaddrs = (host.as_str(), port).to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
+		Ok(Self { sockaddrs: sockaddrs.collect(), host, _mode, path_and_query: path_and_query.to_string() })
 	}
 }
 
@@ -570,9 +561,8 @@ mod tests {
 	use super::{Mode, Target, Uri, WsHandshakeError};
 	use http::uri::InvalidUri;
 
-	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
+	fn assert_ws_target(target: Target, host: &str, mode: Mode, path_and_query: &str) {
 		assert_eq!(&target.host, host);
-		assert_eq!(&target.host_header, host_header);
 		assert_eq!(target._mode, mode);
 		assert_eq!(&target.path_and_query, path_and_query);
 	}
@@ -584,14 +574,14 @@ mod tests {
 	#[test]
 	fn ws_works() {
 		let target = parse_target("ws://127.0.0.1:9933").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
+		assert_ws_target(target, "127.0.0.1", Mode::Plain, "/");
 	}
 
 	#[cfg(feature = "__tls")]
 	#[test]
 	fn wss_works() {
 		let target = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap();
-		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:443", Mode::Tls, "/");
+		assert_ws_target(target, "kusama-rpc.polkadot.io", Mode::Tls, "/");
 	}
 
 	#[cfg(not(feature = "__tls"))]
@@ -618,18 +608,18 @@ mod tests {
 	#[test]
 	fn url_with_path_works() {
 		let target = parse_target("ws://127.0.0.1:443/my-special-path").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my-special-path");
+		assert_ws_target(target, "127.0.0.1", Mode::Plain, "/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
 		let target = parse_target("ws://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my?name1=value1&name2=value2");
+		assert_ws_target(target, "127.0.0.1", Mode::Plain, "/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
 		let target = parse_target("ws://127.0.0.1:443/my.htm#ignore").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my.htm");
+		assert_ws_target(target, "127.0.0.1", Mode::Plain, "/my.htm");
 	}
 }
