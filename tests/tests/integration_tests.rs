@@ -1026,10 +1026,10 @@ async fn ws_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let acl = AllowHosts::Only(vec![
-		AllowHost::from_str("http://localhost:*").unwrap(),
-		AllowHost::from_str("http://127.0.0.1:*").unwrap(),
-	]);
+	let acl = AllowHosts::Only(
+		vec![Authority::from_str("http://localhost:*").unwrap(), Authority::from_str("http://127.0.0.1:*").unwrap()]
+			.into(),
+	);
 
 	let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -1050,10 +1050,10 @@ async fn http_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let allowed_hosts = AllowHosts::Only(vec![
-		AllowHost::from_str("http://localhost:*").unwrap(),
-		AllowHost::from_str("http://127.0.0.1:*").unwrap(),
-	]);
+	let allowed_hosts = AllowHosts::Only(
+		vec![Authority::from_str("http://localhost:*").unwrap(), Authority::from_str("http://127.0.0.1:*").unwrap()]
+			.into(),
+	);
 
 	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -1074,7 +1074,7 @@ async fn deny_invalid_host() {
 
 	init_logger();
 
-	let allowed_hosts = AllowHosts::Only(vec![AllowHost::from_str("http://example.com").unwrap()]);
+	let allowed_hosts = AllowHosts::Only(vec![Authority::from_str("http://example.com").unwrap()].into());
 
 	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
