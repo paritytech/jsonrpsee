@@ -36,7 +36,7 @@ use jsonrpsee::server::{
 	PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
-use jsonrpsee::{Authority, SubscriptionCloseResponse};
+use jsonrpsee::SubscriptionCloseResponse;
 use serde::Serialize;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -199,7 +199,7 @@ pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
 }
 
 pub async fn server_with_access_control(
-	allowed_hosts: Option<Vec<Authority>>,
+	allowed_hosts: Option<Vec<&str>>,
 	cors: CorsLayer,
 ) -> (SocketAddr, ServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
@@ -211,7 +211,7 @@ pub async fn server_with_access_control(
 	let mut builder = jsonrpsee::server::Server::builder();
 
 	if let Some(filter) = allowed_hosts {
-		builder = builder.host_filter(filter)
+		builder = builder.host_filter(filter).unwrap();
 	}
 
 	let server = builder.set_middleware(middleware).build("127.0.0.1:0").await.unwrap();

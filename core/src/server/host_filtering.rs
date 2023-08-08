@@ -50,21 +50,33 @@ impl From<u16> for Port {
 
 /// Represent the http URI scheme that is returned by the HTTP host header
 ///
-/// <http-URI = "http:" "//" authority path-abempty [ "?" query ][ "#" fragment ]>
-///
-/// Further information can be found: https://www.rfc-editor.org/rfc/rfc7230#section-2.7.1
+/// Further information can be found: <https://www.rfc-editor.org/rfc/rfc7230#section-2.7.1>
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
 pub struct Authority {
 	hostname: String,
 	port: Port,
 }
 
+/// Error that can happen when parsing an URI authority fails.
+#[derive(Debug, thiserror::Error)]
+pub enum AuthorityError {
+	/// Invalid URI.
+	#[error("{0}")]
+	InvalidUri(InvalidUri),
+	/// Invalid port.
+	#[error("{0}")]
+	InvalidPort(String),
+	/// The host was not found.
+	#[error("The host was not found")]
+	MissingHost,
+}
+
 impl FromStr for Authority {
-	type Err = String;
+	type Err = AuthorityError;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let uri: Uri = s.parse().map_err(|e: InvalidUri| e.to_string())?;
-		let authority = uri.authority().ok_or_else(|| "HTTP Host must contain authority".to_owned())?;
+		let uri: Uri = s.parse().map_err(|e: InvalidUri| AuthorityError::InvalidUri(e))?;
+		let authority = uri.authority().ok_or_else(|| AuthorityError::MissingHost)?;
 		let hostname = authority.host();
 		let maybe_port = &authority.as_str()[hostname.len()..];
 
@@ -72,7 +84,8 @@ impl FromStr for Authority {
 		let port = match maybe_port.split_once(':') {
 			Some((_, "*")) => Port::Any,
 			Some((_, p)) => {
-				let port_u16: u16 = p.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+				let port_u16: u16 =
+					p.parse().map_err(|e: std::num::ParseIntError| AuthorityError::InvalidPort(e.to_string()))?;
 
 				// Omit default port to allow both requests with and without the default port.
 				match default_port(uri.scheme_str()) {
@@ -89,9 +102,9 @@ impl FromStr for Authority {
 
 /// Represent the URL patterns that is whitelisted.
 #[derive(Default, Debug, Clone)]
-pub struct UrlPattern(Router<Port>);
+pub struct WhitelistedHosts(Router<Port>);
 
-impl<T> From<T> for UrlPattern
+impl<T> From<T> for WhitelistedHosts
 where
 	T: IntoIterator<Item = Authority>,
 {
@@ -106,7 +119,7 @@ where
 	}
 }
 
-impl UrlPattern {
+impl WhitelistedHosts {
 	fn recognize(&self, other: &Authority) -> bool {
 		if let Ok(p) = self.0.recognize(&other.hostname) {
 			let p = p.handler();
@@ -129,7 +142,7 @@ pub enum AllowHosts {
 	/// Allow all hosts (no filter).
 	Any,
 	/// Allow only specified hosts.
-	Only(UrlPattern),
+	Only(WhitelistedHosts),
 }
 
 impl AllowHosts {

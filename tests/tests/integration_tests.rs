@@ -29,7 +29,6 @@
 
 mod helpers;
 
-use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1024,10 +1023,12 @@ async fn ws_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let whitelist =
-		vec![Authority::from_str("http://localhost:*").unwrap(), Authority::from_str("http://127.0.0.1:*").unwrap()];
-
-	let server = ServerBuilder::default().host_filter(whitelist).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.host_filter(["http://localhost:*", "http://127.0.0.1:*"])
+		.unwrap()
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1046,10 +1047,12 @@ async fn http_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let allowed_hosts =
-		vec![Authority::from_str("http://localhost:*").unwrap(), Authority::from_str("http://127.0.0.1:*").unwrap()];
-
-	let server = ServerBuilder::default().host_filter(allowed_hosts).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.host_filter(vec!["http://localhost:*", "http://127.0.0.1:*"])
+		.unwrap()
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1068,11 +1071,8 @@ async fn deny_invalid_host() {
 
 	init_logger();
 
-	let server = ServerBuilder::default()
-		.host_filter(vec![Authority::from_str("http://example.com").unwrap()])
-		.build("127.0.0.1:0")
-		.await
-		.unwrap();
+	let server =
+		ServerBuilder::default().host_filter(["http://example.com"]).unwrap().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();

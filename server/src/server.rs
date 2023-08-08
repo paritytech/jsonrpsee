@@ -28,6 +28,7 @@ use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -42,7 +43,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
-use jsonrpsee_core::server::{AllowHosts, Authority, Methods, UrlPattern};
+use jsonrpsee_core::server::{AllowHosts, Authority, AuthorityError, Methods, WhitelistedHosts};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
@@ -422,9 +423,13 @@ impl<B, L> Builder<B, L> {
 	/// Enables host filtering and allow only the specified hosts.
 	///
 	/// Default: allow all.
-	pub fn host_filter<T: IntoIterator<Item = Authority>>(mut self, allow_only: T) -> Self {
-		self.settings.allow_hosts = AllowHosts::Only(UrlPattern::from(allow_only.into_iter()));
-		self
+	pub fn host_filter<T: IntoIterator<Item = U>, U: AsRef<str>>(
+		mut self,
+		allow_only: T,
+	) -> Result<Self, AuthorityError> {
+		let allow_only: Result<Vec<_>, _> = allow_only.into_iter().map(|a| Authority::from_str(a.as_ref())).collect();
+		self.settings.allow_hosts = AllowHosts::Only(WhitelistedHosts::from(allow_only?));
+		Ok(self)
 	}
 
 	/// Disable host filtering and allow all.
