@@ -1021,7 +1021,6 @@ async fn http_health_api_works() {
 #[tokio::test]
 async fn ws_host_filtering_wildcard_works() {
 	use jsonrpsee::server::*;
-	use std::str::FromStr;
 
 	init_logger();
 
