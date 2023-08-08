@@ -3,4 +3,4 @@
 mod host;
 mod matcher;
 
-pub use host::AllowHosts;
+pub use host::*;

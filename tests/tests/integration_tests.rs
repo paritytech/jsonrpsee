@@ -29,6 +29,7 @@
 
 mod helpers;
 
+use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1021,10 +1022,14 @@ async fn http_health_api_works() {
 #[tokio::test]
 async fn ws_host_filtering_wildcard_works() {
 	use jsonrpsee::server::*;
+	use std::str::FromStr;
 
 	init_logger();
 
-	let acl = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
+	let acl = AllowHosts::Only(vec![
+		AllowHost::from_str("http://localhost:*").unwrap(),
+		AllowHost::from_str("http://127.0.0.1:*").unwrap(),
+	]);
 
 	let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -1045,7 +1050,10 @@ async fn http_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let allowed_hosts = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
+	let allowed_hosts = AllowHosts::Only(vec![
+		AllowHost::from_str("http://localhost:*").unwrap(),
+		AllowHost::from_str("http://127.0.0.1:*").unwrap(),
+	]);
 
 	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -1066,7 +1074,7 @@ async fn deny_invalid_host() {
 
 	init_logger();
 
-	let allowed_hosts = AllowHosts::Only(vec!["http://example.com".into()]);
+	let allowed_hosts = AllowHosts::Only(vec![AllowHost::from_str("http://example.com").unwrap()]);
 
 	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
