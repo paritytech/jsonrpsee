@@ -42,15 +42,6 @@ pub enum Port {
 	Fixed(u16),
 }
 
-impl From<Option<u16>> for Port {
-	fn from(opt: Option<u16>) -> Self {
-		match opt {
-			Some(port) => Port::Fixed(port),
-			None => Port::Default,
-		}
-	}
-}
-
 impl From<u16> for Port {
 	fn from(port: u16) -> Port {
 		Port::Fixed(port)
@@ -81,12 +72,12 @@ impl FromStr for Authority {
 		let port = match maybe_port.split_once(':') {
 			Some((_, "*")) => Port::Any,
 			Some((_, p)) => {
-				let port_u16 = p.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+				let port_u16: u16 = p.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
 
 				// Omit default port to allow both requests with and without the default port.
 				match default_port(uri.scheme_str()) {
 					Some(p) if p == port_u16 => Port::Default,
-					_ => Port::Fixed(port_u16),
+					_ => port_u16.into(),
 				}
 			}
 			None => Port::Default,
