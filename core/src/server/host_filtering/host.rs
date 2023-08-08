@@ -28,10 +28,9 @@
 
 use std::str::FromStr;
 
-use hyper::http::uri::InvalidUri;
-
 use crate::server::host_filtering::matcher::{Matcher, Pattern};
 use crate::Error;
+use http::uri::{InvalidUri, Uri};
 
 /// Port pattern
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
@@ -74,7 +73,7 @@ impl FromStr for Authority {
 	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let uri: http::Uri = s.parse().map_err(|e: InvalidUri| e.to_string())?;
+		let uri: Uri = s.parse().map_err(|e: InvalidUri| e.to_string())?;
 		let authority = uri.authority().ok_or_else(|| "HTTP Host must contain authority".to_owned())?;
 		let hostname = authority.host();
 		let maybe_port = &authority.as_str()[hostname.len()..];
