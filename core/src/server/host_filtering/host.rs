@@ -74,14 +74,15 @@ impl FromStr for Authority {
 	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let uri: hyper::Uri = s.parse().map_err(|e: InvalidUri| e.to_string())?;
+		let uri: http::Uri = s.parse().map_err(|e: InvalidUri| e.to_string())?;
 		let authority = uri.authority().ok_or_else(|| "HTTP Host must contain authority".to_owned())?;
 		let hostname = authority.host();
 		let maybe_port = &authority.as_str()[hostname.len()..];
 
-		let port = match maybe_port.split(":").nth(1) {
-			Some("*") => Port::Any,
-			Some(p) => {
+		// After the host segment, the authority may contain a port such as `fooo:33`, `foo:*` or `foo`
+		let port = match maybe_port.split_once(':') {
+			Some((_, "*")) => Port::Any,
+			Some((_, p)) => {
 				let port_u16 = p.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
 				Port::Fixed(port_u16)
 			}
