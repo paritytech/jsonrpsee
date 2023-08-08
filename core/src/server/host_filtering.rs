@@ -75,8 +75,8 @@ impl FromStr for Authority {
 	type Err = AuthorityError;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let uri: Uri = s.parse().map_err(|e: InvalidUri| AuthorityError::InvalidUri(e))?;
-		let authority = uri.authority().ok_or_else(|| AuthorityError::MissingHost)?;
+		let uri: Uri = s.parse().map_err(AuthorityError::InvalidUri)?;
+		let authority = uri.authority().ok_or(AuthorityError::MissingHost)?;
 		let hostname = authority.host();
 		let maybe_port = &authority.as_str()[hostname.len()..];
 
