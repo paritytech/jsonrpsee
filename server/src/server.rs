@@ -42,7 +42,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
-use jsonrpsee_core::server::{AllowHosts, Methods};
+use jsonrpsee_core::server::{AllowHosts, Authority, Methods, UrlPattern};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
@@ -419,9 +419,19 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Sets host filtering.
-	pub fn set_host_filtering(mut self, allow: AllowHosts) -> Self {
-		self.settings.allow_hosts = allow;
+	/// Enables host filtering and allow only the specified hosts.
+	///
+	/// Default: allow all.
+	pub fn host_filter<T: IntoIterator<Item = Authority>>(mut self, allow_only: T) -> Self {
+		self.settings.allow_hosts = AllowHosts::Only(UrlPattern::from(allow_only.into_iter()));
+		self
+	}
+
+	/// Disable host filtering and allow all.
+	///
+	/// Default: allow all.
+	pub fn disable_host_filtering(mut self) -> Self {
+		self.settings.allow_hosts = AllowHosts::Any;
 		self
 	}
 
