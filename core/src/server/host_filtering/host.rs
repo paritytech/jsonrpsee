@@ -83,7 +83,12 @@ impl FromStr for Authority {
 			Some((_, "*")) => Port::Any,
 			Some((_, p)) => {
 				let port_u16 = p.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
-				Port::Fixed(port_u16)
+
+				// Omit default port to allow both requests with and without the default port.
+				match default_port(uri.scheme_str()) {
+					Some(p) if p == port_u16 => Port::Default,
+					_ => Port::Fixed(port_u16),
+				}
 			}
 			None => Port::Default,
 		};
@@ -156,6 +161,15 @@ impl AllowHosts {
 	}
 }
 
+fn default_port(scheme: Option<&str>) -> Option<u16> {
+	match scheme {
+		Some("http") | Some("ws") => Some(80),
+		Some("https") | Some("wss") => Some(443),
+		Some("ftp") => Some(21),
+		_ => None,
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{AllowHost, AllowHosts, Authority, Port};
@@ -224,6 +238,17 @@ mod tests {
 			.is_ok());
 		assert!((AllowHosts::Only(vec![AllowHost::from_str("*.web3.site:*").unwrap()]))
 			.verify("parity.web3.site")
+			.is_ok());
+	}
+
+	#[test]
+	fn should_accept_with_and_without_default_port() {
+		assert!(AllowHosts::Only(vec![AllowHost::from_str("https://parity.io:443").unwrap()])
+			.verify("https://parity.io")
+			.is_ok());
+
+		assert!(AllowHosts::Only(vec![AllowHost::from_str("https://parity.io").unwrap()])
+			.verify("https://parity.io:443")
 			.is_ok());
 	}
 }
