@@ -150,6 +150,14 @@ impl<'a> Params<'a> {
 			None => 0,
 		}
 	}
+
+	/// Return the underlying JSON string as a `&str`.
+	pub fn as_str(&self) -> Option<&str> {
+		match self.0 {
+			Some(ref cow) => Some(cow.as_ref()),
+			None => None,
+		}
+	}
 }
 
 /// An `Iterator`-like parser for a sequence of [`Params`].
