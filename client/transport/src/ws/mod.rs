@@ -496,15 +496,11 @@ impl TryFrom<url::Url> for Target {
 				#[cfg(feature = "__tls")]
 				let err = format!("`{invalid_scheme}` not supported, expects 'ws' or 'wss'");
 				#[cfg(not(feature = "__tls"))]
-				let err = format!("`{}` not supported, expects 'ws' ('wss' requires the tls feature)", scheme);
+				let err = format!("`{invalid_scheme}` not supported, expects 'ws' ('wss' requires the tls feature)");
 				return Err(WsHandshakeError::Url(err.into()));
 			}
 		};
-		let host =
-			url.host_str().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
-		let port = url.port_or_known_default().ok_or_else(|| WsHandshakeError::Url("Invalid port in URL".into()))?;
-
-		let host_header = if port == 80 || port == 443 { host.clone() } else { format!("{host}:{port}") };
+		let host = url.host_str().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("Invalid host".into()))?;
 
 		let mut path_and_query = url.path().to_owned();
 		if let Some(query) = url.query() {
@@ -513,7 +509,13 @@ impl TryFrom<url::Url> for Target {
 		}
 
 		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self { sockaddrs, host, host_header, _mode, path_and_query: path_and_query.to_string() })
+		Ok(Self {
+			sockaddrs,
+			host,
+			host_header: url.authority().to_string(),
+			_mode,
+			path_and_query: path_and_query.to_string(),
+		})
 	}
 }
 
@@ -575,28 +577,22 @@ mod tests {
 	}
 
 	#[test]
-	fn ws_works() {
+	fn ws_works_with_port() {
 		let target = parse_target("ws://127.0.0.1:9933").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
 	}
 
-	#[test]
-	fn ws_default_port_works() {
-		let target = parse_target("ws://127.0.0.1").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/");
-	}
-
 	#[cfg(feature = "__tls")]
 	#[test]
-	fn wss_works() {
-		let target = parse_target("wss://kusama-rpc.polkadot.io").unwrap();
-		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io", Mode::Tls, "/");
+	fn wss_works_with_port() {
+		let target = parse_target("wss://kusama-rpc.polkadot.io:9999").unwrap();
+		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:9999", Mode::Tls, "/");
 	}
 
 	#[cfg(not(feature = "__tls"))]
 	#[test]
 	fn wss_fails_with_tls_feature() {
-		let err = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap_err();
+		let err = parse_target("wss://kusama-rpc.polkadot.io").unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
@@ -616,19 +612,32 @@ mod tests {
 
 	#[test]
 	fn url_with_path_works() {
-		let target = parse_target("ws://127.0.0.1:443/my-special-path").unwrap();
+		let target = parse_target("ws://127.0.0.1/my-special-path").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
-		let target = parse_target("ws://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
+		let target = parse_target("ws://127.0.0.1/my?name1=value1&name2=value2").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
-		let target = parse_target("ws://127.0.0.1:443/my.htm#ignore").unwrap();
+		let target = parse_target("ws://127.0.0.1:/my.htm#ignore").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my.htm");
+	}
+
+	#[cfg(feature = "__tls")]
+	#[test]
+	fn wss_default_port_is_omitted() {
+		let target = parse_target("wss://127.0.0.1:443").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Tls, "/");
+	}
+
+	#[test]
+	fn ws_default_port_is_omitted() {
+		let target = parse_target("ws://127.0.0.1:80").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/");
 	}
 }
