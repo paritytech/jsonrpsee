@@ -36,7 +36,7 @@ use jsonrpsee_types::{
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{sync::Arc, time::Duration};
+use std::{fmt::Write, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 
 /// Type-alias for subscribers.
@@ -480,15 +480,25 @@ pub(crate) fn sub_message_to_json(
 	sub_id: &SubscriptionId,
 	method: &str,
 ) -> String {
-	let result_or_err = result_or_err.as_str();
-
 	match msg.0 {
 		SubscriptionMessageInner::Complete(msg) => msg,
 		SubscriptionMessageInner::NeedsData(result) => {
+			/// Mandatory JSON RPC field and delimiters.
+			const JSON_RPC_FIELDS: usize = 60;
+
+			let result_or_err = result_or_err.as_str();
 			let sub_id = serde_json::to_string(&sub_id).expect("valid JSON; qed");
-			format!(
-				r#"{{"jsonrpc":"2.0","method":"{method}","params":{{"subscription":{sub_id},"{result_or_err}":{result}}}}}"#,
+			let len = sub_id.len() + result.len() + method.len() + result_or_err.len() + JSON_RPC_FIELDS;
+
+			let mut s = String::with_capacity(len);
+
+			write!(
+				&mut s,
+				r#"{{"jsonrpc":"2.0","method":"{method}","params":{{"subscription":{sub_id},"{result_or_err}":{result}}}}}"#
 			)
+			.expect("std::fmt::write! must work");
+
+			s
 		}
 	}
 }
