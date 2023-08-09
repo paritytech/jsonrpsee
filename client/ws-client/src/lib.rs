@@ -43,8 +43,9 @@ pub use jsonrpsee_types as types;
 
 pub use http::{HeaderMap, HeaderValue};
 use std::time::Duration;
+use url::Url;
 
-use jsonrpsee_client_transport::ws::{InvalidUri, Uri, WsTransportClientBuilder};
+use jsonrpsee_client_transport::ws::WsTransportClientBuilder;
 use jsonrpsee_core::client::{CertificateStore, ClientBuilder, IdKind};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
@@ -243,7 +244,7 @@ impl WsClientBuilder {
 			max_redirections,
 		};
 
-		let uri: Uri = url.as_ref().parse().map_err(|e: InvalidUri| Error::Transport(e.into()))?;
+		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
 		let (sender, receiver) = transport_builder.build(uri).await.map_err(|e| Error::Transport(e.into()))?;
 
 		let mut client = ClientBuilder::default()
