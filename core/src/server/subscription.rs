@@ -30,6 +30,7 @@ use super::helpers::{MethodResponse, MethodSink};
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
 use crate::{traits::IdProvider, Error, StringError};
+use jsonrpsee_types::SubscriptionPayload;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorObjectOwned, Id, ResponsePayload, SubscriptionId, SubscriptionResponse,
 };
@@ -130,6 +131,18 @@ impl SubscriptionMessage {
 	/// Fails if the value couldn't be serialized.
 	pub fn from_json(t: &impl Serialize) -> Result<Self, serde_json::Error> {
 		serde_json::to_string(t).map(|json| SubscriptionMessage(SubscriptionMessageInner::NeedsData(json)))
+	}
+
+	/// Create a subscription message this is more efficient than [`SubscriptionMessage::from_json`]
+	/// because it only allocates once.
+	///
+	/// Fails if the json `result` couldn't be serialized.
+	pub fn new(method: &str, subscription: SubscriptionId, result: &impl Serialize) -> Result<Self, serde_json::Error> {
+		let json = serde_json::to_string(&SubscriptionResponse::new(
+			method.into(),
+			SubscriptionPayload { subscription, result },
+		))?;
+		Ok(Self::from_complete_message(json))
 	}
 
 	pub(crate) fn from_complete_message(msg: String) -> Self {
