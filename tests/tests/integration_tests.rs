@@ -914,7 +914,6 @@ async fn http_correct_content_type_required() {
 #[tokio::test]
 async fn http_cors_preflight_works() {
 	use hyper::{Body, Client, Method, Request};
-	use jsonrpsee::server::AllowHosts;
 
 	init_logger();
 
@@ -922,7 +921,7 @@ async fn http_cors_preflight_works() {
 		.allow_methods([Method::POST])
 		.allow_origin("https://foo.com".parse::<HeaderValue>().unwrap())
 		.allow_headers([hyper::header::CONTENT_TYPE]);
-	let (server_addr, _handle) = server_with_access_control(AllowHosts::Any, cors).await;
+	let (server_addr, _handle) = server_with_access_control(None, cors).await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
@@ -1024,9 +1023,12 @@ async fn ws_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let acl = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
-
-	let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.host_filter(["http://localhost:*".to_string(), "http://127.0.0.1:*".to_string()])
+		.unwrap()
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1045,9 +1047,12 @@ async fn http_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let allowed_hosts = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
-
-	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.host_filter(vec!["http://localhost:*", "http://127.0.0.1:*"])
+		.unwrap()
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1066,9 +1071,8 @@ async fn deny_invalid_host() {
 
 	init_logger();
 
-	let allowed_hosts = AllowHosts::Only(vec!["http://example.com".into()]);
-
-	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
+	let server =
+		ServerBuilder::default().host_filter(["http://example.com"]).unwrap().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();

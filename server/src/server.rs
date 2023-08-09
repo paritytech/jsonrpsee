@@ -42,7 +42,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
-use jsonrpsee_core::server::{AllowHosts, Methods};
+use jsonrpsee_core::server::{AllowHosts, Authority, AuthorityError, Methods, WhitelistedHosts};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
@@ -419,9 +419,27 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Sets host filtering.
-	pub fn set_host_filtering(mut self, allow: AllowHosts) -> Self {
-		self.settings.allow_hosts = allow;
+	/// Enables host filtering and allow only the specified hosts.
+	///
+	/// Default: no host filtering is enabled.
+	pub fn host_filter<T: IntoIterator<Item = U>, U: TryInto<Authority>>(
+		mut self,
+		allow_only: T,
+	) -> Result<Self, AuthorityError>
+	where
+		T: IntoIterator<Item = U>,
+		U: TryInto<Authority, Error = AuthorityError>,
+	{
+		let allow_only: Result<Vec<_>, _> = allow_only.into_iter().map(|a| a.try_into()).collect();
+		self.settings.allow_hosts = AllowHosts::Only(WhitelistedHosts::from(allow_only?));
+		Ok(self)
+	}
+
+	/// Disable host filtering and allow all.
+	///
+	/// Default: no host filtering is enabled.
+	pub fn disable_host_filtering(mut self) -> Self {
+		self.settings.allow_hosts = AllowHosts::Any;
 		self
 	}
 
