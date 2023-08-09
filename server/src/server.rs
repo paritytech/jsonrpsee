@@ -421,7 +421,7 @@ impl<B, L> Builder<B, L> {
 
 	/// Enables host filtering and allow only the specified hosts.
 	///
-	/// Default: allow all.
+	/// Default: no host filtering is enabled.
 	pub fn host_filter<T: IntoIterator<Item = U>, U: TryInto<Authority>>(
 		mut self,
 		allow_only: T,
