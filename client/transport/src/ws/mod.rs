@@ -372,9 +372,8 @@ impl WsTransportClientBuilder {
 								};
 							}
 
-							// Relative URI.
-							Err(url::ParseError::RelativeUrlWithoutBase)
-							| Err(url::ParseError::RelativeUrlWithCannotBeABaseBase) => {
+							// Relative URI such as `/foo/bar.html` or `cake.html`
+							Err(url::ParseError::RelativeUrlWithoutBase) => {
 								// Replace the entire path_and_query if `location` starts with `/` or `//`.
 								if location.starts_with('/') {
 									target.path_and_query = location;

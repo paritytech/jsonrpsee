@@ -280,7 +280,7 @@ mod tests {
 	fn https_works() {
 		let client = HttpTransportClient::new(
 			80,
-			"https://localhost:9933",
+			"https://localhost",
 			80,
 			CertificateStore::Native,
 			80,
@@ -288,7 +288,7 @@ mod tests {
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_eq!(&client.target, "https://localhost:9933/");
+		assert_eq!(&client.target, "https://localhost/");
 	}
 
 	#[cfg(not(feature = "__tls"))]
@@ -337,7 +337,7 @@ mod tests {
 	fn url_with_path_works() {
 		let client = HttpTransportClient::new(
 			1337,
-			"http://localhost:9944/my-special-path",
+			"http://localhost/my-special-path",
 			1337,
 			CertificateStore::Native,
 			80,
@@ -345,14 +345,14 @@ mod tests {
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_eq!(&client.target, "http://localhost:9944/my-special-path");
+		assert_eq!(&client.target, "http://localhost/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
 		let client = HttpTransportClient::new(
 			u32::MAX,
-			"http://127.0.0.1:9999/my?name1=value1&name2=value2",
+			"http://127.0.0.1/my?name1=value1&name2=value2",
 			u32::MAX,
 			CertificateStore::Native,
 			80,
@@ -360,14 +360,14 @@ mod tests {
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_eq!(&client.target, "http://127.0.0.1:9999/my?name1=value1&name2=value2");
+		assert_eq!(&client.target, "http://127.0.0.1/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
 		let client = HttpTransportClient::new(
 			999,
-			"http://127.0.0.1:9944/my.htm#ignore",
+			"http://127.0.0.1/my.htm#ignore",
 			999,
 			CertificateStore::Native,
 			80,
@@ -375,14 +375,14 @@ mod tests {
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_eq!(&client.target, "http://127.0.0.1:9944/my.htm");
+		assert_eq!(&client.target, "http://127.0.0.1/my.htm");
 	}
 
 	#[test]
-	fn url_default_port_works() {
+	fn url_default_port_is_omitted() {
 		let client = HttpTransportClient::new(
 			999,
-			"http://127.0.0.1",
+			"http://127.0.0.1:80",
 			999,
 			CertificateStore::Native,
 			80,
@@ -391,6 +391,37 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(&client.target, "http://127.0.0.1/");
+	}
+
+	#[cfg(feature = "__tls")]
+	#[test]
+	fn https_custom_port_works() {
+		let client = HttpTransportClient::new(
+			80,
+			"https://localhost:9999",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap();
+		assert_eq!(&client.target, "https://localhost:9999/");
+	}
+
+	#[test]
+	fn http_custom_port_works() {
+		let client = HttpTransportClient::new(
+			80,
+			"http://localhost:9999",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap();
+		assert_eq!(&client.target, "http://localhost:9999/");
 	}
 
 	#[tokio::test]
