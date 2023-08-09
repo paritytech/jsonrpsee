@@ -349,7 +349,7 @@ impl WsTransportClientBuilder {
 					}
 					Ok(ServerResponse::Redirect { status_code, location }) => {
 						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
-						match url::Url::parse(&location) {
+						match Url::parse(&location) {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
