@@ -437,7 +437,7 @@ impl<B, L> Builder<B, L> {
 
 	/// Disable host filtering and allow all.
 	///
-	/// Default: allow all.
+	/// Default: no host filtering is enabled.
 	pub fn disable_host_filtering(mut self) -> Self {
 		self.settings.allow_hosts = AllowHosts::Any;
 		self
