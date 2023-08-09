@@ -322,6 +322,11 @@ impl SubscriptionSink {
 		self.method
 	}
 
+	/// Get the connection ID.
+	pub fn connection_id(&self) -> ConnectionId {
+		self.uniq_sub.conn_id
+	}
+
 	/// Send out a response on the subscription and wait until there is capacity.
 	///
 	///
