@@ -26,10 +26,11 @@
 
 //! HTTP Host Header validation.
 
+use std::net::SocketAddr;
+
 use crate::Error;
 use http::uri::{InvalidUri, Uri};
 use route_recognizer::Router;
-use std::str::FromStr;
 
 /// Port pattern
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
@@ -57,25 +58,9 @@ pub struct Authority {
 	port: Port,
 }
 
-/// Error that can happen when parsing an URI authority fails.
-#[derive(Debug, thiserror::Error)]
-pub enum AuthorityError {
-	/// Invalid URI.
-	#[error("{0}")]
-	InvalidUri(InvalidUri),
-	/// Invalid port.
-	#[error("{0}")]
-	InvalidPort(String),
-	/// The host was not found.
-	#[error("The host was not found")]
-	MissingHost,
-}
-
-impl FromStr for Authority {
-	type Err = AuthorityError;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let uri: Uri = s.parse().map_err(AuthorityError::InvalidUri)?;
+impl Authority {
+	fn inner_from_str(value: &str) -> Result<Self, AuthorityError> {
+		let uri: Uri = value.parse().map_err(AuthorityError::InvalidUri)?;
 		let authority = uri.authority().ok_or(AuthorityError::MissingHost)?;
 		let hostname = authority.host();
 		let maybe_port = &authority.as_str()[hostname.len()..];
@@ -97,6 +82,44 @@ impl FromStr for Authority {
 		};
 
 		Ok(Self { hostname: hostname.to_string(), port })
+	}
+}
+
+/// Error that can happen when parsing an URI authority fails.
+#[derive(Debug, thiserror::Error)]
+pub enum AuthorityError {
+	/// Invalid URI.
+	#[error("{0}")]
+	InvalidUri(InvalidUri),
+	/// Invalid port.
+	#[error("{0}")]
+	InvalidPort(String),
+	/// The host was not found.
+	#[error("The host was not found")]
+	MissingHost,
+}
+
+impl<'a> TryFrom<&'a str> for Authority {
+	type Error = AuthorityError;
+
+	fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+		Self::inner_from_str(value)
+	}
+}
+
+impl TryFrom<String> for Authority {
+	type Error = AuthorityError;
+
+	fn try_from(value: String) -> Result<Self, Self::Error> {
+		Self::inner_from_str(&value)
+	}
+}
+
+impl TryFrom<std::net::SocketAddr> for Authority {
+	type Error = AuthorityError;
+
+	fn try_from(sockaddr: SocketAddr) -> Result<Self, Self::Error> {
+		Self::inner_from_str(&sockaddr.to_string())
 	}
 }
 
@@ -148,7 +171,7 @@ pub enum AllowHosts {
 impl AllowHosts {
 	/// Verify a host.
 	pub fn verify(&self, value: &str) -> Result<(), Error> {
-		let auth = Authority::from_str(value)
+		let auth = Authority::try_from(value)
 			.map_err(|_| Error::HttpHeaderRejected("host", format!("Invalid authority: {value}")))?;
 
 		if let AllowHosts::Only(url_pat) = self {
@@ -173,7 +196,6 @@ fn default_port(scheme: Option<&str>) -> Option<u16> {
 #[cfg(test)]
 mod tests {
 	use super::{AllowHosts, Authority, Port};
-	use std::str::FromStr;
 
 	fn authority(host: &str, port: Port) -> Authority {
 		Authority { hostname: host.to_owned(), port }
@@ -181,31 +203,32 @@ mod tests {
 
 	#[test]
 	fn should_parse_valid_authority() {
-		assert_eq!(Authority::from_str("http://parity.io").unwrap(), authority("parity.io", Port::Default));
-		assert_eq!(Authority::from_str("https://parity.io:8443").unwrap(), authority("parity.io", Port::Fixed(8443)));
-		assert_eq!(Authority::from_str("chrome-extension://124.0.0.1").unwrap(), authority("124.0.0.1", Port::Default));
-		assert_eq!(Authority::from_str("http://*.domain:*/somepath").unwrap(), authority("*.domain", Port::Any));
-		assert_eq!(Authority::from_str("parity.io").unwrap(), authority("parity.io", Port::Default));
+		assert_eq!(Authority::try_from("http://parity.io").unwrap(), authority("parity.io", Port::Default));
+		assert_eq!(Authority::try_from("https://parity.io:8443").unwrap(), authority("parity.io", Port::Fixed(8443)));
+		assert_eq!(Authority::try_from("chrome-extension://124.0.0.1").unwrap(), authority("124.0.0.1", Port::Default));
+		assert_eq!(Authority::try_from("http://*.domain:*/somepath").unwrap(), authority("*.domain", Port::Any));
+		assert_eq!(Authority::try_from("parity.io").unwrap(), authority("parity.io", Port::Default));
+		assert_eq!(Authority::try_from("127.0.0.1:8845").unwrap(), authority("127.0.0.1", Port::Fixed(8845)));
 		assert_eq!(
-			Authority::from_str("http://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:9933/").unwrap(),
+			Authority::try_from("http://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:9933/").unwrap(),
 			authority("[2001:db8:85a3:8d3:1319:8a2e:370:7348]", Port::Fixed(9933))
 		);
 		assert_eq!(
-			Authority::from_str("http://[2001:db8:85a3:8d3:1319:8a2e:370:7348]/").unwrap(),
+			Authority::try_from("http://[2001:db8:85a3:8d3:1319:8a2e:370:7348]/").unwrap(),
 			authority("[2001:db8:85a3:8d3:1319:8a2e:370:7348]", Port::Default)
 		);
 		assert_eq!(
-			Authority::from_str("https://user:password@example.com/tmp/foo").unwrap(),
+			Authority::try_from("https://user:password@example.com/tmp/foo").unwrap(),
 			authority("example.com", Port::Default)
 		);
 	}
 
 	#[test]
 	fn should_not_parse_invalid_authority() {
-		assert!(Authority::from_str("/foo/bar").is_err());
-		assert!(Authority::from_str("user:password").is_err());
-		assert!(Authority::from_str("parity.io/somepath").is_err());
-		assert!(Authority::from_str("127.0.0.1:8545/somepath").is_err());
+		assert!(Authority::try_from("/foo/bar").is_err());
+		assert!(Authority::try_from("user:password").is_err());
+		assert!(Authority::try_from("parity.io/somepath").is_err());
+		assert!(Authority::try_from("127.0.0.1:8545/somepath").is_err());
 	}
 
 	#[test]
@@ -220,36 +243,36 @@ mod tests {
 
 	#[test]
 	fn should_accept_if_on_the_list() {
-		assert!(AllowHosts::Only(vec![Authority::from_str("parity.io").unwrap()].into()).verify("parity.io").is_ok());
+		assert!(AllowHosts::Only(vec![Authority::try_from("parity.io").unwrap()].into()).verify("parity.io").is_ok());
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list_with_port() {
-		assert!((AllowHosts::Only(vec![Authority::from_str("parity.io:443").unwrap()].into()))
+		assert!((AllowHosts::Only(vec![Authority::try_from("parity.io:443").unwrap()].into()))
 			.verify("parity.io:443")
 			.is_ok());
-		assert!(AllowHosts::Only(vec![Authority::from_str("parity.io").unwrap()].into())
+		assert!(AllowHosts::Only(vec![Authority::try_from("parity.io").unwrap()].into())
 			.verify("parity.io:443")
 			.is_err());
 	}
 
 	#[test]
 	fn should_support_wildcards() {
-		assert!((AllowHosts::Only(vec![Authority::from_str("*.web3.site:*").unwrap()].into()))
+		assert!((AllowHosts::Only(vec![Authority::try_from("*.web3.site:*").unwrap()].into()))
 			.verify("parity.web3.site:8180")
 			.is_ok());
-		assert!((AllowHosts::Only(vec![Authority::from_str("*.web3.site:*").unwrap()].into()))
+		assert!((AllowHosts::Only(vec![Authority::try_from("*.web3.site:*").unwrap()].into()))
 			.verify("parity.web3.site")
 			.is_ok());
 	}
 
 	#[test]
 	fn should_accept_with_and_without_default_port() {
-		assert!(AllowHosts::Only(vec![Authority::from_str("https://parity.io:443").unwrap()].into())
+		assert!(AllowHosts::Only(vec![Authority::try_from("https://parity.io:443").unwrap()].into())
 			.verify("https://parity.io")
 			.is_ok());
 
-		assert!(AllowHosts::Only(vec![Authority::from_str("https://parity.io").unwrap()].into())
+		assert!(AllowHosts::Only(vec![Authority::try_from("https://parity.io").unwrap()].into())
 			.verify("https://parity.io:443")
 			.is_ok());
 	}

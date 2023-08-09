@@ -1024,7 +1024,7 @@ async fn ws_host_filtering_wildcard_works() {
 	init_logger();
 
 	let server = ServerBuilder::default()
-		.host_filter(["http://localhost:*", "http://127.0.0.1:*"])
+		.host_filter(["http://localhost:*".to_string(), "http://127.0.0.1:*".to_string()])
 		.unwrap()
 		.build("127.0.0.1:0")
 		.await

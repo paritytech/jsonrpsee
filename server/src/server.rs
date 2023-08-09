@@ -28,7 +28,6 @@ use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -423,11 +422,15 @@ impl<B, L> Builder<B, L> {
 	/// Enables host filtering and allow only the specified hosts.
 	///
 	/// Default: allow all.
-	pub fn host_filter<T: IntoIterator<Item = U>, U: AsRef<str>>(
+	pub fn host_filter<T: IntoIterator<Item = U>, U: TryInto<Authority>>(
 		mut self,
 		allow_only: T,
-	) -> Result<Self, AuthorityError> {
-		let allow_only: Result<Vec<_>, _> = allow_only.into_iter().map(|a| Authority::from_str(a.as_ref())).collect();
+	) -> Result<Self, AuthorityError>
+	where
+		T: IntoIterator<Item = U>,
+		U: TryInto<Authority, Error = AuthorityError>,
+	{
+		let allow_only: Result<Vec<_>, _> = allow_only.into_iter().map(|a| a.try_into()).collect();
 		self.settings.allow_hosts = AllowHosts::Only(WhitelistedHosts::from(allow_only?));
 		Ok(self)
 	}
