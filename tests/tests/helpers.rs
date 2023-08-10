@@ -31,9 +31,9 @@ use std::time::Duration;
 
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::Error;
-use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
+use jsonrpsee::server::middleware::{HostFilterLayer, ProxyGetRequestLayer};
 use jsonrpsee::server::{
-	PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
+	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::SubscriptionCloseResponse;
@@ -206,15 +206,10 @@ pub async fn server_with_access_control(
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
 		// Add `CORS` layer.
-		.layer(cors);
+		.layer(cors)
+		.layer(HostFilterLayer::new(allowed_hosts.unwrap_or_else(|| vec!["*"])).unwrap());
 
-	let mut builder = jsonrpsee::server::Server::builder();
-
-	if let Some(filter) = allowed_hosts {
-		builder = builder.host_filter(filter).unwrap();
-	}
-
-	let server = builder.set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();

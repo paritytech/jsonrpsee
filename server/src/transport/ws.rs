@@ -514,7 +514,7 @@ async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
 				BatchRequestConfig::Disabled => {
 					let response = MethodResponse::error(
 						Id::Null,
-						ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+						ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, None),
 					);
 					logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
 					_ = sink.send(response.result).await;

@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::logger::{self, Logger, TransportProtocol};
+use crate::middleware::Authority;
 use crate::server::BatchRequestConfig;
 
 use futures_util::future::Either;
@@ -52,14 +53,16 @@ pub(crate) async fn reject_connection(socket: tokio::net::TcpStream) {
 
 /// The `Authority` can be sent by the client in the `Host header` or in the `URI`
 /// such that we must check both.
-pub(crate) fn fetch_authority(request: &hyper::Request<hyper::Body>) -> Option<&str> {
-	let host_header = http_helpers::read_header_value(request.headers(), hyper::header::HOST);
-	let uri = request.uri().authority();
+pub(crate) fn authority(request: &hyper::Request<hyper::Body>) -> Option<Authority> {
+	// NOTE: we use our own `Authority type` here because an invalid port number would return `None` here
+	// and that should be denied.
+	let host_header = http_helpers::read_header_value(request.headers(), hyper::header::HOST).map(Authority::try_from);
+	let uri = request.uri().authority().map(|v| Authority::try_from(v.as_str()));
 
 	match (host_header, uri) {
-		(Some(a1), Some(a2)) if a1 == a2.as_str() => Some(a1),
-		(Some(a), None) => Some(a),
-		(None, Some(a)) => Some(a.as_str()),
+		(Some(Ok(a1)), Some(Ok(a2))) if a1 == a2 => Some(a1),
+		(Some(Ok(a)), _) => Some(a),
+		(_, Some(Ok(a))) => Some(a),
 		_ => None,
 	}
 }
@@ -117,9 +120,9 @@ pub(crate) async fn process_validated_request<L: Logger>(
 			BatchRequestConfig::Disabled => {
 				let response = MethodResponse::error(
 					Id::Null,
-					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, None),
 				);
-				logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
+				logger.on_response(&response.result, request_start, TransportProtocol::Http);
 				return response::ok_response(response.result);
 			}
 			BatchRequestConfig::Limit(limit) => limit as usize,

@@ -34,7 +34,6 @@ use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::logger::{Logger, TransportProtocol};
-use crate::transport::http::fetch_authority;
 use crate::transport::{http, ws};
 
 use futures_util::future::{self, Either, FutureExt};
@@ -43,7 +42,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
-use jsonrpsee_core::server::{AllowHosts, Authority, AuthorityError, Methods, WhitelistedHosts};
+use jsonrpsee_core::server::Methods;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
@@ -128,7 +127,6 @@ where
 		let max_response_body_size = self.cfg.max_response_body_size;
 		let max_log_length = self.cfg.max_log_length;
 		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
-		let allow_hosts = self.cfg.allow_hosts;
 		let logger = self.logger;
 		let batch_requests_config = self.cfg.batch_requests_config;
 		let id_provider = self.id_provider;
@@ -148,7 +146,6 @@ where
 					let data = ProcessConnection {
 						remote_addr,
 						methods: methods.clone(),
-						allow_hosts: allow_hosts.clone(),
 						max_request_body_size,
 						max_response_body_size,
 						max_log_length,
@@ -209,8 +206,6 @@ struct Settings {
 	max_log_length: u32,
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
-	/// Host filtering.
-	allow_hosts: AllowHosts,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_config: BatchRequestConfig,
 	/// Custom tokio runtime to run the server on.
@@ -245,7 +240,6 @@ impl Default for Settings {
 			max_connections: MAX_CONNECTIONS,
 			max_subscriptions_per_connection: 1024,
 			batch_requests_config: BatchRequestConfig::Unlimited,
-			allow_hosts: AllowHosts::Any,
 			tokio_runtime: None,
 			ping_interval: Duration::from_secs(60),
 			enable_http: true,
@@ -420,30 +414,6 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Enables host filtering and allow only the specified hosts.
-	///
-	/// Default: no host filtering is enabled.
-	pub fn host_filter<T: IntoIterator<Item = U>, U: TryInto<Authority>>(
-		mut self,
-		allow_only: T,
-	) -> Result<Self, AuthorityError>
-	where
-		T: IntoIterator<Item = U>,
-		U: TryInto<Authority, Error = AuthorityError>,
-	{
-		let allow_only: Result<Vec<_>, _> = allow_only.into_iter().map(|a| a.try_into()).collect();
-		self.settings.allow_hosts = AllowHosts::Only(WhitelistedHosts::from(allow_only?));
-		Ok(self)
-	}
-
-	/// Disable host filtering and allow all.
-	///
-	/// Default: no host filtering is enabled.
-	pub fn disable_host_filtering(mut self) -> Self {
-		self.settings.allow_hosts = AllowHosts::Any;
-		self
-	}
-
 	/// Configure a custom [`tower::ServiceBuilder`] middleware for composing layers to be applied to the RPC service.
 	///
 	/// Default: No tower layers are applied to the RPC service.
@@ -592,8 +562,6 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) remote_addr: SocketAddr,
 	/// Registered server methods.
 	pub(crate) methods: Methods,
-	/// Access control.
-	pub(crate) allow_hosts: AllowHosts,
 	/// Max request body size.
 	pub(crate) max_request_body_size: u32,
 	/// Max response body size.
@@ -651,15 +619,6 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		tracing::trace!("{:?}", request);
-
-		let Some(authority) = fetch_authority(&request) else {
-			return async { Ok(http::response::malformed()) }.boxed();
-		};
-
-		if let Err(e) = self.inner.allow_hosts.verify(authority) {
-			tracing::debug!("Denied request: {}", e);
-			return async { Ok(http::response::host_not_allowed()) }.boxed();
-		}
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
@@ -727,8 +686,6 @@ struct ProcessConnection<L> {
 	remote_addr: SocketAddr,
 	/// Registered server methods.
 	methods: Methods,
-	/// Access control.
-	allow_hosts: AllowHosts,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Max response body size.
@@ -806,7 +763,6 @@ fn process_connection<'a, L: Logger, B, U>(
 		inner: ServiceData {
 			remote_addr: cfg.remote_addr,
 			methods: cfg.methods,
-			allow_hosts: cfg.allow_hosts,
 			max_request_body_size: cfg.max_request_body_size,
 			max_response_body_size: cfg.max_response_body_size,
 			max_log_length: cfg.max_log_length,

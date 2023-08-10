@@ -256,7 +256,7 @@ impl MethodResponse {
 
 					let err = ResponsePayload::error_borrowed(ErrorObject::borrowed(
 						err_code,
-						&OVERSIZED_RESPONSE_MSG,
+						OVERSIZED_RESPONSE_MSG,
 						data.as_deref(),
 					));
 					let result =

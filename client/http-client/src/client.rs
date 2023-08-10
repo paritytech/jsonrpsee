@@ -359,7 +359,7 @@ where
 		let mut failed_calls = 0;
 
 		for _ in 0..json_rps.len() {
-			responses.push(Err(ErrorObject::borrowed(0, &"", None)));
+			responses.push(Err(ErrorObject::borrowed(0, "", None)));
 		}
 
 		for rp in json_rps {
