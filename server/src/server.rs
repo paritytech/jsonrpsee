@@ -34,6 +34,7 @@ use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::logger::{Logger, TransportProtocol};
+use crate::transport::http::fetch_authority;
 use crate::transport::{http, ws};
 
 use futures_util::future::{self, Either, FutureExt};
@@ -44,7 +45,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
 use jsonrpsee_core::server::{AllowHosts, Authority, AuthorityError, Methods, WhitelistedHosts};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -651,16 +652,11 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		tracing::trace!("{:?}", request);
 
-		let host = match http_helpers::read_header_value(request.headers(), hyper::header::HOST) {
-			Some(host) => host,
-			None if request.version() == hyper::Version::HTTP_2 => match request.uri().host() {
-				Some(host) => host,
-				None => return async move { Ok(http::response::malformed()) }.boxed(),
-			},
-			None => return async move { Ok(http::response::malformed()) }.boxed(),
+		let Some(authority) = fetch_authority(&request) else {
+			return async { Ok(http::response::malformed()) }.boxed();
 		};
 
-		if let Err(e) = self.inner.allow_hosts.verify(host) {
+		if let Err(e) = self.inner.allow_hosts.verify(authority) {
 			tracing::debug!("Denied request: {}", e);
 			return async { Ok(http::response::host_not_allowed()) }.boxed();
 		}
