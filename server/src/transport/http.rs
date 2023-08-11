@@ -60,7 +60,13 @@ pub(crate) fn authority(request: &hyper::Request<hyper::Body>) -> Option<Authori
 	let uri = request.uri().authority().map(|v| Authority::try_from(v.as_str()));
 
 	match (host_header, uri) {
-		(Some(Ok(a1)), Some(Ok(a2))) if a1 == a2 => Some(a1),
+		(Some(Ok(a1)), Some(Ok(a2))) => {
+			if a1 == a2 {
+				Some(a1)
+			} else {
+				None
+			}
+		}
 		(Some(Ok(a)), _) => Some(a),
 		(_, Some(Ok(a))) => Some(a),
 		_ => None,
