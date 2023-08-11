@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.20.0] - 2023-08-11
 
-Another breaking release and the major changes are:
+Another breaking release where the major changes are:
 - `host filtering` has been moved to tower middleware instead of the server API.
 - the clients now supports default port number such `wss://my.server.com`
 - the background task for the async client has been refactored to multiplex send and read operations.
