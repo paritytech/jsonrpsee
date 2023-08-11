@@ -438,3 +438,45 @@ pub(crate) mod response {
 		from_template(hyper::StatusCode::FORBIDDEN, "".to_owned(), TEXT)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use hyper::{header::HOST, Body};
+
+	use crate::transport::http::authority;
+
+	#[test]
+	fn authority_only_host_works() {
+		let req = hyper::Request::builder().header(HOST, "example.com").body(Body::empty()).unwrap();
+		assert!(authority(&req).is_some());
+	}
+
+	#[test]
+	fn authority_only_uri_works() {
+		let req = hyper::Request::builder().uri("example.com").body(Body::empty()).unwrap();
+		assert!(authority(&req).is_some());
+	}
+
+	#[test]
+	fn authority_host_and_uri_works() {
+		let req = hyper::Request::builder()
+			.header(HOST, "example.com:9999")
+			.uri("example.com:9999")
+			.body(Body::empty())
+			.unwrap();
+		assert!(authority(&req).is_some());
+	}
+
+	#[test]
+	fn authority_host_and_uri_mismatch() {
+		let req =
+			hyper::Request::builder().header(HOST, "example.com:9999").uri("example.com").body(Body::empty()).unwrap();
+		assert!(authority(&req).is_none());
+	}
+
+	#[test]
+	fn authority_missing_host_and_uri() {
+		let req = hyper::Request::builder().body(Body::empty()).unwrap();
+		assert!(authority(&req).is_none());
+	}
+}
