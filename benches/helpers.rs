@@ -194,17 +194,20 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 }
 
 pub mod fixed_client {
-	use jsonrpsee_v0_15::client_transport::ws::{Uri, WsTransportClientBuilder};
-	use jsonrpsee_v0_15::http_client::{HttpClient, HttpClientBuilder};
-	use jsonrpsee_v0_15::ws_client::{WsClient, WsClientBuilder};
+	use jsonrpsee::client_transport::ws::Url;
+	use jsonrpsee_v0_20::client_transport::ws::WsTransportClientBuilder;
+	use jsonrpsee_v0_20::http_client::{HttpClient, HttpClientBuilder};
+	use jsonrpsee_v0_20::ws_client::{WsClient, WsClientBuilder};
 
-	pub use jsonrpsee_v0_15::core::client::{ClientT, SubscriptionClientT};
-	pub use jsonrpsee_v0_15::http_client::HeaderMap;
-	pub use jsonrpsee_v0_15::rpc_params;
+	pub use jsonrpsee_v0_20::core::client::{ClientT, SubscriptionClientT};
+	pub use jsonrpsee_v0_20::core::params::{ArrayParams, BatchRequestBuilder};
+	pub use jsonrpsee_v0_20::http_client::HeaderMap;
+	pub use jsonrpsee_v0_20::rpc_params;
 
 	pub(crate) fn http_client(url: &str, headers: HeaderMap) -> HttpClient {
 		HttpClientBuilder::default()
-			.max_request_body_size(u32::MAX)
+			.max_request_size(u32::MAX)
+			.max_response_size(u32::MAX)
 			.max_concurrent_requests(1024 * 1024)
 			.set_headers(headers)
 			.build(url)
@@ -213,7 +216,8 @@ pub mod fixed_client {
 
 	pub(crate) async fn ws_client(url: &str) -> WsClient {
 		WsClientBuilder::default()
-			.max_request_body_size(u32::MAX)
+			.max_request_size(u32::MAX)
+			.max_response_size(u32::MAX)
 			.max_concurrent_requests(1024 * 1024)
 			.build(url)
 			.await
@@ -221,9 +225,10 @@ pub mod fixed_client {
 	}
 
 	pub(crate) async fn ws_handshake(url: &str, headers: HeaderMap) {
-		let uri: Uri = url.parse().unwrap();
+		let uri = Url::parse(url).unwrap();
 		WsTransportClientBuilder::default()
-			.max_request_body_size(u32::MAX)
+			.max_request_size(u32::MAX)
+			.max_response_size(u32::MAX)
 			.set_headers(headers)
 			.build(uri)
 			.await
