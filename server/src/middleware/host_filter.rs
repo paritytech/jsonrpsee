@@ -35,12 +35,13 @@ use route_recognizer::Router;
 use std::error::Error as StdError;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
 /// Middleware to enable host filtering.
 #[derive(Debug)]
-pub struct HostFilterLayer(WhitelistedHosts);
+pub struct HostFilterLayer(Arc<WhitelistedHosts>);
 
 impl HostFilterLayer {
 	/// Enables host filtering and allow only the specified hosts.
@@ -50,7 +51,7 @@ impl HostFilterLayer {
 		U: TryInto<Authority, Error = AuthorityError>,
 	{
 		let allow_only: Result<Vec<_>, _> = allow_only.into_iter().map(|a| a.try_into()).collect();
-		Ok(Self(WhitelistedHosts::from(allow_only?)))
+		Ok(Self(Arc::new(WhitelistedHosts::from(allow_only?))))
 	}
 }
 
@@ -66,7 +67,7 @@ impl<S> Layer<S> for HostFilterLayer {
 #[derive(Debug)]
 pub struct HostFilter<S> {
 	inner: S,
-	filter: WhitelistedHosts,
+	filter: Arc<WhitelistedHosts>,
 }
 
 impl<S> Service<Request<Body>> for HostFilter<S>
