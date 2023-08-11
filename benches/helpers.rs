@@ -194,8 +194,7 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 }
 
 pub mod fixed_client {
-	use jsonrpsee::client_transport::ws::Url;
-	use jsonrpsee_v0_20::client_transport::ws::WsTransportClientBuilder;
+	use jsonrpsee_v0_20::client_transport::ws::{Url, WsTransportClientBuilder};
 	use jsonrpsee_v0_20::http_client::{HttpClient, HttpClientBuilder};
 	use jsonrpsee_v0_20::ws_client::{WsClient, WsClientBuilder};
 
