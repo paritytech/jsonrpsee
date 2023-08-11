@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Utility and types related to authority of an URI.
+//! Utility and types related to the authority of an URI.
 
 use http::uri::{InvalidUri, Uri};
 use hyper::{Body, Request};
