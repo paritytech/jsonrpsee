@@ -25,7 +25,7 @@ let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::new(["examp
 let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 ```
 
-Thanks to the external contributors @polachok, @bobs4462 and @aj3n that contributed to this release.
+Thanks to the external contributors [@polachok](https://github.com/polachok), [@bobs4462](https://github.com/bobs4462) and [@aj3n](https://github.com/aj3n) that contributed to this release.
 
 ### [Added]
 - feat(server): add `SubscriptionMessage::new` ([#1176](https://github.com/paritytech/jsonrpsee/pull/1176))
