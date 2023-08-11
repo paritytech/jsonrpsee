@@ -36,8 +36,8 @@ use std::time::Duration;
 use futures::stream::FuturesUnordered;
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
-	init_logger, pipe_from_stream_and_drop, server, server_with_access_control, server_with_health_api,
-	server_with_subscription, server_with_subscription_and_handle,
+	init_logger, pipe_from_stream_and_drop, server, server_with_cors, server_with_health_api, server_with_subscription,
+	server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
@@ -906,7 +906,7 @@ async fn http_cors_preflight_works() {
 		.allow_methods([Method::POST])
 		.allow_origin("https://foo.com".parse::<HeaderValue>().unwrap())
 		.allow_headers([hyper::header::CONTENT_TYPE]);
-	let (server_addr, _handle) = server_with_access_control(None, cors).await;
+	let (server_addr, _handle) = server_with_cors(cors).await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
@@ -1052,8 +1052,7 @@ async fn deny_invalid_host() {
 
 	init_logger();
 
-	let middleware =
-		tower::ServiceBuilder::new().layer(HostFilterLayer::new(["http://localhost:*", "http://127.0.0.1:*"]).unwrap());
+	let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::new(["example.com"]).unwrap());
 
 	let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());

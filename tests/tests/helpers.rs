@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::Error;
-use jsonrpsee::server::middleware::{HostFilterLayer, ProxyGetRequestLayer};
+use jsonrpsee::server::middleware::ProxyGetRequestLayer;
 use jsonrpsee::server::{
 	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
@@ -195,19 +195,15 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 
 #[allow(dead_code)]
 pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
-	server_with_access_control(None, CorsLayer::new()).await
+	server_with_cors(CorsLayer::new()).await
 }
 
-pub async fn server_with_access_control(
-	allowed_hosts: Option<Vec<&str>>,
-	cors: CorsLayer,
-) -> (SocketAddr, ServerHandle) {
+pub async fn server_with_cors(cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
 		// Add `CORS` layer.
-		.layer(cors)
-		.layer(HostFilterLayer::new(allowed_hosts.unwrap_or_else(|| vec!["*"])).unwrap());
+		.layer(cors);
 
 	let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
