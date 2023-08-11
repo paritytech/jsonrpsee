@@ -24,27 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! This example utilizes the `ProxyRequest` layer for redirecting
-//! `GET /path` requests to internal RPC methods.
+//! This example shows how to configure `host filtering` by tower middleware on the jsonrpsee server.
 //!
-//! The RPC server registers a method named `system_health` which
-//! returns `serde_json::Value`. Redirect any `GET /health`
-//! requests to the internal method, and return only the method's
-//! response in the body (ie, without any jsonRPC 2.0 overhead).
-//!
-//! # Note
-//!
-//! This functionality is useful for services which would
-//! like to query a certain `URI` path for statistics.
+//! The server whitelist's only `example.com` and any call from localhost will be
+//! rejected both by HTTP and WebSocket transports.
 
-use hyper::{Body, Client, Request};
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::ProxyGetRequestLayer;
+use jsonrpsee::server::middleware::HostFilterLayer;
 use jsonrpsee::server::{RpcModule, Server};
 
 #[tokio::main]
@@ -59,23 +49,9 @@ async fn main() -> anyhow::Result<()> {
 
 	// Use RPC client to get the response of `say_hello` method.
 	let client = HttpClientBuilder::default().build(&url)?;
-	let response: String = client.request("say_hello", rpc_params![]).await?;
-	println!("[main]: response: {:?}", response);
-
-	// Use hyper client to manually submit a `GET /health` request.
-	let http_client = Client::new();
-	let uri = format!("http://{}/health", addr);
-
-	let req = Request::builder().method("GET").uri(&uri).body(Body::empty())?;
-	println!("[main]: Submit proxy request: {:?}", req);
-	let res = http_client.request(req).await?;
-	println!("[main]: Received proxy response: {:?}", res);
-
-	// Interpret the response as String.
-	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-	let out = String::from_utf8(bytes.to_vec()).unwrap();
-	println!("[main]: Interpret proxy response: {:?}", out);
-	assert_eq!(out.as_str(), "{\"health\":true}");
+	// This call will be denied because only `example.com` URIs/hosts are allowed by the host filter.
+	let response = client.request::<String, _>("say_hello", rpc_params![]).await.unwrap_err();
+	println!("[main]: response: {}", response);
 
 	Ok(())
 }
@@ -83,9 +59,11 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	// Custom tower service to handle the RPC requests
 	let service_builder = tower::ServiceBuilder::new()
-		// Proxy `GET /health` requests to internal `system_health` method.
-		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
-		.timeout(Duration::from_secs(2));
+		// For this example we only want to permit requests from `example.com`
+		// all other request are denied.
+		//
+		// `HostFilerLayer::new` only fails on invalid URIs..
+		.layer(HostFilterLayer::new(["example.com"]).unwrap());
 
 	let server = Server::builder().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
@@ -93,7 +71,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo").unwrap();
-	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
 
 	let handle = server.start(module);
 

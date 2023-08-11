@@ -24,13 +24,36 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! HTTP Host Header validation.
+//! Utility and types related to the authority of an URI.
 
-use std::net::SocketAddr;
-
-use crate::Error;
 use http::uri::{InvalidUri, Uri};
-use route_recognizer::Router;
+use hyper::{Body, Request};
+use jsonrpsee_core::http_helpers;
+
+/// Represent the http URI scheme that is returned by the HTTP host header
+///
+/// Further information can be found: <https://www.rfc-editor.org/rfc/rfc7230#section-2.7.1>
+#[derive(Clone, Hash, PartialEq, Eq, Debug)]
+pub struct Authority {
+	/// The host.
+	pub host: String,
+	/// The port.
+	pub port: Port,
+}
+
+/// Error that can happen when parsing an URI authority fails.
+#[derive(Debug, thiserror::Error)]
+pub enum AuthorityError {
+	/// Invalid URI.
+	#[error("{0}")]
+	InvalidUri(InvalidUri),
+	/// Invalid port.
+	#[error("{0}")]
+	InvalidPort(String),
+	/// The host was not found.
+	#[error("The host was not found")]
+	MissingHost,
+}
 
 /// Port pattern
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
@@ -43,27 +66,12 @@ pub enum Port {
 	Fixed(u16),
 }
 
-impl From<u16> for Port {
-	fn from(port: u16) -> Port {
-		Port::Fixed(port)
-	}
-}
-
-/// Represent the http URI scheme that is returned by the HTTP host header
-///
-/// Further information can be found: <https://www.rfc-editor.org/rfc/rfc7230#section-2.7.1>
-#[derive(Clone, Hash, PartialEq, Eq, Debug)]
-pub struct Authority {
-	hostname: String,
-	port: Port,
-}
-
 impl Authority {
 	fn inner_from_str(value: &str) -> Result<Self, AuthorityError> {
 		let uri: Uri = value.parse().map_err(AuthorityError::InvalidUri)?;
 		let authority = uri.authority().ok_or(AuthorityError::MissingHost)?;
-		let hostname = authority.host();
-		let maybe_port = &authority.as_str()[hostname.len()..];
+		let host = authority.host();
+		let maybe_port = &authority.as_str()[host.len()..];
 
 		// After the host segment, the authority may contain a port such as `fooo:33`, `foo:*` or `foo`
 		let port = match maybe_port.split_once(':') {
@@ -81,22 +89,33 @@ impl Authority {
 			None => Port::Default,
 		};
 
-		Ok(Self { hostname: hostname.to_string(), port })
+		Ok(Self { host: host.to_owned(), port })
 	}
-}
 
-/// Error that can happen when parsing an URI authority fails.
-#[derive(Debug, thiserror::Error)]
-pub enum AuthorityError {
-	/// Invalid URI.
-	#[error("{0}")]
-	InvalidUri(InvalidUri),
-	/// Invalid port.
-	#[error("{0}")]
-	InvalidPort(String),
-	/// The host was not found.
-	#[error("The host was not found")]
-	MissingHost,
+	/// Attempts to parse the authority from a HTTP request.
+	///
+	/// The `Authority` can be sent by the client in the `Host header` or in the `URI`
+	/// such that both must be checked.
+	pub fn from_http_request(request: &Request<Body>) -> Option<Self> {
+		// NOTE: we use our own `Authority type` here because an invalid port number would return `None` here
+		// and that should be denied.
+		let host_header =
+			http_helpers::read_header_value(request.headers(), hyper::header::HOST).map(Authority::try_from);
+		let uri = request.uri().authority().map(|v| Authority::try_from(v.as_str()));
+
+		match (host_header, uri) {
+			(Some(Ok(a1)), Some(Ok(a2))) => {
+				if a1 == a2 {
+					Some(a1)
+				} else {
+					None
+				}
+			}
+			(Some(Ok(a)), _) => Some(a),
+			(_, Some(Ok(a))) => Some(a),
+			_ => None,
+		}
+	}
 }
 
 impl<'a> TryFrom<&'a str> for Authority {
@@ -118,69 +137,14 @@ impl TryFrom<String> for Authority {
 impl TryFrom<std::net::SocketAddr> for Authority {
 	type Error = AuthorityError;
 
-	fn try_from(sockaddr: SocketAddr) -> Result<Self, Self::Error> {
+	fn try_from(sockaddr: std::net::SocketAddr) -> Result<Self, Self::Error> {
 		Self::inner_from_str(&sockaddr.to_string())
 	}
 }
 
-/// Represent the URL patterns that is whitelisted.
-#[derive(Default, Debug, Clone)]
-pub struct WhitelistedHosts(Router<Port>);
-
-impl<T> From<T> for WhitelistedHosts
-where
-	T: IntoIterator<Item = Authority>,
-{
-	fn from(value: T) -> Self {
-		let mut router = Router::new();
-
-		for auth in value.into_iter() {
-			router.add(&auth.hostname, auth.port);
-		}
-
-		Self(router)
-	}
-}
-
-impl WhitelistedHosts {
-	fn recognize(&self, other: &Authority) -> bool {
-		if let Ok(p) = self.0.recognize(&other.hostname) {
-			let p = p.handler();
-
-			match (p, &other.port) {
-				(Port::Any, _) => true,
-				(Port::Default, Port::Default) => true,
-				(Port::Fixed(p1), Port::Fixed(p2)) if p1 == p2 => true,
-				_ => false,
-			}
-		} else {
-			false
-		}
-	}
-}
-
-/// Policy for validating the `HTTP host header`.
-#[derive(Debug, Clone)]
-pub enum AllowHosts {
-	/// Allow all hosts (no filter).
-	Any,
-	/// Allow only specified hosts.
-	Only(WhitelistedHosts),
-}
-
-impl AllowHosts {
-	/// Verify a host.
-	pub fn verify(&self, value: &str) -> Result<(), Error> {
-		let auth = Authority::try_from(value)
-			.map_err(|_| Error::HttpHeaderRejected("host", format!("Invalid authority: {value}")))?;
-
-		if let AllowHosts::Only(url_pat) = self {
-			if !url_pat.recognize(&auth) {
-				return Err(Error::HttpHeaderRejected("host", value.into()));
-			}
-		}
-
-		Ok(())
+impl From<u16> for Port {
+	fn from(port: u16) -> Port {
+		Port::Fixed(port)
 	}
 }
 
@@ -195,10 +159,12 @@ fn default_port(scheme: Option<&str>) -> Option<u16> {
 
 #[cfg(test)]
 mod tests {
-	use super::{AllowHosts, Authority, Port};
+	use super::{Authority, Port};
+	use hyper::header::HOST;
+	use hyper::Body;
 
 	fn authority(host: &str, port: Port) -> Authority {
-		Authority { hostname: host.to_owned(), port }
+		Authority { host: host.to_owned(), port }
 	}
 
 	#[test]
@@ -229,51 +195,41 @@ mod tests {
 		assert!(Authority::try_from("user:password").is_err());
 		assert!(Authority::try_from("parity.io/somepath").is_err());
 		assert!(Authority::try_from("127.0.0.1:8545/somepath").is_err());
+		assert!(Authority::try_from("127.0.0.1:-1337").is_err());
 	}
 
 	#[test]
-	fn should_allow_when_validation_is_disabled() {
-		assert!((AllowHosts::Any).verify("any").is_ok());
+	fn authority_from_http_only_host_works() {
+		let req = hyper::Request::builder().header(HOST, "example.com").body(Body::empty()).unwrap();
+		assert!(Authority::from_http_request(&req).is_some());
 	}
 
 	#[test]
-	fn should_reject_if_header_not_on_the_list() {
-		assert!((AllowHosts::Only(vec![].into())).verify("parity.io").is_err());
+	fn authority_only_uri_works() {
+		let req = hyper::Request::builder().uri("example.com").body(Body::empty()).unwrap();
+		assert!(Authority::from_http_request(&req).is_some());
 	}
 
 	#[test]
-	fn should_accept_if_on_the_list() {
-		assert!(AllowHosts::Only(vec![Authority::try_from("parity.io").unwrap()].into()).verify("parity.io").is_ok());
+	fn authority_host_and_uri_works() {
+		let req = hyper::Request::builder()
+			.header(HOST, "example.com:9999")
+			.uri("example.com:9999")
+			.body(Body::empty())
+			.unwrap();
+		assert!(Authority::from_http_request(&req).is_some());
 	}
 
 	#[test]
-	fn should_accept_if_on_the_list_with_port() {
-		assert!((AllowHosts::Only(vec![Authority::try_from("parity.io:443").unwrap()].into()))
-			.verify("parity.io:443")
-			.is_ok());
-		assert!(AllowHosts::Only(vec![Authority::try_from("parity.io").unwrap()].into())
-			.verify("parity.io:443")
-			.is_err());
+	fn authority_host_and_uri_mismatch() {
+		let req =
+			hyper::Request::builder().header(HOST, "example.com:9999").uri("example.com").body(Body::empty()).unwrap();
+		assert!(Authority::from_http_request(&req).is_none());
 	}
 
 	#[test]
-	fn should_support_wildcards() {
-		assert!((AllowHosts::Only(vec![Authority::try_from("*.web3.site:*").unwrap()].into()))
-			.verify("parity.web3.site:8180")
-			.is_ok());
-		assert!((AllowHosts::Only(vec![Authority::try_from("*.web3.site:*").unwrap()].into()))
-			.verify("parity.web3.site")
-			.is_ok());
-	}
-
-	#[test]
-	fn should_accept_with_and_without_default_port() {
-		assert!(AllowHosts::Only(vec![Authority::try_from("https://parity.io:443").unwrap()].into())
-			.verify("https://parity.io")
-			.is_ok());
-
-		assert!(AllowHosts::Only(vec![Authority::try_from("https://parity.io").unwrap()].into())
-			.verify("https://parity.io:443")
-			.is_ok());
+	fn authority_missing_host_and_uri() {
+		let req = hyper::Request::builder().body(Body::empty()).unwrap();
+		assert!(Authority::from_http_request(&req).is_none());
 	}
 }

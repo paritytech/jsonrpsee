@@ -69,7 +69,7 @@ pub(crate) fn process_batch_response(
 	};
 
 	for _ in range {
-		let err_obj = ErrorObject::borrowed(0, &"", None);
+		let err_obj = ErrorObject::borrowed(0, "", None);
 		responses.push(Err(err_obj));
 	}
 
