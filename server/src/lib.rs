@@ -37,6 +37,7 @@ mod transport;
 
 pub mod logger;
 pub mod middleware;
+pub mod uri;
 
 #[cfg(test)]
 mod tests;

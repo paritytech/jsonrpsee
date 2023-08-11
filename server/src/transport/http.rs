@@ -3,14 +3,13 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::logger::{self, Logger, TransportProtocol};
-use crate::middleware::Authority;
 use crate::server::BatchRequestConfig;
 
 use futures_util::future::Either;
 use futures_util::stream::{FuturesOrdered, StreamExt};
 use hyper::Method;
 use jsonrpsee_core::error::GenericTransportError;
-use jsonrpsee_core::http_helpers::{self, read_body};
+use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::server::helpers::{
 	batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse, MethodResponseResult,
 };
@@ -48,28 +47,6 @@ pub(crate) async fn reject_connection(socket: tokio::net::TcpStream) {
 	if let Err(e) = hyper::server::conn::Http::new().serve_connection(socket, hyper::service::service_fn(reject)).await
 	{
 		tracing::debug!("HTTP serve connection failed {:?}", e);
-	}
-}
-
-/// The `Authority` can be sent by the client in the `Host header` or in the `URI`
-/// such that we must check both.
-pub(crate) fn authority(request: &hyper::Request<hyper::Body>) -> Option<Authority> {
-	// NOTE: we use our own `Authority type` here because an invalid port number would return `None` here
-	// and that should be denied.
-	let host_header = http_helpers::read_header_value(request.headers(), hyper::header::HOST).map(Authority::try_from);
-	let uri = request.uri().authority().map(|v| Authority::try_from(v.as_str()));
-
-	match (host_header, uri) {
-		(Some(Ok(a1)), Some(Ok(a2))) => {
-			if a1 == a2 {
-				Some(a1)
-			} else {
-				None
-			}
-		}
-		(Some(Ok(a)), _) => Some(a),
-		(_, Some(Ok(a))) => Some(a),
-		_ => None,
 	}
 }
 
@@ -436,47 +413,5 @@ pub(crate) mod response {
 	/// Create a response for when the server denied the request.
 	pub(crate) fn denied() -> hyper::Response<hyper::Body> {
 		from_template(hyper::StatusCode::FORBIDDEN, "".to_owned(), TEXT)
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use hyper::{header::HOST, Body};
-
-	use crate::transport::http::authority;
-
-	#[test]
-	fn authority_only_host_works() {
-		let req = hyper::Request::builder().header(HOST, "example.com").body(Body::empty()).unwrap();
-		assert!(authority(&req).is_some());
-	}
-
-	#[test]
-	fn authority_only_uri_works() {
-		let req = hyper::Request::builder().uri("example.com").body(Body::empty()).unwrap();
-		assert!(authority(&req).is_some());
-	}
-
-	#[test]
-	fn authority_host_and_uri_works() {
-		let req = hyper::Request::builder()
-			.header(HOST, "example.com:9999")
-			.uri("example.com:9999")
-			.body(Body::empty())
-			.unwrap();
-		assert!(authority(&req).is_some());
-	}
-
-	#[test]
-	fn authority_host_and_uri_mismatch() {
-		let req =
-			hyper::Request::builder().header(HOST, "example.com:9999").uri("example.com").body(Body::empty()).unwrap();
-		assert!(authority(&req).is_none());
-	}
-
-	#[test]
-	fn authority_missing_host_and_uri() {
-		let req = hyper::Request::builder().body(Body::empty()).unwrap();
-		assert!(authority(&req).is_none());
 	}
 }
