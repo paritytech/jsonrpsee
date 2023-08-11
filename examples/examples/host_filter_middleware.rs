@@ -26,7 +26,7 @@
 
 //! This example shows how to configure `host filtering` by tower middleware on the jsonrpsee server.
 //!
-//! The server whitelist only `example.com` and any call from localhost will be
+//! The server whitelist's only `example.com` and any call from localhost will be
 //! rejected both by HTTP and WebSocket transports.
 
 use std::net::SocketAddr;
