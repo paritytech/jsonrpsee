@@ -171,7 +171,8 @@ impl RpcDescription {
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let pending = proc_macro2::Ident::new("subscription_sink", rust_method_name.span());
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params, Some(pending));
-				let into_sub_response = self.jrps_server_item(quote! { IntoSubscriptionCloseResponse });
+				let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
+				let tokio = self.jrps_server_item(quote! { tokio });
 
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
@@ -185,9 +186,12 @@ impl RpcDescription {
 				};
 
 				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| async move {
+					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| {
 						#parsing
-						#into_sub_response::into_response(context.as_ref().#rust_method_name(subscription_sink, #params_seq).await)
+						#tokio::spawn(async move {
+							let _ = context.as_ref().#rust_method_name(subscription_sink, #params_seq).await;
+						});
+						#sub_err::None
 					})
 				})
 			})
@@ -289,6 +293,7 @@ impl RpcDescription {
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
 		let response_payload = self.jrps_server_item(quote! { types::ResponsePayload });
+		let tokio = self.jrps_server_item(quote! { tokio });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -299,7 +304,7 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								#pending.reject(e).await;
+								#tokio::spawn(#pending.reject(e));
 								return #sub_err::None;
 							}
 						};
@@ -322,7 +327,7 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								#pending.reject(e).await;
+								#tokio::spawn(#pending.reject(e));
 								return #sub_err::None;
 							}
 						};
@@ -400,7 +405,7 @@ impl RpcDescription {
 						Ok(p) => p,
 						Err(e) => {
 							#tracing::debug!("Failed to parse JSON-RPC params as object: {}", e);
-							#pending.reject(e).await;
+							#tokio::spawn(#pending.reject(e));
 							return #sub_err::None;
 						}
 					};

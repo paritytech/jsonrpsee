@@ -426,7 +426,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription(
+		.register_async_subscription(
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",
@@ -472,7 +472,9 @@ async fn ws_server_stop_subscription_when_dropped() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
+		.register_async_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async {
+			Ok(())
+		})
 		.unwrap();
 
 	let _handle = server.start(module);
@@ -732,7 +734,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| async move {
+		.register_async_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
@@ -787,7 +789,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| async {
+		.register_async_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| async {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 

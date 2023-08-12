@@ -269,7 +269,7 @@ impl Methods {
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async {
+	///     module.register_async_subscription("hi", "hi", "goodbye", |_, pending, _| async {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
@@ -278,7 +278,7 @@ impl Methods {
 	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
-	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.result).unwrap().try_into().unwrap();    
+	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.result).unwrap().try_into().unwrap();
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
@@ -352,7 +352,7 @@ impl Methods {
 	///     use jsonrpsee::core::{Error, EmptyServerParams, RpcResult};
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
+	///     module.register_async_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
 	///         let sink = pending.accept().await?;
 	///         sink.send("one answer".into()).await?;
 	///         Ok(())
@@ -590,7 +590,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| async move {
+	/// ctx.register_async_subscription("sub", "notif_name", "unsub", |params, pending, ctx| async move {
 	///
 	///     let x = match params.one::<usize>() {
 	///         Ok(x) => x,
@@ -622,7 +622,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     Ok(())
 	/// });
 	/// ```
-	pub fn register_subscription<R, F, Fut>(
+	pub fn register_async_subscription<R, F, Fut>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		notif_method_name: &'static str,
@@ -731,6 +731,183 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							SubscriptionCloseResponse::None => (),
 						}
 					});
+
+					let id = id.clone().into_owned();
+
+					Box::pin(async move {
+						match rx.await {
+							Ok(msg) => {
+								// If the subscription was accepted then send a message
+								// to subscription task otherwise rely on the drop impl.
+								if msg.is_success() {
+									let _ = accepted_tx.send(());
+								}
+								Ok(msg)
+							}
+							Err(_) => Err(id),
+						}
+					})
+				})),
+			)?
+		};
+
+		Ok(callback)
+	}
+
+	/// Similar to [`RpcModule::register_async_subscription`] but a little lower-level API
+	/// where handling the subscription is managed the user i.e, polling the subscription
+	/// such as spawning a separate task to do so.
+	///
+	/// This is more efficient as this doesn't require cloning the `params` in the subscription
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_core::server::{RpcModule, SubscriptionSink, SubscriptionMessage};
+	/// use jsonrpsee_types::ErrorObjectOwned;
+	///
+	/// let mut ctx = RpcModule::new(99_usize);
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| {
+	///
+	///     // The params are parsed outside the async block below to avoid cloning the bytes.
+	///     let val = match params.one::<usize>() {
+	///         Ok(val) => val,
+	///         Err(e) => {
+	///             // If the subscription has not been "accepted" then
+	///             // the return value will be "ignored" as it's not
+	///             // allowed to send out any further notifications on
+	///             // on the subscription.
+	///             tokio::spawn(pending.reject(ErrorObjectOwned::from(e)));
+	///             return Ok(());
+	///         }
+	///     };
+	///
+	///     tokio::spawn(async move {
+	///         // Mark the subscription is accepted after the params has been parsed successful.
+	///         // This is actually responds the underlying RPC method call and may fail if the
+	///         // connection is closed.
+	///         let sink = pending.accept().await.unwrap();
+	///         let sum = val + (*ctx);
+	///
+	///         let msg = SubscriptionMessage::from_json(&sum).unwrap();
+	///
+	///         // This fails only if the connection is closed
+	///         sink.send(msg).await.unwrap();
+	///     });
+	///
+	///     Ok(())
+	/// });
+	/// ```
+	///
+	pub fn register_subscription<R, F>(
+		&mut self,
+		subscribe_method_name: &'static str,
+		notif_method_name: &'static str,
+		unsubscribe_method_name: &'static str,
+		callback: F,
+	) -> Result<&mut MethodCallback, Error>
+	where
+		Context: Send + Sync + 'static,
+		F: (Fn(Params, PendingSubscriptionSink, Arc<Context>) -> R) + Send + Sync + Clone + 'static,
+		R: IntoSubscriptionCloseResponse + Send + 'static,
+	{
+		if subscribe_method_name == unsubscribe_method_name {
+			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
+		}
+
+		self.methods.verify_method_name(subscribe_method_name)?;
+		self.methods.verify_method_name(unsubscribe_method_name)?;
+
+		let ctx = self.ctx.clone();
+		let subscribers = Subscribers::default();
+
+		// Unsubscribe
+		{
+			let subscribers = subscribers.clone();
+			self.methods.mut_callbacks().insert(
+				unsubscribe_method_name,
+				MethodCallback::Unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
+					let sub_id = match params.one::<RpcSubscriptionId>() {
+						Ok(sub_id) => sub_id,
+						Err(_) => {
+							tracing::warn!(
+								"Unsubscribe call `{}` failed: couldn't parse subscription id={:?} request id={:?}",
+								unsubscribe_method_name,
+								params,
+								id
+							);
+
+							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
+						}
+					};
+
+					let key = SubscriptionKey { conn_id, sub_id: sub_id.into_owned() };
+					let result = subscribers.lock().remove(&key).is_some();
+
+					if !result {
+						tracing::debug!(
+							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
+							unsubscribe_method_name,
+							key,
+						);
+					}
+
+					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
+				})),
+			);
+		}
+
+		// Subscribe
+		let callback = {
+			self.methods.verify_and_insert(
+				subscribe_method_name,
+				MethodCallback::Subscription(Arc::new(move |id, params, method_sink, conn| {
+					let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: conn.id_provider.next_id() };
+
+					// response to the subscription call.
+					let (tx, rx) = oneshot::channel();
+					let (accepted_tx, accepted_rx) = oneshot::channel();
+
+					let sub_id = uniq_sub.sub_id.clone();
+					let method = notif_method_name;
+
+					let sink = PendingSubscriptionSink {
+						inner: method_sink.clone(),
+						method: notif_method_name,
+						subscribers: subscribers.clone(),
+						uniq_sub,
+						id: id.clone().into_owned(),
+						subscribe: tx,
+						permit: conn.subscription_permit,
+					};
+
+					// The subscription callback is a future from the subscription
+					// definition and not the as same when the subscription call has been completed.
+					//
+					// This runs until the subscription callback has completed.
+					let res = callback(params, sink, ctx.clone());
+
+					let fut = async move {
+						// This will wait for the subscription future to be resolved
+						if accepted_rx.await.is_err() {
+							return;
+						}
+
+						match res.into_response() {
+							SubscriptionCloseResponse::Notif(msg) => {
+								let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &sub_id, method);
+								let _ = method_sink.send(json).await;
+							}
+							SubscriptionCloseResponse::NotifErr(msg) => {
+								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
+								let _ = method_sink.send(json).await;
+							}
+							SubscriptionCloseResponse::None => (),
+						}
+					};
+
+					tokio::spawn(fut);
 
 					let id = id.clone().into_owned();
 
