@@ -164,7 +164,7 @@ impl Methods {
 	}
 
 	/// Verifies that the method name is not already taken, and returns an error if it is.
-	pub fn verify_method_name(&mut self, name: &'static str) -> Result<(), Error> {
+	pub fn verify_method_name(&self, name: &'static str) -> Result<(), Error> {
 		if self.callbacks.contains_key(name) {
 			return Err(Error::MethodAlreadyRegistered(name.into()));
 		}
@@ -635,51 +635,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Fut: Future<Output = R> + Send + 'static,
 		R: IntoSubscriptionCloseResponse + Send,
 	{
-		if subscribe_method_name == unsubscribe_method_name {
-			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
-		}
-
-		self.methods.verify_method_name(subscribe_method_name)?;
-		self.methods.verify_method_name(unsubscribe_method_name)?;
-
+		let subscribers = self.verify_and_register_unsubscribe(subscribe_method_name, unsubscribe_method_name)?;
 		let ctx = self.ctx.clone();
-		let subscribers = Subscribers::default();
-
-		// Unsubscribe
-		{
-			let subscribers = subscribers.clone();
-			self.methods.mut_callbacks().insert(
-				unsubscribe_method_name,
-				MethodCallback::Unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
-					let sub_id = match params.one::<RpcSubscriptionId>() {
-						Ok(sub_id) => sub_id,
-						Err(_) => {
-							tracing::warn!(
-								"Unsubscribe call `{}` failed: couldn't parse subscription id={:?} request id={:?}",
-								unsubscribe_method_name,
-								params,
-								id
-							);
-
-							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
-						}
-					};
-
-					let key = SubscriptionKey { conn_id, sub_id: sub_id.into_owned() };
-					let result = subscribers.lock().remove(&key).is_some();
-
-					if !result {
-						tracing::debug!(
-							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
-							unsubscribe_method_name,
-							key,
-						);
-					}
-
-					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
-				})),
-			);
-		}
 
 		// Subscribe
 		let callback = {
@@ -812,51 +769,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		F: (Fn(Params, PendingSubscriptionSink, Arc<Context>) -> R) + Send + Sync + Clone + 'static,
 		R: IntoSubscriptionCloseResponse + Send + 'static,
 	{
-		if subscribe_method_name == unsubscribe_method_name {
-			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
-		}
-
-		self.methods.verify_method_name(subscribe_method_name)?;
-		self.methods.verify_method_name(unsubscribe_method_name)?;
-
+		let subscribers = self.verify_and_register_unsubscribe(subscribe_method_name, unsubscribe_method_name)?;
 		let ctx = self.ctx.clone();
-		let subscribers = Subscribers::default();
-
-		// Unsubscribe
-		{
-			let subscribers = subscribers.clone();
-			self.methods.mut_callbacks().insert(
-				unsubscribe_method_name,
-				MethodCallback::Unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
-					let sub_id = match params.one::<RpcSubscriptionId>() {
-						Ok(sub_id) => sub_id,
-						Err(_) => {
-							tracing::warn!(
-								"Unsubscribe call `{}` failed: couldn't parse subscription id={:?} request id={:?}",
-								unsubscribe_method_name,
-								params,
-								id
-							);
-
-							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
-						}
-					};
-
-					let key = SubscriptionKey { conn_id, sub_id: sub_id.into_owned() };
-					let result = subscribers.lock().remove(&key).is_some();
-
-					if !result {
-						tracing::debug!(
-							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
-							unsubscribe_method_name,
-							key,
-						);
-					}
-
-					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
-				})),
-			);
-		}
 
 		// Subscribe
 		let callback = {
@@ -929,6 +843,61 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		};
 
 		Ok(callback)
+	}
+
+	/// Helper to verify the subscription can be created
+	/// and register the unsubscribe handler.
+	fn verify_and_register_unsubscribe(
+		&mut self,
+		subscribe_method_name: &'static str,
+		unsubscribe_method_name: &'static str,
+	) -> Result<Subscribers, Error> {
+		if subscribe_method_name == unsubscribe_method_name {
+			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
+		}
+
+		self.methods.verify_method_name(subscribe_method_name)?;
+		self.methods.verify_method_name(unsubscribe_method_name)?;
+
+		let subscribers = Subscribers::default();
+
+		// Unsubscribe
+		{
+			let subscribers = subscribers.clone();
+			self.methods.mut_callbacks().insert(
+				unsubscribe_method_name,
+				MethodCallback::Unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
+					let sub_id = match params.one::<RpcSubscriptionId>() {
+						Ok(sub_id) => sub_id,
+						Err(_) => {
+							tracing::warn!(
+								"Unsubscribe call `{}` failed: couldn't parse subscription id={:?} request id={:?}",
+								unsubscribe_method_name,
+								params,
+								id
+							);
+
+							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
+						}
+					};
+
+					let key = SubscriptionKey { conn_id, sub_id: sub_id.into_owned() };
+					let result = subscribers.lock().remove(&key).is_some();
+
+					if !result {
+						tracing::debug!(
+							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
+							unsubscribe_method_name,
+							key,
+						);
+					}
+
+					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
+				})),
+			);
+		}
+
+		Ok(subscribers)
 	}
 
 	/// Register an alias for an existing_method. Alias uniqueness is enforced.
