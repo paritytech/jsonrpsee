@@ -12,7 +12,9 @@ pprof = { version = "0.12", features = ["flamegraph", "criterion"] }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 futures-util = "0.3.15"
 jsonrpsee = { path = "../jsonrpsee", features = ["server"] }
-jsonrpsee_v0_20 = { package = "jsonrpsee", version = "=0.20.0", features = ["http-client", "ws-client", "client-ws-transport-native-tls"] }
+jsonrpsee_v0_20 = { package = "jsonrpsee", version = "=0.20.0", features = ["ws-client", "client-ws-transport-native-tls"] }
+# Disable TLS for benches
+jsonrpsee_v0_20_http_client = { package = "jsonrpsee-http-client", version = "=0.20.0", default-features = false }
 jsonrpc-ws-server = { version = "18.0.0", optional = true }
 jsonrpc-http-server = { version = "18.0.0", optional = true }
 jsonrpc-pubsub = { version = "18.0.0", optional = true }

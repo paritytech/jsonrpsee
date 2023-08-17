@@ -195,13 +195,13 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 
 pub mod fixed_client {
 	use jsonrpsee_v0_20::client_transport::ws::{Url, WsTransportClientBuilder};
-	use jsonrpsee_v0_20::http_client::{HttpClient, HttpClientBuilder};
 	use jsonrpsee_v0_20::ws_client::{WsClient, WsClientBuilder};
+	use jsonrpsee_v0_20_http_client::{HttpClient, HttpClientBuilder};
 
 	pub use jsonrpsee_v0_20::core::client::{ClientT, SubscriptionClientT};
 	pub use jsonrpsee_v0_20::core::params::{ArrayParams, BatchRequestBuilder};
-	pub use jsonrpsee_v0_20::http_client::HeaderMap;
 	pub use jsonrpsee_v0_20::rpc_params;
+	pub use jsonrpsee_v0_20_http_client::HeaderMap;
 
 	pub(crate) fn http_client(url: &str, headers: HeaderMap) -> HttpClient {
 		HttpClientBuilder::default()
