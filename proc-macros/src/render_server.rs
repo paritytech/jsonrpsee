@@ -169,10 +169,10 @@ impl RpcDescription {
 				// `parsing` is the code associated with parsing structure from the
 				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters.
-				let pending = proc_macro2::Ident::new("subscription_sink", rust_method_name.span());
+				let pending = proc_macro2::Ident::new("pending", rust_method_name.span());
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params, Some(pending));
 				let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
-				let tokio = self.jrps_server_item(quote! { tokio });
+				let into_sub_response = self.jrps_server_item(quote! { IntoSubscriptionCloseResponse });
 
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
@@ -185,15 +185,22 @@ impl RpcDescription {
 					None => rpc_sub_name.clone(),
 				};
 
-				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| {
-						#parsing
-						#tokio::spawn(async move {
-							let _ = context.as_ref().#rust_method_name(subscription_sink, #params_seq).await;
-						});
-						#sub_err::None
+				if sub.signature.sig.asyncness.is_some() {
+					handle_register_result(quote! {
+						rpc.register_async_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context| async move {
+							#parsing
+							#into_sub_response::into_response(context.as_ref().#rust_method_name(pending, #params_seq).await)
+						})
 					})
-				})
+				} else {
+					handle_register_result(quote! {
+						rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context| {
+							#parsing
+							let _ = context.as_ref().#rust_method_name(pending, #params_seq);
+							#sub_err::None
+						})
+					})
+				}
 			})
 			.collect::<Vec<_>>();
 

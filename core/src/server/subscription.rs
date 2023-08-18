@@ -229,10 +229,10 @@ impl IsUnsubscribed {
 ///
 /// Thus, if you want a customized error message then `PendingSubscription::reject` must be called.
 #[derive(Debug)]
-#[must_use = "PendningSubscriptionSink does nothing unless `accept` or `reject` is called"]
+#[must_use = "PendingSubscriptionSink does nothing unless `accept` or `reject` is called"]
 pub struct PendingSubscriptionSink {
 	/// Sink.
-	pub(crate) inner: MethodSink,
+	pub inner: MethodSink,
 	/// MethodCallback.
 	pub(crate) method: &'static str,
 	/// Shared Mutex of subscriptions for this method.

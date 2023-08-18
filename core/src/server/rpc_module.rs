@@ -716,6 +716,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// such as spawning a separate task to do so.
 	///
 	/// This is more efficient as this doesn't require cloning the `params` in the subscription
+	/// and it won't send out a close message. Such things are delegated to the user of this API
 	///
 	/// # Examples
 	///
@@ -736,7 +737,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///             // allowed to send out any further notifications on
 	///             // on the subscription.
 	///             tokio::spawn(pending.reject(ErrorObjectOwned::from(e)));
-	///             return Ok(());
+	///             return;
 	///         }
 	///     };
 	///
@@ -752,8 +753,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         // This fails only if the connection is closed
 	///         sink.send(msg).await.unwrap();
 	///     });
-	///
-	///     Ok(())
 	/// });
 	/// ```
 	///
@@ -767,7 +766,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		F: (Fn(Params, PendingSubscriptionSink, Arc<Context>) -> R) + Send + Sync + Clone + 'static,
-		R: IntoSubscriptionCloseResponse + Send + 'static,
+		R: IntoSubscriptionCloseResponse,
 	{
 		let subscribers = self.verify_and_register_unsubscribe(subscribe_method_name, unsubscribe_method_name)?;
 		let ctx = self.ctx.clone();
@@ -781,10 +780,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					// response to the subscription call.
 					let (tx, rx) = oneshot::channel();
-					let (accepted_tx, accepted_rx) = oneshot::channel();
-
-					let sub_id = uniq_sub.sub_id.clone();
-					let method = notif_method_name;
 
 					let sink = PendingSubscriptionSink {
 						inner: method_sink.clone(),
@@ -796,45 +791,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						permit: conn.subscription_permit,
 					};
 
-					// The subscription callback is a future from the subscription
-					// definition and not the as same when the subscription call has been completed.
-					//
-					// This runs until the subscription callback has completed.
-					let res = callback(params, sink, ctx.clone());
-
-					let fut = async move {
-						// This will wait for the subscription future to be resolved
-						if accepted_rx.await.is_err() {
-							return;
-						}
-
-						match res.into_response() {
-							SubscriptionCloseResponse::Notif(msg) => {
-								let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &sub_id, method);
-								let _ = method_sink.send(json).await;
-							}
-							SubscriptionCloseResponse::NotifErr(msg) => {
-								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
-								let _ = method_sink.send(json).await;
-							}
-							SubscriptionCloseResponse::None => (),
-						}
-					};
-
-					tokio::spawn(fut);
+					callback(params, sink, ctx.clone());
 
 					let id = id.clone().into_owned();
 
 					Box::pin(async move {
 						match rx.await {
-							Ok(msg) => {
-								// If the subscription was accepted then send a message
-								// to subscription task otherwise rely on the drop impl.
-								if msg.is_success() {
-									let _ = accepted_tx.send(());
-								}
-								Ok(msg)
-							}
+							Ok(msg) => Ok(msg),
 							Err(_) => Err(id),
 						}
 					})

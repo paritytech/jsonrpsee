@@ -87,6 +87,9 @@ mod rpc_impl {
 		#[subscription(name = "unit_type", unsubscribe = "unsubscribe_unit_type", item = String)]
 		async fn sub_unit_type(&self, x: usize);
 
+		#[subscription(name = "sync_sub", unsubscribe = "sync_unsub", item = String)]
+		fn sync_sub(&self);
+
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> Result<String, ErrorObjectOwned> {
 			Ok(format!("Called with: {}, {}", a, b))
@@ -182,6 +185,13 @@ mod rpc_impl {
 
 		async fn sub_custom_ret(&self, _pending: PendingSubscriptionSink, _x: usize) -> CustomSubscriptionRet {
 			CustomSubscriptionRet
+		}
+
+		fn sync_sub(&self, pending: PendingSubscriptionSink) {
+			tokio::spawn(async move {
+				let sink = pending.accept().await.unwrap();
+				sink.send("hello".into()).await.unwrap();
+			});
 		}
 
 		async fn sub_unit_type(&self, _pending: PendingSubscriptionSink, _x: usize) {}
@@ -401,4 +411,17 @@ async fn calls_with_object_params_works() {
 	params.insert("paramB", "0x0").unwrap();
 
 	assert_eq!(client.request::<u64, ObjectParams>("foo_foo", params).await.unwrap(), 42);
+}
+
+#[tokio::test]
+async fn sync_sub_works() {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let addr = server.local_addr().unwrap();
+	let server_url = format!("ws://{}", addr);
+	let _handle = server.start(RpcServerImpl.into_rpc());
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub = client.sync_sub().await.unwrap();
+
+	assert_eq!(sub.next().await.unwrap().unwrap(), "hello");
 }
