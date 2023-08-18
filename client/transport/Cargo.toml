@@ -36,7 +36,7 @@ tokio-rustls = { version = "0.24", optional = true }
 soketto = { version = "0.7.1", optional = true }
 
 # web-sys
-gloo-net = { version = "0.3.0", default-features = false, features = ["json", "websocket"], optional = true }
+gloo-net = { version = "0.4.0", default-features = false, features = ["json", "websocket"], optional = true }
 
 [features]
 native-tls = ["rustls-native-certs", "__tls"]

@@ -116,10 +116,9 @@ where
 		url.set_fragment(None);
 
 		let client = match url.scheme() {
-			#[cfg(not(feature = "__tls"))]
 			"http" => HttpBackend::Http(Client::new()),
 			#[cfg(feature = "__tls")]
-			"https" | "http" => {
+			"https" => {
 				let connector = match cert_store {
 					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
