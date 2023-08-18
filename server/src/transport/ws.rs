@@ -256,6 +256,17 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let mut data = Vec::with_capacity(100);
 	let stopped = stop_handle.clone().shutdown();
 
+	let params = Arc::new(ExecuteCallParams {
+		batch_requests_config,
+		conn_id,
+		methods,
+		max_log_length,
+		max_response_body_size,
+		sink: sink.clone(),
+		id_provider,
+		logger: logger.clone(),
+	});
+
 	tokio::pin!(stopped);
 
 	let result = loop {
@@ -307,20 +318,11 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 			}
 		};
 
-		let params = ExecuteCallParams {
-			batch_requests_config,
-			bounded_subscriptions: bounded_subscriptions.clone(),
-			conn_id,
-			methods: methods.clone(),
-			max_log_length,
-			max_response_body_size,
-			sink: sink.clone(),
-			id_provider: id_provider.clone(),
-			logger: logger.clone(),
-			data: std::mem::take(&mut data),
-		};
-
-		pending_calls.push(tokio::spawn(execute_unchecked_call(params)));
+		pending_calls.push(tokio::spawn(execute_unchecked_call(
+			params.clone(),
+			std::mem::take(&mut data),
+			bounded_subscriptions.clone(),
+		)));
 	};
 
 	// Drive all running methods to completion.
@@ -454,9 +456,7 @@ where
 
 struct ExecuteCallParams<L: Logger> {
 	batch_requests_config: BatchRequestConfig,
-	bounded_subscriptions: BoundedSubscriptions,
 	conn_id: u32,
-	data: Vec<u8>,
 	id_provider: Arc<dyn IdProvider>,
 	methods: Methods,
 	max_response_body_size: u32,
@@ -465,87 +465,66 @@ struct ExecuteCallParams<L: Logger> {
 	logger: L,
 }
 
-async fn execute_unchecked_call<L: Logger>(params: ExecuteCallParams<L>) {
-	let ExecuteCallParams {
-		batch_requests_config,
-		conn_id,
-		data,
-		sink,
-		max_response_body_size,
-		max_log_length,
-		methods,
-		id_provider,
-		bounded_subscriptions,
-		logger,
-	} = params;
-
-	let request_start = logger.on_request(TransportProtocol::WebSocket);
+async fn execute_unchecked_call<L: Logger>(
+	params: Arc<ExecuteCallParams<L>>,
+	data: Vec<u8>,
+	bounded_subscriptions: BoundedSubscriptions,
+) {
+	let request_start = params.logger.on_request(TransportProtocol::WebSocket);
 	let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
+
+	let call_data = CallData {
+		bounded_subscriptions,
+		conn_id: params.conn_id as usize,
+		max_response_body_size: params.max_response_body_size,
+		max_log_length: params.max_log_length,
+		methods: &params.methods,
+		sink: &params.sink,
+		id_provider: &*params.id_provider,
+		logger: &params.logger,
+		request_start,
+	};
 
 	match first_non_whitespace {
 		Some((start, b'{')) => {
-			let call_data = CallData {
-				conn_id: conn_id as usize,
-				bounded_subscriptions,
-				max_response_body_size,
-				max_log_length,
-				methods: &methods,
-				sink: &sink,
-				id_provider: &*id_provider,
-				logger: &logger,
-				request_start,
-			};
-
 			if let Some(rp) = process_single_request(&data[start..], call_data).await {
 				match rp {
 					CallOrSubscription::Subscription(r) => {
-						logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
+						params.logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 					}
 
 					CallOrSubscription::Call(r) => {
-						logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-						_ = sink.send(r.result).await;
+						params.logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
+						_ = params.sink.send(r.result).await;
 					}
 				}
 			}
 		}
 		Some((start, b'[')) => {
-			let limit = match batch_requests_config {
+			let limit = match params.batch_requests_config {
 				BatchRequestConfig::Disabled => {
 					let response = MethodResponse::error(
 						Id::Null,
 						ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, None),
 					);
-					logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-					_ = sink.send(response.result).await;
+					params.logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
+					_ = params.sink.send(response.result).await;
 					return;
 				}
 				BatchRequestConfig::Limit(limit) => limit as usize,
 				BatchRequestConfig::Unlimited => usize::MAX,
 			};
 
-			let call_data = CallData {
-				conn_id: conn_id as usize,
-				bounded_subscriptions,
-				max_response_body_size,
-				max_log_length,
-				methods: &methods,
-				sink: &sink,
-				id_provider: &*id_provider,
-				logger: &logger,
-				request_start,
-			};
-
 			let response = process_batch_request(Batch { data: &data[start..], call: call_data, max_len: limit }).await;
 
 			if let Some(response) = response {
-				tx_log_from_str(&response, max_log_length);
-				logger.on_response(&response, request_start, TransportProtocol::WebSocket);
-				_ = sink.send(response).await;
+				tx_log_from_str(&response, params.max_log_length);
+				params.logger.on_response(&response, request_start, TransportProtocol::WebSocket);
+				_ = params.sink.send(response).await;
 			}
 		}
 		_ => {
-			_ = sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
+			_ = params.sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
 		}
 	};
 }
