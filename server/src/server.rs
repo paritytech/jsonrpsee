@@ -152,7 +152,7 @@ where
 						max_subscriptions_per_connection,
 						batch_requests_config,
 						id_provider: id_provider.clone(),
-						ping_interval: self.cfg.ping_interval,
+						ping_config: self.cfg.ping_config,
 						stop_handle: stop_handle.clone(),
 						conn_id: id,
 						logger: logger.clone(),
@@ -210,14 +210,14 @@ struct Settings {
 	batch_requests_config: BatchRequestConfig,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
-	/// The interval at which `Ping` frames are submitted.
-	ping_interval: Duration,
 	/// Enable HTTP.
 	enable_http: bool,
 	/// Enable WS.
 	enable_ws: bool,
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
 	message_buffer_capacity: u32,
+	/// Ping settings.
+	ping_config: PingConfig,
 }
 
 /// Configuration for batch request handling.
@@ -231,6 +231,54 @@ pub enum BatchRequestConfig {
 	Unlimited,
 }
 
+/// Configuration for WebSocket ping's.
+///
+/// If the server sends out a ping then remote peer must reply with a corresponding pong message.
+///
+/// It's possible to just send out pings then don't care about response
+/// or terminate the connection if the ping isn't replied to the configured `max_inactivity` limit.
+///
+/// NOTE: It's possible that a `ping` may be backpressured and if you expect a connection
+/// to be reassumed after interruption it's not recommended to enable the activity check.
+#[derive(Debug, Copy, Clone)]
+pub enum PingConfig {
+	/// The server pings the connected clients continuously at the configured interval but
+	/// doesn't disconnect them if no pongs are received from the client.
+	WithoutInactivityCheck(Duration),
+	/// The server pings the connected clients continuously at the configured interval
+	/// and terminates the connection if no websocket messages received from client
+	/// after the max limit is exceeded.
+	WithInactivityCheck {
+		/// Time interval between consequent pings from server
+		ping_interval: Duration,
+		/// Max allowed time for connection to stay idle
+		inactive_limit: Duration,
+	},
+}
+
+impl PingConfig {
+	pub(crate) fn ping_interval(&self) -> Duration {
+		match self {
+			Self::WithoutInactivityCheck(ping_interval) => *ping_interval,
+			Self::WithInactivityCheck { ping_interval, .. } => *ping_interval,
+		}
+	}
+
+	pub(crate) fn inactive_limit(&self) -> Option<Duration> {
+		if let Self::WithInactivityCheck { inactive_limit, .. } = self {
+			Some(*inactive_limit)
+		} else {
+			None
+		}
+	}
+}
+
+impl Default for PingConfig {
+	fn default() -> Self {
+		Self::WithoutInactivityCheck(Duration::from_secs(60))
+	}
+}
+
 impl Default for Settings {
 	fn default() -> Self {
 		Self {
@@ -241,10 +289,10 @@ impl Default for Settings {
 			max_subscriptions_per_connection: 1024,
 			batch_requests_config: BatchRequestConfig::Unlimited,
 			tokio_runtime: None,
-			ping_interval: Duration::from_secs(60),
 			enable_http: true,
 			enable_ws: true,
 			message_buffer_capacity: 1024,
+			ping_config: PingConfig::WithoutInactivityCheck(Duration::from_secs(60)),
 		}
 	}
 }
@@ -368,25 +416,31 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Configure the interval at which pings are submitted.
+	/// Configure the interval at which pings are submitted,
+	/// and optionally enable connection inactivity check
 	///
-	/// This option is used to keep the connection alive, and is just submitting `Ping` frames,
-	/// without making any assumptions about when a `Pong` frame should be received.
+	/// This option is used to keep the connection alive, and can be configured to just submit `Ping` frames or with extra parameter, configuring max interval when a `Pong` frame should be received
 	///
-	/// Default: 60 seconds.
+	/// Default: ping interval is set to 60 seconds and the inactivity check is disabled
 	///
 	/// # Examples
 	///
 	/// ```rust
 	/// use std::time::Duration;
-	/// use jsonrpsee_server::ServerBuilder;
+	/// use jsonrpsee_server::{ServerBuilder, PingConfig};
 	///
-	/// // Set the ping interval to 10 seconds.
-	/// let builder = ServerBuilder::default().ping_interval(Duration::from_secs(10));
+	/// // Set the ping interval to 10 seconds but terminate the connection if a client is inactive for more than 2 minutes
+	/// let builder = ServerBuilder::default().ping_interval(PingConfig::WithInactivityCheck { ping_interval: Duration::from_secs(10), inactive_limit: Duration::from_secs(2 * 60) }).unwrap();
 	/// ```
-	pub fn ping_interval(mut self, interval: Duration) -> Self {
-		self.settings.ping_interval = interval;
-		self
+	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
+		if let PingConfig::WithInactivityCheck { ping_interval, inactive_limit } = config {
+			if ping_interval >= inactive_limit {
+				return Err(Error::Custom("`inactive_limit` must be bigger than `ping_interval` to work".into()));
+			}
+		}
+
+		self.settings.ping_config = config;
+		Ok(self)
 	}
 
 	/// Configure custom `subscription ID` provider for the server to use
@@ -576,8 +630,8 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) batch_requests_config: BatchRequestConfig,
 	/// Subscription ID provider.
 	pub(crate) id_provider: Arc<dyn IdProvider>,
-	/// Ping interval
-	pub(crate) ping_interval: Duration,
+	/// Ping configuration.
+	pub(crate) ping_config: PingConfig,
 	/// Stop handle.
 	pub(crate) stop_handle: StopHandle,
 	/// Connection ID
@@ -700,8 +754,8 @@ struct ProcessConnection<L> {
 	batch_requests_config: BatchRequestConfig,
 	/// Subscription ID provider.
 	id_provider: Arc<dyn IdProvider>,
-	/// Ping interval
-	ping_interval: Duration,
+	/// Ping config.
+	ping_config: PingConfig,
 	/// Stop handle.
 	stop_handle: StopHandle,
 	/// Max connections,
@@ -769,7 +823,7 @@ fn process_connection<'a, L: Logger, B, U>(
 			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
 			batch_requests_config: cfg.batch_requests_config,
 			id_provider: cfg.id_provider,
-			ping_interval: cfg.ping_interval,
+			ping_config: cfg.ping_config,
 			stop_handle: cfg.stop_handle.clone(),
 			conn_id: cfg.conn_id,
 			logger: cfg.logger,

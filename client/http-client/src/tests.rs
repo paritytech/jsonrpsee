@@ -199,7 +199,7 @@ async fn batch_request_with_failed_call_gives_proper_error() {
 		.unwrap()
 		.unwrap();
 	let err: Vec<_> = res.into_ok().unwrap_err().collect();
-	assert_eq!(err, vec![ErrorObject::from(ErrorCode::MethodNotFound), ErrorObject::borrowed(-32602, &"foo", None)]);
+	assert_eq!(err, vec![ErrorObject::from(ErrorCode::MethodNotFound), ErrorObject::borrowed(-32602, "foo", None)]);
 }
 
 #[tokio::test]

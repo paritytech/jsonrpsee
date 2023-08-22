@@ -329,7 +329,7 @@ mod tests {
 		let data = serde_json::value::to_raw_value(&"\\\"validate_transaction\\\"").unwrap();
 		let exp = ErrorObject::borrowed(
 			1002,
-			&"desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
+			"desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
 			Some(&*data),
 		);
 
