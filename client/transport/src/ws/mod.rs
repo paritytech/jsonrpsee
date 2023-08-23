@@ -150,11 +150,6 @@ pub enum WsHandshakeError {
 	#[error("Error in the WebSocket handshake: {0}")]
 	Transport(#[source] soketto::handshake::Error),
 
-	/// Invalid DNS name error for TLS
-	#[cfg(feature = "tls")]
-	#[error("Invalid DNS name: {0}")]
-	InvalidDnsName(#[source] tokio_rustls::webpki::InvalidDnsNameError),
-
 	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {status_code}")]
 	Rejected {
@@ -425,13 +420,6 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-#[cfg(feature = "tls")]
-impl From<tokio_rustls::webpki::InvalidDnsNameError> for WsHandshakeError {
-	fn from(err: tokio_rustls::webpki::InvalidDnsNameError) -> WsHandshakeError {
-		WsHandshakeError::InvalidDnsName(err)
-	}
-}
-
 impl From<soketto::handshake::Error> for WsHandshakeError {
 	fn from(err: soketto::handshake::Error) -> WsHandshakeError {
 		WsHandshakeError::Transport(err)
@@ -518,7 +506,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 			}
 		}
 		CertificateStore::WebPki => {
-			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+			roots.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
 				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
 			}));
 		}
