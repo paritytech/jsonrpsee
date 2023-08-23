@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.16.3] - 2023-08-23
+
+This release fixes https://rustsec.org/advisories/RUSTSEC-2023-0052.
+
 ## [v0.16.2] - 2022-12-01
 
 This release adds `Clone` and `Copy` implementations.
