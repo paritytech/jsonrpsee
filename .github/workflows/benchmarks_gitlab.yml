@@ -11,7 +11,7 @@ jobs:
     steps:
 
       - name: Checkout Sources
-        uses: actions/checkout@v3.5.3
+        uses: actions/checkout@v3.6.0
         with:
           fetch-depth: 0
           ref: "gh-pages"
@@ -24,7 +24,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.6.1
+        uses: Swatinem/rust-cache@v2.6.2
 
       - name: Copy bench results
         id: step_one
