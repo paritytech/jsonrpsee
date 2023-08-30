@@ -127,7 +127,7 @@ impl RpcDescription {
 				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters we're passing to the rust function
 				// called..
-				let (parsing, params_seq) = self.render_params_decoding(&method.params, None);
+				let (parsing, params_seq) = self.render_params_decoding(&method.params, None, method.flatten);
 
 				let into_response = self.jrps_server_item(quote! { IntoResponse });
 
@@ -170,7 +170,7 @@ impl RpcDescription {
 				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let pending = proc_macro2::Ident::new("subscription_sink", rust_method_name.span());
-				let (parsing, params_seq) = self.render_params_decoding(&sub.params, Some(pending));
+				let (parsing, params_seq) = self.render_params_decoding(&sub.params, Some(pending), false);
 				let into_sub_response = self.jrps_server_item(quote! { IntoSubscriptionCloseResponse });
 
 				check_name(&rpc_sub_name, rust_method_name.span());
@@ -279,6 +279,7 @@ impl RpcDescription {
 		&self,
 		params: &[(syn::PatIdent, syn::Type)],
 		sub: Option<proc_macro2::Ident>,
+		flatten: bool,
 	) -> (TokenStream2, TokenStream2) {
 		if params.is_empty() {
 			return (TokenStream2::default(), TokenStream2::default());
@@ -380,8 +381,15 @@ impl RpcDescription {
 					tokens: TokenStream2::from_str(&format!("({})", alias_vals.as_str())).unwrap(),
 				};
 
+				let serde_flatten = if flatten {
+					quote! { #[serde(flatten)] }
+				} else {
+					quote! {}
+				};
+
 				quote! {
 					#serde_alias
+					#serde_flatten
 					#name: #ty,
 				}
 			});
