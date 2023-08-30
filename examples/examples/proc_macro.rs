@@ -51,6 +51,9 @@ where
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
 	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> SubscriptionResult;
+
+	#[subscription(name = "subscribeSync" => "sync", item = Vec<Hash>)]
+	fn s(&self, keys: Option<Vec<StorageKey>>);
 }
 
 pub struct RpcServerImpl;
@@ -75,6 +78,14 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		sink.send(msg).await?;
 
 		Ok(())
+	}
+
+	fn s(&self, pending: PendingSubscriptionSink, _keys: Option<Vec<ExampleStorageKey>>) {
+		tokio::spawn(async move {
+			let sink = pending.accept().await.unwrap();
+			let msg = SubscriptionMessage::from_json(&vec![[0; 32]]).unwrap();
+			sink.send(msg).await.unwrap();
+		});
 	}
 }
 

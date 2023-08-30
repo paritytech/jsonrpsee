@@ -271,10 +271,6 @@ impl RpcDescription {
 						));
 					}
 
-					if method.sig.asyncness.is_none() {
-						return Err(syn::Error::new_spanned(method, "Subscription methods must be `async`"));
-					}
-
 					let sub_data = RpcSubscription::from_item(attr.clone(), method.clone())?;
 					subscriptions.push(sub_data);
 				}
