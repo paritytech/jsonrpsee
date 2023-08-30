@@ -66,43 +66,33 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = Server::builder().set_message_buffer_capacity(10).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription(
-			"sub_one_param",
-			"sub_one_param",
-			"unsub_one_param",
-			|params, pending, _| async move {
-				// we are doing this verbose way to get a customized reject error on the subscription.
-				let idx = match params.one::<usize>() {
-					Ok(p) => p,
-					Err(e) => {
-						let _ = pending.reject(e).await;
-						return Ok(());
-					}
-				};
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| async move {
+			// we are doing this verbose way to get a customized reject error on the subscription.
+			let idx = match params.one::<usize>() {
+				Ok(p) => p,
+				Err(e) => {
+					let _ = pending.reject(e).await;
+					return Ok(());
+				}
+			};
 
-				let item = LETTERS.chars().nth(idx);
+			let item = LETTERS.chars().nth(idx);
 
-				let interval = interval(Duration::from_millis(200));
-				let stream = IntervalStream::new(interval).map(move |_| item);
+			let interval = interval(Duration::from_millis(200));
+			let stream = IntervalStream::new(interval).map(move |_| item);
 
-				pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
-			},
-		)
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
+		})
 		.unwrap();
 	module
-		.register_async_subscription(
-			"sub_params_two",
-			"params_two",
-			"unsub_params_two",
-			|params, pending, _| async move {
-				let (one, two) = params.parse::<(usize, usize)>()?;
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| async move {
+			let (one, two) = params.parse::<(usize, usize)>()?;
 
-				let item = &LETTERS[one..two];
-				let interval = interval(Duration::from_millis(200));
-				let stream = IntervalStream::new(interval).map(move |_| item);
-				pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
-			},
-		)
+			let item = &LETTERS[one..two];
+			let interval = interval(Duration::from_millis(200));
+			let stream = IntervalStream::new(interval).map(move |_| item);
+			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
+		})
 		.unwrap();
 
 	let addr = server.local_addr()?;

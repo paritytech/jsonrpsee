@@ -419,21 +419,16 @@ async fn register_methods_works() {
 	assert!(module.register_method("say_hello", |_, _| "lo").is_ok());
 	assert!(module.register_method("say_hello", |_, _| "lo").is_err());
 	assert!(module
-		.register_async_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async {
-			Ok(())
-		})
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| async { Ok(()) })
 		.is_ok());
 	assert!(module
-		.register_async_subscription(
-			"subscribe_hello_again",
-			"subscribe_hello_again",
-			"unsubscribe_hello",
-			|_, _, _| async { Ok(()) }
-		)
+		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| async {
+			Ok(())
+		})
 		.is_err());
 	assert!(
 		module.register_method("subscribe_hello_again", |_, _| "lo").is_ok(),
-		"Failed register_async_subscription should not have side-effects"
+		"Failed register_subscription should not have side-effects"
 	);
 }
 
@@ -441,9 +436,8 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module.register_async_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async {
-			Ok(())
-		}),
+		module
+			.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { Ok(()) }),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -570,7 +564,7 @@ async fn custom_subscription_id_works() {
 	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| async {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| async {
 			let sink = sink.accept().await.unwrap();
 
 			assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
@@ -733,7 +727,7 @@ async fn ws_server_backpressure_works() {
 	let mut module = RpcModule::new(backpressure_tx);
 
 	module
-		.register_async_subscription(
+		.register_subscription(
 			"subscribe_with_backpressure_aggregation",
 			"n",
 			"unsubscribe_with_backpressure_aggregation",

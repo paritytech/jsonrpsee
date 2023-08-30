@@ -269,7 +269,7 @@ impl Methods {
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_async_subscription("hi", "hi", "goodbye", |_, pending, _| async {
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
@@ -352,7 +352,7 @@ impl Methods {
 	///     use jsonrpsee::core::{Error, EmptyServerParams, RpcResult};
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_async_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
 	///         let sink = pending.accept().await?;
 	///         sink.send("one answer".into()).await?;
 	///         Ok(())
@@ -590,7 +590,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_async_subscription("sub", "notif_name", "unsub", |params, pending, ctx| async move {
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| async move {
 	///
 	///     let x = match params.one::<usize>() {
 	///         Ok(x) => x,
@@ -622,7 +622,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     Ok(())
 	/// });
 	/// ```
-	pub fn register_async_subscription<R, F, Fut>(
+	pub fn register_subscription<R, F, Fut>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		notif_method_name: &'static str,
@@ -711,7 +711,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(callback)
 	}
 
-	/// Similar to [`RpcModule::register_async_subscription`] but a little lower-level API
+	/// Similar to [`RpcModule::register_subscription`] but a little lower-level API
 	/// where handling the subscription is managed the user i.e, polling the subscription
 	/// such as spawning a separate task to do so.
 	///
@@ -726,7 +726,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| {
+	/// ctx.register_subscription_raw("sub", "notif_name", "unsub", |params, pending, ctx| {
 	///
 	///     // The params are parsed outside the async block below to avoid cloning the bytes.
 	///     let val = match params.one::<usize>() {
@@ -756,7 +756,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// });
 	/// ```
 	///
-	pub fn register_subscription<R, F>(
+	pub fn register_subscription_raw<R, F>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		notif_method_name: &'static str,

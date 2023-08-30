@@ -80,7 +80,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_async_subscription::<Result<(), StringError>, _, _>(
+		.register_subscription::<Result<(), StringError>, _, _>(
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",

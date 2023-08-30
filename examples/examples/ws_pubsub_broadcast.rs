@@ -74,7 +74,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	std::thread::spawn(move || produce_items(tx));
 
 	module
-		.register_async_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, pending, tx| async move {
+		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, pending, tx| async move {
 			let rx = tx.subscribe();
 			let stream = BroadcastStream::new(rx);
 			pipe_from_stream_with_bounded_buffer(pending, stream).await?;

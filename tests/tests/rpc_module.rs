@@ -73,9 +73,9 @@ fn flatten_rpc_modules() {
 }
 
 #[test]
-fn rpc_context_modules_can_register_async_subscriptions() {
+fn rpc_context_modules_can_register_subscriptions() {
 	let mut cxmodule = RpcModule::new(());
-	cxmodule.register_async_subscription("hi", "hi", "goodbye", |_, _, _| async { Ok(()) }).unwrap();
+	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| async { Ok(()) }).unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -238,7 +238,7 @@ async fn subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let mut stream_data = vec!['0', '1', '2'];
 
 			let sink = pending.accept().await.unwrap();
@@ -271,7 +271,7 @@ async fn close_test_subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let sink = pending.accept().await?;
 			let msg = SubscriptionMessage::from_json(&"lo")?;
 
@@ -314,7 +314,7 @@ async fn close_test_subscribing_without_server() {
 async fn subscribing_without_server_bad_params() {
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| async move {
 			let p = match params.one::<String>() {
 				Ok(p) => p,
 				Err(e) => {
@@ -344,7 +344,7 @@ async fn subscribing_without_server_bad_params() {
 async fn subscribing_without_server_indicates_close() {
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let sink = pending.accept().await?;
 
 			for m in 0..5 {
@@ -368,7 +368,7 @@ async fn subscribing_without_server_indicates_close() {
 async fn subscribe_unsubscribe_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);
 			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
@@ -402,7 +402,7 @@ async fn subscribe_unsubscribe_without_server() {
 async fn rejected_subscription_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
 			pending.reject(err.into_owned()).await;
 			Ok(())
@@ -419,7 +419,7 @@ async fn reject_works() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			pending.reject(ErrorObject::owned(PARSE_ERROR_CODE, "rejected", None::<()>)).await;
 			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 			Err("do not send".into())
@@ -439,7 +439,7 @@ async fn bounded_subscription_works() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx| async move {
 			let mut sink = pending.accept().await?;
 
 			let mut stream = IntervalStream::new(interval(std::time::Duration::from_millis(100)))
@@ -508,7 +508,7 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
 			let _ = pending.accept().await?;
 			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
@@ -544,7 +544,7 @@ async fn subscription_close_response_works() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_async_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| async move {
 			let x = match params.one::<usize>() {
 				Ok(op) => op,
 				Err(e) => {
