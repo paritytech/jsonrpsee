@@ -45,5 +45,5 @@ pub use future::ServerHandle;
 pub use jsonrpsee_core::server::*;
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;
-pub use server::{BatchRequestConfig, Builder as ServerBuilder, Server};
+pub use server::{BatchRequestConfig, Builder as ServerBuilder, PingConfig, Server};
 pub use tracing;
