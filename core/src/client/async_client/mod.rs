@@ -931,8 +931,7 @@ impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
 		if self.futs.is_empty() {
-			self.waker.get_or_insert_with(|| cx.waker().clone());
-
+			self.waker = Some(cx.waker().clone());
 			return Poll::Pending;
 		}
 
