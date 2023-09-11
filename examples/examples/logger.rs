@@ -25,54 +25,51 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
-use std::time::Instant;
+use std::task::Poll;
 
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params, SuccessOrError, TransportProtocol};
+use futures::future::BoxFuture;
+use futures::FutureExt;
+use jsonrpsee::core::{client::ClientT, Error};
+use jsonrpsee::server::middleware::RpcService;
 use jsonrpsee::server::Server;
+use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, RpcModule};
+use jsonrpsee::{rpc_params, MethodResponse, RpcModule};
 
 #[derive(Clone)]
-struct Timings;
+pub struct Timings(RpcService);
 
-impl logger::Logger for Timings {
-	type Instant = Instant;
+impl<'a> tower::Service<Request<'a>> for Timings {
+	type Response = MethodResponse;
+	type Error = Error;
+	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
 
-	fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest, _t: TransportProtocol) {
-		println!("[Logger::on_connect] remote_addr {:?}, headers: {:?}", remote_addr, request);
+	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
 	}
 
-	fn on_request(&self, _t: TransportProtocol) -> Self::Instant {
-		println!("[Logger::on_request]");
-		Instant::now()
-	}
+	fn call(&mut self, request: Request<'a>) -> Self::Future {
+		let instant = std::time::Instant::now();
+		let mut this = self.0.clone();
 
-	fn on_call(&self, name: &str, params: Params, kind: MethodKind, _t: TransportProtocol) {
-		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
+		async move {
+			let name = request.method.clone();
+			let rp = this.call(request).await;
+			println!("method call `{name}` took {}ms", instant.elapsed().as_millis());
+			rp
+		}
+		.boxed()
 	}
+}
 
-	fn on_result(
-		&self,
-		name: &str,
-		success_or_error: SuccessOrError,
-		started_at: Self::Instant,
-		_t: TransportProtocol,
-	) {
-		println!(
-			"[Logger::on_result] '{}', worked? {}, time elapsed {:?}",
-			name,
-			success_or_error.is_success(),
-			started_at.elapsed()
-		);
-	}
+#[derive(Clone)]
+pub struct TimingsLayer;
 
-	fn on_response(&self, result: &str, started_at: Self::Instant, _t: TransportProtocol) {
-		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
-	}
+impl<'a> tower::Layer<RpcService> for TimingsLayer {
+	type Service = Timings;
 
-	fn on_disconnect(&self, remote_addr: SocketAddr, _t: TransportProtocol) {
-		println!("[Logger::on_disconnect] remote_addr: {:?}", remote_addr);
+	fn layer(&self, service: RpcService) -> Self::Service {
+		Timings(service)
 	}
 }
 
@@ -87,8 +84,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", rpc_params![]).await?;
-	println!("response: {:?}", response);
+	let _response: String = client.request("say_hello", rpc_params![]).await?;
 	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
 	let _: String = client.request("say_hello", rpc_params![]).await?;
 
@@ -96,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = Server::builder().set_logger(Timings).build("127.0.0.1:0").await?;
+	let server = Server::builder().set_rpc_middleware(TimingsLayer).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 	let addr = server.local_addr()?;

@@ -33,18 +33,21 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::logger::{Logger, TransportProtocol};
+use crate::middleware::RpcService;
+use crate::transport::http::{content_type_is_json, process_validated_request};
 use crate::transport::{http, ws};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
+use ::http::Method;
 use hyper::body::HttpBody;
-use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 
-use jsonrpsee_core::server::Methods;
+use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
+use jsonrpsee_core::server::{MethodResponse, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_types::Request as JsonRpcRequest;
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -58,22 +61,22 @@ use tracing::{instrument, Instrument};
 const MAX_CONNECTIONS: u32 = 100;
 
 /// JSON RPC server.
-pub struct Server<B = Identity, L = ()> {
+pub struct Server<HttpMiddleware = Identity, RpcMiddleware = ()> {
 	listener: TcpListener,
 	cfg: Settings,
-	logger: L,
+	rpc_middleware: RpcMiddleware,
 	id_provider: Arc<dyn IdProvider>,
-	service_builder: tower::ServiceBuilder<B>,
+	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
-impl Server<Identity, ()> {
+impl Server<Identity> {
 	/// Create a builder for the server.
-	pub fn builder() -> Builder {
+	pub fn builder() -> Builder<Identity> {
 		Builder::new()
 	}
 }
 
-impl<L> std::fmt::Debug for Server<L> {
+impl<RpcMiddleware, HttpMiddleware> std::fmt::Debug for Server<RpcMiddleware, HttpMiddleware> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Server")
 			.field("listener", &self.listener)
@@ -83,24 +86,28 @@ impl<L> std::fmt::Debug for Server<L> {
 	}
 }
 
-impl<B, L> Server<B, L> {
+impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
 	}
 }
 
-impl<S, B, L> Server<S, L>
+impl<HttpMiddleware, RpcMiddleware, B> Server<HttpMiddleware, RpcMiddleware>
 where
-	L: Logger,
-	S: Layer<TowerService<L>> + Send + 'static,
-	<S as Layer<TowerService<L>>>::Service: Send
+	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service:
+		Send + Service<JsonRpcRequest<'a>, Response = MethodResponse, Error = Error>,
+	for<'a> <<RpcMiddleware as Layer<RpcService>>::Service as Service<JsonRpcRequest<'a>>>::Future: Send,
+	HttpMiddleware: Layer<TowerService<RpcMiddleware>> + Send + 'static,
+	<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service: Send
 		+ Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<B>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<S as Layer<TowerService<L>>>::Service as Service<hyper::Request<hyper::Body>>>::Future: Send,
+	<<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+		Send,
 	B: HttpBody + Send + 'static,
 	<B as HttpBody>::Error: Send + Sync + StdError,
 	<B as HttpBody>::Data: Send,
@@ -127,7 +134,6 @@ where
 		let max_response_body_size = self.cfg.max_response_body_size;
 		let max_log_length = self.cfg.max_log_length;
 		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
-		let logger = self.logger;
 		let batch_requests_config = self.cfg.batch_requests_config;
 		let id_provider = self.id_provider;
 
@@ -155,7 +161,6 @@ where
 						ping_config: self.cfg.ping_config,
 						stop_handle: stop_handle.clone(),
 						conn_id: id,
-						logger: logger.clone(),
 						max_connections: self.cfg.max_connections,
 						enable_http: self.cfg.enable_http,
 						enable_ws: self.cfg.enable_ws,
@@ -163,7 +168,8 @@ where
 					};
 
 					process_connection(
-						&self.service_builder,
+						&self.http_middleware,
+						self.rpc_middleware.clone(),
 						&connection_guard,
 						data,
 						socket,
@@ -299,32 +305,32 @@ impl Default for Settings {
 
 /// Builder to configure and create a JSON-RPC server
 #[derive(Debug)]
-pub struct Builder<B = Identity, L = ()> {
+pub struct Builder<HttpMiddleware, RpcMiddleware = ()> {
 	settings: Settings,
-	logger: L,
+	rpc_middleware: RpcMiddleware,
 	id_provider: Arc<dyn IdProvider>,
-	service_builder: tower::ServiceBuilder<B>,
+	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
-impl Default for Builder {
+impl Default for Builder<Identity> {
 	fn default() -> Self {
 		Builder {
 			settings: Settings::default(),
-			logger: (),
+			rpc_middleware: (),
 			id_provider: Arc::new(RandomIntegerIdProvider),
-			service_builder: tower::ServiceBuilder::new(),
+			http_middleware: tower::ServiceBuilder::new(),
 		}
 	}
 }
 
-impl Builder {
+impl Builder<Identity> {
 	/// Create a default server builder.
 	pub fn new() -> Self {
 		Self::default()
 	}
 }
 
-impl<B, L> Builder<B, L> {
+impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -399,12 +405,12 @@ impl<B, L> Builder<B, L> {
 	///
 	/// let builder = ServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<B, T> {
+	pub fn set_rpc_middleware<L>(self, rpc_middleware: L) -> Builder<HttpMiddleware, L> {
 		Builder {
 			settings: self.settings,
-			logger,
+			rpc_middleware,
 			id_provider: self.id_provider,
-			service_builder: self.service_builder,
+			http_middleware: self.http_middleware,
 		}
 	}
 
@@ -484,14 +490,19 @@ impl<B, L> Builder<B, L> {
 	///     let builder = tower::ServiceBuilder::new().timeout(Duration::from_secs(2));
 	///
 	///     let server = jsonrpsee_server::ServerBuilder::new()
-	///         .set_middleware(builder)
+	///         .set_http_middleware(builder)
 	///         .build("127.0.0.1:0".parse::<SocketAddr>().unwrap())
 	///         .await
 	///         .unwrap();
 	/// }
 	/// ```
-	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> Builder<T, L> {
-		Builder { settings: self.settings, logger: self.logger, id_provider: self.id_provider, service_builder }
+	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
+		Builder {
+			settings: self.settings,
+			id_provider: self.id_provider,
+			http_middleware,
+			rpc_middleware: self.rpc_middleware,
+		}
 	}
 
 	/// Configure the server to only serve JSON-RPC HTTP requests.
@@ -561,15 +572,15 @@ impl<B, L> Builder<B, L> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<HttpMiddleware, RpcMiddleware>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
 
 		Ok(Server {
 			listener,
 			cfg: self.settings,
-			logger: self.logger,
+			rpc_middleware: self.rpc_middleware,
 			id_provider: self.id_provider,
-			service_builder: self.service_builder,
+			http_middleware: self.http_middleware,
 		})
 	}
 
@@ -596,22 +607,25 @@ impl<B, L> Builder<B, L> {
 	///   let server = ServerBuilder::new().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<B, L>, Error> {
+	pub fn build_from_tcp<L>(
+		self,
+		listener: impl Into<StdTcpListener>,
+	) -> Result<Server<HttpMiddleware, RpcMiddleware>, Error> {
 		let listener = TcpListener::from_std(listener.into())?;
 
 		Ok(Server {
 			listener,
 			cfg: self.settings,
-			logger: self.logger,
+			rpc_middleware: self.rpc_middleware,
 			id_provider: self.id_provider,
-			service_builder: self.service_builder,
+			http_middleware: self.http_middleware,
 		})
 	}
 }
 
 /// Data required by the server to handle requests.
 #[derive(Debug, Clone)]
-pub(crate) struct ServiceData<L: Logger> {
+pub(crate) struct ServiceData {
 	/// Remote server address.
 	pub(crate) remote_addr: SocketAddr,
 	/// Registered server methods.
@@ -636,8 +650,6 @@ pub(crate) struct ServiceData<L: Logger> {
 	pub(crate) stop_handle: StopHandle,
 	/// Connection ID
 	pub(crate) conn_id: u32,
-	/// Logger.
-	pub(crate) logger: L,
 	/// Handle to hold a `connection permit`.
 	pub(crate) conn: Arc<OwnedSemaphorePermit>,
 	/// Enable HTTP.
@@ -653,14 +665,21 @@ pub(crate) struct ServiceData<L: Logger> {
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].
 #[derive(Debug, Clone)]
-pub struct TowerService<L: Logger> {
-	inner: ServiceData<L>,
+pub struct TowerService<L> {
+	inner: ServiceData,
+	rpc_middleware: L,
 }
 
-impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<L> {
+impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<RpcMiddleware>
+where
+	RpcMiddleware: for<'a> tower::Layer<RpcService> + Send + Sync + Clone + 'static,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service:
+		Send + Service<JsonRpcRequest<'a>, Response = MethodResponse, Error = Error>,
+	for<'a> <<RpcMiddleware as Layer<RpcService>>::Service as Service<JsonRpcRequest<'a>>>::Future: Send,
+{
 	type Response = hyper::Response<hyper::Body>;
 
-	// The following associated type is required by the `impl<B, U, L: Logger> Server<B, L>` bounds.
+	// The following associated type is required by the `impl<B, U, M: JsonRpcMiddleware> Server<B, L>` bounds.
 	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B: Identity`).
 	type Error = Box<dyn StdError + Send + Sync + 'static>;
 
@@ -681,8 +700,8 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::WebSocket);
 					let data = self.inner.clone();
+					let rpc_middleware = self.rpc_middleware.clone();
 
 					tokio::spawn(
 						async move {
@@ -699,7 +718,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 							ws_builder.set_max_message_size(data.max_request_body_size as usize);
 							let (sender, receiver) = ws_builder.finish();
 
-							ws::background_task::<L>(sender, receiver, data).await;
+							ws::background_task(sender, receiver, data, rpc_middleware).await;
 						}
 						.in_current_span(),
 					);
@@ -714,28 +733,45 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 			async { Ok(response) }.boxed()
 		} else if self.inner.enable_http && !is_upgrade_request {
-			// The request wasn't an upgrade request; let's treat it as a standard HTTP request:
-			let data = http::HandleRequest {
-				methods: self.inner.methods.clone(),
-				max_request_body_size: self.inner.max_request_body_size,
-				max_response_body_size: self.inner.max_response_body_size,
-				max_log_length: self.inner.max_log_length,
-				batch_requests_config: self.inner.batch_requests_config,
-				logger: self.inner.logger.clone(),
-				conn: self.inner.conn.clone(),
-				remote_addr: self.inner.remote_addr,
+			let rpc_middleware = self.rpc_middleware.clone();
+
+			let rpc_service = rpc_middleware.layer(RpcService::only_calls(
+				self.inner.methods.clone(),
+				self.inner.max_response_body_size as usize,
+				self.inner.conn_id as usize,
+			));
+
+			let batch_config = self.inner.batch_requests_config;
+			let max_request_size = self.inner.max_request_body_size;
+			let max_response_size = self.inner.max_response_body_size;
+
+			let fut = async move {
+				// Only the `POST` method is allowed.
+				match *request.method() {
+					Method::POST if content_type_is_json(&request) => {
+						process_validated_request(
+							request,
+							batch_config,
+							max_request_size,
+							max_response_size,
+							rpc_service,
+						)
+						.await
+					}
+					// Error scenarios:
+					Method::POST => http::response::unsupported_content_type(),
+					_ => http::response::method_not_allowed(),
+				}
 			};
 
-			self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::Http);
-
-			Box::pin(http::handle_request(request, data).map(Ok))
+			Box::pin(fut.map(Ok))
 		} else {
 			Box::pin(async { http::response::denied() }.map(Ok))
 		}
 	}
 }
 
-struct ProcessConnection<L> {
+struct ProcessConnection {
 	/// Remote server address.
 	remote_addr: SocketAddr,
 	/// Registered server methods.
@@ -762,8 +798,6 @@ struct ProcessConnection<L> {
 	max_connections: u32,
 	/// Connection ID
 	conn_id: u32,
-	/// Logger.
-	logger: L,
 	/// Allow JSON-RPC HTTP requests.
 	enable_http: bool,
 	/// Allow JSON-RPC WS request and WS upgrade requests.
@@ -773,21 +807,25 @@ struct ProcessConnection<L> {
 }
 
 #[instrument(name = "connection", skip_all, fields(remote_addr = %cfg.remote_addr, conn_id = %cfg.conn_id), level = "INFO")]
-fn process_connection<'a, L: Logger, B, U>(
-	service_builder: &tower::ServiceBuilder<B>,
+fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
+	http_middleware_builder: &tower::ServiceBuilder<HttpMiddleware>,
+	rpc_middleware_builder: RpcMiddleware,
 	connection_guard: &ConnectionGuard,
-	cfg: ProcessConnection<L>,
+	cfg: ProcessConnection,
 	socket: TcpStream,
 	drop_on_completion: mpsc::Sender<()>,
 ) where
-	B: Layer<TowerService<L>> + Send + 'static,
-	<B as Layer<TowerService<L>>>::Service: Send
+	RpcMiddleware: 'static,
+	HttpMiddleware: Layer<TowerService<RpcMiddleware>> + Send + 'static,
+	<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service: Send
+		+ 'static
 		+ Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<U>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<B as Layer<TowerService<L>>>::Service as Service<hyper::Request<hyper::Body>>>::Future: Send,
+	<<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+		Send + 'static,
 	U: HttpBody + Send + 'static,
 	<U as HttpBody>::Error: Send + Sync + StdError,
 	<U as HttpBody>::Data: Send,
@@ -826,15 +864,15 @@ fn process_connection<'a, L: Logger, B, U>(
 			ping_config: cfg.ping_config,
 			stop_handle: cfg.stop_handle.clone(),
 			conn_id: cfg.conn_id,
-			logger: cfg.logger,
 			conn: Arc::new(conn),
 			enable_http: cfg.enable_http,
 			enable_ws: cfg.enable_ws,
 			message_buffer_capacity: cfg.message_buffer_capacity,
 		},
+		rpc_middleware: rpc_middleware_builder,
 	};
 
-	let service = service_builder.service(tower_service);
+	let service = http_middleware_builder.service(tower_service);
 
 	tokio::spawn(async {
 		to_http_service(socket, service, cfg.stop_handle).in_current_span().await;

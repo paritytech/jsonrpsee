@@ -87,7 +87,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
 		.timeout(Duration::from_secs(2));
 
-	let server = Server::builder().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let server =
+		Server::builder().set_http_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
 	let addr = server.local_addr()?;
 

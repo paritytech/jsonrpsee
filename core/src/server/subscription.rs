@@ -269,7 +269,7 @@ impl PendingSubscriptionSink {
 	///
 	/// Panics if the subscription response exceeded the `max_response_size`.
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
-		let response = MethodResponse::response(
+		let response = MethodResponse::subscription_response(
 			self.id,
 			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,

@@ -29,71 +29,84 @@ mod helpers;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::task::Poll;
 use std::time::Duration;
 
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use helpers::init_logger;
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, SuccessOrError, TransportProtocol};
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Params};
+use jsonrpsee::server::middleware::RpcService;
+use jsonrpsee::server::{Server, ServerHandle};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::RpcModule;
+use jsonrpsee::{rpc_params, MethodResponse};
 use tokio::time::sleep;
 
-#[derive(Clone, Default)]
+#[derive(Default, Clone)]
 struct Counter {
-	inner: Arc<Mutex<CounterInner>>,
-}
-
-#[derive(Default)]
-struct CounterInner {
-	/// (Number of started connections, number of finished connections)
-	connections: (u32, u32),
 	/// (Number of started requests, number of finished requests)
 	requests: (u32, u32),
 	/// Mapping method names to (number of calls, ids of successfully completed calls)
-	calls: HashMap<String, (u32, Vec<u32>)>,
+	calls: HashMap<String, (u32, Vec<Id<'static>>)>,
 }
 
-impl Logger for Counter {
-	/// Auto-incremented id of the call
-	type Instant = u32;
+#[derive(Clone)]
+struct CounterLayer(Arc<Mutex<Counter>>);
 
-	fn on_connect(&self, _remote_addr: SocketAddr, _req: &HttpRequest, _t: TransportProtocol) {
-		self.inner.lock().unwrap().connections.0 += 1;
+impl tower::Layer<RpcService> for CounterLayer {
+	type Service = CounterMiddleware;
+
+	fn layer(&self, inner: RpcService) -> Self::Service {
+		CounterMiddleware { service: inner, counter: self.0.clone() }
+	}
+}
+
+#[derive(Clone)]
+pub struct CounterMiddleware {
+	service: RpcService,
+	counter: Arc<Mutex<Counter>>,
+}
+
+impl<'a> tower::Service<Request<'a>> for CounterMiddleware {
+	type Response = MethodResponse;
+	type Error = Error;
+	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
+
+	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
 	}
 
-	fn on_request(&self, _t: TransportProtocol) -> u32 {
-		let mut inner = self.inner.lock().unwrap();
-		let n = inner.requests.0;
+	fn call(&mut self, request: Request<'a>) -> Self::Future {
+		let mut this = self.clone();
 
-		inner.requests.0 += 1;
+		async move {
+			let name = request.method.to_string();
+			let id = request.id.clone();
 
-		n
-	}
+			{
+				let mut n = this.counter.lock().unwrap();
+				n.requests.0 += 1;
+				let entry = n.calls.entry(name.clone()).or_insert((0, Vec::new()));
+				entry.0 += 1;
+			}
 
-	fn on_call(&self, name: &str, _params: Params, _kind: MethodKind, _t: TransportProtocol) {
-		let mut inner = self.inner.lock().unwrap();
-		let entry = inner.calls.entry(name.into()).or_insert((0, Vec::new()));
+			let rp = this.service.call(request).await;
 
-		entry.0 += 1;
-	}
+			{
+				let mut n = this.counter.lock().unwrap();
+				n.requests.1 += 1;
+				if rp.as_ref().map_or(false, |r| r.is_success()) {
+					n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
+				}
+			}
 
-	fn on_result(&self, name: &str, success_or_error: SuccessOrError, n: u32, _t: TransportProtocol) {
-		if success_or_error.is_success() {
-			self.inner.lock().unwrap().calls.get_mut(name).unwrap().1.push(n);
+			rp
 		}
-	}
-
-	fn on_response(&self, _result: &str, _: u32, _t: TransportProtocol) {
-		self.inner.lock().unwrap().requests.1 += 1;
-	}
-
-	fn on_disconnect(&self, _remote_addr: SocketAddr, _t: TransportProtocol) {
-		self.inner.lock().unwrap().connections.1 += 1;
+		.boxed()
 	}
 }
 
@@ -117,8 +130,11 @@ fn test_module() -> RpcModule<()> {
 	().into_rpc()
 }
 
-async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketAddr, ServerHandle), Error> {
-	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
+async fn websocket_server(
+	module: RpcModule<()>,
+	counter: Arc<Mutex<Counter>>,
+) -> Result<(SocketAddr, ServerHandle), Error> {
+	let server = Server::builder().set_rpc_middleware(CounterLayer(counter)).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(module);
@@ -126,8 +142,8 @@ async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<(So
 	Ok((addr, handle))
 }
 
-async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketAddr, ServerHandle), Error> {
-	let server = ServerBuilder::default().set_logger(counter).build("127.0.0.1:0").await?;
+async fn http_server(module: RpcModule<()>, counter: Arc<Mutex<Counter>>) -> Result<(SocketAddr, ServerHandle), Error> {
+	let server = Server::builder().set_rpc_middleware(CounterLayer(counter)).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(module);
@@ -139,7 +155,7 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 async fn ws_server_logger() {
 	init_logger();
 
-	let counter = Counter::default();
+	let counter: Arc<Mutex<Counter>> = Default::default();
 	let (server_addr, server_handle) = websocket_server(test_module(), counter.clone()).await.unwrap();
 
 	let server_url = format!("ws://{}", server_addr);
@@ -163,26 +179,23 @@ async fn ws_server_logger() {
 	assert!(res.is_err());
 
 	{
-		let inner = counter.inner.lock().unwrap();
+		let inner = counter.lock().unwrap();
 
-		assert_eq!(inner.connections, (1, 0));
 		assert_eq!(inner.requests, (6, 6));
-		assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
+		assert_eq!(inner.calls["say_hello"], (3, vec![Id::Number(0), Id::Number(2), Id::Number(3)]));
 		assert_eq!(inner.calls["err"], (1, vec![]));
 		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
 	}
 
 	server_handle.stop().unwrap();
 	server_handle.stopped().await;
-
-	assert_eq!(counter.inner.lock().unwrap().connections, (1, 1));
 }
 
 #[tokio::test]
 async fn http_server_logger() {
 	init_logger();
 
-	let counter = Counter::default();
+	let counter: Arc<Mutex<Counter>> = Default::default();
 	let (server_addr, server_handle) = http_server(test_module(), counter.clone()).await.unwrap();
 
 	let server_url = format!("http://{}", server_addr);
@@ -206,16 +219,13 @@ async fn http_server_logger() {
 	assert!(res.is_err());
 
 	{
-		let inner = counter.inner.lock().unwrap();
+		let inner = counter.lock().unwrap();
 		assert_eq!(inner.requests, (6, 6));
-		assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
+		assert_eq!(inner.calls["say_hello"], (3, vec![Id::Number(0), Id::Number(2), Id::Number(3)]));
 		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
 		assert_eq!(inner.calls["err"], (1, vec![]));
 	}
 
 	server_handle.stop().unwrap();
 	server_handle.stopped().await;
-
-	let inner = counter.inner.lock().unwrap();
-	assert_eq!(inner.connections, (6, 6));
 }

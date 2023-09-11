@@ -205,7 +205,7 @@ pub async fn server_with_cors(cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 		// Add `CORS` layer.
 		.layer(cors);
 
-	let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();

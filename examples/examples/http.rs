@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
 			.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
 	);
 
-	let client = HttpClientBuilder::default().set_middleware(middleware).build(url)?;
+	let client = HttpClientBuilder::default().set_http_middleware(middleware).build(url)?;
 	let params = rpc_params![1_u64, 2, 3];
 	let response: Result<String, _> = client.request("say_hello", params).await;
 	tracing::info!("r: {:?}", response);

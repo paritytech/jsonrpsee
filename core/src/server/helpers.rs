@@ -180,6 +180,8 @@ pub struct MethodResponse {
 	pub result: String,
 	/// Indicates whether the call was successful or not.
 	pub success_or_error: MethodResponseResult,
+	/// Indicates whether the call was a subscription response.
+	pub is_subscription: bool,
 }
 
 impl MethodResponse {
@@ -191,6 +193,11 @@ impl MethodResponse {
 	/// Returns whether the call failed.
 	pub fn is_error(&self) -> bool {
 		self.success_or_error.is_success()
+	}
+
+	/// Returns whether the call is a subscription.
+	pub fn is_subscription(&self) -> bool {
+		self.is_subscription
 	}
 }
 
@@ -226,6 +233,16 @@ impl MethodResponseResult {
 }
 
 impl MethodResponse {
+	/// Create a subscription response.
+	pub fn subscription_response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
+	where
+		T: Serialize + Clone,
+	{
+		let mut rp = Self::response(id, result, max_response_size);
+		rp.is_subscription = true;
+		rp
+	}
+
 	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
 	/// an error will be sent instead.
 	pub fn response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
@@ -245,7 +262,7 @@ impl MethodResponse {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
 
-				Self { result, success_or_error }
+				Self { result, success_or_error, is_subscription: false }
 			}
 			Err(err) => {
 				tracing::error!("Error serializing response: {:?}", err);
@@ -262,15 +279,26 @@ impl MethodResponse {
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self { result, success_or_error: MethodResponseResult::Failed(err_code) }
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code), is_subscription: false }
 				} else {
 					let err_code = ErrorCode::InternalError;
 					let result = serde_json::to_string(&Response::new(err_code.into(), id))
 						.expect("JSON serialization infallible; qed");
-					Self { result, success_or_error: MethodResponseResult::Failed(err_code.code()) }
+					Self {
+						result,
+						success_or_error: MethodResponseResult::Failed(err_code.code()),
+						is_subscription: false,
+					}
 				}
 			}
 		}
+	}
+
+	/// Create a subscription response error.
+	pub fn subscription_error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
+		let mut rp = Self::error(id, err);
+		rp.is_subscription = true;
+		rp
 	}
 
 	/// Create a `MethodResponse` from an error.
@@ -279,7 +307,7 @@ impl MethodResponse {
 		let err_code = err.code();
 		let err = ResponsePayload::error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
-		Self { result, success_or_error: MethodResponseResult::Failed(err_code) }
+		Self { result, success_or_error: MethodResponseResult::Failed(err_code), is_subscription: false }
 	}
 }
 

@@ -35,7 +35,6 @@ mod future;
 mod server;
 mod transport;
 
-pub mod logger;
 pub mod middleware;
 
 #[cfg(test)]

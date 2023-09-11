@@ -123,6 +123,32 @@ pub enum MethodCallback {
 	Unsubscription(UnsubscriptionMethod),
 }
 
+/// The kind of the JSON-RPC method call, it can be a subscription, method call or unknown.
+#[derive(Debug, Copy, Clone)]
+pub enum MethodKind {
+	/// Subscription Call.
+	Subscription,
+	/// Unsubscription Call.
+	Unsubscription,
+	/// Method call.
+	MethodCall,
+	/// Unknown method.
+	Unknown,
+}
+
+impl std::fmt::Display for MethodKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = match self {
+			Self::Subscription => "subscription",
+			Self::MethodCall => "method call",
+			Self::Unknown => "unknown",
+			Self::Unsubscription => "unsubscription",
+		};
+
+		write!(f, "{s}")
+	}
+}
+
 /// Result of a method, either direct value or a future of one.
 pub enum MethodResult<T> {
 	/// Result by value
@@ -217,6 +243,16 @@ impl Methods {
 	/// `method_name`, but its lifetime bound is `'static`.
 	pub fn method_with_name(&self, method_name: &str) -> Option<(&'static str, &MethodCallback)> {
 		self.callbacks.get_key_value(method_name).map(|(k, v)| (*k, v))
+	}
+
+	/// Returns the kind of the method callback,
+	pub fn method_kind(&self, method_name: &str) -> MethodKind {
+		match self.method(method_name) {
+			None => MethodKind::Unknown,
+			Some(MethodCallback::Async(_)) | Some(MethodCallback::Sync(_)) => MethodKind::MethodCall,
+			Some(MethodCallback::Subscription(_)) => MethodKind::Subscription,
+			Some(MethodCallback::Unsubscription(_)) => MethodKind::Unsubscription,
+		}
 	}
 
 	/// Helper to call a method on the `RPC module` without having to spin up a server.
