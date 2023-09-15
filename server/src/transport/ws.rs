@@ -7,7 +7,7 @@ use crate::PingConfig;
 
 use futures_util::future::{self, Either, Fuse};
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::{FuturesOrdered, FuturesUnordered};
+use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
@@ -248,7 +248,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let pending_calls = FuturesUnordered::new();
+	let (call_complete, pending_calls) = mpsc::channel::<()>(1);
 
 	// Spawn another task that sends out the responses on the Websocket.
 	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_config.ping_interval(), conn_rx));
@@ -320,7 +320,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 			}
 		};
 
-		pending_calls.push(tokio::spawn(execute_unchecked_call(params.clone(), std::mem::take(&mut data))));
+		tokio::spawn(execute_unchecked_call(params.clone(), std::mem::take(&mut data), call_complete.clone()));
 	};
 
 	// Drive all running methods to completion.
@@ -492,7 +492,11 @@ struct ExecuteCallParams<L: Logger> {
 	bounded_subscriptions: BoundedSubscriptions,
 }
 
-async fn execute_unchecked_call<L: Logger>(params: Arc<ExecuteCallParams<L>>, data: Vec<u8>) {
+async fn execute_unchecked_call<L: Logger>(
+	params: Arc<ExecuteCallParams<L>>,
+	data: Vec<u8>,
+	drop_on_completion: mpsc::Sender<()>,
+) {
 	let request_start = params.logger.on_request(TransportProtocol::WebSocket);
 	let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
@@ -550,6 +554,8 @@ async fn execute_unchecked_call<L: Logger>(params: Arc<ExecuteCallParams<L>>, da
 			_ = params.sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
 		}
 	};
+
+	drop(drop_on_completion);
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -561,14 +567,16 @@ pub(crate) enum Shutdown {
 /// Enforce a graceful shutdown.
 ///
 /// This will return once the connection has been terminated or all pending calls have been executed.
-async fn graceful_shutdown<F: Future>(
+async fn graceful_shutdown(
 	result: Result<Shutdown, SokettoError>,
-	pending_calls: FuturesUnordered<F>,
+	pending_calls: mpsc::Receiver<()>,
 	receiver: Receiver,
 	data: Vec<u8>,
 	mut conn_tx: oneshot::Sender<()>,
 	send_task_handle: tokio::task::JoinHandle<()>,
 ) {
+	let pending_calls = ReceiverStream::new(pending_calls);
+
 	match result {
 		Ok(Shutdown::ConnectionClosed) | Err(SokettoError::Closed) => (),
 		Ok(Shutdown::Stopped) | Err(_) => {
