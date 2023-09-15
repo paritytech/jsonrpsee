@@ -7,7 +7,7 @@ use crate::server::{BatchRequestConfig, ServiceData};
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::FuturesOrdered;
-use futures_util::{Future, FutureExt, StreamExt};
+use futures_util::{Future, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse, MethodSink,
