@@ -250,8 +250,8 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 
 	// On each method call the `pending_calls` is cloned
-	// then all pending_calls are dropped then a graceful shutdown
-	// has occured.
+	// then when all pending_calls are dropped
+	// a graceful shutdown can has occur.
 	let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 	// Spawn another task that sends out the responses on the Websocket.
