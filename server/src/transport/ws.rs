@@ -248,7 +248,11 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let (call_complete, pending_calls) = mpsc::channel::<()>(1);
+
+	// On each method call the `pending_calls` is cloned
+	// then all pending_calls are dropped then a graceful shutdown
+	// has occured.
+	let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 	// Spawn another task that sends out the responses on the Websocket.
 	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_config.ping_interval(), conn_rx));
@@ -320,13 +324,14 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 			}
 		};
 
-		tokio::spawn(execute_unchecked_call(params.clone(), std::mem::take(&mut data), call_complete.clone()));
+		tokio::spawn(execute_unchecked_call(params.clone(), std::mem::take(&mut data), pending_calls.clone()));
 	};
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	graceful_shutdown(result, pending_calls, receiver, data, conn_tx, send_task_handle).await;
+	drop(pending_calls);
+	graceful_shutdown(result, pending_calls_completed, receiver, data, conn_tx, send_task_handle).await;
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
