@@ -560,8 +560,8 @@ async fn execute_unchecked_call<L: Logger>(
 		}
 	};
 
-    // NOTE: This channel is only used to indicate that a method call was completed
-    // thus the drop here tells the main task that method call was completed.
+	// NOTE: This channel is only used to indicate that a method call was completed
+	// thus the drop here tells the main task that method call was completed.
 	drop(drop_on_completion);
 }
 
