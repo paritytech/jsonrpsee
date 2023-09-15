@@ -4,6 +4,25 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.20.1] - 2023-09-15
+
+This release adds support for `synchronous subscriptions` and fixes a leak in WebSocket server
+where FuturesUnordered was not getting polled until shutdown, so it was accumulating tasks forever.
+
+### [Changed]
+- client: downgrade log for unknown subscription to DEBUG  ([#1185](https://github.com/paritytech/jsonrpsee/pull/1185))
+- refactor(http client): use HTTP connector on http URLs  ([#1187](https://github.com/paritytech/jsonrpsee/pull/1187))
+- refactor(server): less alloc per method call  ([#1188](https://github.com/paritytech/jsonrpsee/pull/1188))
+
+### [Fixed]
+- fix: remove needless clone in ws background task  ([#1203](https://github.com/paritytech/jsonrpsee/pull/1203))
+- async client: save latest Waker  ([#1198](https://github.com/paritytech/jsonrpsee/pull/1198))
+- chore(deps): bump actions/checkout from 3.6.0 to 4.0.0  ([#1197](https://github.com/paritytech/jsonrpsee/pull/1197))
+- fix(server): fix leak in FuturesUnordered ([#1204])(https://github.com/paritytech/jsonrpsee/pull/1204)
+
+### [Added]
+- feat(server): add sync subscription API `register_subscription_raw`  ([#1182](https://github.com/paritytech/jsonrpsee/pull/1182))
+
 ## [v0.20.0] - 2023-08-11
 
 Another breaking release where the major changes are:
