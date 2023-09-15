@@ -1,11 +1,10 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::logger::{self, Logger, TransportProtocol};
 use crate::server::{BatchRequestConfig, ServiceData};
-use crate::PingConfig;
 
-use futures_util::future::{self, Either, Fuse};
+use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::FuturesOrdered;
 use futures_util::{Future, FutureExt, StreamExt};
@@ -235,7 +234,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 		batch_requests_config,
 		stop_handle,
 		id_provider,
-		ping_config,
+		ping_interval,
 		conn_id,
 		logger,
 		remote_addr,
@@ -255,7 +254,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 	// Spawn another task that sends out the responses on the Websocket.
-	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_config.ping_interval(), conn_rx));
+	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_interval, conn_rx));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -284,14 +283,14 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 		// Thus, this check enforces that if the client can't keep up with receiving messages,
 		// then no new messages will be read from them.
 		//
-		// TCP retransmission mechanism will take care of the rest and adjust the window size accordingly.
+		// TCP retransmission mechanism will take of the rest and adjust the window size accordingly.
 		let Some(stop) = wait_until_connection_buffer_has_capacity(&sink, stopped).await else {
 			break Ok(Shutdown::ConnectionClosed);
 		};
 
 		stopped = stop;
 
-		match try_recv(&mut receiver, &mut data, stopped, ping_config).await {
+		match try_recv(&mut receiver, &mut data, stopped).await {
 			Receive::Shutdown => break Ok(Shutdown::Stopped),
 			Receive::Ok(stop) => {
 				stopped = stop;
@@ -382,8 +381,7 @@ async fn send_task(
 			}
 
 			// Handle timer intervals.
-			Either::Right((Either::Left((_instant, _stopped)), next_rx)) => {
-				stop = _stopped;
+			Either::Right((Either::Left((Some(_instant), stop)), next_rx)) => {
 				if let Err(err) = send_ping(&mut ws_sender).await {
 					tracing::debug!("WS transport error: send ping failed: {}", err);
 					break;
@@ -392,8 +390,11 @@ async fn send_task(
 				rx_item = next_rx;
 				futs = future::select(ping_interval.next(), stop);
 			}
-			Either::Right((Either::Right((_stopped, _)), _)) => {
-				// server has stopped
+
+			Either::Right((Either::Left((None, _)), _)) => unreachable!("IntervalStream never terminates"),
+
+			// Server is stopped.
+			Either::Right((Either::Right(_), _)) => {
 				break;
 			}
 		}
@@ -427,61 +428,31 @@ where
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.
-async fn try_recv<S>(receiver: &mut Receiver, data: &mut Vec<u8>, mut stopped: S, ping_config: PingConfig) -> Receive<S>
+async fn try_recv<S>(receiver: &mut Receiver, data: &mut Vec<u8>, stopped: S) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
 {
-	let mut last_active = Instant::now();
-
-	let receive = futures_util::stream::unfold((receiver, data), |(receiver, data)| async {
-		match receiver.receive(data).await {
-			Ok(soketto::Incoming::Data(_)) => None,
-			Ok(soketto::Incoming::Pong(_)) => Some((Ok(()), (receiver, data))),
-			Ok(soketto::Incoming::Closed(_)) => Some((Err(SokettoError::Closed), (receiver, data))),
-			// The closing reason is already logged by `soketto` trace log level.
-			// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
-			Err(e) => Some((Err(e), (receiver, data))),
+	let receive = async {
+		// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
+		loop {
+			match receiver.receive(data).await? {
+				soketto::Incoming::Data(d) => break Ok(d),
+				soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
+				soketto::Incoming::Closed(_) => {
+					// The closing reason is already logged by `soketto` trace log level.
+					// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
+					break Err(SokettoError::Closed);
+				}
+			}
 		}
-	});
+	};
 
 	tokio::pin!(receive);
 
-	let inactivity_check =
-		Box::pin(ping_config.inactive_limit().map(|d| tokio::time::sleep(d).fuse()).unwrap_or_else(Fuse::terminated));
-	let mut futs = futures_util::future::select(receive.next(), inactivity_check);
-
-	loop {
-		match futures_util::future::select(futs, stopped).await {
-			// The message has been received, we are done
-			Either::Left((Either::Left((None, _)), s)) => break Receive::Ok(s),
-			// Got a pong response, update our "last seen" timestamp.
-			Either::Left((Either::Left((Some(Ok(())), inactive)), s)) => {
-				last_active = Instant::now();
-				stopped = s;
-				futs = futures_util::future::select(receive.next(), inactive);
-			}
-			// Received an error, terminate the connection.
-			Either::Left((Either::Left((Some(Err(e)), _)), s)) => break Receive::Err(e, s),
-			// Max inactivity timeout fired, check if the connection has been idle too long.
-			Either::Left((Either::Right((_instant, rcv)), s)) => {
-				let inactive_limit_exceeded =
-					ping_config.inactive_limit().map_or(false, |duration| last_active.elapsed() > duration);
-
-				if inactive_limit_exceeded {
-					break Receive::Err(SokettoError::Closed, s);
-				}
-
-				stopped = s;
-				// use really large duration instead of Duration::MAX to
-				// solve the panic issue with interval initialization
-				let inactivity_check = Box::pin(
-					ping_config.inactive_limit().map(|d| tokio::time::sleep(d).fuse()).unwrap_or_else(Fuse::terminated),
-				);
-				futs = futures_util::future::select(rcv, inactivity_check);
-			}
-			// Server has been stopped.
-			Either::Right(_) => break Receive::Shutdown,
-		}
+	match futures_util::future::select(receive, stopped).await {
+		Either::Left((Ok(_), s)) => Receive::Ok(s),
+		Either::Left((Err(e), s)) => Receive::Err(e, s),
+		Either::Right(_) => Receive::Shutdown,
 	}
 }
 
