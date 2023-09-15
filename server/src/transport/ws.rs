@@ -60,7 +60,7 @@ pub(crate) struct Batch<'a, L: Logger> {
 #[derive(Debug, Clone)]
 pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) conn_id: usize,
-	pub(crate) bounded_subscriptions: BoundedSubscriptions,
+	pub(crate) bounded_subscriptions: &'a BoundedSubscriptions,
 	pub(crate) id_provider: &'a dyn IdProvider,
 	pub(crate) methods: &'a Methods,
 	pub(crate) max_response_body_size: u32,
@@ -266,6 +266,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 		sink: sink.clone(),
 		id_provider,
 		logger: logger.clone(),
+		bounded_subscriptions,
 	});
 
 	tokio::pin!(stopped);
@@ -319,11 +320,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 			}
 		};
 
-		pending_calls.push(tokio::spawn(execute_unchecked_call(
-			params.clone(),
-			std::mem::take(&mut data),
-			bounded_subscriptions.clone(),
-		)));
+		pending_calls.push(tokio::spawn(execute_unchecked_call(params.clone(), std::mem::take(&mut data))));
 	};
 
 	// Drive all running methods to completion.
@@ -492,18 +489,15 @@ struct ExecuteCallParams<L: Logger> {
 	max_log_length: u32,
 	sink: MethodSink,
 	logger: L,
+	bounded_subscriptions: BoundedSubscriptions,
 }
 
-async fn execute_unchecked_call<L: Logger>(
-	params: Arc<ExecuteCallParams<L>>,
-	data: Vec<u8>,
-	bounded_subscriptions: BoundedSubscriptions,
-) {
+async fn execute_unchecked_call<L: Logger>(params: Arc<ExecuteCallParams<L>>, data: Vec<u8>) {
 	let request_start = params.logger.on_request(TransportProtocol::WebSocket);
 	let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
 	let call_data = CallData {
-		bounded_subscriptions,
+		bounded_subscriptions: &params.bounded_subscriptions,
 		conn_id: params.conn_id as usize,
 		max_response_body_size: params.max_response_body_size,
 		max_log_length: params.max_log_length,
