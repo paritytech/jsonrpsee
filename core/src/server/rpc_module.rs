@@ -29,6 +29,7 @@ use std::fmt::{self, Debug};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::error::Error;
 use crate::id_providers::RandomIntegerIdProvider;
@@ -38,6 +39,7 @@ use crate::server::subscription::{
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
+use crate::server::timeout_spawn_blocking::SpawnWithTimeoutError;
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
@@ -48,7 +50,10 @@ use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 
+use self::timeout_spawn_blocking::spawn_blocking_with_timeout;
 use super::IntoResponse;
+
+const ONE_MINUTE: Duration = Duration::from_secs(60);
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -474,6 +479,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Fut: Future<Output = R> + Send,
 		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
+		const ONE_MINUTE: Duration = Duration::from_secs(60);
+
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
@@ -482,8 +489,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let callback = callback.clone();
 
 				let future = async move {
-					let rp = callback(params, ctx).await.into_response();
-					MethodResponse::response(id, rp, max_response_size)
+					match tokio::time::timeout(ONE_MINUTE, callback(params, ctx)).await {
+						Ok(rp) => MethodResponse::response(id, rp.into_response(), max_response_size),
+						Err(_) => {
+							tracing::error!("Timeout for async RPC method: `{method_name}`");
+							MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
+						}
+					}
 				};
 				future.boxed()
 			})),
@@ -503,21 +515,30 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		R: IntoResponse + 'static,
 		F: Fn(Params, Arc<Context>) -> R + Clone + Send + Sync + 'static,
 	{
+		const ONE_MINUTE: Duration = Duration::from_secs(60);
+
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size| {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
+				let method_name = method_name.to_string();
 
-				tokio::task::spawn_blocking(move || {
+				// NOTE: the blocking task can't be aborted by tokio
+				// we can only know whether takes longer than 1 minute
+				spawn_blocking_with_timeout(ONE_MINUTE, move |_| {
 					let rp = callback(params, ctx).into_response();
-					MethodResponse::response(id, rp, max_response_size)
+					Ok(MethodResponse::response(id.clone(), rp, max_response_size))
 				})
-				.map(|result| match result {
+				.map(move |result| match result {
 					Ok(r) => r,
-					Err(err) => {
+					Err(SpawnWithTimeoutError::JoinError(err)) => {
 						tracing::error!("Join error for blocking RPC method: {:?}", err);
+						MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
+					}
+					Err(SpawnWithTimeoutError::Timeout) => {
+						tracing::error!("Timeout for spawn_blocking RPC method: `{method_name}`");
 						MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
 					}
 				})
@@ -796,9 +817,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let id = id.clone().into_owned();
 
 					Box::pin(async move {
-						match rx.await {
-							Ok(msg) => Ok(msg),
-							Err(_) => Err(id),
+						match tokio::time::timeout(ONE_MINUTE, rx).await {
+							Ok(Ok(msg)) => Ok(msg),
+							Ok(Err(_)) => Err(id),
+							Err(_) => {
+								tracing::error!("Subscription `{}` accept timeout", subscribe_method_name);
+								Err(id)
+							}
 						}
 					})
 				})),
@@ -880,4 +905,98 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 fn mock_subscription_permit() -> SubscriptionPermit {
 	BoundedSubscriptions::new(1).acquire().expect("1 permit should exist; qed")
+}
+
+pub mod timeout_spawn_blocking {
+	use std::{
+		sync::atomic::{AtomicBool, Ordering},
+		sync::Arc,
+		time::Duration,
+	};
+
+	/// An error signifying that a task has been cancelled due to a timeout.
+	#[derive(Debug)]
+	pub struct Timeout;
+
+	impl std::error::Error for Timeout {}
+	impl std::fmt::Display for Timeout {
+		fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+			fmt.write_str("task has been running too long")
+		}
+	}
+
+	/// A handle which can be used to check whether the task has been cancelled due to a timeout.
+	#[repr(transparent)]
+	pub struct IsTimedOut(Arc<AtomicBool>);
+
+	impl IsTimedOut {
+		#[must_use]
+		pub fn check_if_timed_out(&self) -> std::result::Result<(), Timeout> {
+			if self.0.load(Ordering::Relaxed) {
+				Err(Timeout)
+			} else {
+				Ok(())
+			}
+		}
+	}
+
+	/// An error for a task which either panicked, or has been cancelled due to a timeout.
+	#[derive(Debug)]
+	pub enum SpawnWithTimeoutError {
+		JoinError(tokio::task::JoinError),
+		Timeout,
+	}
+
+	impl std::error::Error for SpawnWithTimeoutError {}
+	impl std::fmt::Display for SpawnWithTimeoutError {
+		fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+			match self {
+				SpawnWithTimeoutError::JoinError(error) => error.fmt(fmt),
+				SpawnWithTimeoutError::Timeout => Timeout.fmt(fmt),
+			}
+		}
+	}
+
+	struct CancelOnDrop(Arc<AtomicBool>);
+	impl Drop for CancelOnDrop {
+		fn drop(&mut self) {
+			self.0.store(true, Ordering::Relaxed)
+		}
+	}
+
+	/// Spawns a new blocking task with a given `timeout`.
+	///
+	/// The `callback` should continuously call [`IsTimedOut::check_if_timed_out`],
+	/// which will return an error once the task runs for longer than `timeout`.
+	///
+	/// If `timeout` is `None` then this works just as a regular `spawn_blocking`.
+	pub async fn spawn_blocking_with_timeout<R>(
+		timeout: Duration,
+		callback: impl FnOnce(IsTimedOut) -> std::result::Result<R, Timeout> + Send + 'static,
+	) -> Result<R, SpawnWithTimeoutError>
+	where
+		R: Send + 'static,
+	{
+		let is_timed_out_arc = Arc::new(AtomicBool::new(false));
+		let is_timed_out = IsTimedOut(is_timed_out_arc.clone());
+		let _cancel_on_drop = CancelOnDrop(is_timed_out_arc);
+		let task = tokio::task::spawn_blocking(move || callback(is_timed_out));
+
+		let result = tokio::select! {
+			// Shouldn't really matter, but make sure the task is polled before the timeout,
+			// in case the task finishes after the timeout and the timeout is really short.
+			biased;
+
+			task_result = task => task_result,
+			_ = tokio::time::sleep(timeout) => {
+				Ok(Err(Timeout))
+			}
+		};
+
+		match result {
+			Ok(Ok(result)) => Ok(result),
+			Ok(Err(Timeout)) => Err(SpawnWithTimeoutError::Timeout),
+			Err(error) => Err(SpawnWithTimeoutError::JoinError(error)),
+		}
+	}
 }

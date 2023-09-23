@@ -139,12 +139,30 @@ impl MethodSink {
 		self.tx.send(msg).await.map_err(Into::into)
 	}
 
+	/// ..
+	pub async fn send_timeout_1min(&self, msg: String) {
+		tx_log_from_str(&msg, self.max_log_length);
+		if let Err(e) = self.tx.send_timeout(msg, Duration::from_secs(60)).await {
+			tracing::warn!("Failed to send message `{e}` to WS task in 1 min; dropping message");
+		}
+	}
+
 	/// Send a JSON-RPC error to the client
 	pub async fn send_error<'a>(&self, id: Id<'a>, err: ErrorObject<'a>) -> Result<(), DisconnectError> {
 		let json =
 			serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err), id)).expect("valid JSON; qed");
 
 		self.send(json).await
+	}
+
+	/// ..
+	pub async fn send_error_timeout_1min<'a>(&self, id: Id<'a>, err: ErrorObject<'a>) {
+		let json =
+			serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err), id)).expect("valid JSON; qed");
+
+		if let Err(e) = self.tx.send_timeout(json, Duration::from_secs(60)).await {
+			tracing::error!("Failed to send message `{e}` to WS task in 1 min; dropping message");
+		}
 	}
 
 	/// Similar to to `MethodSink::send` but only waits for a limited time.

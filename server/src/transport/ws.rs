@@ -33,6 +33,8 @@ use tracing::instrument;
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
+const TWO_MIN: Duration = Duration::from_secs(60 * 2);
+
 type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
 
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
@@ -68,6 +70,18 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) sink: &'a MethodSink,
 	pub(crate) logger: &'a L,
 	pub(crate) request_start: L::Instant,
+}
+
+#[derive(Debug, Clone)]
+struct PendingCall {
+	count: Arc<()>,
+	_tx: mpsc::Sender<()>,
+}
+
+impl PendingCall {
+	fn count(&self) -> usize {
+		Arc::strong_count(&self.count) - 1
+	}
 }
 
 // Batch responses must be sent back as a single message so we read the results from each
@@ -244,6 +258,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 		..
 	} = svc;
 
+	let now = Instant::now();
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
@@ -253,6 +268,8 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	// then when all pending_calls are dropped
 	// a graceful shutdown can has occur.
 	let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
+
+	let pending_calls = PendingCall { count: Arc::new(()), _tx: pending_calls };
 
 	// Spawn another task that sends out the responses on the Websocket.
 	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_config.ping_interval(), conn_rx));
@@ -278,6 +295,10 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let result = loop {
 		data.clear();
 
+		if pending_calls.count() > 1024 {
+			tracing::warn!("conn={conn_id} has many {} pending calls opened", pending_calls.count());
+		}
+
 		match try_recv(&mut receiver, &mut data, stopped, ping_config).await {
 			Receive::Shutdown => break Ok(Shutdown::Stopped),
 			Receive::Ok(stop) => {
@@ -297,8 +318,21 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 							current,
 							maximum
 						);
-						if sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)).await.is_err() {
-							break Ok(Shutdown::ConnectionClosed);
+
+						match tokio::time::timeout(
+							TWO_MIN,
+							sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)),
+						)
+						.await
+						{
+							Err(_) => {
+								tracing::error!("ws sink::send_error timeout expired");
+								break Ok(Shutdown::ConnectionClosed);
+							}
+							Ok(Err(_)) => {
+								break Ok(Shutdown::ConnectionClosed);
+							}
+							Ok(_) => (),
 						}
 
 						continue;
@@ -318,7 +352,18 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
 	drop(pending_calls);
-	graceful_shutdown(result, pending_calls_completed, receiver, data, conn_tx, send_task_handle).await;
+
+	if tokio::time::timeout(
+		TWO_MIN,
+		graceful_shutdown(result, pending_calls_completed, receiver, data, conn_tx, send_task_handle),
+	)
+	.await
+	.is_err()
+	{
+		tracing::error!("graceful shutdown timeout expired");
+	}
+
+	tracing::info!("Closing RPC WS connection to {conn_id} elapsed: {}ms", now.elapsed().as_millis());
 
 	logger.on_disconnect(remote_addr, TransportProtocol::WebSocket);
 	drop(conn);
@@ -354,9 +399,16 @@ async fn send_task(
 			// Received message.
 			Either::Left((Some(response), not_ready)) => {
 				// If websocket message send fail then terminate the connection.
-				if let Err(err) = send_message(&mut ws_sender, response).await {
-					tracing::debug!("WS transport error: send failed: {}", err);
-					break;
+				match tokio::time::timeout(TWO_MIN, send_message(&mut ws_sender, response)).await {
+					Err(_) => {
+						tracing::error!("WS transport error: send timeout expired");
+						break;
+					}
+					Ok(Err(e)) => {
+						tracing::debug!("WS transport error: send failed: {e}");
+						break;
+					}
+					Ok(_) => (),
 				}
 
 				rx_item = rx.next();
@@ -371,9 +423,16 @@ async fn send_task(
 			// Handle timer intervals.
 			Either::Right((Either::Left((_instant, _stopped)), next_rx)) => {
 				stop = _stopped;
-				if let Err(err) = send_ping(&mut ws_sender).await {
-					tracing::debug!("WS transport error: send ping failed: {}", err);
-					break;
+				match tokio::time::timeout(TWO_MIN, send_ping(&mut ws_sender)).await {
+					Err(_) => {
+						tracing::error!("WS transport error: send ping timeout expired");
+						break;
+					}
+					Ok(Err(e)) => {
+						tracing::debug!("WS transport error: send ping failed: {e}");
+						break;
+					}
+					Ok(_) => (),
 				}
 
 				rx_item = next_rx;
@@ -387,7 +446,10 @@ async fn send_task(
 	}
 
 	// Terminate connection and send close message.
-	let _ = ws_sender.close().await;
+	if tokio::time::timeout(TWO_MIN, ws_sender.close()).await.is_err() {
+		tracing::error!("WS transport error: ws close timeout expired");
+	}
+
 	rx.close();
 }
 
@@ -471,7 +533,7 @@ struct ExecuteCallParams<L: Logger> {
 async fn execute_unchecked_call<L: Logger>(
 	params: Arc<ExecuteCallParams<L>>,
 	data: Vec<u8>,
-	drop_on_completion: mpsc::Sender<()>,
+	drop_on_completion: PendingCall,
 ) {
 	let request_start = params.logger.on_request(TransportProtocol::WebSocket);
 	let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
@@ -490,17 +552,19 @@ async fn execute_unchecked_call<L: Logger>(
 
 	match first_non_whitespace {
 		Some((start, b'{')) => {
-			if let Some(rp) = process_single_request(&data[start..], call_data).await {
-				match rp {
+			match tokio::time::timeout(TWO_MIN, process_single_request(&data[start..], call_data)).await {
+				Ok(Some(rp)) => match rp {
 					CallOrSubscription::Subscription(r) => {
 						params.logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
 					}
 
 					CallOrSubscription::Call(r) => {
 						params.logger.on_response(&r.result, request_start, TransportProtocol::WebSocket);
-						_ = params.sink.send(r.result).await;
+						params.sink.send_timeout_1min(r.result).await;
 					}
-				}
+				},
+				Err(_) => params.sink.send_error_timeout_1min(Id::Null, ErrorCode::InternalError.into()).await,
+				_ => (),
 			}
 		}
 		Some((start, b'[')) => {
@@ -511,23 +575,34 @@ async fn execute_unchecked_call<L: Logger>(
 						ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, None),
 					);
 					params.logger.on_response(&response.result, request_start, TransportProtocol::WebSocket);
-					_ = params.sink.send(response.result).await;
+					params.sink.send_timeout_1min(response.result).await;
 					return;
 				}
 				BatchRequestConfig::Limit(limit) => limit as usize,
 				BatchRequestConfig::Unlimited => usize::MAX,
 			};
 
-			let response = process_batch_request(Batch { data: &data[start..], call: call_data, max_len: limit }).await;
+			let response = tokio::time::timeout(
+				TWO_MIN,
+				process_batch_request(Batch { data: &data[start..], call: call_data, max_len: limit }),
+			)
+			.await;
 
-			if let Some(response) = response {
-				tx_log_from_str(&response, params.max_log_length);
-				params.logger.on_response(&response, request_start, TransportProtocol::WebSocket);
-				_ = params.sink.send(response).await;
+			match response {
+				Ok(Some(response)) => {
+					tx_log_from_str(&response, params.max_log_length);
+					params.logger.on_response(&response, request_start, TransportProtocol::WebSocket);
+					params.sink.send_timeout_1min(response).await;
+				}
+				Err(_) => {
+					tracing::error!("Batch request timeout");
+					params.sink.send_error_timeout_1min(Id::Null, ErrorCode::InternalError.into()).await;
+				}
+				_ => (),
 			}
 		}
 		_ => {
-			_ = params.sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
+			params.sink.send_error_timeout_1min(Id::Null, ErrorCode::ParseError.into()).await;
 		}
 	};
 
