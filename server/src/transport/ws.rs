@@ -277,19 +277,6 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	let result = loop {
 		data.clear();
 
-		// This is a guard to ensure that the underlying socket is only read if there is space in
-		// the buffer for messages to be sent back to them.
-		//
-		// Thus, this check enforces that if the client can't keep up with receiving messages,
-		// then no new messages will be read from them.
-		//
-		// TCP retransmission mechanism will take of the rest and adjust the window size accordingly.
-		let Some(stop) = wait_until_connection_buffer_has_capacity(&sink, stopped).await else {
-			break Ok(Shutdown::ConnectionClosed);
-		};
-
-		stopped = stop;
-
 		match try_recv(&mut receiver, &mut data, stopped).await {
 			Receive::Shutdown => break Ok(Shutdown::Stopped),
 			Receive::Ok(stop) => {
@@ -409,22 +396,6 @@ enum Receive<S> {
 	Shutdown,
 	Err(SokettoError, S),
 	Ok(S),
-}
-
-// Wait until there is capacity in connection buffer to send one message.
-//
-// Fails if the server was stopped.
-async fn wait_until_connection_buffer_has_capacity<S>(sink: &MethodSink, stopped: S) -> Option<S>
-where
-	S: Future<Output = ()> + Unpin,
-{
-	let reserve = sink.has_capacity();
-	tokio::pin!(reserve);
-
-	match futures_util::future::select(reserve, stopped).await {
-		Either::Left((Ok(_), s)) => Some(s),
-		_ => None,
-	}
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.

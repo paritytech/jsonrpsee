@@ -4,6 +4,17 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.20.2] - 2023-10-13
+
+This release removes the bounded buffer check which was intended to provide
+backpressure all the way down to the TCP layer but it didn't work well.
+
+For subscriptions the backpressure will be handled by implementation itself 
+and just rely on that.
+
+### [Changed]
+- server: remove bounded channel check ([#1209](https://github.com/paritytech/jsonrpsee/pull/1209))
+
 ## [v0.20.1] - 2023-09-15
 
 This release adds support for `synchronous subscriptions` and fixes a leak in WebSocket server
