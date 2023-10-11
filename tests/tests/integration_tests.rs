@@ -1079,6 +1079,35 @@ async fn deny_invalid_host() {
 }
 
 #[tokio::test]
+async fn disable_host_filter_works() {
+	use jsonrpsee::server::*;
+
+	init_logger();
+
+	let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::disable());
+
+	let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let mut module = RpcModule::new(());
+	let addr = server.local_addr().unwrap();
+	module.register_method("say_hello", |_, _| "hello").unwrap();
+
+	let _handle = server.start(module);
+
+	// HTTP
+	{
+		let server_url = format!("http://{}", addr);
+		let client = HttpClientBuilder::default().build(&server_url).unwrap();
+		assert!(client.request::<String, _>("say_hello", rpc_params![]).await.is_ok());
+	}
+
+	// WebSocket
+	{
+		let server_url = format!("ws://{}", addr);
+		assert!(WsClientBuilder::default().build(&server_url).await.is_ok());
+	}
+}
+
+#[tokio::test]
 async fn subscription_option_err_is_not_sent() {
 	init_logger();
 

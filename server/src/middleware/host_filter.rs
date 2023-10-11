@@ -39,7 +39,7 @@ use tower::{Layer, Service};
 
 /// Middleware to enable host filtering.
 #[derive(Debug)]
-pub struct HostFilterLayer(Arc<WhitelistedHosts>);
+pub struct HostFilterLayer(Option<Arc<WhitelistedHosts>>);
 
 impl HostFilterLayer {
 	/// Enables host filtering and allow only the specified hosts.
@@ -49,7 +49,33 @@ impl HostFilterLayer {
 		U: TryInto<Authority, Error = AuthorityError>,
 	{
 		let allow_only: Result<Vec<_>, _> = allow_only.into_iter().map(|a| a.try_into()).collect();
-		Ok(Self(Arc::new(WhitelistedHosts::from(allow_only?))))
+		Ok(Self(Some(Arc::new(WhitelistedHosts::from(allow_only?)))))
+	}
+
+	/// Convenience method to disable host filtering but less efficient
+	/// than to not enable the middleware at all.
+	///
+	/// Because is the `tower middleware` returns a different type
+	/// depending on which Layers are configured it and may not compile
+	/// in some contexts.
+	///
+	/// For example the following won't compile:
+	///
+	/// ```ignore
+	/// use jsonrpsee_server::middleware::{ProxyGetRequestLayer, HostFilterLayer};
+	///
+	/// let host_filter = false;
+	///
+	/// let middleware = if host_filter {
+	///     tower::ServiceBuilder::new()
+	///        .layer(HostFilterLayer::new(["example.com"]).unwrap())
+	///        .layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
+	/// } else {
+	///    tower::ServiceBuilder::new()
+	/// };
+	/// ```
+	pub fn disable() -> Self {
+		Self(None)
 	}
 }
 
@@ -65,7 +91,7 @@ impl<S> Layer<S> for HostFilterLayer {
 #[derive(Debug)]
 pub struct HostFilter<S> {
 	inner: S,
-	filter: Arc<WhitelistedHosts>,
+	filter: Option<Arc<WhitelistedHosts>>,
 }
 
 impl<S> Service<Request<Body>> for HostFilter<S>
@@ -88,7 +114,7 @@ where
 			return async { Ok(http::response::malformed()) }.boxed();
 		};
 
-		if self.filter.recognize(&authority) {
+		if self.filter.as_ref().map_or(true, |f| f.recognize(&authority)) {
 			Box::pin(self.inner.call(request).map_err(Into::into))
 		} else {
 			tracing::debug!("Denied request: {:?}", request);
