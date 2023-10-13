@@ -880,8 +880,7 @@ async fn server_with_infinite_call(
 ) -> (crate::ServerHandle, std::net::SocketAddr) {
 	let server = ServerBuilder::default()
 		// Make sure that the ping_interval doesn't force the connection to be closed
-		.ping_interval(crate::server::PingConfig::WithoutInactivityCheck(timeout))
-		.unwrap()
+		.ping_interval(timeout)
 		.build("127.0.0.1:0")
 		.with_default_timeout()
 		.await
