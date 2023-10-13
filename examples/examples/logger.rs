@@ -28,34 +28,26 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::{Meta, RpcService, RpcServiceT};
+use jsonrpsee::server::middleware::{Meta, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, MethodResponse, RpcModule};
 
 #[derive(Clone)]
-pub struct Timings(RpcService);
+pub struct Timings<S>(S);
 
 #[async_trait]
-impl<'a> RpcServiceT<'a> for Timings {
+impl<'a, S> RpcServiceT<'a> for Timings<S>
+where
+	S: Send + Sync + RpcServiceT<'a>,
+{
 	async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
 		let now = Instant::now();
 		let name = req.method.to_string();
 		let rp = self.0.call(req, meta).await;
 		tracing::info!("method call `{name}` took {}ms, metadata: {:?}", now.elapsed().as_millis(), meta);
 		rp
-	}
-}
-
-#[derive(Clone)]
-pub struct TimingsLayer;
-
-impl<'a> tower::Layer<RpcService> for TimingsLayer {
-	type Service = Timings;
-
-	fn layer(&self, service: RpcService) -> Self::Service {
-		Timings(service)
 	}
 }
 
@@ -78,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let rpc_middleware = tower::ServiceBuilder::new().layer(TimingsLayer);
+	let rpc_middleware = tower::ServiceBuilder::new().layer_fn(|service| Timings(service));
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;

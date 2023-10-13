@@ -153,7 +153,7 @@ impl tower::Layer<RpcService> for RpcServiceLayer {
 /// Because &mut self will cause every to call to by guarded by Arc<Mutex>
 /// and each RPC can only be processed sequentially which is very bad.
 #[async_trait::async_trait]
-pub trait RpcServiceT<'a>: Send {
+pub trait RpcServiceT<'a> {
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	/// In this interface they are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.

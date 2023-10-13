@@ -1160,7 +1160,6 @@ async fn subscription_ok_unit_not_sent() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn graceful_shutdown_works() {
 	init_logger();
 
