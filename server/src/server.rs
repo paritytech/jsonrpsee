@@ -33,7 +33,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::{RpcService, RpcServiceT};
+use crate::middleware::{Meta, RpcService, RpcServiceT, TransportProtocol};
 use crate::transport::http::{content_type_is_json, process_validated_request};
 use crate::transport::{http, ws};
 
@@ -60,17 +60,17 @@ use tracing::{instrument, Instrument};
 const MAX_CONNECTIONS: u32 = 100;
 
 /// JSON RPC server.
-pub struct Server<HttpMiddleware = Identity, RpcMiddleware = ()> {
+pub struct Server<HttpMiddleware = Identity, RpcMiddleware = Identity> {
 	listener: TcpListener,
 	cfg: Settings,
-	rpc_middleware: RpcMiddleware,
+	rpc_middleware: tower::ServiceBuilder<RpcMiddleware>,
 	id_provider: Arc<dyn IdProvider>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
-impl Server<Identity> {
+impl Server<Identity, Identity> {
 	/// Create a builder for the server.
-	pub fn builder() -> Builder<Identity> {
+	pub fn builder() -> Builder<Identity, Identity> {
 		Builder::new()
 	}
 }
@@ -302,25 +302,25 @@ impl Default for Settings {
 
 /// Builder to configure and create a JSON-RPC server
 #[derive(Debug)]
-pub struct Builder<HttpMiddleware, RpcMiddleware = ()> {
+pub struct Builder<HttpMiddleware, RpcMiddleware> {
 	settings: Settings,
-	rpc_middleware: RpcMiddleware,
+	rpc_middleware: tower::ServiceBuilder<RpcMiddleware>,
 	id_provider: Arc<dyn IdProvider>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
-impl Default for Builder<Identity> {
+impl Default for Builder<Identity, Identity> {
 	fn default() -> Self {
 		Builder {
 			settings: Settings::default(),
-			rpc_middleware: (),
+			rpc_middleware: tower::ServiceBuilder::new(),
 			id_provider: Arc::new(RandomIntegerIdProvider),
 			http_middleware: tower::ServiceBuilder::new(),
 		}
 	}
 }
 
-impl Builder<Identity> {
+impl Builder<Identity, Identity> {
 	/// Create a default server builder.
 	pub fn new() -> Self {
 		Self::default()
@@ -367,36 +367,29 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_server::middleware::{RpcServiceT, RpcService};
+	/// use jsonrpsee_server::middleware::{RpcServiceT, RpcService, Meta};
 	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
 	/// use jsonrpsee_core::async_trait;
 	/// use jsonrpsee_types::Request;
 	///
 	/// #[derive(Clone)]
-	/// struct MyMiddleware(RpcService);
+	/// struct MyMiddleware<S>(S);
 	///
 	/// #[async_trait]
-	/// impl<'a> RpcServiceT<'a> for MyMiddleware {
-	///     async fn call(&self, req: Request<'a>) -> MethodResponse {
+	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
+	/// where S: RpcServiceT<'a> + Send + Sync,
+	/// {
+	///     async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
-	///         self.0.call(req).await  
+	///         self.0.call(req, meta).await  
 	///     }
 	/// }
 	///
-	/// #[derive(Clone)]
-	/// struct MyMiddlewareLayer(RpcService);
-	///
-	/// impl<'a> tower::Layer<RpcService> for MyMiddlewareLayer {
-	///     type Service = MyMiddleware;
-	///
-	///     fn layer(&self, service: RpcService) -> Self::Service {
-	///	        MyMiddleware(service)
-	///     }
-	/// }
-	///
-	/// let builder = ServerBuilder::default().set_rpc_middleware(MyMiddlewareLayer);
+	/// // The service type can be omitted once `start` is called on the server.
+	/// let m = tower::ServiceBuilder::new().layer_fn(|service: ()| MyMiddleware(service));
+	/// let builder = ServerBuilder::default().set_rpc_middleware(m);
 	/// ```
-	pub fn set_rpc_middleware<L>(self, rpc_middleware: L) -> Builder<HttpMiddleware, L> {
+	pub fn set_rpc_middleware<T>(self, rpc_middleware: tower::ServiceBuilder<T>) -> Builder<HttpMiddleware, T> {
 		Builder {
 			settings: self.settings,
 			rpc_middleware,
@@ -658,7 +651,7 @@ pub(crate) struct ServiceData {
 #[derive(Debug, Clone)]
 pub struct TowerService<L> {
 	inner: ServiceData,
-	rpc_middleware: L,
+	rpc_middleware: tower::ServiceBuilder<L>,
 }
 
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<RpcMiddleware>
@@ -686,6 +679,14 @@ where
 		let is_upgrade_request = is_upgrade_request(&request);
 
 		if self.inner.enable_ws && is_upgrade_request {
+			let meta = Meta {
+				transport: TransportProtocol::WebSocket,
+				remote_addr: self.inner.remote_addr,
+				conn_id: self.inner.conn_id as usize,
+				headers: request.headers().clone(),
+				uri: request.uri().clone(),
+			};
+
 			let mut server = soketto::handshake::http::Server::new();
 
 			let response = match server.receive_request(&request) {
@@ -708,7 +709,7 @@ where
 							ws_builder.set_max_message_size(data.max_request_body_size as usize);
 							let (sender, receiver) = ws_builder.finish();
 
-							ws::background_task(sender, receiver, data, rpc_middleware).await;
+							ws::background_task(sender, receiver, data, rpc_middleware, meta).await;
 						}
 						.in_current_span(),
 					);
@@ -725,7 +726,15 @@ where
 		} else if self.inner.enable_http && !is_upgrade_request {
 			let rpc_middleware = self.rpc_middleware.clone();
 
-			let rpc_service = rpc_middleware.layer(RpcService::only_calls(
+			let meta = Meta {
+				transport: TransportProtocol::WebSocket,
+				remote_addr: self.inner.remote_addr,
+				conn_id: self.inner.conn_id as usize,
+				headers: request.headers().clone(),
+				uri: request.uri().clone(),
+			};
+
+			let rpc_service = rpc_middleware.service(RpcService::only_calls(
 				self.inner.methods.clone(),
 				self.inner.max_response_body_size as usize,
 				self.inner.conn_id as usize,
@@ -745,6 +754,7 @@ where
 							max_request_size,
 							max_response_size,
 							rpc_service,
+							meta,
 						)
 						.await
 					}
@@ -799,7 +809,7 @@ struct ProcessConnection {
 #[instrument(name = "connection", skip_all, fields(remote_addr = %cfg.remote_addr, conn_id = %cfg.conn_id), level = "INFO")]
 fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 	http_middleware_builder: &tower::ServiceBuilder<HttpMiddleware>,
-	rpc_middleware_builder: RpcMiddleware,
+	rpc_middleware_builder: tower::ServiceBuilder<RpcMiddleware>,
 	connection_guard: &ConnectionGuard,
 	cfg: ProcessConnection,
 	socket: TcpStream,

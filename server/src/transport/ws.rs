@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::{RpcService, RpcServiceT};
+use crate::middleware::{Meta, RpcService, RpcServiceT};
 use crate::server::{BatchRequestConfig, ServiceData};
 use crate::PingConfig;
 
@@ -51,6 +51,7 @@ pub(crate) async fn background_task<RpcMiddleware>(
 	mut receiver: Receiver,
 	svc: ServiceData,
 	rpc_middleware: RpcMiddleware,
+	meta: Meta,
 ) where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Send + Sync + Clone + 'static,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -76,6 +77,7 @@ pub(crate) async fn background_task<RpcMiddleware>(
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
+	let meta = Arc::new(meta);
 
 	// Spawn another task that sends out the responses on the Websocket.
 	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_config.ping_interval(), conn_rx));
@@ -143,8 +145,9 @@ pub(crate) async fn background_task<RpcMiddleware>(
 		let data = std::mem::take(&mut data);
 
 		let sink = sink.clone();
+		let meta = meta.clone();
 		tokio::spawn(async move {
-			process_request(data, batch_requests_config, max_response_body_size, sink, rpc_service).await;
+			process_request(data, batch_requests_config, max_response_body_size, sink, rpc_service, meta).await;
 		});
 	};
 
@@ -350,6 +353,7 @@ pub(crate) async fn process_request<S>(
 	max_response_size: u32,
 	sink: MethodSink,
 	rpc_service: Arc<S>,
+	meta: Arc<Meta>,
 ) where
 	for<'a> S: RpcServiceT<'a>,
 {
@@ -358,7 +362,7 @@ pub(crate) async fn process_request<S>(
 	match first_non_whitespace {
 		Some((start, b'{')) => {
 			if let Ok(req) = serde_json::from_slice::<Request>(&data[start..]) {
-				let rp = rpc_service.call(req).await;
+				let rp = rpc_service.call(req, &meta).await;
 				if !rp.is_subscription {
 					let _ = sink.send(rp.result).await;
 				}
@@ -396,7 +400,7 @@ pub(crate) async fn process_request<S>(
 
 				for call in batch {
 					if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
-						let rp = rpc_service.call(req).await;
+						let rp = rpc_service.call(req, &meta).await;
 
 						if let Err(too_large) = batch_response.append(&rp) {
 							let _ = sink.send(too_large).await;

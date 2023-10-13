@@ -33,10 +33,11 @@ mod host_filter;
 /// Proxy `GET /path` to internal RPC methods.
 mod proxy_get_request;
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 pub use authority::*;
 pub use host_filter::*;
+use http::{HeaderMap, Uri};
 use jsonrpsee_core::{
 	server::{BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState},
 	traits::IdProvider,
@@ -46,6 +47,41 @@ use jsonrpsee_types::{
 	ErrorObject, Params, Request,
 };
 pub use proxy_get_request::*;
+
+/// The transport protocol used to send or receive a call or request.
+#[derive(Debug, Copy, Clone)]
+pub enum TransportProtocol {
+	/// HTTP transport.
+	Http,
+	/// WebSocket transport.
+	WebSocket,
+}
+
+impl std::fmt::Display for TransportProtocol {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = match self {
+			Self::Http => "http",
+			Self::WebSocket => "websocket",
+		};
+
+		write!(f, "{s}")
+	}
+}
+
+/// Metadata to a JSON-RPC call.
+#[derive(Debug, Clone)]
+pub struct Meta {
+	/// Transport protocol.
+	pub transport: TransportProtocol,
+	/// Remote addr.
+	pub remote_addr: SocketAddr,
+	/// Connection id.
+	pub conn_id: usize,
+	/// HTTP Headers.
+	pub headers: HeaderMap,
+	/// URI.
+	pub uri: Uri,
+}
 
 #[derive(Clone, Debug)]
 enum RpcServiceCfg {
@@ -121,12 +157,12 @@ pub trait RpcServiceT<'a>: Send {
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	/// In this interface they are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
-	async fn call(&self, request: Request<'a>) -> MethodResponse;
+	async fn call(&self, request: Request<'a>, meta: &Meta) -> MethodResponse;
 }
 
 #[async_trait::async_trait]
 impl<'a> RpcServiceT<'a> for RpcService {
-	async fn call(&self, req: Request<'a>) -> MethodResponse {
+	async fn call(&self, req: Request<'a>, _meta: &Meta) -> MethodResponse {
 		let params = Params::new(req.params.map(|params| params.get()));
 		let name = &req.method;
 		let id = req.id;

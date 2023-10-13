@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use crate::middleware::RpcServiceT;
+use crate::middleware::{Meta, RpcServiceT};
 use crate::server::BatchRequestConfig;
 
 use jsonrpsee_core::error::GenericTransportError;
@@ -21,6 +21,7 @@ pub(crate) async fn process_validated_request<S>(
 	max_request_size: u32,
 	max_response_size: u32,
 	rpc_service: S,
+	meta: Meta,
 ) -> hyper::Response<hyper::Body>
 where
 	S: Send,
@@ -42,7 +43,7 @@ where
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = serde_json::from_slice(&body) {
-			let rp = rpc_service.call(req).await;
+			let rp = rpc_service.call(req, &meta).await;
 			response::ok_response(rp.result)
 		} else if let Ok(_notif) = serde_json::from_slice::<Notif>(&body) {
 			response::ok_response(String::new())
@@ -76,7 +77,7 @@ where
 
 			for call in batch {
 				if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
-					let rp = rpc_service.call(req).await;
+					let rp = rpc_service.call(req, &meta).await;
 
 					if let Err(too_large) = batch_response.append(&rp) {
 						return response::ok_response(too_large);

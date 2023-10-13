@@ -35,7 +35,7 @@ use helpers::init_logger;
 use jsonrpsee::core::{async_trait, client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::{RpcService, RpcServiceT};
+use jsonrpsee::server::middleware::{Meta, RpcService, RpcServiceT};
 use jsonrpsee::server::{Server, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -70,7 +70,7 @@ pub struct CounterMiddleware {
 
 #[async_trait]
 impl<'a> RpcServiceT<'a> for CounterMiddleware {
-	async fn call(&self, request: Request<'a>) -> MethodResponse {
+	async fn call(&self, request: Request<'a>, meta: &Meta) -> MethodResponse {
 		let name = request.method.to_string();
 		let id = request.id.clone();
 
@@ -81,7 +81,7 @@ impl<'a> RpcServiceT<'a> for CounterMiddleware {
 			entry.0 += 1;
 		}
 
-		let rp = self.service.call(request).await;
+		let rp = self.service.call(request, meta).await;
 
 		{
 			let mut n = self.counter.lock().unwrap();
@@ -119,7 +119,8 @@ async fn websocket_server(
 	module: RpcModule<()>,
 	counter: Arc<Mutex<Counter>>,
 ) -> Result<(SocketAddr, ServerHandle), Error> {
-	let server = Server::builder().set_rpc_middleware(CounterLayer(counter)).build("127.0.0.1:0").await?;
+	let rpc_middleware = tower::ServiceBuilder::new().layer(CounterLayer(counter));
+	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(module);
@@ -128,7 +129,8 @@ async fn websocket_server(
 }
 
 async fn http_server(module: RpcModule<()>, counter: Arc<Mutex<Counter>>) -> Result<(SocketAddr, ServerHandle), Error> {
-	let server = Server::builder().set_rpc_middleware(CounterLayer(counter)).build("127.0.0.1:0").await?;
+	let rpc_middleware = tower::ServiceBuilder::new().layer(CounterLayer(counter));
+	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(module);

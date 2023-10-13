@@ -24,38 +24,46 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! Example showing how to add multiple loggers to the same server.
+
 use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::{Meta, RpcService, RpcServiceT};
-use jsonrpsee::server::Server;
+use jsonrpsee::rpc_params;
+use jsonrpsee::server::middleware::{Meta, RpcServiceT};
+use jsonrpsee::server::{MethodResponse, RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, MethodResponse, RpcModule};
 
 #[derive(Clone)]
-pub struct Timings(RpcService);
+pub struct Timings<S>(S);
 
 #[async_trait]
-impl<'a> RpcServiceT<'a> for Timings {
+impl<'a, S> RpcServiceT<'a> for Timings<S>
+where
+	S: RpcServiceT<'a> + Send + Sync,
+{
 	async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
 		let now = Instant::now();
 		let name = req.method.to_string();
 		let rp = self.0.call(req, meta).await;
-		tracing::info!("method call `{name}` took {}ms, metadata: {:?}", now.elapsed().as_millis(), meta);
+		tracing::info!("method call `{name}` took {}ms", now.elapsed().as_millis());
 		rp
 	}
 }
 
 #[derive(Clone)]
-pub struct TimingsLayer;
+pub struct Logger<S>(S);
 
-impl<'a> tower::Layer<RpcService> for TimingsLayer {
-	type Service = Timings;
-
-	fn layer(&self, service: RpcService) -> Self::Service {
-		Timings(service)
+#[async_trait]
+impl<'a, S> RpcServiceT<'a> for Logger<S>
+where
+	S: RpcServiceT<'a> + Send + Sync,
+{
+	async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
+		println!("logger middleware: method `{}`", req.method);
+		self.0.call(req, meta).await
 	}
 }
 
@@ -70,20 +78,29 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let _response: String = client.request("say_hello", rpc_params![]).await?;
+	let response: String = client.request("say_hello", rpc_params![]).await?;
+	println!("response: {:?}", response);
 	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
 	let _: String = client.request("say_hello", rpc_params![]).await?;
+	client.request("thready", rpc_params![4]).await?;
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let rpc_middleware = tower::ServiceBuilder::new().layer(TimingsLayer);
+	let rpc_middleware =
+		tower::ServiceBuilder::new().layer_fn(|service| Logger(service)).layer_fn(|service| Timings(service));
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
+	module.register_method("thready", |params, _| {
+		let thread_count: usize = params.one().unwrap();
+		for _ in 0..thread_count {
+			std::thread::spawn(|| std::thread::sleep(std::time::Duration::from_secs(1)));
+		}
+		""
+	})?;
 	let addr = server.local_addr()?;
-
 	let handle = server.start(module);
 
 	// In this example we don't care about doing shutdown so let's it run forever.
