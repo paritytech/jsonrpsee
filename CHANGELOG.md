@@ -22,7 +22,7 @@ After this release then one have to do:
 
 ```rust
 let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::new(["example.com"]).unwrap());
-let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 ```
 
 Thanks to the external contributors [@polachok](https://github.com/polachok), [@bobs4462](https://github.com/bobs4462) and [@aj3n](https://github.com/aj3n) that contributed to this release.
