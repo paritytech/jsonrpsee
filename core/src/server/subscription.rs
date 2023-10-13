@@ -258,7 +258,7 @@ impl PendingSubscriptionSink {
 	/// the return value is simply ignored because no further notification are propagated
 	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
-		let err = MethodResponse::error(self.id, err.into());
+		let err = MethodResponse::subscription_error(self.id, err.into());
 		_ = self.inner.send(err.result.clone()).await;
 		_ = self.subscribe.send(err);
 	}

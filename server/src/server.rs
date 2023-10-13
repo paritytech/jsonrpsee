@@ -33,7 +33,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::RpcService;
+use crate::middleware::{RpcService, RpcServiceT};
 use crate::transport::http::{content_type_is_json, process_validated_request};
 use crate::transport::{http, ws};
 
@@ -44,10 +44,9 @@ use ::http::Method;
 use hyper::body::HttpBody;
 
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::server::{MethodResponse, Methods};
+use jsonrpsee_core::server::Methods;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::Request as JsonRpcRequest;
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -96,9 +95,7 @@ impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 impl<HttpMiddleware, RpcMiddleware, B> Server<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service:
-		Send + Service<JsonRpcRequest<'a>, Response = MethodResponse, Error = Error>,
-	for<'a> <<RpcMiddleware as Layer<RpcService>>::Service as Service<JsonRpcRequest<'a>>>::Future: Send,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	HttpMiddleware: Layer<TowerService<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service: Send
 		+ Service<
@@ -364,46 +361,40 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
-	/// Add a logger to the builder [`Logger`](../jsonrpsee_core/logger/trait.Logger.html).
+	/// Enable middleware that runs on every JSON-RPC call.
 	///
 	/// ```
+	///
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_server::logger::{Logger, HttpRequest, MethodKind, Params, TransportProtocol, SuccessOrError};
-	/// use jsonrpsee_server::ServerBuilder;
+	/// use jsonrpsee_server::middleware::{RpcServiceT, RpcService};
+	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
+	/// use jsonrpsee_core::async_trait;
+	/// use jsonrpsee_types::Request;
 	///
 	/// #[derive(Clone)]
-	/// struct MyLogger;
+	/// struct MyMiddleware(RpcService);
 	///
-	/// impl Logger for MyLogger {
-	///     type Instant = Instant;
-	///
-	///     fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest, transport: TransportProtocol) {
-	///          println!("[MyLogger::on_call] remote_addr: {:?}, headers: {:?}, transport: {}", remote_addr, request, transport);
-	///     }
-	///
-	///     fn on_request(&self, transport: TransportProtocol) -> Self::Instant {
-	///          Instant::now()
-	///     }
-	///
-	///     fn on_call(&self, method_name: &str, params: Params, kind: MethodKind, transport: TransportProtocol) {
-	///          println!("[MyLogger::on_call] method: '{}' params: {:?}, kind: {:?}, transport: {}", method_name, params, kind, transport);
-	///     }
-	///
-	///     fn on_result(&self, method_name: &str, success_or_error: SuccessOrError, started_at: Self::Instant, transport: TransportProtocol) {
-	///          println!("[MyLogger::on_result] '{}', worked? {}, time elapsed {:?}, transport: {}", method_name, success_or_error.is_success(), started_at.elapsed(), transport);
-	///     }
-	///
-	///     fn on_response(&self, result: &str, started_at: Self::Instant, transport: TransportProtocol) {
-	///          println!("[MyLogger::on_response] result: {}, time elapsed {:?}, transport: {}", result, started_at.elapsed(), transport);
-	///     }
-	///
-	///     fn on_disconnect(&self, remote_addr: SocketAddr, transport: TransportProtocol) {
-	///          println!("[MyLogger::on_disconnect] remote_addr: {:?}, transport: {}", remote_addr, transport);
+	/// #[async_trait]
+	/// impl<'a> RpcServiceT<'a> for MyMiddleware {
+	///     async fn call(&self, req: Request<'a>) -> MethodResponse {
+	///         tracing::info!("MyMiddleware processed call {}", req.method);
+	///         self.0.call(req).await  
 	///     }
 	/// }
 	///
-	/// let builder = ServerBuilder::new().set_logger(MyLogger);
+	/// #[derive(Clone)]
+	/// struct MyMiddlewareLayer(RpcService);
+	///
+	/// impl<'a> tower::Layer<RpcService> for MyMiddlewareLayer {
+	///     type Service = MyMiddleware;
+	///
+	///     fn layer(&self, service: RpcService) -> Self::Service {
+	///	        MyMiddleware(service)
+	///     }
+	/// }
+	///
+	/// let builder = ServerBuilder::default().set_rpc_middleware(MyMiddlewareLayer);
 	/// ```
 	pub fn set_rpc_middleware<L>(self, rpc_middleware: L) -> Builder<HttpMiddleware, L> {
 		Builder {
@@ -588,7 +579,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///
 	///
 	/// ```rust
-	/// use jsonrpsee_server::ServerBuilder;
+	/// use jsonrpsee_server::Server;
 	/// use socket2::{Domain, Socket, Type};
 	/// use std::time::Duration;
 	///
@@ -604,10 +595,10 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///
 	///   socket.listen(4096).unwrap();
 	///
-	///   let server = ServerBuilder::new().build_from_tcp(socket).unwrap();
+	///   let server = Server::builder().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp<L>(
+	pub fn build_from_tcp(
 		self,
 		listener: impl Into<StdTcpListener>,
 	) -> Result<Server<HttpMiddleware, RpcMiddleware>, Error> {
@@ -673,9 +664,8 @@ pub struct TowerService<L> {
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<RpcMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Send + Sync + Clone + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service:
-		Send + Service<JsonRpcRequest<'a>, Response = MethodResponse, Error = Error>,
-	for<'a> <<RpcMiddleware as Layer<RpcService>>::Service as Service<JsonRpcRequest<'a>>>::Future: Send,
+	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 {
 	type Response = hyper::Response<hyper::Body>;
 

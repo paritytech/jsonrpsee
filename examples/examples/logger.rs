@@ -25,12 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
-use std::task::Poll;
+use std::time::Instant;
 
-use futures::future::BoxFuture;
-use futures::FutureExt;
-use jsonrpsee::core::{client::ClientT, Error};
-use jsonrpsee::server::middleware::RpcService;
+use jsonrpsee::core::{async_trait, client::ClientT};
+use jsonrpsee::server::middleware::{RpcService, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -39,26 +37,14 @@ use jsonrpsee::{rpc_params, MethodResponse, RpcModule};
 #[derive(Clone)]
 pub struct Timings(RpcService);
 
-impl<'a> tower::Service<Request<'a>> for Timings {
-	type Response = MethodResponse;
-	type Error = Error;
-	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
-
-	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn call(&mut self, request: Request<'a>) -> Self::Future {
-		let instant = std::time::Instant::now();
-		let mut this = self.0.clone();
-
-		async move {
-			let name = request.method.clone();
-			let rp = this.call(request).await;
-			println!("method call `{name}` took {}ms", instant.elapsed().as_millis());
-			rp
-		}
-		.boxed()
+#[async_trait]
+impl<'a> RpcServiceT<'a> for Timings {
+	async fn call(&self, req: Request<'a>) -> MethodResponse {
+		let now = Instant::now();
+		let name = req.method.to_string();
+		let rp = self.0.call(req).await;
+		tracing::info!("method call `{name}` took {}ms", now.elapsed().as_millis());
+		rp
 	}
 }
 

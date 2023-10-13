@@ -33,15 +33,13 @@ mod host_filter;
 /// Proxy `GET /path` to internal RPC methods.
 mod proxy_get_request;
 
-use std::{sync::Arc, task::Poll};
+use std::sync::Arc;
 
 pub use authority::*;
-use futures_util::{future::BoxFuture, FutureExt};
 pub use host_filter::*;
 use jsonrpsee_core::{
 	server::{BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState},
 	traits::IdProvider,
-	Error,
 };
 use jsonrpsee_types::{
 	error::{reject_too_many_subscriptions, ErrorCode},
@@ -101,88 +99,6 @@ impl RpcService {
 	}
 }
 
-impl<'a> tower::Service<Request<'a>> for RpcService {
-	type Response = MethodResponse;
-	type Error = Error;
-	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
-
-	/// Opens door for back pressure implementation.
-	fn poll_ready(&mut self, _: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn call(&mut self, req: Request<'a>) -> Self::Future {
-		let this = self.clone();
-
-		let fut = async move {
-			let params = Params::new(req.params.map(|params| params.get()));
-			let name = &req.method;
-			let id = req.id;
-
-			match this.methods.method_with_name(name) {
-				None => Ok(MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))),
-				Some((_name, method)) => match method {
-					MethodCallback::Async(callback) => {
-						let id = id.into_owned();
-						let params = params.into_owned();
-						let conn_id = this.conn_id;
-						let max_response_body_size = this.max_response_body_size;
-
-						Ok((callback)(id, params, conn_id, max_response_body_size).await)
-					}
-					MethodCallback::Sync(callback) => {
-						let max_response_body_size = this.max_response_body_size;
-						Ok((callback)(id, params, max_response_body_size))
-					}
-					MethodCallback::Subscription(callback) => {
-						let RpcServiceCfg::CallsAndSubscriptions {
-							bounded_subscriptions,
-							sink,
-							id_provider,
-							_pending_calls,
-						} = this.cfg
-						else {
-							tracing::warn!("Subscriptions not supported");
-							return Ok(MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)));
-						};
-
-						if let Some(p) = bounded_subscriptions.acquire() {
-							let conn_state = SubscriptionState {
-								conn_id: this.conn_id,
-								id_provider: &*id_provider,
-								subscription_permit: p,
-							};
-
-							match callback(id, params, sink, conn_state).await {
-								Ok(r) => Ok(r),
-								Err(id) => Ok(MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))),
-							}
-						} else {
-							let max = bounded_subscriptions.max();
-							Ok(MethodResponse::error(id, reject_too_many_subscriptions(max)))
-						}
-					}
-					MethodCallback::Unsubscription(callback) => {
-						// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
-
-						let RpcServiceCfg::CallsAndSubscriptions { .. } = this.cfg else {
-							tracing::warn!("Subscriptions not supported");
-							return Ok(MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)));
-						};
-
-						let conn_id = this.conn_id;
-						let max_response_body_size = this.max_response_body_size;
-						Ok(callback(id, params, conn_id, max_response_body_size))
-					}
-				},
-			}
-		}
-		.boxed();
-
-		fut
-	}
-}
-
 /// Layer for the RpcService middleware.
 #[derive(Clone, Copy, Debug)]
 pub struct RpcServiceLayer;
@@ -192,5 +108,85 @@ impl tower::Layer<RpcService> for RpcServiceLayer {
 
 	fn layer(&self, inner: Self::Service) -> Self::Service {
 		inner
+	}
+}
+
+/// Similar to `tower::Service` but specific for jsonrpsee and
+/// doesn't requires `&mut self` for performance reasons.
+///
+/// Because &mut self will cause every to call to by guarded by Arc<Mutex>
+/// and each RPC can only be processed sequentially which is very bad.
+#[async_trait::async_trait]
+pub trait RpcServiceT<'a>: Send {
+	/// Process a single JSON-RPC call it may be a subscription or regular call.
+	/// In this interface they are treated in the same way but it's possible to
+	/// distinguish those based on the `MethodResponse`.
+	async fn call(&self, request: Request<'a>) -> MethodResponse;
+}
+
+#[async_trait::async_trait]
+impl<'a> RpcServiceT<'a> for RpcService {
+	async fn call(&self, req: Request<'a>) -> MethodResponse {
+		let params = Params::new(req.params.map(|params| params.get()));
+		let name = &req.method;
+		let id = req.id;
+
+		match self.methods.method_with_name(name) {
+			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
+			Some((_name, method)) => match method {
+				MethodCallback::Async(callback) => {
+					let id = id.into_owned();
+					let params = params.into_owned();
+					let conn_id = self.conn_id;
+					let max_response_body_size = self.max_response_body_size;
+
+					(callback)(id, params, conn_id, max_response_body_size).await
+				}
+				MethodCallback::Sync(callback) => {
+					let max_response_body_size = self.max_response_body_size;
+					(callback)(id, params, max_response_body_size)
+				}
+				MethodCallback::Subscription(callback) => {
+					let RpcServiceCfg::CallsAndSubscriptions {
+						bounded_subscriptions,
+						sink,
+						id_provider,
+						_pending_calls,
+					} = &self.cfg
+					else {
+						tracing::warn!("Subscriptions not supported");
+						return MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+					};
+
+					if let Some(p) = bounded_subscriptions.acquire() {
+						let conn_state = SubscriptionState {
+							conn_id: self.conn_id,
+							id_provider: &*id_provider.clone(),
+							subscription_permit: p,
+						};
+
+						match callback(id, params, sink.clone(), conn_state).await {
+							Ok(r) => r,
+							Err(id) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
+						}
+					} else {
+						let max = bounded_subscriptions.max();
+						MethodResponse::error(id, reject_too_many_subscriptions(max))
+					}
+				}
+				MethodCallback::Unsubscription(callback) => {
+					// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
+
+					let RpcServiceCfg::CallsAndSubscriptions { .. } = self.cfg else {
+						tracing::warn!("Subscriptions not supported");
+						return MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+					};
+
+					let conn_id = self.conn_id;
+					let max_response_body_size = self.max_response_body_size;
+					callback(id, params, conn_id, max_response_body_size)
+				}
+			},
+		}
 	}
 }

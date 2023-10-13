@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::RpcService;
+use crate::middleware::{RpcService, RpcServiceT};
 use crate::server::{BatchRequestConfig, ServiceData};
 use crate::PingConfig;
 
@@ -22,10 +22,10 @@ use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::Compat;
-use tower::{Layer, Service};
+use tower::Layer;
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
@@ -53,9 +53,8 @@ pub(crate) async fn background_task<RpcMiddleware>(
 	rpc_middleware: RpcMiddleware,
 ) where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Send + Sync + Clone + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service:
-		Send + Service<Request<'a>, Response = MethodResponse, Error = Error>,
-	for<'a> <<RpcMiddleware as Layer<RpcService>>::Service as Service<Request<'a>>>::Future: Send,
+	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 {
 	let ServiceData {
 		methods,
@@ -100,7 +99,7 @@ pub(crate) async fn background_task<RpcMiddleware>(
 		pending_calls,
 	);
 
-	let rpc_service = Arc::new(Mutex::new(rpc_middleware.layer(rpc_service)));
+	let rpc_service = Arc::new(rpc_middleware.layer(rpc_service));
 
 	tokio::pin!(stopped);
 
@@ -350,17 +349,16 @@ pub(crate) async fn process_request<S>(
 	batch_config: BatchRequestConfig,
 	max_response_size: u32,
 	sink: MethodSink,
-	rpc_service: Arc<Mutex<S>>,
+	rpc_service: Arc<S>,
 ) where
-	for<'a> S: Service<Request<'a>, Response = MethodResponse, Error = jsonrpsee_core::Error>,
+	for<'a> S: RpcServiceT<'a>,
 {
-	let mut rpc_service = rpc_service.lock().await;
 	let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
 	match first_non_whitespace {
 		Some((start, b'{')) => {
 			if let Ok(req) = serde_json::from_slice::<Request>(&data[start..]) {
-				let rp = rpc_service.call(req).await.unwrap();
+				let rp = rpc_service.call(req).await;
 				if !rp.is_subscription {
 					let _ = sink.send(rp.result).await;
 				}
@@ -398,7 +396,7 @@ pub(crate) async fn process_request<S>(
 
 				for call in batch {
 					if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
-						let rp = rpc_service.call(req).await.unwrap();
+						let rp = rpc_service.call(req).await;
 
 						if let Err(too_large) = batch_response.append(&rp) {
 							let _ = sink.send(too_large).await;

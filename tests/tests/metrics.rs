@@ -29,16 +29,13 @@ mod helpers;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-use std::task::Poll;
 use std::time::Duration;
 
-use futures::future::BoxFuture;
-use futures::FutureExt;
 use helpers::init_logger;
-use jsonrpsee::core::{client::ClientT, Error};
+use jsonrpsee::core::{async_trait, client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::RpcService;
+use jsonrpsee::server::middleware::{RpcService, RpcServiceT};
 use jsonrpsee::server::{Server, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -71,42 +68,30 @@ pub struct CounterMiddleware {
 	counter: Arc<Mutex<Counter>>,
 }
 
-impl<'a> tower::Service<Request<'a>> for CounterMiddleware {
-	type Response = MethodResponse;
-	type Error = Error;
-	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
+#[async_trait]
+impl<'a> RpcServiceT<'a> for CounterMiddleware {
+	async fn call(&self, request: Request<'a>) -> MethodResponse {
+		let name = request.method.to_string();
+		let id = request.id.clone();
 
-	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn call(&mut self, request: Request<'a>) -> Self::Future {
-		let mut this = self.clone();
-
-		async move {
-			let name = request.method.to_string();
-			let id = request.id.clone();
-
-			{
-				let mut n = this.counter.lock().unwrap();
-				n.requests.0 += 1;
-				let entry = n.calls.entry(name.clone()).or_insert((0, Vec::new()));
-				entry.0 += 1;
-			}
-
-			let rp = this.service.call(request).await;
-
-			{
-				let mut n = this.counter.lock().unwrap();
-				n.requests.1 += 1;
-				if rp.as_ref().map_or(false, |r| r.is_success()) {
-					n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
-				}
-			}
-
-			rp
+		{
+			let mut n = self.counter.lock().unwrap();
+			n.requests.0 += 1;
+			let entry = n.calls.entry(name.clone()).or_insert((0, Vec::new()));
+			entry.0 += 1;
 		}
-		.boxed()
+
+		let rp = self.service.call(request).await;
+
+		{
+			let mut n = self.counter.lock().unwrap();
+			n.requests.1 += 1;
+			if rp.is_success() {
+				n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
+			}
+		}
+
+		rp
 	}
 }
 
