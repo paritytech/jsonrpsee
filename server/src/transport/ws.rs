@@ -352,7 +352,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	// proper drop behaviour.
 	drop(pending_calls);
 
-	if tokio::time::timeout(
+	/*if tokio::time::timeout(
 		TWO_MIN,
 		graceful_shutdown(result, pending_calls_completed, receiver, data, conn_tx, send_task_handle),
 	)
@@ -360,7 +360,7 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, mut receiver: Rec
 	.is_err()
 	{
 		tracing::error!("graceful shutdown timeout expired");
-	}
+	}*/
 
 	tracing::info!("Closing RPC WS connection to {conn_id} elapsed: {}ms", now.elapsed().as_millis());
 
