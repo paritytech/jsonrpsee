@@ -569,7 +569,7 @@ async fn graceful_shutdown(
 					Ok(Incoming::Closed(_)) | Err(SokettoError::Closed) => None,
 					Ok(Incoming::Data(_) | Incoming::Pong(_)) => Some(((), (receiver, data))),
 					Err(e) => {
-						tracing::warn!("Graceful shutdown got WebSocket error: {e} but polling until the connection closed or all pending calls has been executed");
+						tracing::warn!("Graceful shutdown got WebSocket error: {e} but polling until the connection is closed or all pending calls has been executed");
 						Some(((), (receiver, data)))
 					}
 				}
