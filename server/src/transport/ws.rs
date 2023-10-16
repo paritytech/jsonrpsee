@@ -24,6 +24,7 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Params, Request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
+use soketto::Incoming;
 
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
@@ -564,10 +565,13 @@ async fn graceful_shutdown(
 			//
 			// The receiver is not cancel-safe such that it's used in a stream to enforce that.
 			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
-				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
-					None
-				} else {
-					Some(((), (receiver, data)))
+				match receiver.receive(&mut data).await {
+					Ok(Incoming::Closed(_)) | Err(SokettoError::Closed) => None,
+					Ok(Incoming::Data(_) | Incoming::Pong(_)) => Some(((), (receiver, data))),
+					Err(e) => {
+						tracing::warn!("Graceful shutdown got WebSocket error: {e} but polling until the connection is closed or all pending calls has been executed");
+						Some(((), (receiver, data)))
+					}
 				}
 			});
 
