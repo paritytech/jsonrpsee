@@ -85,7 +85,7 @@ pub struct Meta {
 
 #[derive(Clone, Debug)]
 enum RpcServiceCfg {
-	// The server supports only subscriptions.
+	// The server supports only calls.
 	OnlyCalls,
 	// The server supports both method calls and subscriptions.
 	CallsAndSubscriptions {
