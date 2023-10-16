@@ -26,7 +26,6 @@ pub(crate) async fn process_validated_request<S>(
 where
 	S: Send,
 	for<'a> S: RpcServiceT<'a> + Send,
-	//for<'a> S: Service<Request<'a>, Response = MethodResponse, Error = jsonrpsee_core::Error>,
 {
 	let (parts, body) = request.into_parts();
 
