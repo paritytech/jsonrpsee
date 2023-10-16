@@ -746,6 +746,7 @@ where
 				self.inner.methods.clone(),
 				self.inner.max_response_body_size as usize,
 				self.inner.conn_id as usize,
+				self.inner.max_log_length,
 			));
 
 			let batch_config = self.inner.batch_requests_config;

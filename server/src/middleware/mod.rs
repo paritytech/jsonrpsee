@@ -40,6 +40,7 @@ pub use host_filter::*;
 use http::{HeaderMap, Uri};
 use jsonrpsee_core::{
 	server::{BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState},
+	tracing::{rx_log_from_json, tx_log_from_str},
 	traits::IdProvider,
 };
 use jsonrpsee_types::{
@@ -47,6 +48,7 @@ use jsonrpsee_types::{
 	ErrorObject, Params, Request,
 };
 pub use proxy_get_request::*;
+use tracing::instrument;
 
 /// The transport protocol used to send or receive a call or request.
 #[derive(Debug, Copy, Clone)]
@@ -103,12 +105,13 @@ pub struct RpcService {
 	methods: Methods,
 	max_response_body_size: usize,
 	cfg: RpcServiceCfg,
+	max_log_length: u32,
 }
 
 impl RpcService {
 	/// Create a new service with doesn't support subscriptions.
-	pub fn only_calls(methods: Methods, max_response_body_size: usize, conn_id: usize) -> Self {
-		Self { methods, max_response_body_size, conn_id, cfg: RpcServiceCfg::OnlyCalls }
+	pub fn only_calls(methods: Methods, max_response_body_size: usize, conn_id: usize, max_log_length: u32) -> Self {
+		Self { methods, max_response_body_size, conn_id, cfg: RpcServiceCfg::OnlyCalls, max_log_length }
 	}
 
 	/// Create a new service that supports both calls and subscriptions.
@@ -120,6 +123,7 @@ impl RpcService {
 		id_provider: Arc<dyn IdProvider>,
 		conn_id: usize,
 		pending_calls: tokio::sync::mpsc::Sender<()>,
+		max_log_length: u32,
 	) -> Self {
 		Self {
 			conn_id,
@@ -131,19 +135,8 @@ impl RpcService {
 				id_provider,
 				_pending_calls: pending_calls,
 			},
+			max_log_length,
 		}
-	}
-}
-
-/// Layer for the RpcService middleware.
-#[derive(Clone, Copy, Debug)]
-pub struct RpcServiceLayer;
-
-impl tower::Layer<RpcService> for RpcServiceLayer {
-	type Service = RpcService;
-
-	fn layer(&self, inner: Self::Service) -> Self::Service {
-		inner
 	}
 }
 
@@ -162,12 +155,15 @@ pub trait RpcServiceT<'a> {
 
 #[async_trait::async_trait]
 impl<'a> RpcServiceT<'a> for RpcService {
+	#[instrument(name = "method_call", fields(method = req.method.as_ref()), skip(_meta, req, self), level = "TRACE")]
 	async fn call(&self, req: Request<'a>, _meta: &Meta) -> MethodResponse {
+		rx_log_from_json(&req, self.max_log_length);
+
 		let params = Params::new(req.params.map(|params| params.get()));
 		let name = &req.method;
 		let id = req.id;
 
-		match self.methods.method_with_name(name) {
+		let rp = match self.methods.method_with_name(name) {
 			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
 			Some((_name, method)) => match method {
 				MethodCallback::Async(callback) => {
@@ -223,6 +219,9 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					callback(id, params, conn_id, max_response_body_size)
 				}
 			},
-		}
+		};
+
+		tx_log_from_str(&rp.result, self.max_log_length);
+		rp
 	}
 }

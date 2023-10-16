@@ -92,6 +92,7 @@ pub(crate) async fn background_task<RpcMiddleware>(
 		id_provider.clone(),
 		conn_id as usize,
 		pending_calls,
+		max_log_length,
 	);
 
 	let rpc_service = Arc::new(rpc_middleware.layer(rpc_service));
