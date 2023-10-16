@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 /// JSON-RPC request object as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Request<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -67,7 +67,7 @@ pub struct InvalidRequest<'a> {
 
 /// JSON-RPC notification (a request object without a request ID) as defined in the
 /// [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Notification<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -86,7 +86,7 @@ impl<'a, T> Notification<'a, T> {
 }
 
 /// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct RequestSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -118,7 +118,7 @@ impl<'a> RequestSer<'a> {
 }
 
 /// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct NotificationSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
