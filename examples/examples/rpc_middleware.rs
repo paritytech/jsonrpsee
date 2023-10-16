@@ -24,10 +24,22 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Example showing how to add multiple loggers to the same server.
+//! jsonrpsee supports two kinds of middlewares `http_middleware` and `rpc_middleware`.
+//!
+//! This example demonstrates how to use the `rpc_middleware` which applies for each
+//! JSON-RPC method call and batch requests may call the middleware more than once.
+//!
+//! A typical use-case for this is to implement rate-limiting based on the actual
+//! number of JSON-RPC methods calls and a request could potentially be made
+//! by HTTP or WebSocket which this middleware is agnostic to.
+//!
+//! Contrary the HTTP middleware does only apply per HTTP request and
+//! may be handy in some scenarios such CORS but if you want to access
+//! to the actual JSON-RPC details this is the middleware to use.
 
 use std::net::SocketAddr;
-use std::time::Instant;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::rpc_params;
@@ -36,19 +48,40 @@ use jsonrpsee::server::{MethodResponse, RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 
-#[derive(Clone)]
-pub struct Timings<S>(S);
+pub struct CallsPerConn<S> {
+	service: S,
+	count: AtomicUsize,
+}
 
 #[async_trait]
-impl<'a, S> RpcServiceT<'a> for Timings<S>
+impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
 	async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
-		let now = Instant::now();
-		let name = req.method.to_string();
-		let rp = self.0.call(req, meta).await;
-		tracing::info!("method call `{name}` took {}ms", now.elapsed().as_millis());
+		let rp = self.service.call(req.clone(), meta).await;
+		self.count.fetch_add(1, Ordering::SeqCst);
+		let count = self.count.load(Ordering::SeqCst);
+		println!("conn={} has processed {count} calls", meta.conn_id);
+		rp
+	}
+}
+
+pub struct GlobalCalls<S> {
+	service: S,
+	count: Arc<AtomicUsize>,
+}
+
+#[async_trait]
+impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
+where
+	S: RpcServiceT<'a> + Send + Sync,
+{
+	async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
+		let rp = self.service.call(req.clone(), meta).await;
+		self.count.fetch_add(1, Ordering::SeqCst);
+		let count = self.count.load(Ordering::SeqCst);
+		println!("the server has processed calls={count}");
 		rp
 	}
 }
@@ -77,19 +110,29 @@ async fn main() -> anyhow::Result<()> {
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
-	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", rpc_params![]).await?;
-	println!("response: {:?}", response);
-	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
-	let _: String = client.request("say_hello", rpc_params![]).await?;
-	client.request("thready", rpc_params![4]).await?;
+	for _ in 0..2 {
+		let client = WsClientBuilder::default().build(&url).await?;
+		let response: String = client.request("say_hello", rpc_params![]).await?;
+		println!("response: {:?}", response);
+		let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
+		let _: String = client.request("say_hello", rpc_params![]).await?;
+		let _: String = client.request("thready", rpc_params![4]).await?;
+
+		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+	}
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let rpc_middleware =
-		tower::ServiceBuilder::new().layer_fn(|service| Logger(service)).layer_fn(|service| Timings(service));
+	let global_cnt = Arc::new(AtomicUsize::new(0));
+
+	let rpc_middleware = tower::ServiceBuilder::new()
+		.layer_fn(|service| Logger(service))
+		// This state is created per connection.
+		.layer_fn(|service| CallsPerConn { service, count: AtomicUsize::new(0) })
+		// This state is shared by all connections.
+		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;

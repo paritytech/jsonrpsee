@@ -35,7 +35,7 @@ use helpers::init_logger;
 use jsonrpsee::core::{async_trait, client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::{Meta, RpcService, RpcServiceT};
+use jsonrpsee::server::middleware::{Meta, RpcServiceT};
 use jsonrpsee::server::{Server, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -52,24 +52,16 @@ struct Counter {
 }
 
 #[derive(Clone)]
-struct CounterLayer(Arc<Mutex<Counter>>);
-
-impl tower::Layer<RpcService> for CounterLayer {
-	type Service = CounterMiddleware;
-
-	fn layer(&self, inner: RpcService) -> Self::Service {
-		CounterMiddleware { service: inner, counter: self.0.clone() }
-	}
-}
-
-#[derive(Clone)]
-pub struct CounterMiddleware {
-	service: RpcService,
+pub struct CounterMiddleware<S> {
+	service: S,
 	counter: Arc<Mutex<Counter>>,
 }
 
 #[async_trait]
-impl<'a> RpcServiceT<'a> for CounterMiddleware {
+impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
+where
+	S: RpcServiceT<'a> + Send + Sync,
+{
 	async fn call(&self, request: Request<'a>, meta: &Meta) -> MethodResponse {
 		let name = request.method.to_string();
 		let id = request.id.clone();
@@ -119,7 +111,8 @@ async fn websocket_server(
 	module: RpcModule<()>,
 	counter: Arc<Mutex<Counter>>,
 ) -> Result<(SocketAddr, ServerHandle), Error> {
-	let rpc_middleware = tower::ServiceBuilder::new().layer(CounterLayer(counter));
+	let rpc_middleware =
+		tower::ServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
@@ -129,7 +122,8 @@ async fn websocket_server(
 }
 
 async fn http_server(module: RpcModule<()>, counter: Arc<Mutex<Counter>>) -> Result<(SocketAddr, ServerHandle), Error> {
-	let rpc_middleware = tower::ServiceBuilder::new().layer(CounterLayer(counter));
+	let rpc_middleware =
+		tower::ServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;

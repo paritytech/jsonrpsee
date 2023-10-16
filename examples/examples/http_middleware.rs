@@ -24,9 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! This example sets a custom tower service middleware to the RPC implementation.
+//! jsonrpsee supports two kinds of middlewares `http_middleware` and `rpc_middleware`.
 //!
-//! It works with both `WebSocket` and `HTTP` which is done in the example.
+//! This example demonstrates how to use the `http_middleware` which applies for each
+//! HTTP request.
+//!
+//! A typical use-case for this to apply a specific CORS policy which applies both
+//! for HTTP and WebSocket.
+//!
 
 use hyper::body::Bytes;
 use hyper::http::HeaderValue;
