@@ -333,13 +333,13 @@ impl BatchResponseBuilder {
 	///
 	/// Fails if the max limit is exceeded and returns to error response to
 	/// return early in order to not process method call responses which are thrown away anyway.
-	pub fn append(&mut self, response: &MethodResponse) -> Result<(), String> {
+	pub fn append(&mut self, response: &MethodResponse) -> Result<(), MethodResponse> {
 		// `,` will occupy one extra byte for each entry
 		// on the last item the `,` is replaced by `]`.
 		let len = response.result.len() + self.result.len() + 1;
 
 		if len > self.max_response_size {
-			Err(batch_response_error(Id::Null, reject_too_big_batch_response(self.max_response_size)))
+			Err(MethodResponse::error(Id::Null, reject_too_big_batch_response(self.max_response_size)))
 		} else {
 			self.result.push_str(&response.result);
 			self.result.push(',');
@@ -437,6 +437,6 @@ mod tests {
 		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
 
 		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of 63"},"id":null}"#;
-		assert_eq!(batch, exp_err);
+		assert_eq!(batch.result, exp_err);
 	}
 }

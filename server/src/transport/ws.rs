@@ -2,23 +2,18 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::middleware::{Meta, RpcService, RpcServiceT};
-use crate::server::{BatchRequestConfig, ServiceData};
+use crate::server::{handle_rpc_call, ServiceData};
 use crate::PingConfig;
 
 use futures_util::future::{self, Either, Fuse};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::server::helpers::{
-	batch_response_error, prepare_error, BatchResponseBuilder, MethodResponse, MethodSink,
-};
+use jsonrpsee_core::server::helpers::MethodSink;
 use jsonrpsee_core::server::BoundedSubscriptions;
-use jsonrpsee_core::{Error, JsonRawValue};
-use jsonrpsee_types::error::{
-	reject_too_big_batch_request, reject_too_big_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
-	BATCHES_NOT_SUPPORTED_MSG,
-};
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Request};
+use jsonrpsee_core::Error;
+use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
+use jsonrpsee_types::Id;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 
@@ -28,8 +23,6 @@ use tokio_util::compat::Compat;
 use tower::Layer;
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
-
-type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
 
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
 	sender.send_text_owned(response).await?;
@@ -147,7 +140,31 @@ pub(crate) async fn background_task<RpcMiddleware>(
 		let sink = sink.clone();
 		let meta = meta.clone();
 		tokio::spawn(async move {
-			process_request(data, batch_requests_config, max_response_body_size, sink, rpc_service, meta).await;
+			let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
+
+			let (idx, is_single) = match first_non_whitespace {
+				Some((start, b'{')) => (start, true),
+				Some((start, b'[')) => (start, false),
+				_ => {
+					_ = sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
+					return;
+				}
+			};
+
+			if let Some(rp) = handle_rpc_call(
+				&data[idx..],
+				is_single,
+				batch_requests_config,
+				max_response_body_size,
+				rpc_service,
+				&meta,
+			)
+			.await
+			{
+				if !rp.is_subscription {
+					_ = sink.send(rp.result).await;
+				}
+			}
 		});
 	};
 
@@ -345,97 +362,4 @@ async fn graceful_shutdown(
 	_ = conn_tx.send(());
 	// Ensure that send task has been closed.
 	_ = send_task_handle.await;
-}
-
-pub(crate) async fn process_request<S>(
-	data: Vec<u8>,
-	batch_config: BatchRequestConfig,
-	max_response_size: u32,
-	sink: MethodSink,
-	rpc_service: Arc<S>,
-	meta: Arc<Meta>,
-) where
-	for<'a> S: RpcServiceT<'a>,
-{
-	let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
-
-	match first_non_whitespace {
-		Some((start, b'{')) => {
-			if let Ok(req) = serde_json::from_slice::<Request>(&data[start..]) {
-				let rp = rpc_service.call(req, &meta).await;
-				if !rp.is_subscription {
-					let _ = sink.send(rp.result).await;
-				}
-			} else if serde_json::from_slice::<Notif>(&data[start..]).is_ok() {
-				// just ignore.
-			} else {
-				let (id, code) = prepare_error(&data[start..]);
-				let rp = MethodResponse::error(id, ErrorObject::from(code));
-				if !rp.is_subscription {
-					let _ = sink.send(rp.result).await;
-				}
-			}
-		}
-		Some((start, b'[')) => {
-			let max_len = match batch_config {
-				BatchRequestConfig::Disabled => {
-					let response = MethodResponse::error(
-						Id::Null,
-						ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, None),
-					);
-					_ = sink.send(response.result).await;
-					return;
-				}
-				BatchRequestConfig::Limit(limit) => limit as usize,
-				BatchRequestConfig::Unlimited => usize::MAX,
-			};
-
-			if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(&data[start..]) {
-				if batch.len() > max_len {
-					_ = sink.send(batch_response_error(Id::Null, reject_too_big_batch_request(max_len))).await;
-				}
-
-				let mut got_notif = false;
-				let mut batch_response = BatchResponseBuilder::new_with_limit(max_response_size as usize);
-
-				for call in batch {
-					if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
-						let rp = rpc_service.call(req, &meta).await;
-
-						if let Err(too_large) = batch_response.append(&rp) {
-							let _ = sink.send(too_large).await;
-							return;
-						}
-					} else if let Ok(_notif) = serde_json::from_str::<Notif>(call.get()) {
-						// notifications should not be answered.
-						got_notif = true;
-					} else {
-						// valid JSON but could be not parsable as `InvalidRequest`
-						let id = match serde_json::from_str::<InvalidRequest>(call.get()) {
-							Ok(err) => err.id,
-							Err(_) => Id::Null,
-						};
-
-						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest));
-
-						if let Err(too_large) = batch_response.append(&rp) {
-							let _ = sink.send(too_large).await;
-							return;
-						}
-					}
-				}
-
-				if got_notif && batch_response.is_empty() {
-					_ = sink.send(String::new()).await;
-				} else {
-					_ = sink.send(batch_response.finish()).await;
-				}
-			} else {
-				_ = sink.send(batch_response_error(Id::Null, ErrorObject::from(ErrorCode::ParseError))).await;
-			}
-		}
-		_ => {
-			_ = sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
-		}
-	};
 }

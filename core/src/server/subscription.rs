@@ -438,6 +438,9 @@ impl Subscription {
 		let raw = self.rx.recv().await?;
 
 		tracing::debug!("[Subscription::next]: rx {}", raw);
+
+		// clippy complains about this but it doesn't compile without the extra res binding.
+		#[allow(clippy::let_and_return)]
 		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
 			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
 			Err(e) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {
