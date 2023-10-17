@@ -343,7 +343,7 @@ impl Methods {
 	) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::channel(buf_size);
 		let id = req.id.clone();
-		let params = Params::new(req.params.map(|params| params.get()));
+		let params = Params::new(req.params.as_ref().map(|params| params.as_ref().get()));
 
 		let response = match self.method(&req.method) {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),

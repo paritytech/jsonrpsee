@@ -138,7 +138,6 @@ where
 	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
 		let max_request_body_size = self.cfg.max_request_body_size;
 		let max_response_body_size = self.cfg.max_response_body_size;
-		let max_log_length = self.cfg.max_log_length;
 		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 		let batch_requests_config = self.cfg.batch_requests_config;
 		let id_provider = self.id_provider;
@@ -160,7 +159,6 @@ where
 						methods: methods.clone(),
 						max_request_body_size,
 						max_response_body_size,
-						max_log_length,
 						max_subscriptions_per_connection,
 						batch_requests_config,
 						id_provider: id_provider.clone(),
@@ -212,10 +210,6 @@ struct Settings {
 	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u32,
-	/// Max length for logging for requests and responses
-	///
-	/// Logs bigger than this limit will be truncated.
-	max_log_length: u32,
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
@@ -296,7 +290,6 @@ impl Default for Settings {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
-			max_log_length: 4096,
 			max_connections: MAX_CONNECTIONS,
 			max_subscriptions_per_connection: 1024,
 			batch_requests_config: BatchRequestConfig::Unlimited,
@@ -541,14 +534,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
-	/// Set maximum length for logging calls and responses.
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub fn set_max_logging_length(mut self, max: u32) -> Self {
-		self.settings.max_log_length = max;
-		self
-	}
-
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	///
 	/// ```rust
@@ -627,10 +612,6 @@ pub(crate) struct ServiceData {
 	pub(crate) max_request_body_size: u32,
 	/// Max response body size.
 	pub(crate) max_response_body_size: u32,
-	/// Max length for logging for request and response
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub(crate) max_log_length: u32,
 	/// Maximum number of subscriptions per connection.
 	pub(crate) max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
@@ -721,7 +702,6 @@ where
 						self.inner.methods.clone(),
 						this.max_response_body_size as usize,
 						this.conn_id as usize,
-						this.max_log_length,
 						cfg,
 					);
 
@@ -780,7 +760,6 @@ where
 				self.inner.methods.clone(),
 				self.inner.max_response_body_size as usize,
 				self.inner.conn_id as usize,
-				self.inner.max_log_length,
 				RpcServiceCfg::OnlyCalls,
 			));
 
@@ -834,10 +813,6 @@ struct ProcessConnection {
 	max_request_body_size: u32,
 	/// Max response body size.
 	max_response_body_size: u32,
-	/// Max length for logging for request and response
-	///
-	/// Logs bigger than this limit will be truncated.
-	max_log_length: u32,
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
@@ -911,7 +886,6 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 			methods: cfg.methods,
 			max_request_body_size: cfg.max_request_body_size,
 			max_response_body_size: cfg.max_response_body_size,
-			max_log_length: cfg.max_log_length,
 			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
 			batch_requests_config: cfg.batch_requests_config,
 			id_provider: cfg.id_provider,

@@ -24,30 +24,34 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::net::SocketAddr;
-use std::time::Instant;
-
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::server::middleware::{Meta, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, MethodResponse, RpcModule};
+use std::borrow::Cow as StdCow;
+use std::net::SocketAddr;
 
 #[derive(Clone)]
-pub struct Timings<S>(S);
+pub struct ModifyRequestIf<S>(S);
 
 #[async_trait]
-impl<'a, S> RpcServiceT<'a> for Timings<S>
+impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
-		let now = Instant::now();
-		let name = req.method.to_string();
-		let rp = self.0.call(req, meta).await;
-		tracing::info!("method call `{name}` took {}ms, metadata: {:?}", now.elapsed().as_millis(), meta);
-		rp
+	async fn call(&self, mut req: Request<'a>, meta: &Meta) -> MethodResponse {
+		// Re-direct all calls that isn't `say_hello` to `say_goodby`
+		if req.method != "say_hello" {
+			req.method = "say_goodbye".into();
+			// It's a bit awkward to create new params in the request
+			// but this shows how to do it.
+			let raw_value = serde_json::value::to_raw_value(&1).unwrap();
+			req.params = Some(StdCow::Owned(raw_value));
+		}
+
+		self.0.call(req, meta).await
 	}
 }
 
@@ -70,10 +74,11 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let rpc_middleware = RpcServiceBuilder::new().layer_fn(|service| Timings(service));
+	let rpc_middleware = RpcServiceBuilder::new().layer_fn(|service| ModifyRequestIf(service));
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
+	module.register_method("say_goodbye", |_, _| "goodbye")?;
 	let addr = server.local_addr()?;
 
 	let handle = server.start(module);

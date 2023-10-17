@@ -47,12 +47,9 @@ use tower::util::Either;
 use jsonrpsee_core::server::{
 	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
-use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
-use jsonrpsee_types::{ErrorObject, Params, Request};
-
-use tracing::instrument;
+use jsonrpsee_types::{ErrorObject, Request};
 
 /// The transport protocol used to send or receive a call or request.
 #[derive(Debug, Copy, Clone)]
@@ -110,19 +107,12 @@ pub struct RpcService {
 	methods: Methods,
 	max_response_body_size: usize,
 	cfg: RpcServiceCfg,
-	max_log_length: u32,
 }
 
 impl RpcService {
 	/// Create a new service with doesn't support subscriptions.
-	pub(crate) fn new(
-		methods: Methods,
-		max_response_body_size: usize,
-		conn_id: usize,
-		max_log_length: u32,
-		cfg: RpcServiceCfg,
-	) -> Self {
-		Self { methods, max_response_body_size, conn_id, cfg, max_log_length }
+	pub(crate) fn new(methods: Methods, max_response_body_size: usize, conn_id: usize, cfg: RpcServiceCfg) -> Self {
+		Self { methods, max_response_body_size, conn_id, cfg }
 	}
 }
 
@@ -138,15 +128,12 @@ pub trait RpcServiceT<'a> {
 
 #[async_trait::async_trait]
 impl<'a> RpcServiceT<'a> for RpcService {
-	#[instrument(name = "method_call", fields(method = req.method.as_ref()), skip(_meta, req, self), level = "TRACE")]
 	async fn call(&self, req: Request<'a>, _meta: &Meta) -> MethodResponse {
-		rx_log_from_json(&req, self.max_log_length);
+		let params = req.params();
+		let name = req.method_name();
+		let id = req.id().clone();
 
-		let params = Params::new(req.params.map(|params| params.get()));
-		let name = &req.method;
-		let id = req.id;
-
-		let rp = match self.methods.method_with_name(name) {
+		match self.methods.method_with_name(name) {
 			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
 			Some((_name, method)) => match method {
 				MethodCallback::Async(callback) => {
@@ -202,10 +189,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					callback(id, params, conn_id, max_response_body_size)
 				}
 			},
-		};
-
-		tx_log_from_str(&rp.result, self.max_log_length);
-		rp
+		}
 	}
 }
 
