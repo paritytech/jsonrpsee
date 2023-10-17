@@ -33,7 +33,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::{Meta, RpcService, RpcServiceCfg, RpcServiceT, TransportProtocol};
+use crate::middleware::{Meta, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
 use crate::transport::http::content_type_is_json;
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -41,8 +41,8 @@ use crate::transport::{http, ws};
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
-use ::http::Method;
 use hyper::body::HttpBody;
+use hyper::Method;
 
 use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
@@ -72,7 +72,7 @@ const MAX_CONNECTIONS: u32 = 100;
 pub struct Server<HttpMiddleware = Identity, RpcMiddleware = Identity> {
 	listener: TcpListener,
 	cfg: Settings,
-	rpc_middleware: tower::ServiceBuilder<RpcMiddleware>,
+	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	id_provider: Arc<dyn IdProvider>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
@@ -313,7 +313,7 @@ impl Default for Settings {
 #[derive(Debug)]
 pub struct Builder<HttpMiddleware, RpcMiddleware> {
 	settings: Settings,
-	rpc_middleware: tower::ServiceBuilder<RpcMiddleware>,
+	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	id_provider: Arc<dyn IdProvider>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
@@ -322,7 +322,7 @@ impl Default for Builder<Identity, Identity> {
 	fn default() -> Self {
 		Builder {
 			settings: Settings::default(),
-			rpc_middleware: tower::ServiceBuilder::new(),
+			rpc_middleware: RpcServiceBuilder::new(),
 			id_provider: Arc::new(RandomIntegerIdProvider),
 			http_middleware: tower::ServiceBuilder::new(),
 		}
@@ -376,7 +376,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_server::middleware::{RpcServiceT, RpcService, Meta};
+	/// use jsonrpsee_server::middleware::{RpcServiceT, RpcService, Meta, RpcServiceBuilder};
 	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
 	/// use jsonrpsee_core::async_trait;
 	/// use jsonrpsee_types::Request;
@@ -395,10 +395,10 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	///
 	/// // The service type can be omitted once `start` is called on the server.
-	/// let m = tower::ServiceBuilder::new().layer_fn(|service: ()| MyMiddleware(service));
+	/// let m = RpcServiceBuilder::new().layer_fn(|service: ()| MyMiddleware(service));
 	/// let builder = ServerBuilder::default().set_rpc_middleware(m);
 	/// ```
-	pub fn set_rpc_middleware<T>(self, rpc_middleware: tower::ServiceBuilder<T>) -> Builder<HttpMiddleware, T> {
+	pub fn set_rpc_middleware<T>(self, rpc_middleware: RpcServiceBuilder<T>) -> Builder<HttpMiddleware, T> {
 		Builder {
 			settings: self.settings,
 			rpc_middleware,
@@ -660,7 +660,7 @@ pub(crate) struct ServiceData {
 #[derive(Debug, Clone)]
 pub struct TowerService<L> {
 	inner: ServiceData,
-	rpc_middleware: tower::ServiceBuilder<L>,
+	rpc_middleware: RpcServiceBuilder<L>,
 }
 
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<RpcMiddleware>
@@ -863,7 +863,7 @@ struct ProcessConnection {
 #[instrument(name = "connection", skip_all, fields(remote_addr = %cfg.remote_addr, conn_id = %cfg.conn_id), level = "INFO")]
 fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 	http_middleware_builder: &tower::ServiceBuilder<HttpMiddleware>,
-	rpc_middleware_builder: tower::ServiceBuilder<RpcMiddleware>,
+	rpc_middleware_builder: RpcServiceBuilder<RpcMiddleware>,
 	connection_guard: &ConnectionGuard,
 	cfg: ProcessConnection,
 	socket: TcpStream,

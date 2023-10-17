@@ -43,7 +43,7 @@ use std::sync::Arc;
 
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::{Meta, RpcServiceT};
+use jsonrpsee::server::middleware::{Meta, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{MethodResponse, RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -127,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let global_cnt = Arc::new(AtomicUsize::new(0));
 
-	let rpc_middleware = tower::ServiceBuilder::new()
+	let rpc_middleware = RpcServiceBuilder::new()
 		.layer_fn(|service| Logger(service))
 		// This state is created per connection.
 		.layer_fn(|service| CallsPerConn { service, count: AtomicUsize::new(0) })

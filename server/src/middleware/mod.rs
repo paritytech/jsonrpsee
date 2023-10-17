@@ -37,17 +37,21 @@ use std::{net::SocketAddr, sync::Arc};
 
 pub use authority::*;
 pub use host_filter::*;
-use http::{HeaderMap, Uri};
-use jsonrpsee_core::{
-	server::{BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState},
-	tracing::{rx_log_from_json, tx_log_from_str},
-	traits::IdProvider,
-};
-use jsonrpsee_types::{
-	error::{reject_too_many_subscriptions, ErrorCode},
-	ErrorObject, Params, Request,
-};
 pub use proxy_get_request::*;
+
+use http::{HeaderMap, Uri};
+use tower::layer::util::{Identity, Stack};
+use tower::layer::LayerFn;
+use tower::util::Either;
+
+use jsonrpsee_core::server::{
+	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
+};
+use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
+use jsonrpsee_core::traits::IdProvider;
+use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
+use jsonrpsee_types::{ErrorObject, Params, Request};
+
 use tracing::instrument;
 
 /// The transport protocol used to send or receive a call or request.
@@ -205,5 +209,57 @@ impl<'a> RpcServiceT<'a> for RpcService {
 
 		tx_log_from_str(&rp.result, self.max_log_length);
 		rp
+	}
+}
+
+/// Similar to [`tower::ServiceBuilder`] but doesn't
+/// support any middleware implementations.
+#[derive(Debug, Clone)]
+pub struct RpcServiceBuilder<L>(tower::ServiceBuilder<L>);
+
+impl Default for RpcServiceBuilder<Identity> {
+	fn default() -> Self {
+		RpcServiceBuilder(tower::ServiceBuilder::new())
+	}
+}
+
+impl RpcServiceBuilder<Identity> {
+	/// Create a new [`RpcServiceBuilder`].
+	pub fn new() -> Self {
+		Self(tower::ServiceBuilder::new())
+	}
+}
+
+impl<L> RpcServiceBuilder<L> {
+	/// Optionally add a new layer `T` to the [`RpcServiceBuilder`].
+	///
+	/// See the documentation for [`tower::ServiceBuilder::option_layer`] for more details.
+	pub fn option_layer<T>(self, layer: Option<T>) -> RpcServiceBuilder<Stack<Either<T, Identity>, L>> {
+		RpcServiceBuilder(self.0.option_layer(layer))
+	}
+
+	/// Add a new layer `T` to the [`RpcServiceBuilder`].
+	///
+	/// This wraps the inner service with the service provided by a user-defined
+	/// [`Layer`]. The provided layer must implement the [`Layer`] trait.
+	///
+	/// See the documentation for [`tower::ServiceBuilder::layer`] for more details.
+	pub fn layer<T>(self, layer: T) -> RpcServiceBuilder<Stack<T, L>> {
+		RpcServiceBuilder(self.0.layer(layer))
+	}
+
+	/// Add a [`Layer`] built from a function that accepts a service and returns another service.
+	///
+	/// See the documentation for [`tower::ServiceBuilder::layer_fn`] for more details.
+	pub fn layer_fn<F>(self, f: F) -> RpcServiceBuilder<Stack<LayerFn<F>, L>> {
+		RpcServiceBuilder(self.0.layer_fn(f))
+	}
+
+	/// Wrap the service `S` with the middleware.
+	pub(crate) fn service<S>(&self, service: S) -> L::Service
+	where
+		L: tower::Layer<S>,
+	{
+		self.0.service(service)
 	}
 }

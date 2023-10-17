@@ -35,7 +35,7 @@ use helpers::init_logger;
 use jsonrpsee::core::{async_trait, client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::{Meta, RpcServiceT};
+use jsonrpsee::server::middleware::{Meta, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{Server, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -112,7 +112,7 @@ async fn websocket_server(
 	counter: Arc<Mutex<Counter>>,
 ) -> Result<(SocketAddr, ServerHandle), Error> {
 	let rpc_middleware =
-		tower::ServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
+		RpcServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
@@ -123,7 +123,7 @@ async fn websocket_server(
 
 async fn http_server(module: RpcModule<()>, counter: Arc<Mutex<Counter>>) -> Result<(SocketAddr, ServerHandle), Error> {
 	let rpc_middleware =
-		tower::ServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
+		RpcServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;

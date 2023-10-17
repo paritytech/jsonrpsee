@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::{Meta, RpcServiceT};
+use jsonrpsee::server::middleware::{Meta, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -70,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let rpc_middleware = tower::ServiceBuilder::new().layer_fn(|service| Timings(service));
+	let rpc_middleware = RpcServiceBuilder::new().layer_fn(|service| Timings(service));
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
