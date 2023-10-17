@@ -128,9 +128,6 @@ impl RpcService {
 
 /// Similar to `tower::Service` but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
-///
-/// Because &mut self will cause every to call to by guarded by Arc<Mutex>
-/// and each RPC can only be processed sequentially which is very bad.
 #[async_trait::async_trait]
 pub trait RpcServiceT<'a> {
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
@@ -240,15 +237,12 @@ impl<L> RpcServiceBuilder<L> {
 
 	/// Add a new layer `T` to the [`RpcServiceBuilder`].
 	///
-	/// This wraps the inner service with the service provided by a user-defined
-	/// [`Layer`]. The provided layer must implement the [`Layer`] trait.
-	///
 	/// See the documentation for [`tower::ServiceBuilder::layer`] for more details.
 	pub fn layer<T>(self, layer: T) -> RpcServiceBuilder<Stack<T, L>> {
 		RpcServiceBuilder(self.0.layer(layer))
 	}
 
-	/// Add a [`Layer`] built from a function that accepts a service and returns another service.
+	/// Add a [`tower::Layer`] built from a function that accepts a service and returns another service.
 	///
 	/// See the documentation for [`tower::ServiceBuilder::layer_fn`] for more details.
 	pub fn layer_fn<F>(self, f: F) -> RpcServiceBuilder<Stack<LayerFn<F>, L>> {
