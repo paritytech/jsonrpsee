@@ -33,7 +33,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::{Meta, RpcService, RpcServiceT, TransportProtocol};
+use crate::middleware::{Meta, RpcService, RpcServiceCfg, RpcServiceT, TransportProtocol};
 use crate::transport::http::content_type_is_json;
 use crate::transport::{http, ws};
 
@@ -742,11 +742,12 @@ where
 				uri: request.uri().clone(),
 			};
 
-			let rpc_service = rpc_middleware.service(RpcService::only_calls(
+			let rpc_service = rpc_middleware.service(RpcService::new(
 				self.inner.methods.clone(),
 				self.inner.max_response_body_size as usize,
 				self.inner.conn_id as usize,
 				self.inner.max_log_length,
+				RpcServiceCfg::OnlyCalls,
 			));
 
 			let batch_config = self.inner.batch_requests_config;
@@ -769,15 +770,9 @@ where
 							}
 						};
 
-						let rp = handle_rpc_call(
-							&body,
-							is_single,
-							batch_config,
-							max_response_size,
-							Arc::new(rpc_service),
-							&meta,
-						)
-						.await;
+						let rp =
+							handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, &meta)
+								.await;
 
 						// If the response is empty it means that it was a notification or empty batch.
 						// For HTTP these are just ACK:ed with a empty body.
@@ -962,11 +957,10 @@ pub(crate) async fn handle_rpc_call<S>(
 	is_single: bool,
 	batch_config: BatchRequestConfig,
 	max_response_size: u32,
-	rpc_service: Arc<S>,
+	rpc_service: &S,
 	meta: &Meta,
 ) -> Option<MethodResponse>
 where
-	S: Send,
 	for<'a> S: RpcServiceT<'a> + Send,
 {
 	// Single request or notification
@@ -1019,9 +1013,9 @@ where
 						Err(_) => Id::Null,
 					};
 
-					let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest));
-
-					if let Err(too_large) = batch_response.append(&rp) {
+					if let Err(too_large) =
+						batch_response.append(&MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)))
+					{
 						return Some(too_large);
 					}
 				}

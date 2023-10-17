@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::{Meta, RpcService, RpcServiceT};
+use crate::middleware::{Meta, RpcService, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ServiceData};
 use crate::PingConfig;
 
@@ -69,8 +69,6 @@ pub(crate) async fn background_task<RpcMiddleware>(
 	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
-	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let meta = Arc::new(meta);
 
 	// Spawn another task that sends out the responses on the Websocket.
 	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_config.ping_interval(), conn_rx));
@@ -84,18 +82,16 @@ pub(crate) async fn background_task<RpcMiddleware>(
 	// a graceful shutdown can has occur.
 	let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
-	let rpc_service = RpcService::full(
-		methods,
-		max_response_body_size as usize,
-		bounded_subscriptions,
-		sink.clone(),
-		id_provider.clone(),
-		conn_id as usize,
-		pending_calls,
-		max_log_length,
-	);
+	let cfg = RpcServiceCfg::CallsAndSubscriptions {
+		bounded_subscriptions: BoundedSubscriptions::new(max_subscriptions_per_connection),
+		id_provider,
+		sink: sink.clone(),
+		_pending_calls: pending_calls.clone(),
+	};
 
-	let rpc_service = Arc::new(rpc_middleware.layer(rpc_service));
+	let rpc_service = RpcService::new(methods, max_response_body_size as usize, conn_id as usize, max_log_length, cfg);
+
+	let params = Arc::new((rpc_middleware.layer(rpc_service), meta));
 
 	tokio::pin!(stopped);
 
@@ -135,11 +131,10 @@ pub(crate) async fn background_task<RpcMiddleware>(
 			}
 		};
 
-		let rpc_service = rpc_service.clone();
+		let params = params.clone();
 		let data = std::mem::take(&mut data);
-
 		let sink = sink.clone();
-		let meta = meta.clone();
+
 		tokio::spawn(async move {
 			let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
@@ -157,8 +152,8 @@ pub(crate) async fn background_task<RpcMiddleware>(
 				is_single,
 				batch_requests_config,
 				max_response_body_size,
-				rpc_service,
-				&meta,
+				&params.0,
+				&params.1,
 			)
 			.await
 			{
@@ -169,7 +164,7 @@ pub(crate) async fn background_task<RpcMiddleware>(
 		});
 	};
 
-	drop(rpc_service);
+	drop(params);
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee

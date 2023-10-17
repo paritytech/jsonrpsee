@@ -85,11 +85,12 @@ pub struct Meta {
 	pub uri: Uri,
 }
 
+/// Configuration of the RpcService.
 #[derive(Clone, Debug)]
-enum RpcServiceCfg {
-	// The server supports only calls.
+pub(crate) enum RpcServiceCfg {
+	/// The server supports only calls.
 	OnlyCalls,
-	// The server supports both method calls and subscriptions.
+	/// The server supports both method calls and subscriptions.
 	CallsAndSubscriptions {
 		bounded_subscriptions: BoundedSubscriptions,
 		sink: MethodSink,
@@ -110,33 +111,14 @@ pub struct RpcService {
 
 impl RpcService {
 	/// Create a new service with doesn't support subscriptions.
-	pub fn only_calls(methods: Methods, max_response_body_size: usize, conn_id: usize, max_log_length: u32) -> Self {
-		Self { methods, max_response_body_size, conn_id, cfg: RpcServiceCfg::OnlyCalls, max_log_length }
-	}
-
-	/// Create a new service that supports both calls and subscriptions.
-	pub fn full(
+	pub(crate) fn new(
 		methods: Methods,
 		max_response_body_size: usize,
-		bounded_subscriptions: BoundedSubscriptions,
-		sink: MethodSink,
-		id_provider: Arc<dyn IdProvider>,
 		conn_id: usize,
-		pending_calls: tokio::sync::mpsc::Sender<()>,
 		max_log_length: u32,
+		cfg: RpcServiceCfg,
 	) -> Self {
-		Self {
-			conn_id,
-			methods,
-			max_response_body_size,
-			cfg: RpcServiceCfg::CallsAndSubscriptions {
-				bounded_subscriptions,
-				sink,
-				id_provider,
-				_pending_calls: pending_calls,
-			},
-			max_log_length,
-		}
+		Self { methods, max_response_body_size, conn_id, cfg, max_log_length }
 	}
 }
 
