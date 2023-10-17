@@ -35,6 +35,7 @@ use std::time::Duration;
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::middleware::{Meta, RpcService, RpcServiceCfg, RpcServiceT, TransportProtocol};
 use crate::transport::http::content_type_is_json;
+use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
 
 use futures_util::future::{self, Either, FutureExt};
@@ -46,7 +47,7 @@ use hyper::body::HttpBody;
 use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponseResult};
-use jsonrpsee_core::server::{BatchResponseBuilder, MethodResponse, Methods};
+use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, GenericTransportError, JsonRawValue, TEN_MB_SIZE_BYTES};
 
@@ -664,7 +665,7 @@ pub struct TowerService<L> {
 
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<RpcMiddleware>
 where
-	RpcMiddleware: for<'a> tower::Layer<RpcService> + Send + Sync + Clone + 'static,
+	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 {
@@ -687,6 +688,8 @@ where
 		let is_upgrade_request = is_upgrade_request(&request);
 
 		if self.inner.enable_ws && is_upgrade_request {
+			let this = self.inner.clone();
+
 			let meta = Meta {
 				transport: TransportProtocol::WebSocket,
 				remote_addr: self.inner.remote_addr,
@@ -699,8 +702,30 @@ where
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					let data = self.inner.clone();
-					let rpc_middleware = self.rpc_middleware.clone();
+					let (tx, rx) = mpsc::channel::<String>(this.message_buffer_capacity as usize);
+					let sink = MethodSink::new(tx);
+
+					// On each method call the `pending_calls` is cloned
+					// then when all pending_calls are dropped
+					// a graceful shutdown can has occur.
+					let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
+
+					let cfg = RpcServiceCfg::CallsAndSubscriptions {
+						bounded_subscriptions: BoundedSubscriptions::new(this.max_subscriptions_per_connection),
+						id_provider: self.inner.id_provider.clone(),
+						sink: sink.clone(),
+						_pending_calls: pending_calls,
+					};
+
+					let rpc_service = RpcService::new(
+						self.inner.methods.clone(),
+						this.max_response_body_size as usize,
+						this.conn_id as usize,
+						this.max_log_length,
+						cfg,
+					);
+
+					let rpc_service = self.rpc_middleware.service(rpc_service);
 
 					tokio::spawn(
 						async move {
@@ -714,10 +739,21 @@ where
 
 							let stream = BufReader::new(BufWriter::new(upgraded.compat()));
 							let mut ws_builder = server.into_builder(stream);
-							ws_builder.set_max_message_size(data.max_request_body_size as usize);
+							ws_builder.set_max_message_size(this.max_request_body_size as usize);
 							let (sender, receiver) = ws_builder.finish();
 
-							ws::background_task(sender, receiver, data, rpc_middleware, meta).await;
+							let params = BackgroundTaskParams {
+								other: this,
+								ws_sender: sender,
+								ws_receiver: receiver,
+								rpc_service,
+								sink,
+								rx,
+								meta,
+								pending_calls_completed,
+							};
+
+							ws::background_task(params).await;
 						}
 						.in_current_span(),
 					);
@@ -732,8 +768,6 @@ where
 
 			async { Ok(response) }.boxed()
 		} else if self.inner.enable_http && !is_upgrade_request {
-			let rpc_middleware = self.rpc_middleware.clone();
-
 			let meta = Meta {
 				transport: TransportProtocol::WebSocket,
 				remote_addr: self.inner.remote_addr,
@@ -742,7 +776,7 @@ where
 				uri: request.uri().clone(),
 			};
 
-			let rpc_service = rpc_middleware.service(RpcService::new(
+			let rpc_service = self.rpc_middleware.service(RpcService::new(
 				self.inner.methods.clone(),
 				self.inner.max_response_body_size as usize,
 				self.inner.conn_id as usize,

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::{Meta, RpcService, RpcServiceCfg, RpcServiceT};
+use crate::middleware::{Meta, RpcServiceT};
 use crate::server::{handle_rpc_call, ServiceData};
 use crate::PingConfig;
 
@@ -10,7 +10,6 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, FutureExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::MethodSink;
-use jsonrpsee_core::server::BoundedSubscriptions;
 use jsonrpsee_core::Error;
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
@@ -20,7 +19,6 @@ use soketto::data::ByteSlice125;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::Compat;
-use tower::Layer;
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
@@ -39,66 +37,59 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 	sender.flush().await.map_err(Into::into)
 }
 
-pub(crate) async fn background_task<RpcMiddleware>(
-	sender: Sender,
-	mut receiver: Receiver,
-	svc: ServiceData,
-	rpc_middleware: RpcMiddleware,
-	meta: Meta,
-) where
-	RpcMiddleware: for<'a> tower::Layer<RpcService> + Send + Sync + Clone + 'static,
-	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+pub(crate) struct BackgroundTaskParams<S> {
+	pub(crate) other: ServiceData,
+	pub(crate) ws_sender: Sender,
+	pub(crate) ws_receiver: Receiver,
+	pub(crate) rpc_service: S,
+	pub(crate) sink: MethodSink,
+	pub(crate) rx: mpsc::Receiver<String>,
+	pub(crate) meta: Meta,
+	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
+}
+
+pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
+where
+	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
+	let BackgroundTaskParams {
+		other,
+		ws_sender,
+		mut ws_receiver,
+		rpc_service,
+		sink,
+		rx,
+		meta,
+		pending_calls_completed,
+	} = params;
+
 	let ServiceData {
-		methods,
 		max_request_body_size,
 		max_response_body_size,
-		max_log_length,
-		max_subscriptions_per_connection,
 		batch_requests_config,
 		stop_handle,
-		id_provider,
 		ping_config,
 		conn_id,
-		message_buffer_capacity,
 		conn,
 		..
-	} = svc;
+	} = other;
 
-	let (tx, rx) = mpsc::channel::<String>(message_buffer_capacity as usize);
 	let (conn_tx, conn_rx) = oneshot::channel();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	// Spawn another task that sends out the responses on the Websocket.
-	let send_task_handle = tokio::spawn(send_task(rx, sender, ping_config.ping_interval(), conn_rx));
+	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config.ping_interval(), conn_rx));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let stopped = stop_handle.clone().shutdown();
-
-	// On each method call the `pending_calls` is cloned
-	// then when all pending_calls are dropped
-	// a graceful shutdown can has occur.
-	let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
-
-	let cfg = RpcServiceCfg::CallsAndSubscriptions {
-		bounded_subscriptions: BoundedSubscriptions::new(max_subscriptions_per_connection),
-		id_provider,
-		sink: sink.clone(),
-		_pending_calls: pending_calls.clone(),
-	};
-
-	let rpc_service = RpcService::new(methods, max_response_body_size as usize, conn_id as usize, max_log_length, cfg);
-
-	let params = Arc::new((rpc_middleware.layer(rpc_service), meta));
+	let params = Arc::new((rpc_service, meta));
 
 	tokio::pin!(stopped);
 
 	let result = loop {
 		data.clear();
 
-		match try_recv(&mut receiver, &mut data, stopped, ping_config).await {
+		match try_recv(&mut ws_receiver, &mut data, stopped, ping_config).await {
 			Receive::Shutdown => break Ok(Shutdown::Stopped),
 			Receive::Ok(stop) => {
 				stopped = stop;
@@ -169,7 +160,7 @@ pub(crate) async fn background_task<RpcMiddleware>(
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	graceful_shutdown(result, pending_calls_completed, receiver, data, conn_tx, send_task_handle).await;
+	graceful_shutdown(result, pending_calls_completed, ws_receiver, data, conn_tx, send_task_handle).await;
 
 	drop(conn);
 	drop(stop_handle);
