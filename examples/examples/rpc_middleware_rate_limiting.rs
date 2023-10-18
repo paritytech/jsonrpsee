@@ -24,6 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! Example middleware to rate limit based on the number
+//! JSON-RPC calls.
+//!
+//! As demonstrated in this example any state must be
+//! stored in something to provide interior mutability
+//! such as `Arc<Mutex>`
+
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::server::middleware::{Meta, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
@@ -34,16 +41,16 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct Rate {
 	num: u64,
 	period: Duration,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 enum State {
-	Limited { until: Instant },
-	Ready { until: Instant, rem: u64 },
+	Deny { until: Instant },
+	Allow { until: Instant, rem: u64 },
 }
 
 #[derive(Clone)]
@@ -61,7 +68,7 @@ impl<S> RateLimit<S> {
 		Self {
 			service,
 			rate,
-			state: Arc::new(Mutex::new(State::Ready { until: Instant::now() + period, rem: num + 1 })),
+			state: Arc::new(Mutex::new(State::Allow { until: Instant::now() + period, rem: num + 1 })),
 		}
 	}
 }
@@ -77,31 +84,29 @@ where
 		let is_denied = {
 			let mut lock = self.state.lock().unwrap();
 			let next_state = match *lock {
-				State::Limited { until } => {
+				State::Deny { until } => {
 					if now > until {
-						State::Ready { until: now + self.rate.period, rem: self.rate.num - 1 }
+						State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
 					} else {
-						State::Limited { until }
+						State::Deny { until }
 					}
 				}
-				State::Ready { until, rem } => {
+				State::Allow { until, rem } => {
 					if now > until {
-						State::Ready { until: now + self.rate.period, rem: self.rate.num - 1 }
+						State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
 					} else {
 						let n = rem - 1;
 						if n > 0 {
-							State::Ready { until: now + self.rate.period, rem: n }
+							State::Allow { until: now + self.rate.period, rem: n }
 						} else {
-							State::Limited { until }
+							State::Deny { until }
 						}
 					}
 				}
 			};
 
-			let is_denied = matches!(next_state, State::Limited { .. });
 			*lock = next_state;
-
-			is_denied
+			matches!(next_state, State::Deny { .. })
 		};
 
 		if is_denied {
@@ -127,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
 	// rate limit should trigger an error here.
 	let _response = client.request::<String, _>("unknown_method", rpc_params![]).await.unwrap_err();
 
-	// Sleep until 1 second has elapsed, then the server should be able to process calls again.
+	// Sleep 2 seconds, after that then the server should process calls again.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	let _response: String = client.request("say_hello", rpc_params![]).await?;
@@ -136,8 +141,10 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
+	// Allow only one RPC call per second.
 	let rpc_middleware = RpcServiceBuilder::new()
 		.layer_fn(|service| RateLimit::new(service, Rate { num: 1, period: Duration::from_secs(1) }));
+
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
