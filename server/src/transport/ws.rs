@@ -565,13 +565,11 @@ async fn graceful_shutdown<S>(
 		let graceful_shutdown = pending_calls.for_each(|_| async {});
 		let disconnect = ws_stream.try_for_each(|_| async { Ok(()) });
 
-		// All pending calls has been finished or the connection closed.
-		// Fine to terminate
 		tokio::select! {
 			_ = graceful_shutdown => {}
 			res = disconnect => {
 				if let Err(err) = res {
-					tracing::info!("Graceful shutdown terminated because of error: `{err}`");
+					tracing::warn!("Graceful shutdown terminated because of error: `{err}`");
 				}
 			}
 			_ = conn_tx.closed() => {}
