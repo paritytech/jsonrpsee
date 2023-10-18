@@ -32,7 +32,7 @@
 //! such as `Arc<Mutex>`
 
 use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::{Meta, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::{Context, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -78,7 +78,7 @@ impl<'a, S> RpcServiceT<'a> for RateLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
+	async fn call(&self, req: Request<'a>, meta: &Context) -> MethodResponse {
 		let now = Instant::now();
 
 		let is_denied = {

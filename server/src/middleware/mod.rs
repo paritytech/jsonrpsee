@@ -71,9 +71,9 @@ impl std::fmt::Display for TransportProtocol {
 	}
 }
 
-/// Metadata to a JSON-RPC call.
+/// Context to a JSON-RPC call.
 #[derive(Debug, Clone)]
-pub struct Meta {
+pub struct Context {
 	/// Transport protocol.
 	pub transport: TransportProtocol,
 	/// Remote addr.
@@ -123,12 +123,12 @@ pub trait RpcServiceT<'a> {
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	/// In this interface they are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
-	async fn call(&self, request: Request<'a>, meta: &Meta) -> MethodResponse;
+	async fn call(&self, request: Request<'a>, ctx: &Context) -> MethodResponse;
 }
 
 #[async_trait::async_trait]
 impl<'a> RpcServiceT<'a> for RpcService {
-	async fn call(&self, req: Request<'a>, _meta: &Meta) -> MethodResponse {
+	async fn call(&self, req: Request<'a>, _ctx: &Context) -> MethodResponse {
 		let params = req.params();
 		let name = req.method_name();
 		let id = req.id().clone();

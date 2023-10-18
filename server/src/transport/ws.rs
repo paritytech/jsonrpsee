@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::{Meta, RpcServiceT};
+use crate::middleware::{Context, RpcServiceT};
 use crate::server::{handle_rpc_call, ServiceData};
 use crate::PingConfig;
 
@@ -44,7 +44,7 @@ pub(crate) struct BackgroundTaskParams<S> {
 	pub(crate) rpc_service: S,
 	pub(crate) sink: MethodSink,
 	pub(crate) rx: mpsc::Receiver<String>,
-	pub(crate) meta: Meta,
+	pub(crate) ctx: Context,
 	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
 }
 
@@ -52,16 +52,8 @@ pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
 	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
-	let BackgroundTaskParams {
-		other,
-		ws_sender,
-		mut ws_receiver,
-		rpc_service,
-		sink,
-		rx,
-		meta,
-		pending_calls_completed,
-	} = params;
+	let BackgroundTaskParams { other, ws_sender, mut ws_receiver, rpc_service, sink, rx, ctx, pending_calls_completed } =
+		params;
 
 	let ServiceData {
 		max_request_body_size,
@@ -82,7 +74,7 @@ where
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let stopped = stop_handle.clone().shutdown();
-	let params = Arc::new((rpc_service, meta));
+	let params = Arc::new((rpc_service, ctx));
 
 	tokio::pin!(stopped);
 

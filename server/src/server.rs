@@ -29,11 +29,11 @@ use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::task::Poll;
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::{Meta, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
+use crate::middleware::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
 use crate::transport::http::content_type_is_json;
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -363,32 +363,57 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
-	/// Enable middleware that runs on every JSON-RPC call.
+	/// Enable middleware that is invoked on every JSON-RPC call.
 	///
+	/// The middleware itself is very similar to the `tower middleware` but
+	/// it has a different service trait which takes &self instead &mut self
+	/// which means that you can't use built-in middleware from tower.
+	///
+	/// Another consequence of `&self` is that you must wrap any of the middleware state in
+	/// a type which is Send and provides interior mutability such `Arc<Mutex>`.
+	///
+	/// The builder itself exposes a similar API as the [`tower::ServiceBuilder`]
+	/// where it possible compose layers to the middleware.
+	///
+	/// To add a middleware [`crate::middleware::RpcServiceBuilder`] exposes a few different layer APIs that
+	/// is wrapped on top of the [`tower::ServiceBuilder`].
+	///
+	/// When the server is started these layers are wrapped in the [`crate::middleware::RpcService`] and
+	/// that's why the service APIs is not exposed.
 	/// ```
 	///
-	/// use std::{time::Instant, net::SocketAddr};
+	/// use std::{time::Instant, net::SocketAddr, sync::Arc};
+	/// use std::sync::atomic::{Ordering, AtomicUsize};
 	///
-	/// use jsonrpsee_server::middleware::{RpcServiceT, RpcService, Meta, RpcServiceBuilder};
+	/// use jsonrpsee_server::middleware::{RpcServiceT, RpcService, Context, RpcServiceBuilder};
 	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
 	/// use jsonrpsee_core::async_trait;
 	/// use jsonrpsee_types::Request;
 	///
 	/// #[derive(Clone)]
-	/// struct MyMiddleware<S>(S);
+	/// struct MyMiddleware<S> {
+	///     service: S,
+	///     count: Arc<AtomicUsize>,
+	/// }
 	///
 	/// #[async_trait]
 	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
 	/// where S: RpcServiceT<'a> + Send + Sync,
 	/// {
-	///     async fn call(&self, req: Request<'a>, meta: &Meta) -> MethodResponse {
+	///     async fn call(&self, req: Request<'a>, ctx: &Context) -> MethodResponse {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
-	///         self.0.call(req, meta).await  
+	///         // if one wants to access connection related context
+	///         // that can be fetched from `Context`
+	///         let rp = self.service.call(req, ctx).await;
+	///         // Modify the state.
+	///         self.count.fetch_add(1, Ordering::Relaxed);
+	///         rp
 	///     }
 	/// }
 	///
-	/// // The service type can be omitted once `start` is called on the server.
-	/// let m = RpcServiceBuilder::new().layer_fn(|service: ()| MyMiddleware(service));
+	/// // Create a state per connection
+	/// // NOTE: The service type can be omitted once `start` is called on the server.
+	/// let m = RpcServiceBuilder::new().layer_fn(move |service: ()| MyMiddleware { service, count: Arc::new(AtomicUsize::new(0)) });
 	/// let builder = ServerBuilder::default().set_rpc_middleware(m);
 	/// ```
 	pub fn set_rpc_middleware<T>(self, rpc_middleware: RpcServiceBuilder<T>) -> Builder<HttpMiddleware, T> {
@@ -659,7 +684,7 @@ where
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
 	/// Opens door for back pressure implementation.
-	fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+	fn poll_ready(&mut self, _: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
 		Poll::Ready(Ok(()))
 	}
 
@@ -671,7 +696,7 @@ where
 		if self.inner.enable_ws && is_upgrade_request {
 			let this = self.inner.clone();
 
-			let meta = Meta {
+			let ctx = Context {
 				transport: TransportProtocol::WebSocket,
 				remote_addr: self.inner.remote_addr,
 				conn_id: self.inner.conn_id as usize,
@@ -729,7 +754,7 @@ where
 								rpc_service,
 								sink,
 								rx,
-								meta,
+								ctx,
 								pending_calls_completed,
 							};
 
@@ -748,7 +773,7 @@ where
 
 			async { Ok(response) }.boxed()
 		} else if self.inner.enable_http && !is_upgrade_request {
-			let meta = Meta {
+			let ctx = Context {
 				transport: TransportProtocol::WebSocket,
 				remote_addr: self.inner.remote_addr,
 				conn_id: self.inner.conn_id as usize,
@@ -783,9 +808,8 @@ where
 							}
 						};
 
-						let rp =
-							handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, &meta)
-								.await;
+						let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, &ctx)
+							.await;
 
 						// If the response is empty it means that it was a notification or empty batch.
 						// For HTTP these are just ACK:ed with a empty body.
@@ -966,7 +990,7 @@ pub(crate) async fn handle_rpc_call<S>(
 	batch_config: BatchRequestConfig,
 	max_response_size: u32,
 	rpc_service: &S,
-	meta: &Meta,
+	ctx: &Context,
 ) -> Option<MethodResponse>
 where
 	for<'a> S: RpcServiceT<'a> + Send,
@@ -974,7 +998,7 @@ where
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = serde_json::from_slice(body) {
-			Some(rpc_service.call(req, meta).await)
+			Some(rpc_service.call(req, ctx).await)
 		} else if let Ok(_notif) = serde_json::from_slice::<Notif>(body) {
 			None
 		} else {
@@ -1006,7 +1030,7 @@ where
 
 			for call in batch {
 				if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
-					let rp = rpc_service.call(req, meta).await;
+					let rp = rpc_service.call(req, ctx).await;
 
 					if let Err(too_large) = batch_response.append(&rp) {
 						return Some(too_large);

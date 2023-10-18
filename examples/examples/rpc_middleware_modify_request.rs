@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::{Meta, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::{Context, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -41,7 +41,7 @@ impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, mut req: Request<'a>, meta: &Meta) -> MethodResponse {
+	async fn call(&self, mut req: Request<'a>, meta: &Context) -> MethodResponse {
 		// Re-direct all calls that isn't `say_hello` to `say_goodby`
 		if req.method != "say_hello" {
 			req.method = "say_goodbye".into();
