@@ -278,14 +278,15 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, receiver: Receive
 
 	tokio::pin!(stopped);
 
-	let ws_stream = futures_util::stream::unfold((Vec::new(), receiver), |(mut data, mut receiver)| async {
+	let ws_stream = futures_util::stream::unfold(receiver, |mut receiver| async {
+		let mut data = Vec::new();
 		match receiver.receive(&mut data).await {
-			Ok(soketto::Incoming::Data(_)) => Some((Ok(Incoming::Data(std::mem::take(&mut data))), (data, receiver))),
-			Ok(soketto::Incoming::Pong(_)) => Some((Ok(Incoming::Pong), (data, receiver))),
+			Ok(soketto::Incoming::Data(_)) => Some((Ok(Incoming::Data(data)), receiver)),
+			Ok(soketto::Incoming::Pong(_)) => Some((Ok(Incoming::Pong), receiver)),
 			Ok(soketto::Incoming::Closed(_)) | Err(SokettoError::Closed) => None,
 			// The closing reason is already logged by `soketto` trace log level.
 			// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
-			Err(e) => Some((Err(e), (data, receiver))),
+			Err(e) => Some((Err(e), receiver)),
 		}
 	});
 
