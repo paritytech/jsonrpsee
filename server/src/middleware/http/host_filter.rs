@@ -26,7 +26,7 @@
 
 //! HTTP host validation middleware.
 
-use crate::middleware::authority::{Authority, AuthorityError, Port};
+use crate::middleware::http::authority::{Authority, AuthorityError, Port};
 use crate::transport::http;
 use futures_util::{Future, FutureExt, TryFutureExt};
 use hyper::{Body, Request, Response};

@@ -43,7 +43,7 @@ use std::sync::Arc;
 
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::{Context, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::rpc::{Context, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{MethodResponse, RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;

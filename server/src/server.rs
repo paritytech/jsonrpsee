@@ -33,7 +33,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
+use crate::middleware::rpc::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
 use crate::transport::http::content_type_is_json;
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -385,7 +385,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use std::{time::Instant, net::SocketAddr, sync::Arc};
 	/// use std::sync::atomic::{Ordering, AtomicUsize};
 	///
-	/// use jsonrpsee_server::middleware::{RpcServiceT, RpcService, Context, RpcServiceBuilder};
+	/// use jsonrpsee_server::middleware::rpc::{RpcServiceT, RpcService, Context, RpcServiceBuilder};
 	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
 	/// use jsonrpsee_core::async_trait;
 	/// use jsonrpsee_types::Request;

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::{Context, RpcServiceT};
+use crate::middleware::rpc::{Context, RpcServiceT};
 use crate::server::{handle_rpc_call, ServiceData};
 use crate::PingConfig;
 

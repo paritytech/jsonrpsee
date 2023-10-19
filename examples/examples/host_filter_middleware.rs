@@ -34,7 +34,7 @@ use std::net::SocketAddr;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::HostFilterLayer;
+use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{RpcModule, Server};
 
 #[tokio::main]

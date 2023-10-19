@@ -35,7 +35,7 @@ use helpers::init_logger;
 use jsonrpsee::core::{async_trait, client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::{Context, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::rpc::{Context, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{Server, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;

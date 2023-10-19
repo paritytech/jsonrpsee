@@ -45,7 +45,7 @@ use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::middleware::HostFilterLayer;
+use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;

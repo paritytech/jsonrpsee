@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::{Context, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::rpc::{Context, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -41,17 +41,27 @@ impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, mut req: Request<'a>, meta: &Context) -> MethodResponse {
-		// Re-direct all calls that isn't `say_hello` to `say_goodby`
-		if req.method != "say_hello" {
-			req.method = "say_goodbye".into();
+	// The `Context` contains a bunch of data that may be useful to
+	// such as connection ID or any data related the HTTP request itself.
+	async fn call(&self, mut req: Request<'a>, ctx: &Context) -> MethodResponse {
+		// If the HTTP request related to the JSON-RPC call contains an authorization
+		//
+		// Modify the params as the authorization value.
+		//
+		// This is just a toy-example and you shouldn't parse the authorization header value
+		// like this.
+		if let Some(auth) = ctx.headers.get(hyper::header::AUTHORIZATION) {
 			// It's a bit awkward to create new params in the request
 			// but this shows how to do it.
-			let raw_value = serde_json::value::to_raw_value(&1).unwrap();
+			let raw_value = serde_json::value::to_raw_value(&auth.to_str().unwrap()).unwrap();
 			req.params = Some(StdCow::Owned(raw_value));
 		}
+		// Re-direct all calls that isn't `say_hello` to `say_goodby`
+		else if req.method != "say_hello" {
+			req.method = "say_goodbye".into();
+		}
 
-		self.0.call(req, meta).await
+		self.0.call(req, ctx).await
 	}
 }
 

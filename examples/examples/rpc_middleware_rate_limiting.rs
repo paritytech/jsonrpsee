@@ -32,7 +32,7 @@
 //! such as `Arc<Mutex>`
 
 use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::{Context, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::rpc::{Context, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -78,7 +78,12 @@ impl<'a, S> RpcServiceT<'a> for RateLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>, meta: &Context) -> MethodResponse {
+	async fn call(&self, req: Request<'a>, ctx: &Context) -> MethodResponse {
+		// `Context` contains the connection ID related to RPC call.
+		//
+		// That you may use to distinguish calls from different connections
+		// if you want to manage that yourself.
+
 		let now = Instant::now();
 
 		let is_denied = {
@@ -112,7 +117,7 @@ where
 		if is_denied {
 			MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
 		} else {
-			self.service.call(req, meta).await
+			self.service.call(req, ctx).await
 		}
 	}
 }
@@ -127,21 +132,29 @@ async fn main() -> anyhow::Result<()> {
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
-	let client = WsClientBuilder::default().build(&url).await?;
-	let _response: String = client.request("say_hello", rpc_params![]).await?;
-	// rate limit should trigger an error here.
-	let _response = client.request::<String, _>("unknown_method", rpc_params![]).await.unwrap_err();
+	let client1 = WsClientBuilder::default().build(&url).await?;
+	let _response: String = client1.request("say_hello", rpc_params![]).await?;
 
-	// Sleep 2 seconds, after that then the server should process calls again.
-	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+	// The rate limit should trigger an error here.
+	let _response = client1.request::<String, _>("unknown_method", rpc_params![]).await.unwrap_err();
 
-	let _response: String = client.request("say_hello", rpc_params![]).await?;
+	// Make a new connection and the server will allow it because our `RateLimit`
+	// applies per connection and not globally on the server.
+	let client2 = WsClientBuilder::default().build(&url).await?;
+	let _response: String = client2.request("say_hello", rpc_params![]).await?;
+
+	// The first connection should allow a call now again.
+	tokio::time::sleep(Duration::from_secs(2)).await;
+	let _response: String = client1.request("say_hello", rpc_params![]).await?;
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	// Allow only one RPC call per second.
+	// This will create a new `RateLimit` per connection.
+	//
+	// In this particular example the server will only
+	// allow one RPC call per second.
 	let rpc_middleware = RpcServiceBuilder::new()
 		.layer_fn(|service| RateLimit::new(service, Rate { num: 1, period: Duration::from_secs(1) }));
 

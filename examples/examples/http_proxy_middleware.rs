@@ -44,7 +44,7 @@ use std::time::Duration;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::ProxyGetRequestLayer;
+use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{RpcModule, Server};
 
 #[tokio::main]
