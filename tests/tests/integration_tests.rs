@@ -1173,14 +1173,14 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 	call_answered: Arc<AtomicBool>,
 	mut call_ack: tokio::sync::mpsc::UnboundedReceiver<()>,
 ) {
-	let mut calls: FuturesUnordered<_> = (0..10)
+	const LEN: usize = 10;
+
+	let mut calls: FuturesUnordered<_> = (0..LEN)
 		.map(|_| {
 			let c = client.clone();
 			async move { c.request::<String, _>("sleep_20s", rpc_params!()).await }
 		})
 		.collect();
-
-	let calls_len = calls.len();
 
 	let res = tokio::spawn(async move {
 		let mut c = 0;
@@ -1191,7 +1191,7 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 	});
 
 	// All calls has been received by server => then stop.
-	for _ in 0..calls_len {
+	for _ in 0..LEN {
 		call_ack.recv().await.unwrap();
 	}
 
@@ -1214,7 +1214,7 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 	assert!(call_after_stop.await.unwrap().is_err());
 
 	// The pending calls should be answered before shutdown.
-	assert_eq!(res.await.unwrap(), 10);
+	assert_eq!(res.await.unwrap(), LEN);
 
 	// The server should be closed now.
 	assert!(client.request::<String, _>("sleep_20s", rpc_params!()).await.is_err());

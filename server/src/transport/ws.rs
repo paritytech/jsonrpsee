@@ -7,7 +7,7 @@ use crate::PingConfig;
 
 use futures_util::future::{self, Either, Fuse};
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::{Future, FutureExt, StreamExt};
+use futures_util::{Future, FutureExt, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::MethodSink;
 use jsonrpsee_core::Error;
@@ -21,6 +21,11 @@ use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::Compat;
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
+
+enum Incoming {
+	Data(Vec<u8>),
+	Pong,
+}
 
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
 	sender.send_text_owned(response).await?;
@@ -52,7 +57,7 @@ pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
 	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
-	let BackgroundTaskParams { other, ws_sender, mut ws_receiver, rpc_service, sink, rx, ctx, pending_calls_completed } =
+	let BackgroundTaskParams { other, ws_sender, ws_receiver, rpc_service, sink, rx, ctx, pending_calls_completed } =
 		params;
 
 	let ServiceData {
@@ -71,20 +76,31 @@ where
 	// Spawn another task that sends out the responses on the Websocket.
 	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config.ping_interval(), conn_rx));
 
-	// Buffer for incoming data.
-	let mut data = Vec::with_capacity(100);
 	let stopped = stop_handle.clone().shutdown();
 	let params = Arc::new((rpc_service, ctx));
 
 	tokio::pin!(stopped);
 
-	let result = loop {
-		data.clear();
+	let ws_stream = futures_util::stream::unfold(ws_receiver, |mut receiver| async {
+		let mut data = Vec::new();
+		match receiver.receive(&mut data).await {
+			Ok(soketto::Incoming::Data(_)) => Some((Ok(Incoming::Data(data)), receiver)),
+			Ok(soketto::Incoming::Pong(_)) => Some((Ok(Incoming::Pong), receiver)),
+			Ok(soketto::Incoming::Closed(_)) | Err(SokettoError::Closed) => None,
+			// The closing reason is already logged by `soketto` trace log level.
+			// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
+			Err(e) => Some((Err(e), receiver)),
+		}
+	});
 
-		match try_recv(&mut ws_receiver, &mut data, stopped, ping_config).await {
+	tokio::pin!(ws_stream);
+
+	let result = loop {
+		let data = match try_recv(&mut ws_stream, stopped, ping_config).await {
 			Receive::Shutdown => break Ok(Shutdown::Stopped),
-			Receive::Ok(stop) => {
+			Receive::Ok(data, stop) => {
 				stopped = stop;
+				data
 			}
 			Receive::Err(err, stop) => {
 				stopped = stop;
@@ -115,7 +131,6 @@ where
 		};
 
 		let params = params.clone();
-		let data = std::mem::take(&mut data);
 		let sink = sink.clone();
 
 		tokio::spawn(async move {
@@ -147,12 +162,11 @@ where
 		});
 	};
 
-	drop(params);
-
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	graceful_shutdown(result, pending_calls_completed, ws_receiver, data, conn_tx, send_task_handle).await;
+	drop(params);
+	graceful_shutdown(result, pending_calls_completed, ws_stream, conn_tx, send_task_handle).await;
 
 	drop(conn);
 	drop(stop_handle);
@@ -227,42 +241,32 @@ async fn send_task(
 enum Receive<S> {
 	Shutdown,
 	Err(SokettoError, S),
-	Ok(S),
+	Ok(Vec<u8>, S),
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.
-async fn try_recv<S>(receiver: &mut Receiver, data: &mut Vec<u8>, mut stopped: S, ping_config: PingConfig) -> Receive<S>
+async fn try_recv<T, S>(ws_stream: &mut T, mut stopped: S, ping_config: PingConfig) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
+	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
 {
 	let mut last_active = Instant::now();
 
-	let receive = futures_util::stream::unfold((receiver, data), |(receiver, data)| async {
-		match receiver.receive(data).await {
-			Ok(soketto::Incoming::Data(_)) => None,
-			Ok(soketto::Incoming::Pong(_)) => Some((Ok(()), (receiver, data))),
-			Ok(soketto::Incoming::Closed(_)) => Some((Err(SokettoError::Closed), (receiver, data))),
-			// The closing reason is already logged by `soketto` trace log level.
-			// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
-			Err(e) => Some((Err(e), (receiver, data))),
-		}
-	});
-
-	tokio::pin!(receive);
-
 	let inactivity_check =
 		Box::pin(ping_config.inactive_limit().map(|d| tokio::time::sleep(d).fuse()).unwrap_or_else(Fuse::terminated));
-	let mut futs = futures_util::future::select(receive.next(), inactivity_check);
+	let mut futs = futures_util::future::select(ws_stream.next(), inactivity_check);
 
 	loop {
 		match futures_util::future::select(futs, stopped).await {
+			// The connection is closed.
+			Either::Left((Either::Left((None, _)), _)) => break Receive::Shutdown,
 			// The message has been received, we are done
-			Either::Left((Either::Left((None, _)), s)) => break Receive::Ok(s),
+			Either::Left((Either::Left((Some(Ok(Incoming::Data(d))), _)), s)) => break Receive::Ok(d, s),
 			// Got a pong response, update our "last seen" timestamp.
-			Either::Left((Either::Left((Some(Ok(())), inactive)), s)) => {
+			Either::Left((Either::Left((Some(Ok(Incoming::Pong)), inactive)), s)) => {
 				last_active = Instant::now();
 				stopped = s;
-				futs = futures_util::future::select(receive.next(), inactive);
+				futs = futures_util::future::select(ws_stream.next(), inactive);
 			}
 			// Received an error, terminate the connection.
 			Either::Left((Either::Left((Some(Err(e)), _)), s)) => break Receive::Err(e, s),
@@ -298,44 +302,31 @@ pub(crate) enum Shutdown {
 /// Enforce a graceful shutdown.
 ///
 /// This will return once the connection has been terminated or all pending calls have been executed.
-async fn graceful_shutdown(
+async fn graceful_shutdown<S>(
 	result: Result<Shutdown, SokettoError>,
 	pending_calls: mpsc::Receiver<()>,
-	receiver: Receiver,
-	data: Vec<u8>,
+	ws_stream: S,
 	mut conn_tx: oneshot::Sender<()>,
 	send_task_handle: tokio::task::JoinHandle<()>,
-) {
+) where
+	S: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
+{
 	let pending_calls = ReceiverStream::new(pending_calls);
 
-	match result {
-		Ok(Shutdown::ConnectionClosed) | Err(SokettoError::Closed) => (),
-		Ok(Shutdown::Stopped) | Err(_) => {
-			// Soketto doesn't have a way to signal when the connection is closed
-			// thus just throw away the data and terminate the stream once the connection has
-			// been terminated.
-			//
-			// The receiver is not cancel-safe such that it's used in a stream to enforce that.
-			let disconnect_stream = futures_util::stream::unfold((receiver, data), |(mut receiver, mut data)| async {
-				if let Err(SokettoError::Closed) = receiver.receive(&mut data).await {
-					None
-				} else {
-					Some(((), (receiver, data)))
+	if let Ok(Shutdown::Stopped) = result {
+		let graceful_shutdown = pending_calls.for_each(|_| async {});
+		let disconnect = ws_stream.try_for_each(|_| async { Ok(()) });
+
+		tokio::select! {
+			_ = graceful_shutdown => {}
+			res = disconnect => {
+				if let Err(err) = res {
+					tracing::warn!("Graceful shutdown terminated because of error: `{err}`");
 				}
-			});
-
-			let graceful_shutdown = pending_calls.for_each(|_| async {});
-			let disconnect = disconnect_stream.for_each(|_| async {});
-
-			// All pending calls has been finished or the connection closed.
-			// Fine to terminate
-			tokio::select! {
-				_ = graceful_shutdown => {}
-				_ = disconnect => {}
-				_ = conn_tx.closed() => {}
 			}
+			_ = conn_tx.closed() => {}
 		}
-	};
+	}
 
 	// Send a message to close down the "send task".
 	_ = conn_tx.send(());
