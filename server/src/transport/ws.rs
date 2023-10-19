@@ -288,7 +288,8 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, receiver: Receive
 			// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
 			Err(e) => Some((Err(e), receiver)),
 		}
-	});
+	})
+	.fuse();
 
 	tokio::pin!(ws_stream);
 
