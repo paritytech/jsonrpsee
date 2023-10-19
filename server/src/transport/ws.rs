@@ -294,7 +294,8 @@ pub(crate) async fn background_task<L: Logger>(sender: Sender, receiver: Receive
 
 	let result = loop {
 		let data = match try_recv(&mut ws_stream, stopped, ping_config).await {
-			Receive::Shutdown => break Ok(Shutdown::Stopped),
+			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
+			Receive::Stopped => break Ok(Shutdown::Stopped),
 			Receive::Ok(data, stop) => {
 				stopped = stop;
 				data
@@ -408,7 +409,8 @@ async fn send_task(
 }
 
 enum Receive<S> {
-	Shutdown,
+	ConnectionClosed,
+	Stopped,
 	Err(SokettoError, S),
 	Ok(Vec<u8>, S),
 }
@@ -428,7 +430,7 @@ where
 	loop {
 		match futures_util::future::select(futs, stopped).await {
 			// The connection is closed.
-			Either::Left((Either::Left((None, _)), _)) => break Receive::Shutdown,
+			Either::Left((Either::Left((None, _)), _)) => break Receive::ConnectionClosed,
 			// The message has been received, we are done
 			Either::Left((Either::Left((Some(Ok(Incoming::Data(d))), _)), s)) => break Receive::Ok(d, s),
 			// Got a pong response, update our "last seen" timestamp.
@@ -457,7 +459,7 @@ where
 				futs = futures_util::future::select(rcv, inactivity_check);
 			}
 			// Server has been stopped.
-			Either::Right(_) => break Receive::Shutdown,
+			Either::Right(_) => break Receive::Stopped,
 		}
 	}
 }
