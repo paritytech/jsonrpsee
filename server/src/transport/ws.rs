@@ -42,18 +42,18 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 	sender.flush().await.map_err(Into::into)
 }
 
-pub(crate) struct BackgroundTaskParams<S> {
-	pub(crate) other: ServiceData,
-	pub(crate) ws_sender: Sender,
-	pub(crate) ws_receiver: Receiver,
-	pub(crate) rpc_service: S,
-	pub(crate) sink: MethodSink,
-	pub(crate) rx: mpsc::Receiver<String>,
-	pub(crate) ctx: Context,
-	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
+pub struct BackgroundTaskParams<S> {
+	pub other: ServiceData,
+	pub ws_sender: Sender,
+	pub ws_receiver: Receiver,
+	pub rpc_service: S,
+	pub sink: MethodSink,
+	pub rx: mpsc::Receiver<String>,
+	pub ctx: Context,
+	pub pending_calls_completed: mpsc::Receiver<()>,
 }
 
-pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
+pub async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
 	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
