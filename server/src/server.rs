@@ -201,7 +201,7 @@ where
 	}
 }
 
-/// JSON-RPC Websocket server settings.
+/// JSON-RPC server settings.
 #[derive(Debug, Clone)]
 struct Settings {
 	/// Maximum size in bytes of a request.
@@ -224,6 +224,33 @@ struct Settings {
 	message_buffer_capacity: u32,
 	/// Ping settings.
 	ping_config: PingConfig,
+}
+
+/// Service config.
+#[derive(Debug, Clone)]
+pub struct ServiceConfig {
+	/// Maximum size in bytes of a request.
+	pub max_request_body_size: u32,
+	/// Maximum size in bytes of a response.
+	pub max_response_body_size: u32,
+	/// Maximum number of incoming connections allowed.
+	pub max_connections: u32,
+	/// Maximum number of subscriptions per connection.
+	pub max_subscriptions_per_connection: u32,
+	/// Whether batch requests are supported by this server or not.
+	pub batch_requests_config: BatchRequestConfig,
+	/// Enable HTTP.
+	pub enable_http: bool,
+	/// Enable WS.
+	pub enable_ws: bool,
+	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
+	pub message_buffer_capacity: u32,
+	/// Ping settings.
+	pub ping_config: PingConfig,
+	/// Methods
+	pub methods: Methods,
+	/// ID provider.
+	pub id_provider: Arc<dyn IdProvider>,
 }
 
 /// Configuration for batch request handling.
@@ -559,6 +586,23 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
+	/// Extract the server configuration to use jsonrpsee as service.
+	pub fn to_service(self, methods: impl Into<Methods>) -> ServiceConfig {
+		ServiceConfig {
+			max_request_body_size: self.settings.max_request_body_size,
+			max_response_body_size: self.settings.max_response_body_size,
+			max_connections: self.settings.max_connections,
+			max_subscriptions_per_connection: self.settings.max_subscriptions_per_connection,
+			batch_requests_config: self.settings.batch_requests_config,
+			enable_http: self.settings.enable_http,
+			enable_ws: self.settings.enable_ws,
+			message_buffer_capacity: self.settings.message_buffer_capacity,
+			ping_config: self.settings.ping_config,
+			methods: methods.into(),
+			id_provider: self.id_provider,
+		}
+	}
+
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	///
 	/// ```rust
@@ -628,35 +672,35 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 
 /// Data required by the server to handle requests.
 #[derive(Debug, Clone)]
-pub(crate) struct ServiceData {
+pub struct ServiceData {
 	/// Remote server address.
-	pub(crate) remote_addr: SocketAddr,
+	pub remote_addr: SocketAddr,
 	/// Registered server methods.
-	pub(crate) methods: Methods,
+	pub methods: Methods,
 	/// Max request body size.
-	pub(crate) max_request_body_size: u32,
+	pub max_request_body_size: u32,
 	/// Max response body size.
-	pub(crate) max_response_body_size: u32,
+	pub max_response_body_size: u32,
 	/// Maximum number of subscriptions per connection.
-	pub(crate) max_subscriptions_per_connection: u32,
+	pub max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
-	pub(crate) batch_requests_config: BatchRequestConfig,
+	pub batch_requests_config: BatchRequestConfig,
 	/// Subscription ID provider.
-	pub(crate) id_provider: Arc<dyn IdProvider>,
+	pub id_provider: Arc<dyn IdProvider>,
 	/// Ping configuration.
-	pub(crate) ping_config: PingConfig,
+	pub ping_config: PingConfig,
 	/// Stop handle.
-	pub(crate) stop_handle: StopHandle,
+	pub stop_handle: StopHandle,
 	/// Connection ID
-	pub(crate) conn_id: u32,
+	pub conn_id: u32,
 	/// Handle to hold a `connection permit`.
-	pub(crate) conn: Arc<OwnedSemaphorePermit>,
+	pub conn: Arc<OwnedSemaphorePermit>,
 	/// Enable HTTP.
-	pub(crate) enable_http: bool,
+	pub enable_http: bool,
 	/// Enable WS.
-	pub(crate) enable_ws: bool,
+	pub enable_ws: bool,
 	/// Number of messages that server is allowed `buffer` until backpressure kicks in.
-	pub(crate) message_buffer_capacity: u32,
+	pub message_buffer_capacity: u32,
 }
 
 /// JsonRPSee service compatible with `tower`.
@@ -667,6 +711,37 @@ pub(crate) struct ServiceData {
 pub struct TowerService<L> {
 	inner: ServiceData,
 	rpc_middleware: RpcServiceBuilder<L>,
+}
+
+impl<L> TowerService<L> {
+	/// Create a new jsonrpsee tower service.
+	pub fn new(
+		cfg: ServiceConfig,
+		rpc_middleware: RpcServiceBuilder<L>,
+		remote_addr: SocketAddr,
+		conn_permit: Arc<OwnedSemaphorePermit>,
+		stop_handle: StopHandle,
+		conn_id: u32,
+	) -> Self {
+		let inner = ServiceData {
+			remote_addr,
+			methods: cfg.methods,
+			max_request_body_size: cfg.max_request_body_size,
+			max_response_body_size: cfg.max_response_body_size,
+			batch_requests_config: cfg.batch_requests_config,
+			enable_http: cfg.enable_http,
+			enable_ws: cfg.enable_ws,
+			conn_id,
+			conn: conn_permit,
+			ping_config: cfg.ping_config,
+			stop_handle: stop_handle,
+			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
+			message_buffer_capacity: cfg.message_buffer_capacity,
+			id_provider: cfg.id_provider,
+		};
+
+		Self { inner, rpc_middleware }
+	}
 }
 
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<RpcMiddleware>

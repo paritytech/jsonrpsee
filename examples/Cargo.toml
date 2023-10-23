@@ -20,3 +20,10 @@ tower-http = { version = "0.4.0", features = ["full"] }
 tower = { version = "0.4.13", features = ["full"] }
 hyper = "0.14.20"
 console-subscriber = "0.2.0"
+
+[features]
+server = []
+
+[dependencies]
+soketto = { version = "0.7.1", features = ["http"] }
+tokio-util = "0.7.9"

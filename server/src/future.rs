@@ -33,16 +33,16 @@ use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 /// Represent a stop handle which is a wrapper over a `multi-consumer receiver`
 /// and cloning [`StopHandle`] will get a separate instance of the underlying receiver.
 #[derive(Debug, Clone)]
-pub(crate) struct StopHandle(watch::Receiver<()>);
+pub struct StopHandle(watch::Receiver<()>);
 
 impl StopHandle {
-	pub(crate) fn new(rx: watch::Receiver<()>) -> Self {
+	pub fn new(rx: watch::Receiver<()>) -> Self {
 		Self(rx)
 	}
 
 	/// A future that resolves when server has been stopped
 	/// it consumes the stop handle.
-	pub(crate) async fn shutdown(mut self) {
+	pub async fn shutdown(mut self) {
 		let _ = self.0.changed().await;
 	}
 }
@@ -78,14 +78,14 @@ impl ServerHandle {
 
 /// Limits the number of connections.
 #[derive(Debug)]
-pub(crate) struct ConnectionGuard(Arc<Semaphore>);
+pub struct ConnectionGuard(Arc<Semaphore>);
 
 impl ConnectionGuard {
-	pub(crate) fn new(limit: usize) -> Self {
+	pub fn new(limit: usize) -> Self {
 		Self(Arc::new(Semaphore::new(limit)))
 	}
 
-	pub(crate) fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
+	pub fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
 		match self.0.clone().try_acquire_owned() {
 			Ok(guard) => Some(guard),
 			Err(TryAcquireError::Closed) => unreachable!("Semaphore::Close is never called and can't be closed; qed"),
@@ -93,7 +93,7 @@ impl ConnectionGuard {
 		}
 	}
 
-	pub(crate) fn available_connections(&self) -> usize {
+	pub fn available_connections(&self) -> usize {
 		self.0.available_permits()
 	}
 }
