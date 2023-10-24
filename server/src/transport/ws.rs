@@ -20,8 +20,11 @@ use soketto::data::ByteSlice125;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
+
+pub use soketto::handshake::http::is_upgrade_request;
 
 enum Incoming {
 	Data(Vec<u8>),
@@ -329,11 +332,45 @@ async fn graceful_shutdown<S>(
 	_ = send_task_handle.await;
 }
 
-/// Low-level API that runs the HTTP Websocket upgrade handshake
-/// and returns a future that may be cancelled or dropped
+/// Low-level API that runs the "WebSocket upgrade handshake"
+/// and returns a future that may be dropped
 /// if one would want to disconnect a certain peer.
 ///
+/// If you calling this from the `hyper::service_fn` the HTTP response
+/// must be sent back and the websocket connection will held in another task.
 ///
+/// ```no_run
+/// use jsonrpsee_server::ws::run_websocket;
+/// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService};
+/// use jsonrpsee_server::ServiceData;
+///
+/// async fn handle_request<L>(
+///     req: hyper::Request<hyper::Body>,
+///     svc: ServiceData,
+///     rpc_service: RpcServiceBuilder<L>,
+///     mut disconnect: tokio::sync::mpsc::Receiver<()>
+/// ) -> hyper::Response<hyper::Body>
+/// where
+///     L: for<'a> tower::Layer<RpcService> + 'static,
+///     <L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
+///     for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a> + 'static,
+/// {
+///   match run_websocket(req, svc, rpc_service).await {
+///     Ok((rp, conn_fut)) => {
+///         tokio::spawn(async move {
+///             // Keep the connection alive until
+///             // a close signal is sent.
+///             tokio::select! {
+///                 _ = conn_fut => (),
+///                 _ = disconnect.recv() => (),
+///             }
+///         });
+///         rp
+///     }
+///     Err(rp) => rp,
+///   }
+/// }
+/// ```
 pub async fn run_websocket<L>(
 	req: hyper::Request<hyper::Body>,
 	params: ServiceData,

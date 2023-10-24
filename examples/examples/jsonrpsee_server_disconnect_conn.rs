@@ -34,8 +34,8 @@ use futures::FutureExt;
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::*;
-use jsonrpsee::server::ws::run_websocket;
-use jsonrpsee::server::{ConnectionGuard, ServiceData, StopHandle};
+use jsonrpsee::server::ws::{self, run_websocket};
+use jsonrpsee::server::{http, ConnectionGuard, ServiceData, StopHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, MethodResponse};
@@ -143,15 +143,15 @@ async fn run_server() {
 			Ok::<_, Infallible>(service_fn(move |req| {
 				// Connection number limit exceeded.
 				let Some(conn_permit) = conn_guard.try_acquire() else {
-					return async { Ok::<_, Infallible>(reject(req).await) }.boxed();
+					return async { Ok::<_, Infallible>(http::response::too_many_requests()) }.boxed();
 				};
 
 				// The IP addr was blacklisted.
 				if blacklisted_peers.lock().unwrap().get(&remote_addr.ip()).is_some() {
-					return async { Ok::<_, Infallible>(reject(req).await) }.boxed();
+					return async { Ok(http::response::denied()) }.boxed();
 				}
 
-				if jsonrpsee::server::is_websocket_request(&req) && service_cfg.settings.enable_ws {
+				if ws::is_upgrade_request(&req) && service_cfg.settings.enable_ws {
 					let service_cfg = service_cfg.clone();
 					let stop_handle = stop_handle.clone();
 					let blacklisted_peers = blacklisted_peers.clone();
@@ -193,8 +193,8 @@ async fn run_server() {
 					}
 					.boxed()
 				} else {
-					// TODO: for simplicity in this example we don't about pure HTTP requests
-					async move { Ok(echo_http(req).await) }.boxed()
+					// TODO: for simplicity in this example the server doesn't support HTTP requests.
+					async { Ok(http::response::denied()) }.boxed()
 				}
 			}))
 		}
@@ -204,12 +204,4 @@ async fn run_server() {
 	let server = hyper::Server::bind(&addr).serve(make_service);
 
 	server.await.unwrap();
-}
-
-async fn echo_http(_req: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {
-	hyper::Response::builder().status(hyper::StatusCode::OK).body(hyper::Body::empty()).unwrap()
-}
-
-async fn reject(_req: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {
-	hyper::Response::builder().status(hyper::StatusCode::TOO_MANY_REQUESTS).body(hyper::Body::empty()).unwrap()
 }

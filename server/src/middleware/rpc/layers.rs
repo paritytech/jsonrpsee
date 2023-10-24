@@ -47,7 +47,7 @@ pub struct RpcService {
 
 /// Configuration of the RpcService.
 #[derive(Clone, Debug)]
-pub enum RpcServiceCfg {
+pub(crate) enum RpcServiceCfg {
 	/// The server supports only calls.
 	OnlyCalls,
 	/// The server supports both method calls and subscriptions.
@@ -61,7 +61,7 @@ pub enum RpcServiceCfg {
 
 impl RpcService {
 	/// Create a new service with doesn't support subscriptions.
-	pub fn new(methods: Methods, max_response_body_size: usize, conn_id: usize, cfg: RpcServiceCfg) -> Self {
+	pub(crate) fn new(methods: Methods, max_response_body_size: usize, conn_id: usize, cfg: RpcServiceCfg) -> Self {
 		Self { methods, max_response_body_size, conn_id, cfg }
 	}
 }

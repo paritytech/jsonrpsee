@@ -656,7 +656,7 @@ impl<L> TowerService<L> {
 		stop_handle: StopHandle,
 		conn_id: u32,
 	) -> Self {
-		let inner = ServiceData { cfg, remote_addr, methods, conn_id, conn_permit, stop_handle: stop_handle };
+		let inner = ServiceData { cfg, remote_addr, methods, conn_id, conn_permit, stop_handle };
 
 		Self { inner, rpc_middleware }
 	}

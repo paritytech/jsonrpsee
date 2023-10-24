@@ -49,6 +49,5 @@ pub use server::{
 };
 pub use tracing;
 
-pub use soketto::handshake::http::is_upgrade_request as is_websocket_request;
 pub use transport::http;
 pub use transport::ws;

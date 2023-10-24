@@ -36,6 +36,7 @@ use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 pub struct StopHandle(watch::Receiver<()>);
 
 impl StopHandle {
+	/// Create a new stop handle.
 	pub fn new(rx: watch::Receiver<()>) -> Self {
 		Self(rx)
 	}
@@ -81,10 +82,12 @@ impl ServerHandle {
 pub struct ConnectionGuard(Arc<Semaphore>);
 
 impl ConnectionGuard {
+	/// Create a new connection guard.
 	pub fn new(limit: usize) -> Self {
 		Self(Arc::new(Semaphore::new(limit)))
 	}
 
+	/// Acquire a connection permit.
 	pub fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
 		match self.0.clone().try_acquire_owned() {
 			Ok(guard) => Some(guard),
@@ -93,6 +96,7 @@ impl ConnectionGuard {
 		}
 	}
 
+	/// Get the number of available connection slots.
 	pub fn available_connections(&self) -> usize {
 		self.0.available_permits()
 	}

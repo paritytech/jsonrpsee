@@ -26,35 +26,7 @@
 
 //! jsonrpsee-server middleware
 
-use std::net::SocketAddr;
-
-use hyper::Body;
-use jsonrpsee_core::server::MethodResponse;
-use jsonrpsee_types::Request;
-
-use self::rpc::RpcService;
-
 /// HTTP related middleware.
 pub mod http;
 /// JSON-RPC specific middleware.
 pub mod rpc;
-
-/// Represent a single connection.
-#[async_trait::async_trait]
-pub trait ConnectionManager {
-	/// Callback that is invoked every time a new connection is created.
-	///
-	/// You should only return `Some(response)` if you want refuse a peer.
-	async fn on_connect(
-		&self,
-		req: hyper::Request<Body>,
-		remote_addr: SocketAddr,
-		conn_id: u32,
-	) -> Option<hyper::Response<Body>>;
-
-	/// Middleware that runs on every RPC call.
-	async fn on_call<'a, S>(&self, req: Request<'a>, service: S) -> MethodResponse;
-
-	/// Callback that is invoked once a peer disconnects.
-	fn on_disconnect(&self);
-}

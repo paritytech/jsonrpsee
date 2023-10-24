@@ -29,12 +29,12 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
+use futures::FutureExt;
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::rpc::RpcServiceBuilder;
-use jsonrpsee::server::{ConnectionGuard, StopHandle, TowerService};
+use jsonrpsee::server::{http, ConnectionGuard, ServerHandle, StopHandle, TowerService};
 use jsonrpsee::types::ErrorObjectOwned;
 
 use hyper::server::conn::AddrStream;
@@ -60,7 +60,8 @@ async fn main() -> anyhow::Result<()> {
 		.add_directive("jsonrpsee[method_call{name = \"say_hello\"}]=trace".parse()?);
 	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
-	tokio::spawn(run_server());
+	let handle = run_server();
+	tokio::spawn(handle);
 
 	let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
 
@@ -70,54 +71,67 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() {
+async fn run_server() -> ServerHandle {
 	use hyper::service::{make_service_fn, service_fn};
 
 	// Construct our SocketAddr to listen on...
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9944));
 
 	// Maybe we want to be able to stop our server but not added here.
-	let (_tx, rx) = tokio::sync::watch::channel(());
+	let (tx, rx) = tokio::sync::watch::channel(());
 
+	let server_handle = ServerHandle::new(tx);
 	let stop_handle = StopHandle::new(rx);
-	let conn_guard = ConnectionGuard::new(100);
-	let service_cfg = jsonrpsee::server::Server::builder().to_service(().into_rpc());
+	let cfg = jsonrpsee::server::Server::builder().to_service(().into_rpc());
+	let conn_guard = Arc::new(ConnectionGuard::new(cfg.settings.max_connections as usize));
 	let conn_id = Arc::new(AtomicU32::new(0));
 
+	let stop_handle2 = stop_handle.clone();
+	let conn_id2 = conn_id.clone();
+
 	// And a MakeService to handle each connection...
-	let make_service = make_service_fn(|conn: &AddrStream| {
+	let make_service = make_service_fn(move |conn: &AddrStream| {
 		// You may use `conn` or the actual HTTP request to deny a certain peer.
 
 		// Connection state.
-		let conn_id = conn_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+		let next_id = conn_id2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 		let remote_addr = conn.remote_addr();
-		let stop_handle = stop_handle.clone();
-		let conn_permit = Arc::new(conn_guard.try_acquire().unwrap());
-		let service_cfg = service_cfg.clone();
+		let stop_handle = stop_handle2.clone();
+		let conn_guard = conn_guard.clone();
+		let cfg = cfg.clone();
 
 		async move {
 			let stop_handle = stop_handle.clone();
-			let conn_permit = conn_permit.clone();
-			let service_cfg = service_cfg.clone();
+			let conn_guard = conn_guard.clone();
+			let cfg = cfg.clone();
 
 			Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
+				let Some(conn_permit) = conn_guard.try_acquire() else {
+					return async move { Ok(http::response::too_many_requests()) }.boxed();
+				};
+
 				let mut svc = TowerService::new(
-					service_cfg.settings.clone(),
-					service_cfg.methods.clone(),
-					RpcServiceBuilder::new(),
+					cfg.settings.clone(),
+					cfg.methods.clone(),
+					cfg.rpc_middleware.clone(),
 					remote_addr,
-					conn_permit.clone(),
+					Arc::new(conn_permit),
 					stop_handle.clone(),
-					conn_id,
+					next_id,
 				);
 
-				async move { svc.call(req).await }
+				async move { svc.call(req).await }.boxed()
 			}))
 		}
 	});
 
-	// Then bind and serve...
 	let server = hyper::Server::bind(&addr).serve(make_service);
 
-	server.await.unwrap();
+	tokio::spawn(async move {
+		let graceful = server.with_graceful_shutdown(async move { stop_handle.shutdown().await });
+		graceful.await.unwrap()
+	});
+
+	server_handle
 }
