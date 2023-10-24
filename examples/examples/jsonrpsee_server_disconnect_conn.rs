@@ -26,7 +26,7 @@
 
 use std::collections::HashSet;
 use std::convert::Infallible;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU32, AtomicUsize};
 use std::sync::{Arc, Mutex};
 
@@ -34,15 +34,14 @@ use futures::FutureExt;
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::*;
-use jsonrpsee::server::{ConnectionGuard, RandomIntegerIdProvider, ServiceConfig, ServiceData, StopHandle};
+use jsonrpsee::server::ws::run_websocket;
+use jsonrpsee::server::{ConnectionGuard, ServiceData, StopHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, BoundedSubscriptions, MethodResponse, MethodSink};
+use jsonrpsee::{rpc_params, MethodResponse};
 
-use futures::io::{BufReader, BufWriter};
 use hyper::server::conn::AddrStream;
-use tokio::sync::{mpsc, OwnedSemaphorePermit};
-use tokio_util::compat::TokioAsyncReadCompatExt;
+use tokio::sync::mpsc;
 use tracing_subscriber::util::SubscriberInitExt;
 
 struct DummyRateLimit<S> {
@@ -114,8 +113,9 @@ async fn run_server() {
 	let (_tx, rx) = tokio::sync::watch::channel(());
 
 	let stop_handle = StopHandle::new(rx);
-	let conn_guard = ConnectionGuard::new(100);
+
 	let service_cfg = jsonrpsee::server::Server::builder().to_service(().into_rpc());
+	let conn_guard = Arc::new(ConnectionGuard::new(service_cfg.settings.max_connections as usize));
 	let conn_id = Arc::new(AtomicU32::new(0));
 
 	// Blacklisted peers
@@ -129,48 +129,67 @@ async fn run_server() {
 		let conn_id = conn_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 		let remote_addr = conn.remote_addr();
 		let stop_handle = stop_handle.clone();
-		let conn_permit = Arc::new(conn_guard.try_acquire().unwrap());
+		let conn_guard = conn_guard.clone();
 		let service_cfg = service_cfg.clone();
 		let blacklisted_peers = blacklisted_peers.clone();
 
 		async move {
 			let stop_handle = stop_handle.clone();
-			let conn_permit = conn_permit.clone();
+			let conn_guard = conn_guard.clone();
 			let service_cfg = service_cfg.clone();
 			let stop_handle = stop_handle.clone();
 			let blacklisted_peers = blacklisted_peers.clone();
 
 			Ok::<_, Infallible>(service_fn(move |req| {
+				// Connection number limit exceeded.
+				let Some(conn_permit) = conn_guard.try_acquire() else {
+					return async { Ok::<_, Infallible>(reject(req).await) }.boxed();
+				};
+
+				// The IP addr was blacklisted.
 				if blacklisted_peers.lock().unwrap().get(&remote_addr.ip()).is_some() {
 					return async { Ok::<_, Infallible>(reject(req).await) }.boxed();
 				}
 
-				if jsonrpsee::server::is_websocket_request(&req) && service_cfg.enable_ws {
+				if jsonrpsee::server::is_websocket_request(&req) && service_cfg.settings.enable_ws {
 					let service_cfg = service_cfg.clone();
 					let stop_handle = stop_handle.clone();
-					let conn_permit = conn_permit.clone();
 					let blacklisted_peers = blacklisted_peers.clone();
 
-					let (tx, rx_conn) = mpsc::channel(1);
+					let (tx, mut disconnect) = mpsc::channel(1);
 					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| DummyRateLimit {
 						service,
 						count: Arc::new(AtomicUsize::new(0)),
 						state: tx.clone(),
 					});
 
+					let svc = ServiceData {
+						cfg: service_cfg.settings,
+						conn_id,
+						remote_addr,
+						stop_handle,
+						conn_permit: Arc::new(conn_permit),
+						methods: service_cfg.methods.clone(),
+					};
+
+					// Establishes the websocket connection
+					// and if the `DummyRateLimit` middleware triggers the hard limit
+					// then the connection is closed i.e, the `conn_fut` is dropped.
 					async move {
-						Ok(websocket_upgrade(
-							req,
-							service_cfg,
-							conn_id,
-							rpc_service,
-							remote_addr,
-							stop_handle,
-							conn_permit,
-							rx_conn,
-							blacklisted_peers,
-						)
-						.await)
+						match run_websocket(req, svc, rpc_service).await {
+							Ok((rp, conn_fut)) => {
+								tokio::spawn(async move {
+									tokio::select! {
+										_ = conn_fut => (),
+										_ = disconnect.recv() => {
+											blacklisted_peers.lock().unwrap().insert(remote_addr.ip());
+										},
+									}
+								});
+								Ok(rp)
+							}
+							Err(rp) => Ok(rp),
+						}
 					}
 					.boxed()
 				} else {
@@ -185,118 +204,6 @@ async fn run_server() {
 	let server = hyper::Server::bind(&addr).serve(make_service);
 
 	server.await.unwrap();
-}
-
-async fn websocket_upgrade<L>(
-	req: hyper::Request<hyper::Body>,
-	cfg: ServiceConfig,
-	conn_id: u32,
-	rpc_middleware: RpcServiceBuilder<L>,
-	remote_addr: SocketAddr,
-	stop_handle: StopHandle,
-	conn_permit: Arc<OwnedSemaphorePermit>,
-	mut rx_conn: mpsc::Receiver<()>,
-	blacklisted_peers: Arc<Mutex<HashSet<IpAddr>>>,
-) -> hyper::Response<hyper::Body>
-where
-	L: for<'a> tower::Layer<RpcService>,
-	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
-{
-	let mut server = soketto::handshake::http::Server::new();
-
-	match server.receive_request(&req) {
-		Ok(response) => {
-			let (tx, rx) = mpsc::channel::<String>(cfg.message_buffer_capacity as usize);
-			let sink = MethodSink::new(tx);
-
-			let ctx = Context {
-				transport: TransportProtocol::WebSocket,
-				remote_addr: remote_addr,
-				conn_id: conn_id as usize,
-				headers: req.headers().clone(),
-				uri: req.uri().clone(),
-			};
-
-			// On each method call the `pending_calls` is cloned
-			// then when all pending_calls are dropped
-			// a graceful shutdown can has occur.
-			let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
-
-			let rpc_service_cfg = RpcServiceCfg::CallsAndSubscriptions {
-				bounded_subscriptions: BoundedSubscriptions::new(cfg.max_subscriptions_per_connection),
-				id_provider: Arc::new(RandomIntegerIdProvider),
-				sink: sink.clone(),
-				_pending_calls: pending_calls,
-			};
-
-			let rpc_service = RpcService::new(
-				cfg.methods.clone(),
-				cfg.max_response_body_size as usize,
-				conn_id as usize,
-				rpc_service_cfg,
-			);
-
-			let rpc_service = rpc_middleware.service(rpc_service);
-
-			tokio::spawn(async move {
-				let upgraded = match hyper::upgrade::on(req).await {
-					Ok(u) => u,
-					Err(e) => {
-						tracing::debug!("Could not upgrade connection: {}", e);
-						return;
-					}
-				};
-
-				let stream = BufReader::new(BufWriter::new(upgraded.compat()));
-				let mut ws_builder = server.into_builder(stream);
-				ws_builder.set_max_message_size(cfg.max_response_body_size as usize);
-				let (sender, receiver) = ws_builder.finish();
-
-				let svc = ServiceData {
-					remote_addr,
-					methods: cfg.methods.clone(),
-					max_request_body_size: cfg.max_request_body_size,
-					max_response_body_size: cfg.max_response_body_size,
-					max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
-					ping_config: cfg.ping_config,
-					enable_http: cfg.enable_http,
-					enable_ws: cfg.enable_ws,
-					batch_requests_config: cfg.batch_requests_config,
-					id_provider: cfg.id_provider,
-					message_buffer_capacity: cfg.message_buffer_capacity,
-					conn_id,
-					stop_handle,
-					conn: conn_permit,
-				};
-
-				let params = jsonrpsee::server::ws::BackgroundTaskParams {
-					other: svc,
-					ws_sender: sender,
-					ws_receiver: receiver,
-					rpc_service,
-					sink,
-					rx,
-					ctx,
-					pending_calls_completed,
-				};
-
-				tokio::select! {
-					_ = jsonrpsee::server::ws::background_task(params) => (),
-					_ = rx_conn.recv() => {
-						tracing::warn!("Rate limit middleware blacklist ip={}", remote_addr.ip());
-						blacklisted_peers.lock().unwrap().insert(remote_addr.ip());
-					}
-				}
-			});
-
-			response.map(|()| hyper::Body::empty())
-		}
-		Err(e) => {
-			tracing::debug!("Could not upgrade connection: {}", e);
-			hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}")))
-		}
-	}
 }
 
 async fn echo_http(_req: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {

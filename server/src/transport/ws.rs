@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::rpc::{Context, RpcServiceT};
+use crate::middleware::rpc::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
 use crate::server::{handle_rpc_call, ServiceData};
 use crate::PingConfig;
 
@@ -10,6 +10,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, FutureExt, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::MethodSink;
+use jsonrpsee_core::server::BoundedSubscriptions;
 use jsonrpsee_core::Error;
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
@@ -18,7 +19,7 @@ use soketto::data::ByteSlice125;
 
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
-use tokio_util::compat::Compat;
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
@@ -42,39 +43,30 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 	sender.flush().await.map_err(Into::into)
 }
 
-pub struct BackgroundTaskParams<S> {
-	pub other: ServiceData,
-	pub ws_sender: Sender,
-	pub ws_receiver: Receiver,
-	pub rpc_service: S,
-	pub sink: MethodSink,
-	pub rx: mpsc::Receiver<String>,
-	pub ctx: Context,
-	pub pending_calls_completed: mpsc::Receiver<()>,
+pub(crate) struct BackgroundTaskParams<S> {
+	pub(crate) other: ServiceData,
+	pub(crate) ws_sender: Sender,
+	pub(crate) ws_receiver: Receiver,
+	pub(crate) rpc_service: S,
+	pub(crate) sink: MethodSink,
+	pub(crate) rx: mpsc::Receiver<String>,
+	pub(crate) ctx: Context,
+	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
 }
 
-pub async fn background_task<S>(params: BackgroundTaskParams<S>)
+pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
 	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
 	let BackgroundTaskParams { other, ws_sender, ws_receiver, rpc_service, sink, rx, ctx, pending_calls_completed } =
 		params;
 
-	let ServiceData {
-		max_request_body_size,
-		max_response_body_size,
-		batch_requests_config,
-		stop_handle,
-		ping_config,
-		conn_id,
-		conn,
-		..
-	} = other;
+	let ServiceData { cfg, stop_handle, conn_id, conn_permit, .. } = other;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
 
 	// Spawn another task that sends out the responses on the Websocket.
-	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config.ping_interval(), conn_rx));
+	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, cfg.ping_config.ping_interval(), conn_rx));
 
 	let stopped = stop_handle.clone().shutdown();
 	let params = Arc::new((rpc_service, ctx));
@@ -97,7 +89,7 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
-		let data = match try_recv(&mut ws_stream, stopped, ping_config).await {
+		let data = match try_recv(&mut ws_stream, stopped, cfg.ping_config).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
 			Receive::Ok(data, stop) => {
@@ -118,7 +110,7 @@ where
 							current,
 							maximum
 						);
-						if sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)).await.is_err() {
+						if sink.send_error(Id::Null, reject_too_big_request(cfg.max_request_body_size)).await.is_err() {
 							break Ok(Shutdown::ConnectionClosed);
 						}
 
@@ -150,8 +142,8 @@ where
 			if let Some(rp) = handle_rpc_call(
 				&data[idx..],
 				is_single,
-				batch_requests_config,
-				max_response_body_size,
+				cfg.batch_requests_config,
+				cfg.max_response_body_size,
 				&params.0,
 				&params.1,
 			)
@@ -170,7 +162,7 @@ where
 	drop(params);
 	graceful_shutdown(result, pending_calls_completed, ws_stream, conn_tx, send_task_handle).await;
 
-	drop(conn);
+	drop(conn_permit);
 	drop(stop_handle);
 }
 
@@ -335,4 +327,92 @@ async fn graceful_shutdown<S>(
 	_ = conn_tx.send(());
 	// Ensure that send task has been closed.
 	_ = send_task_handle.await;
+}
+
+/// Low-level API that runs the HTTP Websocket upgrade handshake
+/// and returns a future that may be cancelled or dropped
+/// if one would want to disconnect a certain peer.
+///
+///
+pub async fn run_websocket<L>(
+	req: hyper::Request<hyper::Body>,
+	params: ServiceData,
+	rpc_middleware: RpcServiceBuilder<L>,
+) -> Result<(hyper::Response<hyper::Body>, impl Future<Output = ()>), hyper::Response<hyper::Body>>
+where
+	L: for<'a> tower::Layer<RpcService>,
+	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
+	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
+{
+	let mut server = soketto::handshake::http::Server::new();
+
+	match server.receive_request(&req) {
+		Ok(response) => {
+			let (tx, rx) = mpsc::channel::<String>(params.cfg.message_buffer_capacity as usize);
+			let sink = MethodSink::new(tx);
+
+			let ctx = Context {
+				transport: TransportProtocol::WebSocket,
+				remote_addr: params.remote_addr,
+				conn_id: params.conn_id as usize,
+				headers: req.headers().clone(),
+				uri: req.uri().clone(),
+			};
+
+			// On each method call the `pending_calls` is cloned
+			// then when all pending_calls are dropped
+			// a graceful shutdown can has occur.
+			let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
+
+			let rpc_service_cfg = RpcServiceCfg::CallsAndSubscriptions {
+				bounded_subscriptions: BoundedSubscriptions::new(params.cfg.max_subscriptions_per_connection),
+				id_provider: params.cfg.id_provider.clone(),
+				sink: sink.clone(),
+				_pending_calls: pending_calls,
+			};
+
+			let rpc_service = RpcService::new(
+				params.methods.clone(),
+				params.cfg.max_response_body_size as usize,
+				params.conn_id as usize,
+				rpc_service_cfg,
+			);
+
+			let rpc_service = rpc_middleware.service(rpc_service);
+
+			let fut = async move {
+				let upgraded = match hyper::upgrade::on(req).await {
+					Ok(u) => u,
+					Err(e) => {
+						tracing::debug!("Could not upgrade connection: {}", e);
+						return;
+					}
+				};
+
+				let stream = BufReader::new(BufWriter::new(upgraded.compat()));
+				let mut ws_builder = server.into_builder(stream);
+				ws_builder.set_max_message_size(params.cfg.max_response_body_size as usize);
+				let (sender, receiver) = ws_builder.finish();
+
+				let params = BackgroundTaskParams {
+					other: params,
+					ws_sender: sender,
+					ws_receiver: receiver,
+					rpc_service,
+					sink,
+					rx,
+					ctx,
+					pending_calls_completed,
+				};
+
+				background_task(params).await;
+			};
+
+			Ok((response.map(|()| hyper::Body::empty()), fut))
+		}
+		Err(e) => {
+			tracing::debug!("Could not upgrade connection: {}", e);
+			Err(hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}"))))
+		}
+	}
 }

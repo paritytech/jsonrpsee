@@ -73,7 +73,6 @@ pub struct Server<HttpMiddleware = Identity, RpcMiddleware = Identity> {
 	listener: TcpListener,
 	cfg: Settings,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
-	id_provider: Arc<dyn IdProvider>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
@@ -86,11 +85,7 @@ impl Server<Identity, Identity> {
 
 impl<RpcMiddleware, HttpMiddleware> std::fmt::Debug for Server<RpcMiddleware, HttpMiddleware> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Server")
-			.field("listener", &self.listener)
-			.field("cfg", &self.cfg)
-			.field("id_provider", &self.id_provider)
-			.finish()
+		f.debug_struct("Server").field("listener", &self.listener).field("cfg", &self.cfg).finish()
 	}
 }
 
@@ -136,12 +131,6 @@ where
 	}
 
 	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
-		let max_request_body_size = self.cfg.max_request_body_size;
-		let max_response_body_size = self.cfg.max_response_body_size;
-		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
-		let batch_requests_config = self.cfg.batch_requests_config;
-		let id_provider = self.id_provider;
-
 		let mut id: u32 = 0;
 		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
 		let listener = self.listener;
@@ -157,18 +146,9 @@ where
 					let data = ProcessConnection {
 						remote_addr,
 						methods: methods.clone(),
-						max_request_body_size,
-						max_response_body_size,
-						max_subscriptions_per_connection,
-						batch_requests_config,
-						id_provider: id_provider.clone(),
-						ping_config: self.cfg.ping_config,
 						stop_handle: stop_handle.clone(),
 						conn_id: id,
-						max_connections: self.cfg.max_connections,
-						enable_http: self.cfg.enable_http,
-						enable_ws: self.cfg.enable_ws,
-						message_buffer_capacity: self.cfg.message_buffer_capacity,
+						settings: self.cfg.clone(),
 					};
 
 					process_connection(
@@ -203,32 +183,7 @@ where
 
 /// JSON-RPC server settings.
 #[derive(Debug, Clone)]
-struct Settings {
-	/// Maximum size in bytes of a request.
-	max_request_body_size: u32,
-	/// Maximum size in bytes of a response.
-	max_response_body_size: u32,
-	/// Maximum number of incoming connections allowed.
-	max_connections: u32,
-	/// Maximum number of subscriptions per connection.
-	max_subscriptions_per_connection: u32,
-	/// Whether batch requests are supported by this server or not.
-	batch_requests_config: BatchRequestConfig,
-	/// Custom tokio runtime to run the server on.
-	tokio_runtime: Option<tokio::runtime::Handle>,
-	/// Enable HTTP.
-	enable_http: bool,
-	/// Enable WS.
-	enable_ws: bool,
-	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
-	message_buffer_capacity: u32,
-	/// Ping settings.
-	ping_config: PingConfig,
-}
-
-/// Service config.
-#[derive(Debug, Clone)]
-pub struct ServiceConfig {
+pub struct Settings {
 	/// Maximum size in bytes of a request.
 	pub max_request_body_size: u32,
 	/// Maximum size in bytes of a response.
@@ -239,6 +194,8 @@ pub struct ServiceConfig {
 	pub max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
 	pub batch_requests_config: BatchRequestConfig,
+	/// Custom tokio runtime to run the server on.
+	pub tokio_runtime: Option<tokio::runtime::Handle>,
 	/// Enable HTTP.
 	pub enable_http: bool,
 	/// Enable WS.
@@ -247,10 +204,21 @@ pub struct ServiceConfig {
 	pub message_buffer_capacity: u32,
 	/// Ping settings.
 	pub ping_config: PingConfig,
-	/// Methods
-	pub methods: Methods,
 	/// ID provider.
 	pub id_provider: Arc<dyn IdProvider>,
+}
+
+/// Service config.
+#[derive(Debug, Clone)]
+pub struct ServiceConfig<RpcMiddleware, HttpMiddleware> {
+	/// Settings
+	pub settings: Settings,
+	/// Methods
+	pub methods: Methods,
+	/// RPC middleware.
+	pub rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
+	/// HTTP middleware.
+	pub http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
 /// Configuration for batch request handling.
@@ -325,6 +293,7 @@ impl Default for Settings {
 			enable_ws: true,
 			message_buffer_capacity: 1024,
 			ping_config: PingConfig::WithoutInactivityCheck(Duration::from_secs(60)),
+			id_provider: Arc::new(RandomIntegerIdProvider),
 		}
 	}
 }
@@ -334,7 +303,6 @@ impl Default for Settings {
 pub struct Builder<HttpMiddleware, RpcMiddleware> {
 	settings: Settings,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
-	id_provider: Arc<dyn IdProvider>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
@@ -343,7 +311,6 @@ impl Default for Builder<Identity, Identity> {
 		Builder {
 			settings: Settings::default(),
 			rpc_middleware: RpcServiceBuilder::new(),
-			id_provider: Arc::new(RandomIntegerIdProvider),
 			http_middleware: tower::ServiceBuilder::new(),
 		}
 	}
@@ -444,12 +411,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// let builder = ServerBuilder::default().set_rpc_middleware(m);
 	/// ```
 	pub fn set_rpc_middleware<T>(self, rpc_middleware: RpcServiceBuilder<T>) -> Builder<HttpMiddleware, T> {
-		Builder {
-			settings: self.settings,
-			rpc_middleware,
-			id_provider: self.id_provider,
-			http_middleware: self.http_middleware,
-		}
+		Builder { settings: self.settings, rpc_middleware, http_middleware: self.http_middleware }
 	}
 
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
@@ -508,7 +470,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// ```
 	///
 	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
-		self.id_provider = Arc::new(id_provider);
+		self.settings.id_provider = Arc::new(id_provider);
 		self
 	}
 
@@ -535,12 +497,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	/// ```
 	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
-		Builder {
-			settings: self.settings,
-			id_provider: self.id_provider,
-			http_middleware,
-			rpc_middleware: self.rpc_middleware,
-		}
+		Builder { settings: self.settings, http_middleware, rpc_middleware: self.rpc_middleware }
 	}
 
 	/// Configure the server to only serve JSON-RPC HTTP requests.
@@ -587,19 +544,12 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	}
 
 	/// Extract the server configuration to use jsonrpsee as service.
-	pub fn to_service(self, methods: impl Into<Methods>) -> ServiceConfig {
+	pub fn to_service(self, methods: impl Into<Methods>) -> ServiceConfig<RpcMiddleware, HttpMiddleware> {
 		ServiceConfig {
-			max_request_body_size: self.settings.max_request_body_size,
-			max_response_body_size: self.settings.max_response_body_size,
-			max_connections: self.settings.max_connections,
-			max_subscriptions_per_connection: self.settings.max_subscriptions_per_connection,
-			batch_requests_config: self.settings.batch_requests_config,
-			enable_http: self.settings.enable_http,
-			enable_ws: self.settings.enable_ws,
-			message_buffer_capacity: self.settings.message_buffer_capacity,
-			ping_config: self.settings.ping_config,
+			settings: self.settings,
 			methods: methods.into(),
-			id_provider: self.id_provider,
+			rpc_middleware: self.rpc_middleware,
+			http_middleware: self.http_middleware,
 		}
 	}
 
@@ -626,7 +576,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			listener,
 			cfg: self.settings,
 			rpc_middleware: self.rpc_middleware,
-			id_provider: self.id_provider,
 			http_middleware: self.http_middleware,
 		})
 	}
@@ -664,7 +613,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			listener,
 			cfg: self.settings,
 			rpc_middleware: self.rpc_middleware,
-			id_provider: self.id_provider,
 			http_middleware: self.http_middleware,
 		})
 	}
@@ -677,30 +625,14 @@ pub struct ServiceData {
 	pub remote_addr: SocketAddr,
 	/// Registered server methods.
 	pub methods: Methods,
-	/// Max request body size.
-	pub max_request_body_size: u32,
-	/// Max response body size.
-	pub max_response_body_size: u32,
-	/// Maximum number of subscriptions per connection.
-	pub max_subscriptions_per_connection: u32,
-	/// Whether batch requests are supported by this server or not.
-	pub batch_requests_config: BatchRequestConfig,
-	/// Subscription ID provider.
-	pub id_provider: Arc<dyn IdProvider>,
-	/// Ping configuration.
-	pub ping_config: PingConfig,
 	/// Stop handle.
 	pub stop_handle: StopHandle,
 	/// Connection ID
 	pub conn_id: u32,
 	/// Handle to hold a `connection permit`.
-	pub conn: Arc<OwnedSemaphorePermit>,
-	/// Enable HTTP.
-	pub enable_http: bool,
-	/// Enable WS.
-	pub enable_ws: bool,
-	/// Number of messages that server is allowed `buffer` until backpressure kicks in.
-	pub message_buffer_capacity: u32,
+	pub conn_permit: Arc<OwnedSemaphorePermit>,
+	/// Settings
+	pub cfg: Settings,
 }
 
 /// JsonRPSee service compatible with `tower`.
@@ -716,29 +648,15 @@ pub struct TowerService<L> {
 impl<L> TowerService<L> {
 	/// Create a new jsonrpsee tower service.
 	pub fn new(
-		cfg: ServiceConfig,
+		cfg: Settings,
+		methods: Methods,
 		rpc_middleware: RpcServiceBuilder<L>,
 		remote_addr: SocketAddr,
 		conn_permit: Arc<OwnedSemaphorePermit>,
 		stop_handle: StopHandle,
 		conn_id: u32,
 	) -> Self {
-		let inner = ServiceData {
-			remote_addr,
-			methods: cfg.methods,
-			max_request_body_size: cfg.max_request_body_size,
-			max_response_body_size: cfg.max_response_body_size,
-			batch_requests_config: cfg.batch_requests_config,
-			enable_http: cfg.enable_http,
-			enable_ws: cfg.enable_ws,
-			conn_id,
-			conn: conn_permit,
-			ping_config: cfg.ping_config,
-			stop_handle: stop_handle,
-			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
-			message_buffer_capacity: cfg.message_buffer_capacity,
-			id_provider: cfg.id_provider,
-		};
+		let inner = ServiceData { cfg, remote_addr, methods, conn_id, conn_permit, stop_handle: stop_handle };
 
 		Self { inner, rpc_middleware }
 	}
@@ -768,13 +686,13 @@ where
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
-		if self.inner.enable_ws && is_upgrade_request {
+		if self.inner.cfg.enable_ws && is_upgrade_request {
 			let this = self.inner.clone();
 
 			let ctx = Context {
 				transport: TransportProtocol::WebSocket,
-				remote_addr: self.inner.remote_addr,
-				conn_id: self.inner.conn_id as usize,
+				remote_addr: this.remote_addr,
+				conn_id: this.conn_id as usize,
 				headers: request.headers().clone(),
 				uri: request.uri().clone(),
 			};
@@ -783,7 +701,7 @@ where
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					let (tx, rx) = mpsc::channel::<String>(this.message_buffer_capacity as usize);
+					let (tx, rx) = mpsc::channel::<String>(this.cfg.message_buffer_capacity as usize);
 					let sink = MethodSink::new(tx);
 
 					// On each method call the `pending_calls` is cloned
@@ -792,15 +710,15 @@ where
 					let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 					let cfg = RpcServiceCfg::CallsAndSubscriptions {
-						bounded_subscriptions: BoundedSubscriptions::new(this.max_subscriptions_per_connection),
-						id_provider: self.inner.id_provider.clone(),
+						bounded_subscriptions: BoundedSubscriptions::new(this.cfg.max_subscriptions_per_connection),
+						id_provider: this.cfg.id_provider.clone(),
 						sink: sink.clone(),
 						_pending_calls: pending_calls,
 					};
 
 					let rpc_service = RpcService::new(
 						self.inner.methods.clone(),
-						this.max_response_body_size as usize,
+						this.cfg.max_response_body_size as usize,
 						this.conn_id as usize,
 						cfg,
 					);
@@ -819,7 +737,7 @@ where
 
 							let stream = BufReader::new(BufWriter::new(upgraded.compat()));
 							let mut ws_builder = server.into_builder(stream);
-							ws_builder.set_max_message_size(this.max_request_body_size as usize);
+							ws_builder.set_max_message_size(this.cfg.max_request_body_size as usize);
 							let (sender, receiver) = ws_builder.finish();
 
 							let params = BackgroundTaskParams {
@@ -847,7 +765,7 @@ where
 			};
 
 			async { Ok(response) }.boxed()
-		} else if self.inner.enable_http && !is_upgrade_request {
+		} else if self.inner.cfg.enable_http && !is_upgrade_request {
 			let ctx = Context {
 				transport: TransportProtocol::WebSocket,
 				remote_addr: self.inner.remote_addr,
@@ -858,14 +776,14 @@ where
 
 			let rpc_service = self.rpc_middleware.service(RpcService::new(
 				self.inner.methods.clone(),
-				self.inner.max_response_body_size as usize,
+				self.inner.cfg.max_response_body_size as usize,
 				self.inner.conn_id as usize,
 				RpcServiceCfg::OnlyCalls,
 			));
 
-			let batch_config = self.inner.batch_requests_config;
-			let max_request_size = self.inner.max_request_body_size;
-			let max_response_size = self.inner.max_response_body_size;
+			let batch_config = self.inner.cfg.batch_requests_config;
+			let max_request_size = self.inner.cfg.max_request_body_size;
+			let max_response_size = self.inner.cfg.max_response_body_size;
 
 			let fut = async move {
 				// Only the `POST` method is allowed.
@@ -904,34 +822,11 @@ where
 }
 
 struct ProcessConnection {
-	/// Remote server address.
+	settings: Settings,
 	remote_addr: SocketAddr,
-	/// Registered server methods.
 	methods: Methods,
-	/// Max request body size.
-	max_request_body_size: u32,
-	/// Max response body size.
-	max_response_body_size: u32,
-	/// Maximum number of subscriptions per connection.
-	max_subscriptions_per_connection: u32,
-	/// Whether batch requests are supported by this server or not.
-	batch_requests_config: BatchRequestConfig,
-	/// Subscription ID provider.
-	id_provider: Arc<dyn IdProvider>,
-	/// Ping config.
-	ping_config: PingConfig,
-	/// Stop handle.
-	stop_handle: StopHandle,
-	/// Max connections,
-	max_connections: u32,
-	/// Connection ID
 	conn_id: u32,
-	/// Allow JSON-RPC HTTP requests.
-	enable_http: bool,
-	/// Allow JSON-RPC WS request and WS upgrade requests.
-	enable_ws: bool,
-	/// Number of messages that server is allowed `buffer` until backpressure kicks in.
-	message_buffer_capacity: u32,
+	stop_handle: StopHandle,
 }
 
 #[instrument(name = "connection", skip_all, fields(remote_addr = %cfg.remote_addr, conn_id = %cfg.conn_id), level = "INFO")]
@@ -975,26 +870,18 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 		}
 	};
 
-	let max_conns = cfg.max_connections as usize;
+	let max_conns = cfg.settings.max_connections as usize;
 	let curr_conns = max_conns - connection_guard.available_connections();
 	tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
 
 	let tower_service = TowerService {
 		inner: ServiceData {
+			cfg: cfg.settings,
 			remote_addr: cfg.remote_addr,
 			methods: cfg.methods,
-			max_request_body_size: cfg.max_request_body_size,
-			max_response_body_size: cfg.max_response_body_size,
-			max_subscriptions_per_connection: cfg.max_subscriptions_per_connection,
-			batch_requests_config: cfg.batch_requests_config,
-			id_provider: cfg.id_provider,
-			ping_config: cfg.ping_config,
 			stop_handle: cfg.stop_handle.clone(),
 			conn_id: cfg.conn_id,
-			conn: Arc::new(conn),
-			enable_http: cfg.enable_http,
-			enable_ws: cfg.enable_ws,
-			message_buffer_capacity: cfg.message_buffer_capacity,
+			conn_permit: Arc::new(conn),
 		},
 		rpc_middleware: rpc_middleware_builder,
 	};

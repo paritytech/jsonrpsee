@@ -102,7 +102,8 @@ async fn run_server() {
 
 			Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
 				let mut svc = TowerService::new(
-					service_cfg.clone(),
+					service_cfg.settings.clone(),
+					service_cfg.methods.clone(),
 					RpcServiceBuilder::new(),
 					remote_addr,
 					conn_permit.clone(),
