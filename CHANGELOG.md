@@ -4,6 +4,15 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.20.3] - 2023-10-24
+
+This release fixes a cancel-safety issue in the server's graceful shutdown which could lead to high CPU usage.
+
+### [Fixed]
+- server: graceful shutdown distinguish between stopped and conn closed ([#1220](https://github.com/paritytech/jsonrpsee/pull/1220))
+- server: graceful shutdown fix cancel-safety issue ([#1218](https://github.com/paritytech/jsonrpsee/pull/1218))
+- server: graceful shutdown check `Incoming::Closed` ([#1216](https://github.com/paritytech/jsonrpsee/pull/1216))
+
 ## [v0.20.2] - 2023-10-13
 
 This release removes the bounded buffer check which was intended to provide

@@ -431,6 +431,7 @@ where
 			Either::Left((Some(Ok(Incoming::Data(d))), s)) => break Receive::Ok(d, s),
 			// Got a pong response, update our "last seen" timestamp.
 			Either::Left((Some(Ok(Incoming::Pong)), s)) => {
+				tracing::debug!("Received pong");
 				stopped = s;
 			}
 			// Received an error, terminate the connection.
