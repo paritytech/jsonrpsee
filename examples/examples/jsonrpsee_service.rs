@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
 	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
 	let handle = run_server();
-	tokio::spawn(handle);
+	tokio::spawn(handle.stopped());
 
 	let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
 
@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> ServerHandle {
+fn run_server() -> ServerHandle {
 	use hyper::service::{make_service_fn, service_fn};
 
 	// Construct our SocketAddr to listen on...

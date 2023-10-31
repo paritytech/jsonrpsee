@@ -767,7 +767,7 @@ where
 			async { Ok(response) }.boxed()
 		} else if self.inner.cfg.enable_http && !is_upgrade_request {
 			let ctx = Context {
-				transport: TransportProtocol::WebSocket,
+				transport: TransportProtocol::Http,
 				remote_addr: self.inner.remote_addr,
 				conn_id: self.inner.conn_id as usize,
 				headers: request.headers().clone(),

@@ -1,5 +1,14 @@
 use std::convert::Infallible;
 
+use http::Method;
+use jsonrpsee_core::{http_helpers::read_body, GenericTransportError};
+
+use crate::{
+	middleware::rpc::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol},
+	server::handle_rpc_call,
+	ServiceData,
+};
+
 /// Checks that content type of received request is valid for JSON-RPC.
 pub fn content_type_is_json(request: &hyper::Request<hyper::Body>) -> bool {
 	is_json(request.headers().get(hyper::header::CONTENT_TYPE))
@@ -24,6 +33,70 @@ pub async fn reject_connection(socket: tokio::net::TcpStream) {
 	{
 		tracing::debug!("HTTP serve connection failed {:?}", e);
 	}
+}
+
+/// Process a JSON-RPC HTTP request.
+pub async fn handle_request<L>(
+	request: hyper::Request<hyper::Body>,
+	svc: ServiceData,
+	rpc_service: RpcServiceBuilder<L>,
+) -> hyper::Response<hyper::Body>
+where
+	L: for<'a> tower::Layer<RpcService>,
+	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
+	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
+{
+	let ServiceData { remote_addr, methods, stop_handle, conn_id, conn_permit, cfg } = svc;
+
+	let ctx = Context {
+		transport: TransportProtocol::Http,
+		remote_addr,
+		conn_id: conn_id as usize,
+		headers: request.headers().clone(),
+		uri: request.uri().clone(),
+	};
+
+	let rpc_service = rpc_service.service(RpcService::new(
+		methods,
+		cfg.max_response_body_size as usize,
+		conn_id as usize,
+		RpcServiceCfg::OnlyCalls,
+	));
+
+	let batch_config = cfg.batch_requests_config;
+	let max_request_size = cfg.max_request_body_size;
+	let max_response_size = cfg.max_response_body_size;
+
+	// Only the `POST` method is allowed.
+	let rp = match *request.method() {
+		Method::POST if content_type_is_json(&request) => {
+			let (parts, body) = request.into_parts();
+
+			let (body, is_single) = match read_body(&parts.headers, body, max_request_size).await {
+				Ok(r) => r,
+				Err(GenericTransportError::TooLarge) => return response::too_large(max_request_size),
+				Err(GenericTransportError::Malformed) => return response::malformed(),
+				Err(GenericTransportError::Inner(e)) => {
+					tracing::warn!("Internal error reading request body: {}", e);
+					return response::internal_error();
+				}
+			};
+
+			let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, &ctx).await;
+
+			// If the response is empty it means that it was a notification or empty batch.
+			// For HTTP these are just ACK:ed with a empty body.
+			response::ok_response(rp.map_or(String::new(), |r| r.result))
+		}
+		// Error scenarios:
+		Method::POST => response::unsupported_content_type(),
+		_ => response::method_not_allowed(),
+	};
+
+	drop(conn_permit);
+	drop(stop_handle);
+
+	rp
 }
 
 /// HTTP response helpers.
