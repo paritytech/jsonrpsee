@@ -138,7 +138,7 @@ where
 		let mut router = Router::new();
 		let mut uniq_hosts: BTreeMap<String, Ports> = BTreeMap::new();
 
-		// Ensure that no ports "overwritten"
+		// Ensure that no ports are "overwritten"
 		// since it's possible add the same hostname with
 		// several port numbers.
 		for auth in value.into_iter() {
