@@ -373,7 +373,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// a type which is Send and provides interior mutability such `Arc<Mutex>`.
 	///
 	/// The builder itself exposes a similar API as the [`tower::ServiceBuilder`]
-	/// where it possible compose layers to the middleware.
+	/// where it is possible to compose layers to the middleware.
 	///
 	/// To add a middleware [`crate::middleware::rpc::RpcServiceBuilder`] exposes a few different layer APIs that
 	/// is wrapped on top of the [`tower::ServiceBuilder`].
@@ -703,7 +703,7 @@ where
 
 					// On each method call the `pending_calls` is cloned
 					// then when all pending_calls are dropped
-					// a graceful shutdown can has occur.
+					// a graceful shutdown can occur.
 					let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 					let cfg = RpcServiceCfg::CallsAndSubscriptions {
