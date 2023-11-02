@@ -33,7 +33,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::rpc::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
+use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
 use crate::transport::http::content_type_is_json;
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -629,8 +629,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 /// Data required by the server to handle requests.
 #[derive(Debug, Clone)]
 pub(crate) struct ServiceData {
-	/// Remote server address.
-	pub(crate) remote_addr: SocketAddr,
 	/// Registered server methods.
 	pub(crate) methods: Methods,
 	/// Max request body size.
@@ -696,14 +694,6 @@ where
 		if self.inner.enable_ws && is_upgrade_request {
 			let this = self.inner.clone();
 
-			let ctx = Context {
-				transport: TransportProtocol::WebSocket,
-				remote_addr: self.inner.remote_addr,
-				conn_id: self.inner.conn_id as usize,
-				headers: request.headers().clone(),
-				uri: request.uri().clone(),
-			};
-
 			let mut server = soketto::handshake::http::Server::new();
 
 			let response = match server.receive_request(&request) {
@@ -754,7 +744,6 @@ where
 								rpc_service,
 								sink,
 								rx,
-								ctx,
 								pending_calls_completed,
 							};
 
@@ -773,14 +762,6 @@ where
 
 			async { Ok(response) }.boxed()
 		} else if self.inner.enable_http && !is_upgrade_request {
-			let ctx = Context {
-				transport: TransportProtocol::WebSocket,
-				remote_addr: self.inner.remote_addr,
-				conn_id: self.inner.conn_id as usize,
-				headers: request.headers().clone(),
-				uri: request.uri().clone(),
-			};
-
 			let rpc_service = self.rpc_middleware.service(RpcService::new(
 				self.inner.methods.clone(),
 				self.inner.max_response_body_size as usize,
@@ -808,8 +789,15 @@ where
 							}
 						};
 
-						let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, &ctx)
-							.await;
+						let rp = handle_rpc_call(
+							&body,
+							is_single,
+							batch_config,
+							max_response_size,
+							&rpc_service,
+							TransportProtocol::Http,
+						)
+						.await;
 
 						// If the response is empty it means that it was a notification or empty batch.
 						// For HTTP these are just ACK:ed with a empty body.
@@ -906,7 +894,6 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 
 	let tower_service = TowerService {
 		inner: ServiceData {
-			remote_addr: cfg.remote_addr,
 			methods: cfg.methods,
 			max_request_body_size: cfg.max_request_body_size,
 			max_response_body_size: cfg.max_response_body_size,
@@ -990,7 +977,7 @@ pub(crate) async fn handle_rpc_call<S>(
 	batch_config: BatchRequestConfig,
 	max_response_size: u32,
 	rpc_service: &S,
-	ctx: &Context,
+	transport: TransportProtocol,
 ) -> Option<MethodResponse>
 where
 	for<'a> S: RpcServiceT<'a> + Send,
@@ -998,7 +985,7 @@ where
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = serde_json::from_slice(body) {
-			Some(rpc_service.call(req, ctx).await)
+			Some(rpc_service.call(req, transport).await)
 		} else if let Ok(_notif) = serde_json::from_slice::<Notif>(body) {
 			None
 		} else {
@@ -1030,7 +1017,7 @@ where
 
 			for call in batch {
 				if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
-					let rp = rpc_service.call(req, ctx).await;
+					let rp = rpc_service.call(req, transport).await;
 
 					if let Err(too_large) = batch_response.append(&rp) {
 						return Some(too_large);

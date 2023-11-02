@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::rpc::{Context, RpcServiceT};
+use crate::middleware::rpc::{RpcServiceT, TransportProtocol};
 use crate::server::{handle_rpc_call, ServiceData};
 use crate::PingConfig;
 
@@ -49,7 +49,6 @@ pub(crate) struct BackgroundTaskParams<S> {
 	pub(crate) rpc_service: S,
 	pub(crate) sink: MethodSink,
 	pub(crate) rx: mpsc::Receiver<String>,
-	pub(crate) ctx: Context,
 	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
 }
 
@@ -57,8 +56,7 @@ pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
 	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
-	let BackgroundTaskParams { other, ws_sender, ws_receiver, rpc_service, sink, rx, ctx, pending_calls_completed } =
-		params;
+	let BackgroundTaskParams { other, ws_sender, ws_receiver, rpc_service, sink, rx, pending_calls_completed } = params;
 
 	let ServiceData {
 		max_request_body_size,
@@ -77,7 +75,7 @@ where
 	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config.ping_interval(), conn_rx));
 
 	let stopped = stop_handle.clone().shutdown();
-	let params = Arc::new((rpc_service, ctx));
+	let rpc_service = Arc::new(rpc_service);
 
 	tokio::pin!(stopped);
 
@@ -132,7 +130,7 @@ where
 			}
 		};
 
-		let params = params.clone();
+		let rpc_service = rpc_service.clone();
 		let sink = sink.clone();
 
 		tokio::spawn(async move {
@@ -152,8 +150,8 @@ where
 				is_single,
 				batch_requests_config,
 				max_response_body_size,
-				&params.0,
-				&params.1,
+				&*rpc_service,
+				TransportProtocol::WebSocket,
 			)
 			.await
 			{
@@ -167,7 +165,7 @@ where
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	drop(params);
+	drop(rpc_service);
 	graceful_shutdown(result, pending_calls_completed, ws_stream, conn_tx, send_task_handle).await;
 
 	drop(conn);

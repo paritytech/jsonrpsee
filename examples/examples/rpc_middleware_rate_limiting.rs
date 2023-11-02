@@ -32,7 +32,7 @@
 //! such as `Arc<Mutex>`
 
 use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::rpc::{Context, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, TransportProtocol};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -78,7 +78,7 @@ impl<'a, S> RpcServiceT<'a> for RateLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>, ctx: &Context) -> MethodResponse {
+	async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
 		// `Context` contains the connection ID related to RPC call.
 		//
 		// That you may use to distinguish calls from different connections
@@ -117,7 +117,7 @@ where
 		if is_denied {
 			MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
 		} else {
-			self.service.call(req, ctx).await
+			self.service.call(req, t).await
 		}
 	}
 }

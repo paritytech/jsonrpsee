@@ -47,7 +47,7 @@ pub trait RpcServiceT<'a> {
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	/// In this interface they are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
-	async fn call(&self, request: Request<'a>, ctx: &Context) -> MethodResponse;
+	async fn call(&self, request: Request<'a>, transport_label: TransportProtocol) -> MethodResponse;
 }
 
 /// The transport protocol used to send or receive a call or request.
