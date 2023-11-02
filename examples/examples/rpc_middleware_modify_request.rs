@@ -49,7 +49,7 @@ where
 			let raw_value = serde_json::value::to_raw_value("myparams").unwrap();
 			req.params = Some(StdCow::Owned(raw_value));
 		}
-		// Re-direct all calls that isn't `say_hello` to `say_goodby`
+		// Re-direct all calls that isn't `say_hello` to `say_goodbye`
 		else if req.method != "say_hello" {
 			req.method = "say_goodbye".into();
 		}
