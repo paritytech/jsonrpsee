@@ -132,8 +132,8 @@ pub enum MethodKind {
 	Unsubscription,
 	/// Method call.
 	MethodCall,
-	/// Unknown method.
-	Unknown,
+	/// The method was not found.
+	NotFound,
 }
 
 impl std::fmt::Display for MethodKind {
@@ -141,7 +141,7 @@ impl std::fmt::Display for MethodKind {
 		let s = match self {
 			Self::Subscription => "subscription",
 			Self::MethodCall => "method call",
-			Self::Unknown => "unknown",
+			Self::NotFound => "method not found",
 			Self::Unsubscription => "unsubscription",
 		};
 
