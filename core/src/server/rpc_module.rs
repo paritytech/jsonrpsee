@@ -245,16 +245,6 @@ impl Methods {
 		self.callbacks.get_key_value(method_name).map(|(k, v)| (*k, v))
 	}
 
-	/// Returns the kind of the method callback,
-	pub fn method_kind(&self, method_name: &str) -> MethodKind {
-		match self.method(method_name) {
-			None => MethodKind::Unknown,
-			Some(MethodCallback::Async(_)) | Some(MethodCallback::Sync(_)) => MethodKind::MethodCall,
-			Some(MethodCallback::Subscription(_)) => MethodKind::Subscription,
-			Some(MethodCallback::Unsubscription(_)) => MethodKind::Unsubscription,
-		}
-	}
-
 	/// Helper to call a method on the `RPC module` without having to spin up a server.
 	///
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
