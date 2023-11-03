@@ -23,7 +23,3 @@ console-subscriber = "0.2.0"
 
 [features]
 server = []
-
-[dependencies]
-soketto = { version = "0.7.1", features = ["http"] }
-tokio-util = "0.7.9"
