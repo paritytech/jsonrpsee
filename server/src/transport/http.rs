@@ -5,8 +5,8 @@ use jsonrpsee_core::{http_helpers::read_body, GenericTransportError};
 
 use crate::{
 	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol},
-	server::handle_rpc_call,
-	ServiceData,
+	server::{handle_rpc_call, Settings},
+	BatchRequestConfig, ServiceData,
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
@@ -35,8 +35,10 @@ pub async fn reject_connection(socket: tokio::net::TcpStream) {
 	}
 }
 
-/// Process a JSON-RPC HTTP request.
-pub async fn handle_request<L>(
+/// Make JSON-RPC HTTP call with a [`RpcServiceBuilder`]
+///
+/// Fails if the HTTP request was a malformed JSON-RPC request.
+pub async fn call_with_service_builder<L>(
 	request: hyper::Request<hyper::Body>,
 	svc: ServiceData,
 	rpc_service: RpcServiceBuilder<L>,
@@ -46,21 +48,41 @@ where
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
 {
-	let ServiceData { methods, stop_handle, conn_id, conn_permit, cfg } = svc;
+	let ServiceData { methods, conn_id, conn_permit, cfg, stop_handle } = svc;
+	let Settings { max_response_body_size, batch_requests_config, max_request_body_size, .. } = cfg;
 
 	let rpc_service = rpc_service.service(RpcService::new(
 		methods,
-		cfg.max_response_body_size as usize,
+		max_response_body_size as usize,
 		conn_id as usize,
 		RpcServiceCfg::OnlyCalls,
 	));
 
-	let batch_config = cfg.batch_requests_config;
-	let max_request_size = cfg.max_request_body_size;
-	let max_response_size = cfg.max_response_body_size;
+	let rp =
+		call_with_service(request, batch_requests_config, max_request_body_size, rpc_service, max_response_body_size)
+			.await;
 
+	drop(conn_permit);
+	drop(stop_handle);
+
+	rp
+}
+
+/// Make JSON-RPC HTTP call with a service [`RpcServiceT`]
+///
+/// Fails if the HTTP request was a malformed JSON-RPC request.
+pub async fn call_with_service<S>(
+	request: hyper::Request<hyper::Body>,
+	batch_config: BatchRequestConfig,
+	max_request_size: u32,
+	rpc_service: S,
+	max_response_size: u32,
+) -> hyper::Response<hyper::Body>
+where
+	for<'a> S: RpcServiceT<'a> + Send,
+{
 	// Only the `POST` method is allowed.
-	let rp = match *request.method() {
+	match *request.method() {
 		Method::POST if content_type_is_json(&request) => {
 			let (parts, body) = request.into_parts();
 
@@ -91,12 +113,7 @@ where
 		// Error scenarios:
 		Method::POST => response::unsupported_content_type(),
 		_ => response::method_not_allowed(),
-	};
-
-	drop(conn_permit);
-	drop(stop_handle);
-
-	rp
+	}
 }
 
 /// HTTP response helpers.

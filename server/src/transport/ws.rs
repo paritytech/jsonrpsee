@@ -330,15 +330,19 @@ async fn graceful_shutdown<S>(
 	_ = send_task_handle.await;
 }
 
-/// Low-level API that runs the "WebSocket upgrade handshake"
-/// and returns a future that may be dropped
-/// if one would want to disconnect a certain peer.
+/// Low-level API that attempts to establish WebSocket connection
+///
+/// Returns Ok((http_response, fut)) if websocket connection was successfully established
+/// otherwise Err(http_response).
+///
+/// `fut` is a future that drives the WebSocket connection
+/// and if it's dropped the connection will be closed.
 ///
 /// If you calling this from the `hyper::service_fn` the HTTP response
 /// must be sent back and the websocket connection will held in another task.
 ///
 /// ```no_run
-/// use jsonrpsee_server::ws::run_websocket;
+/// use jsonrpsee_server::ws;
 /// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService};
 /// use jsonrpsee_server::ServiceData;
 ///
@@ -353,7 +357,7 @@ async fn graceful_shutdown<S>(
 ///     <L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
 ///     for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a> + 'static,
 /// {
-///   match run_websocket(req, svc, rpc_service).await {
+///   match ws::connect(req, svc, rpc_service).await {
 ///     Ok((rp, conn_fut)) => {
 ///         tokio::spawn(async move {
 ///             // Keep the connection alive until
@@ -369,7 +373,7 @@ async fn graceful_shutdown<S>(
 ///   }
 /// }
 /// ```
-pub async fn run_websocket<L>(
+pub async fn connect<L>(
 	req: hyper::Request<hyper::Body>,
 	params: ServiceData,
 	rpc_middleware: RpcServiceBuilder<L>,

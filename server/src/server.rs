@@ -34,7 +34,6 @@ use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
-use crate::transport::http::content_type_is_json;
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
 
@@ -42,14 +41,12 @@ use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
 use hyper::body::HttpBody;
-use hyper::Method;
 
-use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponseResult};
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{Error, GenericTransportError, JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	reject_too_big_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
@@ -754,54 +751,23 @@ where
 
 			async { Ok(response) }.boxed()
 		} else if self.inner.cfg.enable_http && !is_upgrade_request {
+			let this = &self.inner;
+			let max_response_size = this.cfg.max_response_body_size;
+			let max_request_size = this.cfg.max_request_body_size;
+			let methods = this.methods.clone();
+			let batch_config = this.cfg.batch_requests_config;
+
 			let rpc_service = self.rpc_middleware.service(RpcService::new(
-				self.inner.methods.clone(),
-				self.inner.cfg.max_response_body_size as usize,
-				self.inner.conn_id as usize,
+				methods,
+				max_response_size as usize,
+				this.conn_id as usize,
 				RpcServiceCfg::OnlyCalls,
 			));
 
-			let batch_config = self.inner.cfg.batch_requests_config;
-			let max_request_size = self.inner.cfg.max_request_body_size;
-			let max_response_size = self.inner.cfg.max_response_body_size;
-
-			let fut = async move {
-				// Only the `POST` method is allowed.
-				match *request.method() {
-					Method::POST if content_type_is_json(&request) => {
-						let (parts, body) = request.into_parts();
-
-						let (body, is_single) = match read_body(&parts.headers, body, max_request_size).await {
-							Ok(r) => r,
-							Err(GenericTransportError::TooLarge) => return http::response::too_large(max_request_size),
-							Err(GenericTransportError::Malformed) => return http::response::malformed(),
-							Err(GenericTransportError::Inner(e)) => {
-								tracing::warn!("Internal error reading request body: {}", e);
-								return http::response::internal_error();
-							}
-						};
-
-						let rp = handle_rpc_call(
-							&body,
-							is_single,
-							batch_config,
-							max_response_size,
-							&rpc_service,
-							TransportProtocol::Http,
-						)
-						.await;
-
-						// If the response is empty it means that it was a notification or empty batch.
-						// For HTTP these are just ACK:ed with a empty body.
-						http::response::ok_response(rp.map_or(String::new(), |r| r.result))
-					}
-					// Error scenarios:
-					Method::POST => http::response::unsupported_content_type(),
-					_ => http::response::method_not_allowed(),
-				}
-			};
-
-			Box::pin(fut.map(Ok))
+			Box::pin(
+				http::call_with_service(request, batch_config, max_request_size, rpc_service, max_response_size)
+					.map(Ok),
+			)
 		} else {
 			Box::pin(async { http::response::denied() }.map(Ok))
 		}

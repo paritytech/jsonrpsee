@@ -35,8 +35,7 @@ use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::*;
-use jsonrpsee::server::ws::{self, run_websocket};
-use jsonrpsee::server::{http, ConnectionGuard, ServerHandle, ServiceData, StopHandle};
+use jsonrpsee::server::{http, ws, ConnectionGuard, ServerHandle, ServiceData, StopHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, MethodResponse};
@@ -205,7 +204,7 @@ fn run_server() -> ServerHandle {
 					// and if the `DummyRateLimit` middleware triggers the hard limit
 					// then the connection is closed i.e, the `conn_fut` is dropped.
 					async move {
-						match run_websocket(req, svc, rpc_service).await {
+						match ws::connect(req, svc, rpc_service).await {
 							Ok((rp, conn_fut)) => {
 								tokio::spawn(async move {
 									tokio::select! {
@@ -243,7 +242,10 @@ fn run_server() -> ServerHandle {
 						state: tx.clone(),
 					});
 
-					async move { http::handle_request(req, svc, rpc_service).map(Ok).await }.boxed()
+					// There is another API for making call with just a service as well.
+					//
+					// See [`jsonrpsee::server::http::call_with_service`]
+					async move { http::call_with_service_builder(req, svc, rpc_service).map(Ok).await }.boxed()
 				} else {
 					async { Ok(http::response::denied()) }.boxed()
 				}
