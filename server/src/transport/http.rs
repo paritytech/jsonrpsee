@@ -4,7 +4,7 @@ use http::Method;
 use jsonrpsee_core::{http_helpers::read_body, GenericTransportError};
 
 use crate::{
-	middleware::rpc::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol},
+	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol},
 	server::handle_rpc_call,
 	ServiceData,
 };
@@ -46,15 +46,7 @@ where
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
 {
-	let ServiceData { remote_addr, methods, stop_handle, conn_id, conn_permit, cfg } = svc;
-
-	let ctx = Context {
-		transport: TransportProtocol::Http,
-		remote_addr,
-		conn_id: conn_id as usize,
-		headers: request.headers().clone(),
-		uri: request.uri().clone(),
-	};
+	let ServiceData { methods, stop_handle, conn_id, conn_permit, cfg } = svc;
 
 	let rpc_service = rpc_service.service(RpcService::new(
 		methods,
@@ -82,7 +74,15 @@ where
 				}
 			};
 
-			let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, &ctx).await;
+			let rp = handle_rpc_call(
+				&body,
+				is_single,
+				batch_config,
+				max_response_size,
+				&rpc_service,
+				TransportProtocol::Http,
+			)
+			.await;
 
 			// If the response is empty it means that it was a notification or empty batch.
 			// For HTTP these are just ACK:ed with a empty body.

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::rpc::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
-use crate::server::{handle_rpc_call, ServiceData};
+use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
+use crate::server::{handle_rpc_call, ServiceData, Settings};
 use crate::PingConfig;
 
 use futures_util::future::{self, Either, Fuse};
@@ -53,7 +53,6 @@ pub(crate) struct BackgroundTaskParams<S> {
 	pub(crate) rpc_service: S,
 	pub(crate) sink: MethodSink,
 	pub(crate) rx: mpsc::Receiver<String>,
-	pub(crate) ctx: Context,
 	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
 }
 
@@ -61,18 +60,17 @@ pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
 	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
-	let BackgroundTaskParams { other, ws_sender, ws_receiver, rpc_service, sink, rx, ctx, pending_calls_completed } =
-		params;
-
+	let BackgroundTaskParams { other, ws_sender, ws_receiver, rpc_service, sink, rx, pending_calls_completed } = params;
 	let ServiceData { cfg, stop_handle, conn_id, conn_permit, .. } = other;
+	let Settings { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } = cfg;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
 
 	// Spawn another task that sends out the responses on the Websocket.
-	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, cfg.ping_config.ping_interval(), conn_rx));
+	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config.ping_interval(), conn_rx));
 
 	let stopped = stop_handle.clone().shutdown();
-	let params = Arc::new((rpc_service, ctx));
+	let rpc_service = Arc::new(rpc_service);
 
 	tokio::pin!(stopped);
 
@@ -92,7 +90,7 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
-		let data = match try_recv(&mut ws_stream, stopped, cfg.ping_config).await {
+		let data = match try_recv(&mut ws_stream, stopped, ping_config).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
 			Receive::Ok(data, stop) => {
@@ -113,7 +111,7 @@ where
 							current,
 							maximum
 						);
-						if sink.send_error(Id::Null, reject_too_big_request(cfg.max_request_body_size)).await.is_err() {
+						if sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)).await.is_err() {
 							break Ok(Shutdown::ConnectionClosed);
 						}
 
@@ -127,7 +125,7 @@ where
 			}
 		};
 
-		let params = params.clone();
+		let rpc_service = rpc_service.clone();
 		let sink = sink.clone();
 
 		tokio::spawn(async move {
@@ -145,10 +143,10 @@ where
 			if let Some(rp) = handle_rpc_call(
 				&data[idx..],
 				is_single,
-				cfg.batch_requests_config,
-				cfg.max_response_body_size,
-				&params.0,
-				&params.1,
+				batch_requests_config,
+				max_response_body_size,
+				&*rpc_service,
+				TransportProtocol::WebSocket,
 			)
 			.await
 			{
@@ -162,7 +160,7 @@ where
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
 	// proper drop behaviour.
-	drop(params);
+	drop(rpc_service);
 	graceful_shutdown(result, pending_calls_completed, ws_stream, conn_tx, send_task_handle).await;
 
 	drop(conn_permit);
@@ -388,14 +386,6 @@ where
 			let (tx, rx) = mpsc::channel::<String>(params.cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
-			let ctx = Context {
-				transport: TransportProtocol::WebSocket,
-				remote_addr: params.remote_addr,
-				conn_id: params.conn_id as usize,
-				headers: req.headers().clone(),
-				uri: req.uri().clone(),
-			};
-
 			// On each method call the `pending_calls` is cloned
 			// then when all pending_calls are dropped
 			// a graceful shutdown can has occur.
@@ -438,7 +428,6 @@ where
 					rpc_service,
 					sink,
 					rx,
-					ctx,
 					pending_calls_completed,
 				};
 

@@ -34,7 +34,7 @@ use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
 use jsonrpsee_types::{ErrorObject, Request};
 
-use super::{Context, RpcServiceT};
+use super::{RpcServiceT, TransportProtocol};
 
 /// JSON-RPC service middleware.
 #[derive(Clone, Debug)]
@@ -68,7 +68,7 @@ impl RpcService {
 
 #[async_trait::async_trait]
 impl<'a> RpcServiceT<'a> for RpcService {
-	async fn call(&self, req: Request<'a>, _ctx: &Context) -> MethodResponse {
+	async fn call(&self, req: Request<'a>, _transport: TransportProtocol) -> MethodResponse {
 		let params = req.params();
 		let name = req.method_name();
 		let id = req.id().clone();
@@ -164,10 +164,10 @@ impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
-	#[tracing::instrument(name = "method_call", skip(self, request, ctx), level = "trace")]
-	async fn call(&self, request: Request<'a>, ctx: &Context) -> MethodResponse {
+	#[tracing::instrument(name = "method_call", skip(self, request, transport), level = "trace")]
+	async fn call(&self, request: Request<'a>, transport: TransportProtocol) -> MethodResponse {
 		rx_log_from_json(&request, self.max);
-		let rp = self.service.call(request, ctx).await;
+		let rp = self.service.call(request, transport).await;
 		tx_log_from_str(&rp.result, self.max);
 		rp
 	}

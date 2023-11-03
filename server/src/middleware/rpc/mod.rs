@@ -30,9 +30,6 @@ mod layers;
 
 pub use layers::*;
 
-use std::net::SocketAddr;
-
-use http::{HeaderMap, Uri};
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
 use tower::util::Either;
@@ -47,7 +44,7 @@ pub trait RpcServiceT<'a> {
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	/// In this interface they are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
-	async fn call(&self, request: Request<'a>, ctx: &Context) -> MethodResponse;
+	async fn call(&self, request: Request<'a>, transport_label: TransportProtocol) -> MethodResponse;
 }
 
 /// The transport protocol used to send or receive a call or request.
@@ -70,23 +67,8 @@ impl std::fmt::Display for TransportProtocol {
 	}
 }
 
-/// Context to a JSON-RPC call.
-#[derive(Debug, Clone)]
-pub struct Context {
-	/// Transport protocol.
-	pub transport: TransportProtocol,
-	/// Remote addr.
-	pub remote_addr: SocketAddr,
-	/// Connection id.
-	pub conn_id: usize,
-	/// HTTP Headers.
-	pub headers: HeaderMap,
-	/// URI.
-	pub uri: Uri,
-}
-
 /// Similar to [`tower::ServiceBuilder`] but doesn't
-/// support any middleware implementations.
+/// support any tower middleware implementations.
 #[derive(Debug, Clone)]
 pub struct RpcServiceBuilder<L>(tower::ServiceBuilder<L>);
 

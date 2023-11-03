@@ -173,7 +173,12 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	}
 }
 
-/// Represent the response to a method call.
+/// Represents a response to a method call.
+///
+/// NOTE: A subscription is also a method call but it's
+/// possible determine whether a method response
+/// is "subscription" or "ordinary method call"
+/// by calling [`MethodResponse::is_subscription`]
 #[derive(Debug, Clone)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
@@ -233,7 +238,8 @@ impl MethodResponseResult {
 }
 
 impl MethodResponse {
-	/// Create a subscription response.
+	/// This is similar to [`MethodResponse::response`] but sets a flag to indicate
+	/// that response is a subscription.
 	pub fn subscription_response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
 	where
 		T: Serialize + Clone,
@@ -243,8 +249,10 @@ impl MethodResponse {
 		rp
 	}
 
-	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
-	/// an error will be sent instead.
+	/// Create a new method response.
+	///
+	/// If the serialization of `result` exceeds `max_response_size` then
+	/// the response is changed to an JSON-RPC error object.
 	pub fn response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
 	where
 		T: Serialize + Clone,
@@ -294,14 +302,15 @@ impl MethodResponse {
 		}
 	}
 
-	/// Create a subscription response error.
+	/// This is similar to [`MethodResponse::error`] but sets a flag to indicate
+	/// that error is a subscription.
 	pub fn subscription_error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
 		let mut rp = Self::error(id, err);
 		rp.is_subscription = true;
 		rp
 	}
 
-	/// Create a `MethodResponse` from an error.
+	/// Create a [`MethodResponse`] from a JSON-RPC error.
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
 		let err: ErrorObject = err.into();
 		let err_code = err.code();

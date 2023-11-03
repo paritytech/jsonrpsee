@@ -33,7 +33,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::rpc::{Context, RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
+use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
 use crate::transport::http::content_type_is_json;
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -367,7 +367,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// a type which is Send and provides interior mutability such `Arc<Mutex>`.
 	///
 	/// The builder itself exposes a similar API as the [`tower::ServiceBuilder`]
-	/// where it possible compose layers to the middleware.
+	/// where it is possible to compose layers to the middleware.
 	///
 	/// To add a middleware [`crate::middleware::rpc::RpcServiceBuilder`] exposes a few different layer APIs that
 	/// is wrapped on top of the [`tower::ServiceBuilder`].
@@ -379,7 +379,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use std::{time::Instant, net::SocketAddr, sync::Arc};
 	/// use std::sync::atomic::{Ordering, AtomicUsize};
 	///
-	/// use jsonrpsee_server::middleware::rpc::{RpcServiceT, RpcService, Context, RpcServiceBuilder};
+	/// use jsonrpsee_server::middleware::rpc::{RpcServiceT, RpcService, TransportProtocol, RpcServiceBuilder};
 	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
 	/// use jsonrpsee_core::async_trait;
 	/// use jsonrpsee_types::Request;
@@ -394,11 +394,11 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
 	/// where S: RpcServiceT<'a> + Send + Sync,
 	/// {
-	///     async fn call(&self, req: Request<'a>, ctx: &Context) -> MethodResponse {
+	///     async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         // if one wants to access connection related context
 	///         // that can be fetched from `Context`
-	///         let rp = self.service.call(req, ctx).await;
+	///         let rp = self.service.call(req, t).await;
 	///         // Modify the state.
 	///         self.count.fetch_add(1, Ordering::Relaxed);
 	///         rp
@@ -621,8 +621,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 /// Data required by the server to handle requests.
 #[derive(Debug, Clone)]
 pub struct ServiceData {
-	/// Remote server address.
-	pub remote_addr: SocketAddr,
 	/// Registered server methods.
 	pub methods: Methods,
 	/// Stop handle.
@@ -651,12 +649,11 @@ impl<L> TowerService<L> {
 		cfg: Settings,
 		methods: Methods,
 		rpc_middleware: RpcServiceBuilder<L>,
-		remote_addr: SocketAddr,
 		conn_permit: Arc<OwnedSemaphorePermit>,
 		stop_handle: StopHandle,
 		conn_id: u32,
 	) -> Self {
-		let inner = ServiceData { cfg, remote_addr, methods, conn_id, conn_permit, stop_handle };
+		let inner = ServiceData { cfg, methods, conn_id, conn_permit, stop_handle };
 
 		Self { inner, rpc_middleware }
 	}
@@ -688,14 +685,6 @@ where
 
 		if self.inner.cfg.enable_ws && is_upgrade_request {
 			let this = self.inner.clone();
-
-			let ctx = Context {
-				transport: TransportProtocol::WebSocket,
-				remote_addr: this.remote_addr,
-				conn_id: this.conn_id as usize,
-				headers: request.headers().clone(),
-				uri: request.uri().clone(),
-			};
 
 			let mut server = soketto::handshake::http::Server::new();
 
@@ -747,7 +736,6 @@ where
 								rpc_service,
 								sink,
 								rx,
-								ctx,
 								pending_calls_completed,
 							};
 
@@ -766,14 +754,6 @@ where
 
 			async { Ok(response) }.boxed()
 		} else if self.inner.cfg.enable_http && !is_upgrade_request {
-			let ctx = Context {
-				transport: TransportProtocol::Http,
-				remote_addr: self.inner.remote_addr,
-				conn_id: self.inner.conn_id as usize,
-				headers: request.headers().clone(),
-				uri: request.uri().clone(),
-			};
-
 			let rpc_service = self.rpc_middleware.service(RpcService::new(
 				self.inner.methods.clone(),
 				self.inner.cfg.max_response_body_size as usize,
@@ -801,8 +781,15 @@ where
 							}
 						};
 
-						let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, &ctx)
-							.await;
+						let rp = handle_rpc_call(
+							&body,
+							is_single,
+							batch_config,
+							max_response_size,
+							&rpc_service,
+							TransportProtocol::Http,
+						)
+						.await;
 
 						// If the response is empty it means that it was a notification or empty batch.
 						// For HTTP these are just ACK:ed with a empty body.
@@ -877,7 +864,6 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 	let tower_service = TowerService {
 		inner: ServiceData {
 			cfg: cfg.settings,
-			remote_addr: cfg.remote_addr,
 			methods: cfg.methods,
 			stop_handle: cfg.stop_handle.clone(),
 			conn_id: cfg.conn_id,
@@ -952,7 +938,7 @@ pub(crate) async fn handle_rpc_call<S>(
 	batch_config: BatchRequestConfig,
 	max_response_size: u32,
 	rpc_service: &S,
-	ctx: &Context,
+	transport: TransportProtocol,
 ) -> Option<MethodResponse>
 where
 	for<'a> S: RpcServiceT<'a> + Send,
@@ -960,7 +946,7 @@ where
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = serde_json::from_slice(body) {
-			Some(rpc_service.call(req, ctx).await)
+			Some(rpc_service.call(req, transport).await)
 		} else if let Ok(_notif) = serde_json::from_slice::<Notif>(body) {
 			None
 		} else {
@@ -992,7 +978,7 @@ where
 
 			for call in batch {
 				if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
-					let rp = rpc_service.call(req, ctx).await;
+					let rp = rpc_service.call(req, transport).await;
 
 					if let Err(too_large) = batch_response.append(&rp) {
 						return Some(too_large);

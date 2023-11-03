@@ -29,7 +29,7 @@
 //! This example demonstrates how to use the `http_middleware` which applies for each
 //! HTTP request.
 //!
-//! A typical use-case for this to apply a specific CORS policy which applies both
+//! A typical use-case for this it to apply a specific CORS policy which applies both
 //! for HTTP and WebSocket.
 //!
 

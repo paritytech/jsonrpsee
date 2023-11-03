@@ -90,13 +90,10 @@ fn run_server() -> ServerHandle {
 	let conn_id2 = conn_id.clone();
 
 	// And a MakeService to handle each connection...
-	let make_service = make_service_fn(move |conn: &AddrStream| {
-		// You may use `conn` or the actual HTTP request to deny a certain peer.
-
-		// Connection state.
+	let make_service = make_service_fn(move |_conn: &AddrStream| {
+		// You may use `conn` or the actual HTTP request to get connection related details.
 
 		let next_id = conn_id2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-		let remote_addr = conn.remote_addr();
 		let stop_handle = stop_handle2.clone();
 		let conn_guard = conn_guard.clone();
 		let cfg = cfg.clone();
@@ -115,7 +112,6 @@ fn run_server() -> ServerHandle {
 					cfg.settings.clone(),
 					cfg.methods.clone(),
 					cfg.rpc_middleware.clone(),
-					remote_addr,
 					Arc::new(conn_permit),
 					stop_handle.clone(),
 					next_id,

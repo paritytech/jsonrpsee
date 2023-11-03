@@ -57,14 +57,14 @@ impl<'a, S> RpcServiceT<'a> for DummyRateLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>, ctx: &Context) -> MethodResponse {
+	async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
 		let mut lock = self.count.lock().await;
 
 		if *lock >= 10 {
 			let _ = self.state.try_send(());
 			MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
 		} else {
-			let rp = self.service.call(req, ctx).await;
+			let rp = self.service.call(req, t).await;
 			*lock = *lock + 1;
 			rp
 		}
@@ -196,7 +196,6 @@ fn run_server() -> ServerHandle {
 					let svc = ServiceData {
 						cfg: service_cfg.settings,
 						conn_id,
-						remote_addr,
 						stop_handle,
 						conn_permit: Arc::new(conn_permit),
 						methods: service_cfg.methods.clone(),
@@ -226,7 +225,6 @@ fn run_server() -> ServerHandle {
 					let svc = ServiceData {
 						cfg: service_cfg.settings.clone(),
 						conn_id,
-						remote_addr,
 						stop_handle: stop_handle.clone(),
 						conn_permit: Arc::new(conn_permit),
 						methods: service_cfg.methods.clone(),
