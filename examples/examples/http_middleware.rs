@@ -24,9 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! This example sets a custom tower service middleware to the RPC implementation.
+//! jsonrpsee supports two kinds of middlewares `http_middleware` and `rpc_middleware`.
 //!
-//! It works with both `WebSocket` and `HTTP` which is done in the example.
+//! This example demonstrates how to use the `http_middleware` which applies for each
+//! HTTP request.
+//!
+//! A typical use-case for this it to apply a specific CORS policy which applies both
+//! for HTTP and WebSocket.
+//!
 
 use hyper::body::Bytes;
 use hyper::http::HeaderValue;
@@ -104,7 +109,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.layer(cors)
 		.timeout(Duration::from_secs(2));
 
-	let server = Server::builder().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let server =
+		Server::builder().set_http_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
 	let addr = server.local_addr()?;
 

@@ -258,7 +258,7 @@ impl PendingSubscriptionSink {
 	/// the return value is simply ignored because no further notification are propagated
 	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
-		let err = MethodResponse::error(self.id, err.into());
+		let err = MethodResponse::subscription_error(self.id, err.into());
 		_ = self.inner.send(err.result.clone()).await;
 		_ = self.subscribe.send(err);
 	}
@@ -269,7 +269,7 @@ impl PendingSubscriptionSink {
 	///
 	/// Panics if the subscription response exceeded the `max_response_size`.
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
-		let response = MethodResponse::response(
+		let response = MethodResponse::subscription_response(
 			self.id,
 			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
@@ -438,6 +438,9 @@ impl Subscription {
 		let raw = self.rx.recv().await?;
 
 		tracing::debug!("[Subscription::next]: rx {}", raw);
+
+		// clippy complains about this but it doesn't compile without the extra res binding.
+		#[allow(clippy::let_and_return)]
 		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
 			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
 			Err(e) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {

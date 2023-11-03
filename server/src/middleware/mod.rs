@@ -24,15 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Various middleware implementations for RPC specific purposes.
+//! jsonrpsee-server middleware
 
-/// Utility and types related to the authority of an URI.
-mod authority;
-/// HTTP Host filtering middleware.
-mod host_filter;
-/// Proxy `GET /path` to internal RPC methods.
-mod proxy_get_request;
-
-pub use authority::*;
-pub use host_filter::*;
-pub use proxy_get_request::*;
+/// HTTP related middleware.
+pub mod http;
+/// JSON-RPC specific middleware.
+pub mod rpc;

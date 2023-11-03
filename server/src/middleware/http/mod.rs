@@ -24,25 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! # jsonrpsee-server
-//!
-//! `jsonrpsee-server` is a [JSON RPC](https://www.jsonrpc.org/specification) server that supports both HTTP and WebSocket transport.
+//! Various middleware implementations for HTTP specific purposes.
 
-#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+/// Utility and types related to the authority of an URI.
+mod authority;
+/// HTTP Host filtering middleware.
+mod host_filter;
+/// Proxy `GET /path` to internal RPC methods.
+mod proxy_get_request;
 
-mod future;
-mod server;
-mod transport;
-
-pub mod middleware;
-
-#[cfg(test)]
-mod tests;
-
-pub use future::ServerHandle;
-pub use jsonrpsee_core::server::*;
-pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
-pub use jsonrpsee_types as types;
-pub use server::{BatchRequestConfig, Builder as ServerBuilder, PingConfig, Server};
-pub use tracing;
+pub use {authority::*, host_filter::*, proxy_get_request::*};

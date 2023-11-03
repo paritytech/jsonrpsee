@@ -123,6 +123,32 @@ pub enum MethodCallback {
 	Unsubscription(UnsubscriptionMethod),
 }
 
+/// The kind of the JSON-RPC method call, it can be a subscription, method call or unknown.
+#[derive(Debug, Copy, Clone)]
+pub enum MethodKind {
+	/// Subscription Call.
+	Subscription,
+	/// Unsubscription Call.
+	Unsubscription,
+	/// Method call.
+	MethodCall,
+	/// The method was not found.
+	NotFound,
+}
+
+impl std::fmt::Display for MethodKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = match self {
+			Self::Subscription => "subscription",
+			Self::MethodCall => "method call",
+			Self::NotFound => "method not found",
+			Self::Unsubscription => "unsubscription",
+		};
+
+		write!(f, "{s}")
+	}
+}
+
 /// Result of a method, either direct value or a future of one.
 pub enum MethodResult<T> {
 	/// Result by value
@@ -307,7 +333,7 @@ impl Methods {
 	) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::channel(buf_size);
 		let id = req.id.clone();
-		let params = Params::new(req.params.map(|params| params.get()));
+		let params = Params::new(req.params.as_ref().map(|params| params.as_ref().get()));
 
 		let response = match self.method(&req.method) {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),

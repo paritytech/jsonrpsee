@@ -173,13 +173,20 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	}
 }
 
-/// Represent the response to a method call.
+/// Represents a response to a method call.
+///
+/// NOTE: A subscription is also a method call but it's
+/// possible determine whether a method response
+/// is "subscription" or "ordinary method call"
+/// by calling [`MethodResponse::is_subscription`]
 #[derive(Debug, Clone)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
 	pub result: String,
 	/// Indicates whether the call was successful or not.
 	pub success_or_error: MethodResponseResult,
+	/// Indicates whether the call was a subscription response.
+	pub is_subscription: bool,
 }
 
 impl MethodResponse {
@@ -191,6 +198,11 @@ impl MethodResponse {
 	/// Returns whether the call failed.
 	pub fn is_error(&self) -> bool {
 		self.success_or_error.is_success()
+	}
+
+	/// Returns whether the call is a subscription.
+	pub fn is_subscription(&self) -> bool {
+		self.is_subscription
 	}
 }
 
@@ -226,8 +238,21 @@ impl MethodResponseResult {
 }
 
 impl MethodResponse {
-	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
-	/// an error will be sent instead.
+	/// This is similar to [`MethodResponse::response`] but sets a flag to indicate
+	/// that response is a subscription.
+	pub fn subscription_response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
+	where
+		T: Serialize + Clone,
+	{
+		let mut rp = Self::response(id, result, max_response_size);
+		rp.is_subscription = true;
+		rp
+	}
+
+	/// Create a new method response.
+	///
+	/// If the serialization of `result` exceeds `max_response_size` then
+	/// the response is changed to an JSON-RPC error object.
 	pub fn response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
 	where
 		T: Serialize + Clone,
@@ -245,7 +270,7 @@ impl MethodResponse {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
 
-				Self { result, success_or_error }
+				Self { result, success_or_error, is_subscription: false }
 			}
 			Err(err) => {
 				tracing::error!("Error serializing response: {:?}", err);
@@ -262,24 +287,36 @@ impl MethodResponse {
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self { result, success_or_error: MethodResponseResult::Failed(err_code) }
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code), is_subscription: false }
 				} else {
 					let err_code = ErrorCode::InternalError;
 					let result = serde_json::to_string(&Response::new(err_code.into(), id))
 						.expect("JSON serialization infallible; qed");
-					Self { result, success_or_error: MethodResponseResult::Failed(err_code.code()) }
+					Self {
+						result,
+						success_or_error: MethodResponseResult::Failed(err_code.code()),
+						is_subscription: false,
+					}
 				}
 			}
 		}
 	}
 
-	/// Create a `MethodResponse` from an error.
+	/// This is similar to [`MethodResponse::error`] but sets a flag to indicate
+	/// that error is a subscription.
+	pub fn subscription_error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
+		let mut rp = Self::error(id, err);
+		rp.is_subscription = true;
+		rp
+	}
+
+	/// Create a [`MethodResponse`] from a JSON-RPC error.
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
 		let err: ErrorObject = err.into();
 		let err_code = err.code();
 		let err = ResponsePayload::error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
-		Self { result, success_or_error: MethodResponseResult::Failed(err_code) }
+		Self { result, success_or_error: MethodResponseResult::Failed(err_code), is_subscription: false }
 	}
 }
 
@@ -305,13 +342,13 @@ impl BatchResponseBuilder {
 	///
 	/// Fails if the max limit is exceeded and returns to error response to
 	/// return early in order to not process method call responses which are thrown away anyway.
-	pub fn append(&mut self, response: &MethodResponse) -> Result<(), String> {
+	pub fn append(&mut self, response: &MethodResponse) -> Result<(), MethodResponse> {
 		// `,` will occupy one extra byte for each entry
 		// on the last item the `,` is replaced by `]`.
 		let len = response.result.len() + self.result.len() + 1;
 
 		if len > self.max_response_size {
-			Err(batch_response_error(Id::Null, reject_too_big_batch_response(self.max_response_size)))
+			Err(MethodResponse::error(Id::Null, reject_too_big_batch_response(self.max_response_size)))
 		} else {
 			self.result.push_str(&response.result);
 			self.result.push(',');
@@ -409,6 +446,6 @@ mod tests {
 		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
 
 		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of 63"},"id":null}"#;
-		assert_eq!(batch, exp_err);
+		assert_eq!(batch.result, exp_err);
 	}
 }

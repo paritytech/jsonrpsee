@@ -34,7 +34,7 @@ use std::net::SocketAddr;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::HostFilterLayer;
+use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{RpcModule, Server};
 
 #[tokio::main]
@@ -65,7 +65,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		// `HostFilerLayer::new` only fails on invalid URIs..
 		.layer(HostFilterLayer::new(["example.com"]).unwrap());
 
-	let server = Server::builder().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let server =
+		Server::builder().set_http_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
 	let addr = server.local_addr()?;
 

@@ -45,7 +45,7 @@ use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::middleware::HostFilterLayer;
+use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -1011,7 +1011,7 @@ async fn ws_host_filtering_wildcard_works() {
 	let middleware =
 		tower::ServiceBuilder::new().layer(HostFilterLayer::new(["http://localhost:*", "http://127.0.0.1:*"]).unwrap());
 
-	let server = ServerBuilder::default().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1033,7 +1033,7 @@ async fn http_host_filtering_wildcard_works() {
 	let middleware =
 		tower::ServiceBuilder::new().layer(HostFilterLayer::new(["http://localhost:*", "http://127.0.0.1:*"]).unwrap());
 
-	let server = ServerBuilder::default().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1054,7 +1054,7 @@ async fn deny_invalid_host() {
 
 	let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::new(["example.com"]).unwrap());
 
-	let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1086,7 +1086,7 @@ async fn disable_host_filter_works() {
 
 	let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::disable());
 
-	let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();

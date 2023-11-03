@@ -161,7 +161,7 @@ impl<L> HttpClientBuilder<L> {
 	}
 
 	/// Set custom tower middleware.
-	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
+	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
 		HttpClientBuilder {
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
