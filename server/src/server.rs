@@ -692,7 +692,7 @@ where
 
 					// On each method call the `pending_calls` is cloned
 					// then when all pending_calls are dropped
-					// a graceful shutdown can has occur.
+					// a graceful shutdown can occur.
 					let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 					let cfg = RpcServiceCfg::CallsAndSubscriptions {
