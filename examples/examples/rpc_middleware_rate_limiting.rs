@@ -53,6 +53,13 @@ enum State {
 	Allow { until: Instant, rem: u64 },
 }
 
+/// Depending on how the rate limit is instantiated
+/// it's possible to select whether the rate limit
+/// is be applied per connection or shared by
+/// all connections.
+///
+/// Have a look at `async fn run_server` below which
+/// shows how do it.
 #[derive(Clone)]
 pub struct RateLimit<S> {
 	service: S,
@@ -79,11 +86,6 @@ where
 	S: Send + Sync + RpcServiceT<'a>,
 {
 	async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
-		// `Context` contains the connection ID related to RPC call.
-		//
-		// That you may use to distinguish calls from different connections
-		// if you want to manage that yourself.
-
 		let now = Instant::now();
 
 		let is_denied = {
@@ -155,6 +157,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	//
 	// In this particular example the server will only
 	// allow one RPC call per second.
+	//
+	// Have a look at the `rpc_middleware example` if you want see an example
+	// how to share state of the "middleware" for all connections on the server.
 	let rpc_middleware = RpcServiceBuilder::new()
 		.layer_fn(|service| RateLimit::new(service, Rate { num: 1, period: Duration::from_secs(1) }));
 
