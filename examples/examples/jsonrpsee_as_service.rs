@@ -24,20 +24,37 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! This examples shows how to use the jsonrpsee::server as
+//! a tower service such that one access HTTP related things
+//! by launching a hyper::service_fn
+//!
+//! The typical use-case for this is when one wants to have
+//! access to HTTP related things.
+
 use std::error::Error as StdError;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use futures::FutureExt;
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
+use jsonrpsee::server::middleware::rpc::RpcServiceBuilder;
 use jsonrpsee::server::{ServerHandle, StopHandle};
 use jsonrpsee::types::ErrorObjectOwned;
 
 use hyper::server::conn::AddrStream;
 use tower::Service;
+use tower_http::cors::CorsLayer;
 use tracing_subscriber::util::SubscriberInitExt;
+
+#[derive(Default, Clone)]
+struct Metrics {
+	ws_connections: Arc<AtomicUsize>,
+	http_connections: Arc<AtomicUsize>,
+}
 
 #[rpc(server)]
 pub trait Rpc {
@@ -80,9 +97,15 @@ fn run_server() -> ServerHandle {
 
 	let server_handle = ServerHandle::new(tx);
 	let stop_handle = StopHandle::new(rx);
-	let svc_builder = jsonrpsee::server::Server::builder().to_service_builder().max_connections(20);
+	let http_middleware = tower::ServiceBuilder::new().layer(CorsLayer::permissive());
+	let svc_builder = jsonrpsee::server::Server::builder()
+		.set_http_middleware(http_middleware)
+		.set_rpc_middleware(RpcServiceBuilder::new().rpc_logger(1024))
+		.to_service_builder()
+		.max_connections(33);
 	let methods = ().into_rpc();
 	let stop_handle2 = stop_handle.clone();
+	let metrics = Metrics::default();
 
 	// And a MakeService to handle each connection...
 	let make_service = make_service_fn(move |_conn: &AddrStream| {
@@ -91,16 +114,29 @@ fn run_server() -> ServerHandle {
 		let stop_handle = stop_handle2.clone();
 		let svc_builder = svc_builder.clone();
 		let methods = methods.clone();
+		let metrics = metrics.clone();
 
 		async move {
 			let stop_handle = stop_handle.clone();
 			let svc_builder = svc_builder.clone();
 			let methods = methods.clone();
+			let metrics = metrics.clone();
 
 			Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
+				let metrics = metrics.clone();
 				let mut svc = svc_builder.build(methods.clone(), stop_handle.clone());
-
-				async move { svc.call(req).await }.boxed()
+				async move {
+					// You can't determine whether the websocket upgrade handshake failed or not here.
+					let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
+					let rp = svc.call(req).await;
+					if is_websocket {
+						metrics.ws_connections.fetch_add(1, Ordering::Relaxed);
+					} else {
+						metrics.http_connections.fetch_add(1, Ordering::Relaxed);
+					}
+					rp
+				}
+				.boxed()
 			}))
 		}
 	});

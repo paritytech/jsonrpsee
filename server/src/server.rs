@@ -768,7 +768,7 @@ where
 			cfg: self.inner.cfg.clone(),
 		};
 
-		let max_conns = self.inner.cfg.max_connections as usize;
+		let max_conns = self.inner.conn_guard.max_connections();
 		let curr_conns = max_conns - self.inner.conn_guard.available_connections();
 		tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
 

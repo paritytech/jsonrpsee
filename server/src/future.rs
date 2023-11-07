@@ -79,17 +79,20 @@ impl ServerHandle {
 
 /// Limits the number of connections.
 #[derive(Clone, Debug)]
-pub struct ConnectionGuard(Arc<Semaphore>);
+pub struct ConnectionGuard {
+	inner: Arc<Semaphore>,
+	max: usize,
+}
 
 impl ConnectionGuard {
 	/// Create a new connection guard.
 	pub fn new(limit: usize) -> Self {
-		Self(Arc::new(Semaphore::new(limit)))
+		Self { inner: Arc::new(Semaphore::new(limit)), max: limit }
 	}
 
 	/// Acquire a connection permit.
 	pub fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
-		match self.0.clone().try_acquire_owned() {
+		match self.inner.clone().try_acquire_owned() {
 			Ok(guard) => Some(guard),
 			Err(TryAcquireError::Closed) => unreachable!("Semaphore::Close is never called and can't be closed; qed"),
 			Err(TryAcquireError::NoPermits) => None,
@@ -98,6 +101,11 @@ impl ConnectionGuard {
 
 	/// Get the number of available connection slots.
 	pub fn available_connections(&self) -> usize {
-		self.0.available_permits()
+		self.inner.available_permits()
+	}
+
+	/// Get the maximum number of connections.
+	pub fn max_connections(&self) -> usize {
+		self.max
 	}
 }

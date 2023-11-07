@@ -24,9 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! This example shows how to use the low-level APIs and helpers
-//! in jsonrpsee to get access the connection handlers to
-//! disconnect certain peers and other things.
+//! This example shows how to use the low-level server API
+//! in jsonrpsee.
+//!
+//! The particular example disconnects peers that exceeds
+//! the rate limit more than ten times and bans IP addr.
+//!
+//! NOTE:
+//!
+//! Enabling tower middleware in this example doesn't work,
+//! to do so then the low-level API in hyper must be used.
 
 use std::collections::HashSet;
 use std::convert::Infallible;
