@@ -28,6 +28,7 @@ use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
+use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
@@ -97,14 +98,14 @@ impl<HttpMiddleware, RpcMiddleware, B> Server<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
-	HttpMiddleware: Layer<TowerService<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service: Send
+	HttpMiddleware: Layer<InnerTowerService<RpcMiddleware>> + Send + 'static,
+	<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service: Send
 		+ Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<B>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+	<<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
 		Send,
 	B: HttpBody + Send + 'static,
 	<B as HttpBody>::Error: Send + Sync + StdError,
@@ -207,15 +208,17 @@ pub struct Settings {
 
 /// Service config.
 #[derive(Debug, Clone)]
-pub struct ServiceConfig<RpcMiddleware, HttpMiddleware> {
+pub struct TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 	/// Settings
-	pub settings: Settings,
-	/// Methods
-	pub methods: Methods,
+	settings: Settings,
 	/// RPC middleware.
-	pub rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
+	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	/// HTTP middleware.
-	pub http_middleware: tower::ServiceBuilder<HttpMiddleware>,
+	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
+	/// Connection ID.
+	conn_id: Arc<AtomicU32>,
+	/// Connection ID.
+	conn_guard: ConnectionGuard,
 }
 
 /// Configuration for batch request handling.
@@ -227,6 +230,21 @@ pub enum BatchRequestConfig {
 	Limit(u32),
 	/// The batch request is unlimited.
 	Unlimited,
+}
+
+/// Data required to handle a JSON-RPC call.
+#[derive(Debug, Clone)]
+pub struct Params {
+	/// Registered server methods.
+	pub methods: Methods,
+	/// Stop handle.
+	pub stop_handle: StopHandle,
+	/// Connection ID
+	pub conn_id: u32,
+	/// Connection guard.
+	pub conn_permit: Arc<OwnedSemaphorePermit>,
+	/// Settings
+	pub cfg: Settings,
 }
 
 /// Configuration for WebSocket ping's.
@@ -317,6 +335,44 @@ impl Builder<Identity, Identity> {
 	/// Create a default server builder.
 	pub fn new() -> Self {
 		Self::default()
+	}
+}
+
+impl<RpcMiddleware: Clone, HttpMiddleware: Clone> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
+	/// Build a tower service.
+	pub fn build(
+		&self,
+		methods: impl Into<Methods>,
+		stop_handle: StopHandle,
+	) -> TowerService<RpcMiddleware, HttpMiddleware> {
+		let conn_id = self.conn_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+		let rpc_middleware = InnerTowerService {
+			rpc_middleware: self.rpc_middleware.clone(),
+			inner: ServiceData {
+				methods: methods.into(),
+				stop_handle,
+				conn_id,
+				conn_guard: self.conn_guard.clone(),
+				cfg: self.settings.clone(),
+			},
+		};
+
+		TowerService { rpc_middleware, http_middleware: self.http_middleware.clone() }
+	}
+
+	/// Configure the connection id.
+	///
+	/// This is incremented every time `build` is called.
+	pub fn connection_id(mut self, id: u32) -> Self {
+		self.conn_id = Arc::new(AtomicU32::new(id));
+		self
+	}
+
+	/// Configure the max allowed connections on the server.
+	pub fn max_connections(mut self, limit: u32) -> Self {
+		self.conn_guard = ConnectionGuard::new(limit as usize);
+		self
 	}
 }
 
@@ -541,12 +597,13 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	}
 
 	/// Extract the server configuration to use jsonrpsee as service.
-	pub fn to_service(self, methods: impl Into<Methods>) -> ServiceConfig<RpcMiddleware, HttpMiddleware> {
-		ServiceConfig {
+	pub fn to_service_builder(self) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
+		TowerServiceBuilder {
 			settings: self.settings,
-			methods: methods.into(),
 			rpc_middleware: self.rpc_middleware,
 			http_middleware: self.http_middleware,
+			conn_id: Arc::new(AtomicU32::new(0)),
+			conn_guard: ConnectionGuard::new(100),
 		}
 	}
 
@@ -624,10 +681,47 @@ pub struct ServiceData {
 	pub stop_handle: StopHandle,
 	/// Connection ID
 	pub conn_id: u32,
-	/// Handle to hold a `connection permit`.
-	pub conn_permit: Arc<OwnedSemaphorePermit>,
+	/// Connection guard.
+	pub conn_guard: ConnectionGuard,
 	/// Settings
 	pub cfg: Settings,
+}
+
+/// Wrapped HTTP and RPC middleware for ease of use.
+#[derive(Debug)]
+pub struct TowerService<RpcMiddleware, HttpMiddleware> {
+	rpc_middleware: InnerTowerService<RpcMiddleware>,
+	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
+}
+
+impl<RpcMiddleware, HttpMiddleware> hyper::service::Service<hyper::Request<hyper::Body>>
+	for TowerService<RpcMiddleware, HttpMiddleware>
+where
+	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
+	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	HttpMiddleware: Layer<InnerTowerService<RpcMiddleware>> + Send + 'static,
+	<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service: Send
+		+ Service<
+			hyper::Request<hyper::Body>,
+			Response = hyper::Response<hyper::Body>,
+			Error = Box<(dyn StdError + Send + Sync + 'static)>,
+		>,
+	<<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+		Send + 'static,
+{
+	type Response = hyper::Response<hyper::Body>;
+	type Error = Box<dyn StdError + Send + Sync + 'static>;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+	/// Opens door for back pressure implementation.
+	fn poll_ready(&mut self, _: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
+		Box::pin(self.http_middleware.service(self.rpc_middleware.clone()).call(request))
+	}
 }
 
 /// JsonRPSee service compatible with `tower`.
@@ -635,28 +729,12 @@ pub struct ServiceData {
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].
 #[derive(Debug, Clone)]
-pub struct TowerService<L> {
+pub struct InnerTowerService<L> {
 	inner: ServiceData,
 	rpc_middleware: RpcServiceBuilder<L>,
 }
 
-impl<L> TowerService<L> {
-	/// Create a new jsonrpsee tower service.
-	pub fn new(
-		cfg: Settings,
-		methods: Methods,
-		rpc_middleware: RpcServiceBuilder<L>,
-		conn_permit: Arc<OwnedSemaphorePermit>,
-		stop_handle: StopHandle,
-		conn_id: u32,
-	) -> Self {
-		let inner = ServiceData { cfg, methods, conn_id, conn_permit, stop_handle };
-
-		Self { inner, rpc_middleware }
-	}
-}
-
-impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<RpcMiddleware>
+impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for InnerTowerService<RpcMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -677,6 +755,22 @@ where
 
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		tracing::trace!("{:?}", request);
+
+		let Some(conn_permit) = self.inner.conn_guard.try_acquire() else {
+			return async move { Ok(http::response::too_many_requests()) }.boxed();
+		};
+
+		let params = Params {
+			methods: self.inner.methods.clone(),
+			conn_id: self.inner.conn_id,
+			stop_handle: self.inner.stop_handle.clone(),
+			conn_permit: Arc::new(conn_permit),
+			cfg: self.inner.cfg.clone(),
+		};
+
+		let max_conns = self.inner.cfg.max_connections as usize;
+		let curr_conns = max_conns - self.inner.conn_guard.available_connections();
+		tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
@@ -727,7 +821,7 @@ where
 							let (sender, receiver) = ws_builder.finish();
 
 							let params = BackgroundTaskParams {
-								other: this,
+								params,
 								ws_sender: sender,
 								ws_receiver: receiver,
 								rpc_service,
@@ -786,21 +880,21 @@ struct ProcessConnection {
 fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 	http_middleware_builder: &tower::ServiceBuilder<HttpMiddleware>,
 	rpc_middleware_builder: RpcServiceBuilder<RpcMiddleware>,
-	connection_guard: &ConnectionGuard,
+	conn_guard: &ConnectionGuard,
 	cfg: ProcessConnection,
 	socket: TcpStream,
 	drop_on_completion: mpsc::Sender<()>,
 ) where
 	RpcMiddleware: 'static,
-	HttpMiddleware: Layer<TowerService<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service: Send
+	HttpMiddleware: Layer<InnerTowerService<RpcMiddleware>> + Send + 'static,
+	<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service: Send
 		+ 'static
 		+ Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<U>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<HttpMiddleware as Layer<TowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+	<<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
 		Send + 'static,
 	U: HttpBody + Send + 'static,
 	<U as HttpBody>::Error: Send + Sync + StdError,
@@ -811,7 +905,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 		return;
 	}
 
-	let conn = match connection_guard.try_acquire() {
+	/*let conn = match connection_guard.try_acquire() {
 		Some(conn) => conn,
 		None => {
 			tracing::debug!("Too many connections. Please try again later.");
@@ -825,15 +919,15 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 
 	let max_conns = cfg.settings.max_connections as usize;
 	let curr_conns = max_conns - connection_guard.available_connections();
-	tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
+	tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);*/
 
-	let tower_service = TowerService {
+	let tower_service = InnerTowerService {
 		inner: ServiceData {
 			cfg: cfg.settings,
 			methods: cfg.methods,
 			stop_handle: cfg.stop_handle.clone(),
 			conn_id: cfg.conn_id,
-			conn_permit: Arc::new(conn),
+			conn_guard: conn_guard.clone(),
 		},
 		rpc_middleware: rpc_middleware_builder,
 	};

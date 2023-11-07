@@ -26,15 +26,13 @@
 
 use std::error::Error as StdError;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
 
 use futures::FutureExt;
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{http, ConnectionGuard, ServerHandle, StopHandle, TowerService};
+use jsonrpsee::server::{ServerHandle, StopHandle};
 use jsonrpsee::types::ErrorObjectOwned;
 
 use hyper::server::conn::AddrStream;
@@ -82,40 +80,25 @@ fn run_server() -> ServerHandle {
 
 	let server_handle = ServerHandle::new(tx);
 	let stop_handle = StopHandle::new(rx);
-	let cfg = jsonrpsee::server::Server::builder().to_service(().into_rpc());
-	let conn_guard = Arc::new(ConnectionGuard::new(cfg.settings.max_connections as usize));
-	let conn_id = Arc::new(AtomicU32::new(0));
-
+	let svc_builder = jsonrpsee::server::Server::builder().to_service_builder().max_connections(20);
+	let methods = ().into_rpc();
 	let stop_handle2 = stop_handle.clone();
-	let conn_id2 = conn_id.clone();
 
 	// And a MakeService to handle each connection...
 	let make_service = make_service_fn(move |_conn: &AddrStream| {
 		// You may use `conn` or the actual HTTP request to get connection related details.
 
-		let next_id = conn_id2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 		let stop_handle = stop_handle2.clone();
-		let conn_guard = conn_guard.clone();
-		let cfg = cfg.clone();
+		let svc_builder = svc_builder.clone();
+		let methods = methods.clone();
 
 		async move {
 			let stop_handle = stop_handle.clone();
-			let conn_guard = conn_guard.clone();
-			let cfg = cfg.clone();
+			let svc_builder = svc_builder.clone();
+			let methods = methods.clone();
 
 			Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
-				let Some(conn_permit) = conn_guard.try_acquire() else {
-					return async move { Ok(http::response::too_many_requests()) }.boxed();
-				};
-
-				let mut svc = TowerService::new(
-					cfg.settings.clone(),
-					cfg.methods.clone(),
-					cfg.rpc_middleware.clone(),
-					Arc::new(conn_permit),
-					stop_handle.clone(),
-					next_id,
-				);
+				let mut svc = svc_builder.build(methods.clone(), stop_handle.clone());
 
 				async move { svc.call(req).await }.boxed()
 			}))

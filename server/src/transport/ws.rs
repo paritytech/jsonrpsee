@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
-use crate::server::{handle_rpc_call, ServiceData, Settings};
+use crate::server::{handle_rpc_call, Params, Settings};
 use crate::PingConfig;
 
 use futures_util::future::{self, Either, Fuse};
@@ -47,7 +47,7 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 }
 
 pub(crate) struct BackgroundTaskParams<S> {
-	pub(crate) other: ServiceData,
+	pub(crate) params: Params,
 	pub(crate) ws_sender: Sender,
 	pub(crate) ws_receiver: Receiver,
 	pub(crate) rpc_service: S,
@@ -60,8 +60,9 @@ pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
 	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
-	let BackgroundTaskParams { other, ws_sender, ws_receiver, rpc_service, sink, rx, pending_calls_completed } = params;
-	let ServiceData { cfg, stop_handle, conn_id, conn_permit, .. } = other;
+	let BackgroundTaskParams { params, ws_sender, ws_receiver, rpc_service, sink, rx, pending_calls_completed } =
+		params;
+	let Params { cfg, stop_handle, conn_id, conn_permit, .. } = params;
 	let Settings { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } = cfg;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
@@ -375,7 +376,7 @@ async fn graceful_shutdown<S>(
 /// ```
 pub async fn connect<L>(
 	req: hyper::Request<hyper::Body>,
-	params: ServiceData,
+	params: Params,
 	rpc_middleware: RpcServiceBuilder<L>,
 ) -> Result<(hyper::Response<hyper::Body>, impl Future<Output = ()>), hyper::Response<hyper::Body>>
 where
@@ -426,7 +427,7 @@ where
 				let (sender, receiver) = ws_builder.finish();
 
 				let params = BackgroundTaskParams {
-					other: params,
+					params,
 					ws_sender: sender,
 					ws_receiver: receiver,
 					rpc_service,

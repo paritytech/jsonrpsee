@@ -24,22 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::error::Error as StdError;
 use std::net::SocketAddr;
-use std::pin::Pin;
-use std::sync::Arc;
 
-use futures::Future;
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::rpc::{RpcService, RpcServiceT};
-use jsonrpsee::server::{ConnectionGuard, ServerHandle, StopHandle, TowerService};
+use jsonrpsee::server::middleware::rpc::RpcServiceBuilder;
+use jsonrpsee::server::{ServerHandle, StopHandle};
 use jsonrpsee::types::ErrorObjectOwned;
 use tokio::net::TcpListener;
-
-use tower::Service;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -86,69 +80,38 @@ fn run_server(listener: TcpListener) -> ServerHandle {
 	// This must held to keep the server running
 	let server_handle = ServerHandle::new(tx);
 
+	let methods = ().into_rpc();
 	let http_middleware = tower::ServiceBuilder::new().layer(CorsLayer::permissive());
-	let cfg = jsonrpsee::server::Server::builder().set_http_middleware(http_middleware).to_service(().into_rpc());
-	let conn_guard = Arc::new(ConnectionGuard::new(cfg.settings.max_connections as usize));
-	let mut conn_id = 0;
+	let svc_builder = jsonrpsee::server::Server::builder()
+		.set_http_middleware(http_middleware)
+		.set_rpc_middleware(RpcServiceBuilder::new().rpc_logger(1024))
+		.to_service_builder()
+		.max_connections(33);
 
 	tokio::spawn(async move {
 		loop {
-			let (stream, _) = listener.accept().await.unwrap();
+			let stream = tokio::select! {
+				_ = stop_handle.clone().shutdown() => return,
+				next = listener.accept() => {
+					match next {
+						Ok((stream, _)) => stream,
+						Err(e) => {
+							tracing::warn!("Connection closed: {e}");
+							return;
+						}
+					}
+				}
+			};
 
-			let conn_permit = conn_guard.try_acquire().unwrap();
-
-			let svc = TowerService::new(
-				cfg.settings.clone(),
-				cfg.methods.clone(),
-				cfg.rpc_middleware.clone(),
-				Arc::new(conn_permit),
-				stop_handle.clone(),
-				conn_id,
-			);
-
-			let svc = Svc { svc, builder: cfg.http_middleware.clone() };
+			let svc = svc_builder.build(methods.clone(), stop_handle.clone());
 
 			tokio::task::spawn(async move {
 				if let Err(err) = Http::new().serve_connection(stream, svc).await {
 					println!("Failed to serve connection: {:?}", err);
 				}
 			});
-			conn_id += 1;
 		}
 	});
 
 	server_handle
-}
-
-struct Svc<RpcMiddleware, HttpMiddleware> {
-	svc: TowerService<RpcMiddleware>,
-	builder: tower::ServiceBuilder<HttpMiddleware>,
-}
-
-impl<RpcMiddleware, HttpMiddleware> Service<hyper::Request<hyper::Body>> for Svc<RpcMiddleware, HttpMiddleware>
-where
-	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
-	for<'a> <RpcMiddleware as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
-	HttpMiddleware: tower::Layer<TowerService<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as tower::Layer<TowerService<RpcMiddleware>>>::Service: Send
-		+ Service<
-			hyper::Request<hyper::Body>,
-			Response = hyper::Response<hyper::Body>,
-			Error = Box<(dyn StdError + Send + Sync + 'static)>,
-		>,
-	<<HttpMiddleware as tower::Layer<TowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
-		Send,
-{
-	type Response = hyper::Response<hyper::Body>;
-	type Error = Box<(dyn StdError + Send + Sync + 'static)>;
-	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
-
-	fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
-		let m = self.svc.clone();
-		Box::pin(self.builder.service(m).call(req))
-	}
-
-	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-		std::task::Poll::Ready(Ok(()))
-	}
 }

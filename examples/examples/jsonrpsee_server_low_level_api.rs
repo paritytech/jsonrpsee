@@ -24,22 +24,29 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! This example shows how to use the low-level APIs and helpers
+//! in jsonrpsee to get access the connection handlers to
+//! disconnect certain peers and other things.
+
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use futures::FutureExt;
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::*;
-use jsonrpsee::server::{http, ws, ConnectionGuard, ServerHandle, ServiceData, StopHandle};
+use jsonrpsee::server::{
+	http, ws, ConnectionGuard, Params, PingConfig, RandomIntegerIdProvider, ServerHandle, Settings, StopHandle,
+};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, MethodResponse};
-use tokio::sync::Mutex as AsyncMutex;
+use jsonrpsee::{rpc_params, MethodResponse, Methods};
+use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit};
 
 use hyper::server::conn::AddrStream;
 use tokio::sync::mpsc;
@@ -127,6 +134,29 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
+fn to_jsonrpsee_params(
+	methods: impl Into<Methods>,
+	stop_handle: StopHandle,
+	conn_id: u32,
+	conn_permit: OwnedSemaphorePermit,
+) -> Params {
+	let cfg = Settings {
+		max_connections: 100,
+		max_request_body_size: 1024 * 1024,
+		max_response_body_size: 1024 * 1024,
+		max_subscriptions_per_connection: 128,
+		message_buffer_capacity: 1024,
+		enable_http: true,
+		enable_ws: true,
+		tokio_runtime: None,
+		ping_config: PingConfig::WithoutInactivityCheck(Duration::from_secs(30)),
+		batch_requests_config: jsonrpsee::server::BatchRequestConfig::Disabled,
+		id_provider: Arc::new(RandomIntegerIdProvider),
+	};
+
+	Params { methods: methods.into(), stop_handle, conn_id, conn_permit: Arc::new(conn_permit), cfg }
+}
+
 fn run_server() -> ServerHandle {
 	use hyper::service::{make_service_fn, service_fn};
 
@@ -138,9 +168,8 @@ fn run_server() -> ServerHandle {
 
 	let stop_handle = StopHandle::new(rx);
 	let server_handle = ServerHandle::new(tx);
-
-	let service_cfg = jsonrpsee::server::Server::builder().to_service(().into_rpc());
-	let conn_guard = Arc::new(ConnectionGuard::new(service_cfg.settings.max_connections as usize));
+	let methods = ().into_rpc();
+	let conn_guard = ConnectionGuard::new(100);
 	let conn_id = Arc::new(AtomicU32::new(0));
 	let http_rate_limit = Arc::new(AsyncMutex::new(0));
 
@@ -150,21 +179,19 @@ fn run_server() -> ServerHandle {
 
 	// And a MakeService to handle each connection...
 	let make_service = make_service_fn(move |conn: &AddrStream| {
-		// You may use `conn` or the actual HTTP request to deny a certain peer.
-
 		// Connection state.
 		let conn_id = conn_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 		let remote_addr = conn.remote_addr();
 		let stop_handle = stop_handle2.clone();
 		let conn_guard = conn_guard.clone();
-		let service_cfg = service_cfg.clone();
+		let methods = methods.clone();
 		let blacklisted_peers = blacklisted_peers.clone();
 		let http_rate_limit = http_rate_limit.clone();
 
 		async move {
 			let stop_handle = stop_handle.clone();
 			let conn_guard = conn_guard.clone();
-			let service_cfg = service_cfg.clone();
+			let methods = methods.clone();
 			let stop_handle = stop_handle.clone();
 			let blacklisted_peers = blacklisted_peers.clone();
 			let http_rate_limit = http_rate_limit.clone();
@@ -180,8 +207,8 @@ fn run_server() -> ServerHandle {
 					return async { Ok(http::response::denied()) }.boxed();
 				}
 
-				if ws::is_upgrade_request(&req) && service_cfg.settings.enable_ws {
-					let service_cfg = service_cfg.clone();
+				if ws::is_upgrade_request(&req) {
+					let methods = methods.clone();
 					let stop_handle = stop_handle.clone();
 					let blacklisted_peers = blacklisted_peers.clone();
 
@@ -192,19 +219,13 @@ fn run_server() -> ServerHandle {
 						state: tx.clone(),
 					});
 
-					let svc = ServiceData {
-						cfg: service_cfg.settings,
-						conn_id,
-						stop_handle,
-						conn_permit: Arc::new(conn_permit),
-						methods: service_cfg.methods.clone(),
-					};
+					let params = to_jsonrpsee_params(methods.clone(), stop_handle.clone(), conn_id, conn_permit);
 
 					// Establishes the websocket connection
 					// and if the `DummyRateLimit` middleware triggers the hard limit
 					// then the connection is closed i.e, the `conn_fut` is dropped.
 					async move {
-						match ws::connect(req, svc, rpc_service).await {
+						match ws::connect(req, params, rpc_service).await {
 							Ok((rp, conn_fut)) => {
 								tokio::spawn(async move {
 									tokio::select! {
@@ -220,15 +241,7 @@ fn run_server() -> ServerHandle {
 						}
 					}
 					.boxed()
-				} else if !ws::is_upgrade_request(&req) && service_cfg.settings.enable_http {
-					let svc = ServiceData {
-						cfg: service_cfg.settings.clone(),
-						conn_id,
-						stop_handle: stop_handle.clone(),
-						conn_permit: Arc::new(conn_permit),
-						methods: service_cfg.methods.clone(),
-					};
-
+				} else if !ws::is_upgrade_request(&req) {
 					// In this example it doesn't make sense to disconnect the peer in the middleware rate limit
 					// is triggered as it will just reply to HTTP request i.e, the "mpsc::Sender disconnect"
 					// is not used.
@@ -242,10 +255,12 @@ fn run_server() -> ServerHandle {
 						state: tx.clone(),
 					});
 
+					let params = to_jsonrpsee_params(methods.clone(), stop_handle.clone(), conn_id, conn_permit);
+
 					// There is another API for making call with just a service as well.
 					//
 					// See [`jsonrpsee::server::http::call_with_service`]
-					async move { http::call_with_service_builder(req, svc, rpc_service).map(Ok).await }.boxed()
+					async move { http::call_with_service_builder(req, params, rpc_service).map(Ok).await }.boxed()
 				} else {
 					async { Ok(http::response::denied()) }.boxed()
 				}

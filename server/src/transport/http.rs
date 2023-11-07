@@ -1,12 +1,10 @@
-use std::convert::Infallible;
-
 use http::Method;
 use jsonrpsee_core::{http_helpers::read_body, GenericTransportError};
 
 use crate::{
 	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol},
-	server::{handle_rpc_call, Settings},
-	BatchRequestConfig, ServiceData,
+	server::{handle_rpc_call, Params, Settings},
+	BatchRequestConfig,
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
@@ -23,24 +21,12 @@ pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 	})
 }
 
-/// Reject a connection.
-pub async fn reject_connection(socket: tokio::net::TcpStream) {
-	async fn reject(_req: hyper::Request<hyper::Body>) -> Result<hyper::Response<hyper::Body>, Infallible> {
-		Ok(response::too_many_requests())
-	}
-
-	if let Err(e) = hyper::server::conn::Http::new().serve_connection(socket, hyper::service::service_fn(reject)).await
-	{
-		tracing::debug!("HTTP serve connection failed {:?}", e);
-	}
-}
-
 /// Make JSON-RPC HTTP call with a [`RpcServiceBuilder`]
 ///
 /// Fails if the HTTP request was a malformed JSON-RPC request.
 pub async fn call_with_service_builder<L>(
 	request: hyper::Request<hyper::Body>,
-	svc: ServiceData,
+	svc: Params,
 	rpc_service: RpcServiceBuilder<L>,
 ) -> hyper::Response<hyper::Body>
 where
@@ -48,7 +34,7 @@ where
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
 {
-	let ServiceData { methods, conn_id, conn_permit, cfg, stop_handle } = svc;
+	let Params { methods, conn_id, conn_permit, cfg, stop_handle } = svc;
 	let Settings { max_response_body_size, batch_requests_config, max_request_body_size, .. } = cfg;
 
 	let rpc_service = rpc_service.service(RpcService::new(
