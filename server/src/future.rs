@@ -78,7 +78,7 @@ impl ServerHandle {
 }
 
 /// Limits the number of connections.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ConnectionGuard(Arc<Semaphore>);
 
 impl ConnectionGuard {
