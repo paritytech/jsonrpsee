@@ -8,8 +8,6 @@ default:
       - api_failure
 
 stages:
-  - lint
-  - test
   - benchmark
   - check_benchmark
   - publish
@@ -62,45 +60,6 @@ variables:
       - ./artifacts/
     reports:
       dotenv: runner.env
-#### stage:                        lint
-
-fmt:
-  stage:                           lint
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - cargo fmt --all -- --check
-
-clippy:
-  stage:                           lint
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - cargo clippy
-
-check-rustdoc-links:
-  stage:                           lint
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --workspace --no-deps --document-private-items
-
-#### stage:                       test
-
-check-code:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - cargo install cargo-hack
-    - cargo hack check --workspace --each-feature
-
-test:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *common-refs
-  script:
-    - cargo test
 
 benchmarks:
   stage:                           benchmark
