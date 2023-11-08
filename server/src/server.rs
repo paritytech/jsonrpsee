@@ -98,14 +98,14 @@ impl<HttpMiddleware, RpcMiddleware, B> Server<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
-	HttpMiddleware: Layer<InnerTowerService<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service: Send
+	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
 		+ Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<B>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
 		Send,
 	B: HttpBody + Send + 'static,
 	<B as HttpBody>::Error: Send + Sync + StdError,
@@ -347,7 +347,7 @@ impl<RpcMiddleware: Clone, HttpMiddleware: Clone> TowerServiceBuilder<RpcMiddlew
 	) -> TowerService<RpcMiddleware, HttpMiddleware> {
 		let conn_id = self.conn_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-		let rpc_middleware = InnerTowerService {
+		let rpc_middleware = TowerServiceNoHttp {
 			rpc_middleware: self.rpc_middleware.clone(),
 			inner: ServiceData {
 				methods: methods.into(),
@@ -373,6 +373,31 @@ impl<RpcMiddleware: Clone, HttpMiddleware: Clone> TowerServiceBuilder<RpcMiddlew
 	pub fn max_connections(mut self, limit: u32) -> Self {
 		self.conn_guard = ConnectionGuard::new(limit as usize);
 		self
+	}
+
+	/// Configure rpc middleware.
+	pub fn set_rpc_middleware<T>(self, rpc_middleware: RpcServiceBuilder<T>) -> TowerServiceBuilder<T, HttpMiddleware> {
+		TowerServiceBuilder {
+			settings: self.settings,
+			rpc_middleware,
+			http_middleware: self.http_middleware,
+			conn_id: self.conn_id,
+			conn_guard: self.conn_guard,
+		}
+	}
+
+	/// Configure http middleware.
+	pub fn set_http_middleware<T>(
+		self,
+		http_middleware: tower::ServiceBuilder<T>,
+	) -> TowerServiceBuilder<RpcMiddleware, T> {
+		TowerServiceBuilder {
+			settings: self.settings,
+			rpc_middleware: self.rpc_middleware,
+			http_middleware,
+			conn_id: self.conn_id,
+			conn_guard: self.conn_guard,
+		}
 	}
 }
 
@@ -598,12 +623,14 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 
 	/// Extract the server configuration to use jsonrpsee as service.
 	pub fn to_service_builder(self) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
+		let max_conns = self.settings.max_connections as usize;
+
 		TowerServiceBuilder {
 			settings: self.settings,
 			rpc_middleware: self.rpc_middleware,
 			http_middleware: self.http_middleware,
 			conn_id: Arc::new(AtomicU32::new(0)),
-			conn_guard: ConnectionGuard::new(100),
+			conn_guard: ConnectionGuard::new(max_conns),
 		}
 	}
 
@@ -687,10 +714,14 @@ pub struct ServiceData {
 	pub cfg: Settings,
 }
 
-/// Wrapped HTTP and RPC middleware for ease of use.
+/// jsonrpsee tower service
+///
+/// This will enable both `http_middleware` and `rpc_middleware`
+/// if you want only to enable `rpc_middleware` then [`TowerServiceNoHttp`]
+/// can be used.
 #[derive(Debug)]
 pub struct TowerService<RpcMiddleware, HttpMiddleware> {
-	rpc_middleware: InnerTowerService<RpcMiddleware>,
+	rpc_middleware: TowerServiceNoHttp<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
@@ -700,14 +731,14 @@ where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
-	HttpMiddleware: Layer<InnerTowerService<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service: Send
+	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
 		+ Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<hyper::Body>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
 		Send + 'static,
 {
 	type Response = hyper::Response<hyper::Body>;
@@ -724,17 +755,20 @@ where
 	}
 }
 
-/// JsonRPSee service compatible with `tower`.
+/// jsonrpsee tower service.
+///
+/// This will not apply specific HTTP middleware that
+/// can be enabled by [`ServerBuilder::set_http_middleware`]
 ///
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].
 #[derive(Debug, Clone)]
-pub struct InnerTowerService<L> {
+pub struct TowerServiceNoHttp<L> {
 	inner: ServiceData,
 	rpc_middleware: RpcServiceBuilder<L>,
 }
 
-impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for InnerTowerService<RpcMiddleware>
+impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerServiceNoHttp<RpcMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -886,15 +920,15 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 	drop_on_completion: mpsc::Sender<()>,
 ) where
 	RpcMiddleware: 'static,
-	HttpMiddleware: Layer<InnerTowerService<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service: Send
+	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
 		+ 'static
 		+ Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<U>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<HttpMiddleware as Layer<InnerTowerService<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
 		Send + 'static,
 	U: HttpBody + Send + 'static,
 	<U as HttpBody>::Error: Send + Sync + StdError,
@@ -905,23 +939,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 		return;
 	}
 
-	/*let conn = match connection_guard.try_acquire() {
-		Some(conn) => conn,
-		None => {
-			tracing::debug!("Too many connections. Please try again later.");
-			tokio::spawn(async {
-				http::reject_connection(socket).in_current_span().await;
-				drop(drop_on_completion);
-			});
-			return;
-		}
-	};
-
-	let max_conns = cfg.settings.max_connections as usize;
-	let curr_conns = max_conns - connection_guard.available_connections();
-	tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);*/
-
-	let tower_service = InnerTowerService {
+	let tower_service = TowerServiceNoHttp {
 		inner: ServiceData {
 			cfg: cfg.settings,
 			methods: cfg.methods,

@@ -24,9 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! This examples shows how to use the jsonrpsee::server as
-//! a tower service such that one access HTTP related things
-//! by launching a hyper::service_fn
+//! This examples shows how to use the `jsonrpsee::server`` as
+//! a tower service such that it's possible to get access
+//! HTTP related things by launching a `hyper::service_fn`.
 //!
 //! The typical use-case for this is when one wants to have
 //! access to HTTP related things.
@@ -37,15 +37,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use futures::FutureExt;
-use jsonrpsee::core::{async_trait, client::ClientT};
+use hyper::header::AUTHORIZATION;
+use hyper::server::conn::AddrStream;
+use hyper::HeaderMap;
+use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::rpc::RpcServiceBuilder;
+use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, TransportProtocol};
 use jsonrpsee::server::{ServerHandle, StopHandle};
-use jsonrpsee::types::ErrorObjectOwned;
-
-use hyper::server::conn::AddrStream;
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
+use jsonrpsee::ws_client::HeaderValue;
+use jsonrpsee::MethodResponse;
 use tower::Service;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -56,32 +58,70 @@ struct Metrics {
 	http_connections: Arc<AtomicUsize>,
 }
 
-#[rpc(server)]
+struct AuthorizationMiddleware<S> {
+	headers: HeaderMap,
+	inner: S,
+}
+
+#[async_trait]
+impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
+where
+	S: Send + Sync + RpcServiceT<'a>,
+{
+	async fn call(&self, req: Request<'a>, label: TransportProtocol) -> MethodResponse {
+		if req.method_name() == "trusted_call" {
+			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else {
+				return MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
+			};
+
+			// In this example for simplicity, the authorization value is not verified
+			// and used because it's just a toy example.
+
+			self.inner.call(req, label).await
+		} else {
+			self.inner.call(req, label).await
+		}
+	}
+}
+
+#[rpc(server, client)]
 pub trait Rpc {
-	#[method(name = "say_hello")]
-	async fn say_hello(&self) -> Result<String, ErrorObjectOwned>;
+	#[method(name = "trusted_call")]
+	async fn trusted_call(&self) -> Result<String, ErrorObjectOwned>;
 }
 
 #[async_trait]
 impl RpcServer for () {
-	async fn say_hello(&self) -> Result<String, ErrorObjectOwned> {
-		Ok("lo".to_string())
+	async fn trusted_call(&self) -> Result<String, ErrorObjectOwned> {
+		Ok("mysecret".to_string())
 	}
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	let filter = tracing_subscriber::EnvFilter::try_from_default_env()?
-		.add_directive("jsonrpsee[method_call{name = \"say_hello\"}]=trace".parse()?);
+	let filter = tracing_subscriber::EnvFilter::try_from_default_env()?;
 	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
 	let handle = run_server();
 	tokio::spawn(handle.stopped());
 
-	let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
+	{
+		let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
 
-	let x: String = client.request("say_hello", rpc_params!()).await.unwrap();
-	tracing::info!("response: {x}");
+		// Fails because the authorization header is missing.
+		let x = client.trusted_call().await.unwrap_err();
+		tracing::info!("response: {x}");
+	}
+
+	{
+		let mut headers = HeaderMap::new();
+		headers.insert(AUTHORIZATION, HeaderValue::from_static("don't care in this example"));
+
+		let client = HttpClientBuilder::default().set_headers(headers).build("http://127.0.0.1:9944").unwrap();
+
+		let x = client.trusted_call().await.unwrap();
+		tracing::info!("response: {x}");
+	}
 
 	Ok(())
 }
@@ -89,20 +129,16 @@ async fn main() -> anyhow::Result<()> {
 fn run_server() -> ServerHandle {
 	use hyper::service::{make_service_fn, service_fn};
 
-	// Construct our SocketAddr to listen on...
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9944));
-
-	// Maybe we want to be able to stop our server but not added here.
 	let (tx, rx) = tokio::sync::watch::channel(());
 
 	let server_handle = ServerHandle::new(tx);
 	let stop_handle = StopHandle::new(rx);
-	let http_middleware = tower::ServiceBuilder::new().layer(CorsLayer::permissive());
 	let svc_builder = jsonrpsee::server::Server::builder()
-		.set_http_middleware(http_middleware)
-		.set_rpc_middleware(RpcServiceBuilder::new().rpc_logger(1024))
-		.to_service_builder()
-		.max_connections(33);
+		.set_http_middleware(tower::ServiceBuilder::new().layer(CorsLayer::permissive()))
+		.max_connections(33)
+		.to_service_builder();
+
 	let methods = ().into_rpc();
 	let stop_handle2 = stop_handle.clone();
 	let metrics = Metrics::default();
@@ -124,8 +160,20 @@ fn run_server() -> ServerHandle {
 
 			Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
 				let metrics = metrics.clone();
-				let mut svc = svc_builder.build(methods.clone(), stop_handle.clone());
+				let svc_builder = svc_builder.clone();
+				let methods = methods.clone();
+				let stop_handle = stop_handle.clone();
+
 				async move {
+					let headers = req.headers().clone();
+
+					// NOTE, the rpc middleware must be initialized here to be able to created once per connection.
+					let rpc_middleware = RpcServiceBuilder::new()
+						.rpc_logger(1024)
+						.layer_fn(move |service| AuthorizationMiddleware { inner: service, headers: headers.clone() });
+
+					let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
+
 					// You can't determine whether the websocket upgrade handshake failed or not here.
 					let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
 					let rp = svc.call(req).await;
