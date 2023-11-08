@@ -198,7 +198,14 @@ fn run_server() -> ServerHandle {
 		let conn_guard = conn_guard.clone();
 		let methods = methods.clone();
 		let blacklisted_peers = blacklisted_peers.clone();
-		let http_rate_limit = http_rate_limit.clone();
+		// HTTP rate limit that is shared by all connections.
+		//
+		// This is just a toy-example and one not should "limit" HTTP connections
+		// like this because the actual IP addr of each request is not checked.
+		//
+		// Because it's possible to blacklist a peer which has only made one or
+		// a few calls.
+		let global_http_rate_limit = http_rate_limit.clone();
 
 		async move {
 			let stop_handle = stop_handle.clone();
@@ -206,10 +213,13 @@ fn run_server() -> ServerHandle {
 			let methods = methods.clone();
 			let stop_handle = stop_handle.clone();
 			let blacklisted_peers = blacklisted_peers.clone();
-			let http_rate_limit = http_rate_limit.clone();
+			let global_http_rate_limit = global_http_rate_limit.clone();
 
 			Ok::<_, Infallible>(service_fn(move |req| {
-				// Connection number limit exceeded.
+				// jsonrpsee::server::Params expects a `conn permit` for connection.
+				//
+				// This may be omitted if don't want to limit the number of connections
+				// to the server.
 				let Some(conn_permit) = conn_guard.try_acquire() else {
 					return async { Ok::<_, Infallible>(http::response::too_many_requests()) }.boxed();
 				};
@@ -234,7 +244,7 @@ fn run_server() -> ServerHandle {
 					let params = to_jsonrpsee_params(methods.clone(), stop_handle.clone(), conn_id, conn_permit);
 
 					// Establishes the websocket connection
-					// and if the `DummyRateLimit` middleware triggers the hard limit
+					// and if the `CallLimit` middleware triggers the hard limit
 					// then the connection is closed i.e, the `conn_fut` is dropped.
 					async move {
 						match ws::connect(req, params, rpc_service).await {
@@ -254,16 +264,13 @@ fn run_server() -> ServerHandle {
 					}
 					.boxed()
 				} else if !ws::is_upgrade_request(&req) {
-					// In this example it doesn't make sense to disconnect the peer in the middleware rate limit
-					// is triggered as it will just reply to HTTP request i.e, the "mpsc::Sender disconnect"
-					// is not used.
-					let (tx, _disconnect) = mpsc::channel(1);
+					let (tx, mut disconnect) = mpsc::channel(1);
 
-					let http_rate_limit = http_rate_limit.clone();
+					let global_http_rate_limit = global_http_rate_limit.clone();
 
 					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
 						service,
-						count: http_rate_limit.clone(),
+						count: global_http_rate_limit.clone(),
 						state: tx.clone(),
 					});
 
@@ -272,7 +279,15 @@ fn run_server() -> ServerHandle {
 					// There is another API for making call with just a service as well.
 					//
 					// See [`jsonrpsee::server::http::call_with_service`]
-					async move { http::call_with_service_builder(req, params, rpc_service).map(Ok).await }.boxed()
+					async move {
+						tokio::select! {
+							// Rpc call finished successfully.
+							res = http::call_with_service_builder(req, params, rpc_service) => Ok(res),
+							// Deny the call if the call limit is exceeded.
+							_ = disconnect.recv() => Ok(http::response::denied()),
+						}
+					}
+					.boxed()
 				} else {
 					async { Ok(http::response::denied()) }.boxed()
 				}
