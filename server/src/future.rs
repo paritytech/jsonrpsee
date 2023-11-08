@@ -44,7 +44,7 @@ pub struct StopHandle(watch::Receiver<()>);
 
 impl StopHandle {
 	/// Create a new stop handle.
-	pub fn new(rx: watch::Receiver<()>) -> Self {
+	pub(crate) fn new(rx: watch::Receiver<()>) -> Self {
 		Self(rx)
 	}
 
@@ -64,7 +64,7 @@ pub struct ServerHandle(Arc<watch::Sender<()>>);
 
 impl ServerHandle {
 	/// Create a new server handle.
-	pub fn new(tx: watch::Sender<()>) -> Self {
+	pub(crate) fn new(tx: watch::Sender<()>) -> Self {
 		Self(Arc::new(tx))
 	}
 

@@ -69,7 +69,7 @@ const MAX_CONNECTIONS: u32 = 100;
 /// JSON RPC server.
 pub struct Server<HttpMiddleware = Identity, RpcMiddleware = Identity> {
 	listener: TcpListener,
-	cfg: ServerConfig,
+	server_cfg: ServerConfig,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
@@ -83,7 +83,7 @@ impl Server<Identity, Identity> {
 
 impl<RpcMiddleware, HttpMiddleware> std::fmt::Debug for Server<RpcMiddleware, HttpMiddleware> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Server").field("listener", &self.listener).field("cfg", &self.cfg).finish()
+		f.debug_struct("Server").field("listener", &self.listener).field("server_cfg", &self.server_cfg).finish()
 	}
 }
 
@@ -120,7 +120,7 @@ where
 
 		let stop_handle = StopHandle::new(stop_rx);
 
-		match self.cfg.tokio_runtime.take() {
+		match self.server_cfg.tokio_runtime.take() {
 			Some(rt) => rt.spawn(self.start_inner(methods, stop_handle)),
 			None => tokio::spawn(self.start_inner(methods, stop_handle)),
 		};
@@ -130,7 +130,7 @@ where
 
 	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
 		let mut id: u32 = 0;
-		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
+		let connection_guard = ConnectionGuard::new(self.server_cfg.max_connections as usize);
 		let listener = self.listener;
 
 		let stopped = stop_handle.clone().shutdown();
@@ -141,22 +141,20 @@ where
 		loop {
 			match try_accept_conn(&listener, stopped).await {
 				AcceptConnection::Established { socket, remote_addr, stop } => {
-					let data = ProcessConnection {
+
+
+					process_connection(ProcessConnection {
+						http_middleware: &self.http_middleware,
+						rpc_middleware: self.rpc_middleware.clone(),
 						remote_addr,
 						methods: methods.clone(),
 						stop_handle: stop_handle.clone(),
 						conn_id: id,
-						settings: self.cfg.clone(),
-					};
-
-					process_connection(
-						&self.http_middleware,
-						self.rpc_middleware.clone(),
-						&connection_guard,
-						data,
+						server_cfg: self.server_cfg.clone(),
+						conn_guard: &connection_guard,
 						socket,
-						drop_on_completion.clone(),
-					);
+						drop_on_completion: drop_on_completion.clone(),
+					});
 					id = id.wrapping_add(1);
 					stopped = stop;
 				}
@@ -234,7 +232,7 @@ pub struct ServerConfigBuilder {
 #[derive(Debug, Clone)]
 pub struct TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 	/// ServerConfig
-	pub(crate) settings: ServerConfig,
+	pub(crate) server_cfg: ServerConfig,
 	/// RPC middleware.
 	pub(crate) rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	/// HTTP middleware.
@@ -445,7 +443,7 @@ impl ServerConfigBuilder {
 /// Builder to configure and create a JSON-RPC server
 #[derive(Debug)]
 pub struct Builder<HttpMiddleware, RpcMiddleware> {
-	settings: ServerConfig,
+	server_cfg: ServerConfig,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
@@ -453,7 +451,7 @@ pub struct Builder<HttpMiddleware, RpcMiddleware> {
 impl Default for Builder<Identity, Identity> {
 	fn default() -> Self {
 		Builder {
-			settings: ServerConfig::default(),
+			server_cfg: ServerConfig::default(),
 			rpc_middleware: RpcServiceBuilder::new(),
 			http_middleware: tower::ServiceBuilder::new(),
 		}
@@ -483,7 +481,7 @@ impl<RpcMiddleware: Clone, HttpMiddleware: Clone> TowerServiceBuilder<RpcMiddlew
 				stop_handle,
 				conn_id,
 				conn_guard: self.conn_guard.clone(),
-				cfg: self.settings.clone(),
+				server_cfg: self.server_cfg.clone(),
 			},
 		};
 
@@ -507,7 +505,7 @@ impl<RpcMiddleware: Clone, HttpMiddleware: Clone> TowerServiceBuilder<RpcMiddlew
 	/// Configure rpc middleware.
 	pub fn set_rpc_middleware<T>(self, rpc_middleware: RpcServiceBuilder<T>) -> TowerServiceBuilder<T, HttpMiddleware> {
 		TowerServiceBuilder {
-			settings: self.settings,
+			server_cfg: self.server_cfg,
 			rpc_middleware,
 			http_middleware: self.http_middleware,
 			conn_id: self.conn_id,
@@ -521,7 +519,7 @@ impl<RpcMiddleware: Clone, HttpMiddleware: Clone> TowerServiceBuilder<RpcMiddlew
 		http_middleware: tower::ServiceBuilder<T>,
 	) -> TowerServiceBuilder<RpcMiddleware, T> {
 		TowerServiceBuilder {
-			settings: self.settings,
+			server_cfg: self.server_cfg,
 			rpc_middleware: self.rpc_middleware,
 			http_middleware,
 			conn_id: self.conn_id,
@@ -533,19 +531,19 @@ impl<RpcMiddleware: Clone, HttpMiddleware: Clone> TowerServiceBuilder<RpcMiddlew
 impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.settings.max_request_body_size = size;
+		self.server_cfg.max_request_body_size = size;
 		self
 	}
 
 	/// Set the maximum size of a response body in bytes. Default is 10 MiB.
 	pub fn max_response_body_size(mut self, size: u32) -> Self {
-		self.settings.max_response_body_size = size;
+		self.server_cfg.max_response_body_size = size;
 		self
 	}
 
 	/// Set the maximum number of connections allowed. Default is 100.
 	pub fn max_connections(mut self, max: u32) -> Self {
-		self.settings.max_connections = max;
+		self.server_cfg.max_connections = max;
 		self
 	}
 
@@ -554,13 +552,13 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///
 	/// Default: batch requests are allowed and can be arbitrary big but the maximum payload size is limited.
 	pub fn set_batch_request_config(mut self, cfg: BatchRequestConfig) -> Self {
-		self.settings.batch_requests_config = cfg;
+		self.server_cfg.batch_requests_config = cfg;
 		self
 	}
 
 	/// Set the maximum number of connections allowed. Default is 1024.
 	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
-		self.settings.max_subscriptions_per_connection = max;
+		self.server_cfg.max_subscriptions_per_connection = max;
 		self
 	}
 
@@ -618,14 +616,14 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// let builder = ServerBuilder::default().set_rpc_middleware(m);
 	/// ```
 	pub fn set_rpc_middleware<T>(self, rpc_middleware: RpcServiceBuilder<T>) -> Builder<HttpMiddleware, T> {
-		Builder { settings: self.settings, rpc_middleware, http_middleware: self.http_middleware }
+		Builder { server_cfg: self.server_cfg, rpc_middleware, http_middleware: self.http_middleware }
 	}
 
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
 	///
 	/// Default: [`tokio::spawn`]
 	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) -> Self {
-		self.settings.tokio_runtime = Some(rt);
+		self.server_cfg.tokio_runtime = Some(rt);
 		self
 	}
 
@@ -652,7 +650,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			}
 		}
 
-		self.settings.ping_config = config;
+		self.server_cfg.ping_config = config;
 		Ok(self)
 	}
 
@@ -677,7 +675,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// ```
 	///
 	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
-		self.settings.id_provider = Arc::new(id_provider);
+		self.server_cfg.id_provider = Arc::new(id_provider);
 		self
 	}
 
@@ -704,15 +702,15 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	/// ```
 	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
-		Builder { settings: self.settings, http_middleware, rpc_middleware: self.rpc_middleware }
+		Builder { server_cfg: self.server_cfg, http_middleware, rpc_middleware: self.rpc_middleware }
 	}
 
 	/// Configure the server to only serve JSON-RPC HTTP requests.
 	///
 	/// Default: both http and ws are enabled.
 	pub fn http_only(mut self) -> Self {
-		self.settings.enable_http = true;
-		self.settings.enable_ws = false;
+		self.server_cfg.enable_http = true;
+		self.server_cfg.enable_ws = false;
 		self
 	}
 
@@ -722,8 +720,8 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///
 	/// Default: both http and ws are enabled.
 	pub fn ws_only(mut self) -> Self {
-		self.settings.enable_http = false;
-		self.settings.enable_ws = true;
+		self.server_cfg.enable_http = false;
+		self.server_cfg.enable_ws = true;
 		self
 	}
 
@@ -746,16 +744,16 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// Panics if the buffer capacity is 0.
 	///
 	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
-		self.settings.message_buffer_capacity = c;
+		self.server_cfg.message_buffer_capacity = c;
 		self
 	}
 
 	/// Extract the server configuration to use jsonrpsee as service.
 	pub fn to_service_builder(self) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
-		let max_conns = self.settings.max_connections as usize;
+		let max_conns = self.server_cfg.max_connections as usize;
 
 		TowerServiceBuilder {
-			settings: self.settings,
+			server_cfg: self.server_cfg,
 			rpc_middleware: self.rpc_middleware,
 			http_middleware: self.http_middleware,
 			conn_id: Arc::new(AtomicU32::new(0)),
@@ -784,7 +782,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 
 		Ok(Server {
 			listener,
-			cfg: self.settings,
+			server_cfg: self.server_cfg,
 			rpc_middleware: self.rpc_middleware,
 			http_middleware: self.http_middleware,
 		})
@@ -821,7 +819,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 
 		Ok(Server {
 			listener,
-			cfg: self.settings,
+			server_cfg: self.server_cfg,
 			rpc_middleware: self.rpc_middleware,
 			http_middleware: self.http_middleware,
 		})
@@ -832,15 +830,15 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 #[derive(Debug, Clone)]
 pub struct ServiceData {
 	/// Registered server methods.
-	pub methods: Methods,
+	pub(crate) methods: Methods,
 	/// Stop handle.
-	pub stop_handle: StopHandle,
+	pub(crate) stop_handle: StopHandle,
 	/// Connection ID
-	pub conn_id: u32,
+	pub(crate) conn_id: u32,
 	/// Connection guard.
-	pub conn_guard: ConnectionGuard,
+	pub(crate) conn_guard: ConnectionGuard,
 	/// ServerConfig
-	pub cfg: ServerConfig,
+	pub(crate) server_cfg: ServerConfig,
 }
 
 /// jsonrpsee tower service
@@ -935,14 +933,14 @@ where
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
-		if self.inner.cfg.enable_ws && is_upgrade_request {
+		if self.inner.server_cfg.enable_ws && is_upgrade_request {
 			let this = self.inner.clone();
 
 			let mut server = soketto::handshake::http::Server::new();
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					let (tx, rx) = mpsc::channel::<String>(this.cfg.message_buffer_capacity as usize);
+					let (tx, rx) = mpsc::channel::<String>(this.server_cfg.message_buffer_capacity as usize);
 					let sink = MethodSink::new(tx);
 
 					// On each method call the `pending_calls` is cloned
@@ -951,15 +949,15 @@ where
 					let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 					let cfg = RpcServiceCfg::CallsAndSubscriptions {
-						bounded_subscriptions: BoundedSubscriptions::new(this.cfg.max_subscriptions_per_connection),
-						id_provider: this.cfg.id_provider.clone(),
+						bounded_subscriptions: BoundedSubscriptions::new(this.server_cfg.max_subscriptions_per_connection),
+						id_provider: this.server_cfg.id_provider.clone(),
 						sink: sink.clone(),
 						_pending_calls: pending_calls,
 					};
 
 					let rpc_service = RpcService::new(
 						this.methods.clone(),
-						this.cfg.max_response_body_size as usize,
+						this.server_cfg.max_response_body_size as usize,
 						this.conn_id as usize,
 						cfg,
 					);
@@ -978,11 +976,11 @@ where
 
 							let stream = BufReader::new(BufWriter::new(upgraded.compat()));
 							let mut ws_builder = server.into_builder(stream);
-							ws_builder.set_max_message_size(this.cfg.max_request_body_size as usize);
+							ws_builder.set_max_message_size(this.server_cfg.max_request_body_size as usize);
 							let (sender, receiver) = ws_builder.finish();
 
 							let params = BackgroundTaskParams {
-								server_cfg: this.cfg,
+								server_cfg: this.server_cfg,
 								conn,
 								ws_sender: sender,
 								ws_receiver: receiver,
@@ -1006,12 +1004,12 @@ where
 			};
 
 			async { Ok(response) }.boxed()
-		} else if self.inner.cfg.enable_http && !is_upgrade_request {
+		} else if self.inner.server_cfg.enable_http && !is_upgrade_request {
 			let this = &self.inner;
-			let max_response_size = this.cfg.max_response_body_size;
-			let max_request_size = this.cfg.max_request_body_size;
+			let max_response_size = this.server_cfg.max_response_body_size;
+			let max_request_size = this.server_cfg.max_request_body_size;
 			let methods = this.methods.clone();
-			let batch_config = this.cfg.batch_requests_config;
+			let batch_config = this.server_cfg.batch_requests_config;
 
 			let rpc_service = self.rpc_middleware.service(RpcService::new(
 				methods,
@@ -1030,22 +1028,23 @@ where
 	}
 }
 
-struct ProcessConnection {
-	settings: ServerConfig,
-	remote_addr: SocketAddr,
-	methods: Methods,
+struct ProcessConnection<'a, HttpMiddleware, RpcMiddleware> {
+	http_middleware: &'a tower::ServiceBuilder<HttpMiddleware>,
+	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
+	conn_guard: &'a ConnectionGuard,
 	conn_id: u32,
+	server_cfg: ServerConfig,
 	stop_handle: StopHandle,
-}
-
-#[instrument(name = "connection", skip_all, fields(remote_addr = %cfg.remote_addr, conn_id = %cfg.conn_id), level = "INFO")]
-fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
-	http_middleware_builder: &tower::ServiceBuilder<HttpMiddleware>,
-	rpc_middleware_builder: RpcServiceBuilder<RpcMiddleware>,
-	conn_guard: &ConnectionGuard,
-	cfg: ProcessConnection,
 	socket: TcpStream,
 	drop_on_completion: mpsc::Sender<()>,
+	remote_addr: SocketAddr,
+	methods: Methods,
+}
+
+#[instrument(name = "connection", skip_all, fields(remote_addr = %params.remote_addr, conn_id = %params.conn_id), level = "INFO")]
+fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
+	params: ProcessConnection<HttpMiddleware, RpcMiddleware>
+
 ) where
 	RpcMiddleware: 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
@@ -1062,6 +1061,19 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 	<U as HttpBody>::Error: Send + Sync + StdError,
 	<U as HttpBody>::Data: Send,
 {
+	let ProcessConnection {
+		http_middleware,
+		rpc_middleware,
+		conn_guard,
+		conn_id,
+		server_cfg,
+		socket,
+		stop_handle,
+		drop_on_completion,
+		methods,
+		..
+	} = params;
+
 	if let Err(e) = socket.set_nodelay(true) {
 		tracing::warn!("Could not set NODELAY on socket: {:?}", e);
 		return;
@@ -1069,19 +1081,19 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 
 	let tower_service = TowerServiceNoHttp {
 		inner: ServiceData {
-			cfg: cfg.settings,
-			methods: cfg.methods,
-			stop_handle: cfg.stop_handle.clone(),
-			conn_id: cfg.conn_id,
+			server_cfg,
+			methods,
+			stop_handle: stop_handle.clone(),
+			conn_id: conn_id,
 			conn_guard: conn_guard.clone(),
 		},
-		rpc_middleware: rpc_middleware_builder,
+		rpc_middleware,
 	};
 
-	let service = http_middleware_builder.service(tower_service);
+	let service = http_middleware.service(tower_service);
 
 	tokio::spawn(async {
-		to_http_service(socket, service, cfg.stop_handle).in_current_span().await;
+		to_http_service(socket, service, stop_handle).in_current_span().await;
 		drop(drop_on_completion)
 	});
 }
