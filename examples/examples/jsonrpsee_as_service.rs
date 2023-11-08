@@ -74,7 +74,7 @@ where
 				return MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
 			};
 
-			// In this example for simplicity, the authorization value is not verified
+			// In this example for simplicity, the authorization value is not checked
 			// and used because it's just a toy example.
 
 			self.inner.call(req, label).await

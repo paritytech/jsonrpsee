@@ -43,30 +43,35 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures::FutureExt;
-use jsonrpsee::core::{async_trait, client::ClientT};
+use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::*;
+use jsonrpsee::server::middleware::rpc::{RpcServiceT, TransportProtocol};
 use jsonrpsee::server::{
-	http, ws, ConnectionGuard, Params, PingConfig, RandomIntegerIdProvider, ServerHandle, Settings, StopHandle,
+	http, ws, ConnectionGuard, Params, PingConfig, RandomIntegerIdProvider, RpcServiceBuilder, ServerHandle, Settings,
+	StopHandle,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, MethodResponse, Methods};
+use jsonrpsee::{MethodResponse, Methods};
 use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit};
 
 use hyper::server::conn::AddrStream;
 use tokio::sync::mpsc;
 use tracing_subscriber::util::SubscriberInitExt;
 
-struct DummyRateLimit<S> {
+/// This is just a counter to limit
+/// the number of calls per connection.
+/// Once the limit has been exceeded
+/// all future calls are rejected.
+struct CallLimit<S> {
 	service: S,
 	count: Arc<AsyncMutex<usize>>,
 	state: mpsc::Sender<()>,
 }
 
 #[async_trait]
-impl<'a, S> RpcServiceT<'a> for DummyRateLimit<S>
+impl<'a, S> RpcServiceT<'a> for CallLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
@@ -84,7 +89,7 @@ where
 	}
 }
 
-#[rpc(server)]
+#[rpc(server, client)]
 pub trait Rpc {
 	#[method(name = "say_hello")]
 	async fn say_hello(&self) -> Result<String, ErrorObjectOwned>;
@@ -109,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
 
 		let client = WsClientBuilder::default().build("ws://127.0.0.1:9944").await.unwrap();
 		while client.is_connected() {
-			let rp: Result<String, _> = client.request("say_hello", rpc_params!()).await;
+			let rp: Result<String, _> = client.say_hello().await;
 			if rp.is_ok() {
 				i += 1;
 			}
@@ -129,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
 		let handle = run_server();
 
 		let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
-		while let Ok(_) = client.request::<String, _>("say_hello", rpc_params![]).await {
+		while let Ok(_) = client.say_hello().await {
 			i += 1;
 		}
 		tracing::info!("HTTP client made {i} successful calls before getting blacklisted");
@@ -220,7 +225,7 @@ fn run_server() -> ServerHandle {
 					let blacklisted_peers = blacklisted_peers.clone();
 
 					let (tx, mut disconnect) = mpsc::channel(1);
-					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| DummyRateLimit {
+					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
 						service,
 						count: Default::default(),
 						state: tx.clone(),
@@ -256,7 +261,7 @@ fn run_server() -> ServerHandle {
 
 					let http_rate_limit = http_rate_limit.clone();
 
-					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| DummyRateLimit {
+					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
 						service,
 						count: http_rate_limit.clone(),
 						state: tx.clone(),
