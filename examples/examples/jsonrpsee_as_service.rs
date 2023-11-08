@@ -167,7 +167,8 @@ fn run_server() -> ServerHandle {
 				async move {
 					let headers = req.headers().clone();
 
-					// NOTE, the rpc middleware must be initialized here to be able to created once per connection.
+					// NOTE, the rpc middleware must be initialized here to be able to created once per connection
+					// with data from the connection such as the headers in this example
 					let rpc_middleware = RpcServiceBuilder::new()
 						.rpc_logger(1024)
 						.layer_fn(move |service| AuthorizationMiddleware { inner: service, headers: headers.clone() });
