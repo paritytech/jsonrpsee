@@ -53,7 +53,7 @@ impl ThreadSafeRequestManager {
 	}
 }
 
-/// Wrapper over a [`oneshot::Receiver`](tokio::sync::oneshot::Receiver) that reads
+/// Wrapper over a [`oneshot::Receiver`] that reads
 /// the underlying channel once and then stores the result in String.
 /// It is possible that the error is read more than once if several calls are made
 /// when the background thread has been terminated.

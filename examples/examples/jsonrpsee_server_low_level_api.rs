@@ -40,7 +40,6 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use futures::FutureExt;
 use jsonrpsee::core::async_trait;
@@ -48,13 +47,12 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceT, TransportProtocol};
 use jsonrpsee::server::{
-	http, ws, ConnectionGuard, Params, PingConfig, RandomIntegerIdProvider, RpcServiceBuilder, ServerHandle, Settings,
-	StopHandle,
+	http, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{MethodResponse, Methods};
-use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit};
+use jsonrpsee::MethodResponse;
+use tokio::sync::Mutex as AsyncMutex;
 
 use hyper::server::conn::AddrStream;
 use tokio::sync::mpsc;
@@ -146,29 +144,6 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-fn to_jsonrpsee_params(
-	methods: impl Into<Methods>,
-	stop_handle: StopHandle,
-	conn_id: u32,
-	conn_permit: OwnedSemaphorePermit,
-) -> Params {
-	let cfg = Settings {
-		max_connections: 100,
-		max_request_body_size: 1024 * 1024,
-		max_response_body_size: 1024 * 1024,
-		max_subscriptions_per_connection: 128,
-		message_buffer_capacity: 1024,
-		enable_http: true,
-		enable_ws: true,
-		tokio_runtime: None,
-		ping_config: PingConfig::WithoutInactivityCheck(Duration::from_secs(30)),
-		batch_requests_config: jsonrpsee::server::BatchRequestConfig::Disabled,
-		id_provider: Arc::new(RandomIntegerIdProvider),
-	};
-
-	Params { methods: methods.into(), stop_handle, conn_id, conn_permit: Arc::new(conn_permit), cfg }
-}
-
 fn run_server() -> ServerHandle {
 	use hyper::service::{make_service_fn, service_fn};
 
@@ -241,13 +216,13 @@ fn run_server() -> ServerHandle {
 						state: tx.clone(),
 					});
 
-					let params = to_jsonrpsee_params(methods.clone(), stop_handle.clone(), conn_id, conn_permit);
+					let conn = ConnectionState::new(stop_handle.clone(), conn_id, conn_permit);
 
 					// Establishes the websocket connection
 					// and if the `CallLimit` middleware triggers the hard limit
 					// then the connection is closed i.e, the `conn_fut` is dropped.
 					async move {
-						match ws::connect(req, params, rpc_service).await {
+						match ws::connect(req, ServerConfig::default(), methods, conn, rpc_service).await {
 							Ok((rp, conn_fut)) => {
 								tokio::spawn(async move {
 									tokio::select! {
@@ -274,7 +249,9 @@ fn run_server() -> ServerHandle {
 						state: tx.clone(),
 					});
 
-					let params = to_jsonrpsee_params(methods.clone(), stop_handle.clone(), conn_id, conn_permit);
+					let server_cfg = ServerConfig::default();
+					let conn = ConnectionState::new(stop_handle.clone(), conn_id, conn_permit);
+					let methods = methods.clone();
 
 					// There is another API for making call with just a service as well.
 					//
@@ -282,7 +259,7 @@ fn run_server() -> ServerHandle {
 					async move {
 						tokio::select! {
 							// Rpc call finished successfully.
-							res = http::call_with_service_builder(req, params, rpc_service) => Ok(res),
+							res = http::call_with_service_builder(req, server_cfg, conn, methods, rpc_service) => Ok(res),
 							// Deny the call if the call limit is exceeded.
 							_ = disconnect.recv() => Ok(http::response::denied()),
 						}

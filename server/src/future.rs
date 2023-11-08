@@ -91,7 +91,7 @@ impl ConnectionGuard {
 	}
 
 	/// Acquire a connection permit.
-	pub fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
+	pub fn try_acquire(&self) -> Option<ConnectionPermit> {
 		match self.inner.clone().try_acquire_owned() {
 			Ok(guard) => Some(guard),
 			Err(TryAcquireError::Closed) => unreachable!("Semaphore::Close is never called and can't be closed; qed"),
@@ -109,3 +109,6 @@ impl ConnectionGuard {
 		self.max
 	}
 }
+
+/// Connection permit.
+pub type ConnectionPermit = OwnedSemaphorePermit;

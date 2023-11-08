@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
-use crate::server::{handle_rpc_call, Params, Settings};
+use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
 use crate::PingConfig;
 
 use futures_util::future::{self, Either, Fuse};
@@ -10,7 +10,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, FutureExt, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::MethodSink;
-use jsonrpsee_core::server::BoundedSubscriptions;
+use jsonrpsee_core::server::{BoundedSubscriptions, Methods};
 use jsonrpsee_core::Error;
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
@@ -47,7 +47,8 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 }
 
 pub(crate) struct BackgroundTaskParams<S> {
-	pub(crate) params: Params,
+	pub(crate) server_cfg: ServerConfig,
+	pub(crate) conn: ConnectionState,
 	pub(crate) ws_sender: Sender,
 	pub(crate) ws_receiver: Receiver,
 	pub(crate) rpc_service: S,
@@ -60,17 +61,25 @@ pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
 	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
-	let BackgroundTaskParams { params, ws_sender, ws_receiver, rpc_service, sink, rx, pending_calls_completed } =
-		params;
-	let Params { cfg, stop_handle, conn_id, conn_permit, .. } = params;
-	let Settings { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } = cfg;
+	let BackgroundTaskParams {
+		server_cfg,
+		conn,
+		ws_sender,
+		ws_receiver,
+		rpc_service,
+		sink,
+		rx,
+		pending_calls_completed,
+	} = params;
+	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
+		server_cfg;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
 
 	// Spawn another task that sends out the responses on the Websocket.
 	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config.ping_interval(), conn_rx));
 
-	let stopped = stop_handle.clone().shutdown();
+	let stopped = conn.stop_handle.clone().shutdown();
 	let rpc_service = Arc::new(rpc_service);
 
 	tokio::pin!(stopped);
@@ -103,7 +112,7 @@ where
 
 				match err {
 					SokettoError::Closed => {
-						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
+						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn.conn_id);
 						break Ok(Shutdown::ConnectionClosed);
 					}
 					SokettoError::MessageTooLarge { current, maximum } => {
@@ -119,7 +128,7 @@ where
 						continue;
 					}
 					err => {
-						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn_id);
+						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn.conn_id);
 						break Err(err);
 					}
 				};
@@ -164,8 +173,7 @@ where
 	drop(rpc_service);
 	graceful_shutdown(result, pending_calls_completed, ws_stream, conn_tx, send_task_handle).await;
 
-	drop(conn_permit);
-	drop(stop_handle);
+	drop(conn);
 }
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
@@ -376,7 +384,9 @@ async fn graceful_shutdown<S>(
 /// ```
 pub async fn connect<L>(
 	req: hyper::Request<hyper::Body>,
-	params: Params,
+	server_cfg: ServerConfig,
+	methods: impl Into<Methods>,
+	conn: ConnectionState,
 	rpc_middleware: RpcServiceBuilder<L>,
 ) -> Result<(hyper::Response<hyper::Body>, impl Future<Output = ()>), hyper::Response<hyper::Body>>
 where
@@ -388,7 +398,7 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
-			let (tx, rx) = mpsc::channel::<String>(params.cfg.message_buffer_capacity as usize);
+			let (tx, rx) = mpsc::channel::<String>(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
 			// On each method call the `pending_calls` is cloned
@@ -397,16 +407,16 @@ where
 			let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 			let rpc_service_cfg = RpcServiceCfg::CallsAndSubscriptions {
-				bounded_subscriptions: BoundedSubscriptions::new(params.cfg.max_subscriptions_per_connection),
-				id_provider: params.cfg.id_provider.clone(),
+				bounded_subscriptions: BoundedSubscriptions::new(server_cfg.max_subscriptions_per_connection),
+				id_provider: server_cfg.id_provider.clone(),
 				sink: sink.clone(),
 				_pending_calls: pending_calls,
 			};
 
 			let rpc_service = RpcService::new(
-				params.methods.clone(),
-				params.cfg.max_response_body_size as usize,
-				params.conn_id as usize,
+				methods.into(),
+				server_cfg.max_response_body_size as usize,
+				conn.conn_id as usize,
 				rpc_service_cfg,
 			);
 
@@ -423,11 +433,12 @@ where
 
 				let stream = BufReader::new(BufWriter::new(upgraded.compat()));
 				let mut ws_builder = server.into_builder(stream);
-				ws_builder.set_max_message_size(params.cfg.max_response_body_size as usize);
+				ws_builder.set_max_message_size(server_cfg.max_response_body_size as usize);
 				let (sender, receiver) = ws_builder.finish();
 
 				let params = BackgroundTaskParams {
-					params,
+					server_cfg,
+					conn,
 					ws_sender: sender,
 					ws_receiver: receiver,
 					rpc_service,

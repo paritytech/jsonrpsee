@@ -69,7 +69,7 @@ const MAX_CONNECTIONS: u32 = 100;
 /// JSON RPC server.
 pub struct Server<HttpMiddleware = Identity, RpcMiddleware = Identity> {
 	listener: TcpListener,
-	cfg: Settings,
+	cfg: ServerConfig,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
@@ -179,46 +179,70 @@ where
 	}
 }
 
-/// JSON-RPC server settings.
+/// Static server configuration which is shared per connection.
 #[derive(Debug, Clone)]
-pub struct Settings {
+pub struct ServerConfig {
 	/// Maximum size in bytes of a request.
-	pub max_request_body_size: u32,
+	pub(crate) max_request_body_size: u32,
 	/// Maximum size in bytes of a response.
-	pub max_response_body_size: u32,
+	pub(crate) max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
-	pub max_connections: u32,
+	pub(crate) max_connections: u32,
 	/// Maximum number of subscriptions per connection.
-	pub max_subscriptions_per_connection: u32,
+	pub(crate) max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
-	pub batch_requests_config: BatchRequestConfig,
+	pub(crate) batch_requests_config: BatchRequestConfig,
 	/// Custom tokio runtime to run the server on.
-	pub tokio_runtime: Option<tokio::runtime::Handle>,
+	pub(crate) tokio_runtime: Option<tokio::runtime::Handle>,
 	/// Enable HTTP.
-	pub enable_http: bool,
+	pub(crate) enable_http: bool,
 	/// Enable WS.
-	pub enable_ws: bool,
+	pub(crate) enable_ws: bool,
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
-	pub message_buffer_capacity: u32,
+	pub(crate) message_buffer_capacity: u32,
 	/// Ping settings.
-	pub ping_config: PingConfig,
+	pub(crate) ping_config: PingConfig,
 	/// ID provider.
-	pub id_provider: Arc<dyn IdProvider>,
+	pub(crate) id_provider: Arc<dyn IdProvider>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ServerConfigBuilder {
+	/// Maximum size in bytes of a request.
+	pub(crate) max_request_body_size: u32,
+	/// Maximum size in bytes of a response.
+	pub(crate) max_response_body_size: u32,
+	/// Maximum number of incoming connections allowed.
+	pub(crate) max_connections: u32,
+	/// Maximum number of subscriptions per connection.
+	pub(crate) max_subscriptions_per_connection: u32,
+	/// Whether batch requests are supported by this server or not.
+	pub(crate) batch_requests_config: BatchRequestConfig,
+	/// Enable HTTP.
+	pub(crate) enable_http: bool,
+	/// Enable WS.
+	pub(crate) enable_ws: bool,
+	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
+	pub(crate) message_buffer_capacity: u32,
+	/// Ping settings.
+	pub(crate) ping_config: PingConfig,
+	/// ID provider.
+	pub(crate) id_provider: Arc<dyn IdProvider>,
 }
 
 /// Service config.
 #[derive(Debug, Clone)]
 pub struct TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
-	/// Settings
-	settings: Settings,
+	/// ServerConfig
+	pub(crate) settings: ServerConfig,
 	/// RPC middleware.
-	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
+	pub(crate) rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	/// HTTP middleware.
-	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
+	pub(crate) http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 	/// Connection ID.
-	conn_id: Arc<AtomicU32>,
-	/// Connection ID.
-	conn_guard: ConnectionGuard,
+	pub(crate) conn_id: Arc<AtomicU32>,
+	/// Connection guard.
+	pub(crate) conn_guard: ConnectionGuard,
 }
 
 /// Configuration for batch request handling.
@@ -232,19 +256,23 @@ pub enum BatchRequestConfig {
 	Unlimited,
 }
 
-/// Data required to handle a JSON-RPC call.
+/// Connection related state that is needed
+/// to execute JSON-RPC calls.
 #[derive(Debug, Clone)]
-pub struct Params {
-	/// Registered server methods.
-	pub methods: Methods,
+pub struct ConnectionState {
 	/// Stop handle.
-	pub stop_handle: StopHandle,
+	pub(crate) stop_handle: StopHandle,
 	/// Connection ID
-	pub conn_id: u32,
+	pub(crate) conn_id: u32,
 	/// Connection guard.
-	pub conn_permit: Arc<OwnedSemaphorePermit>,
-	/// Settings
-	pub cfg: Settings,
+	pub(crate) _conn_permit: Arc<OwnedSemaphorePermit>,
+}
+
+impl ConnectionState {
+	/// Create a new connection state.
+	pub fn new(stop_handle: StopHandle, conn_id: u32, conn_permit: OwnedSemaphorePermit) -> ConnectionState {
+		Self { stop_handle, conn_id, _conn_permit: Arc::new(conn_permit) }
+	}
 }
 
 /// Configuration for WebSocket ping's.
@@ -295,7 +323,7 @@ impl Default for PingConfig {
 	}
 }
 
-impl Default for Settings {
+impl Default for ServerConfig {
 	fn default() -> Self {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
@@ -313,10 +341,111 @@ impl Default for Settings {
 	}
 }
 
+impl ServerConfig {
+	/// Create a new builder for the [`ServerConfig`].
+	pub fn builder() -> ServerConfigBuilder {
+		ServerConfigBuilder::default()
+	}
+}
+
+impl Default for ServerConfigBuilder {
+	fn default() -> Self {
+		let this = ServerConfig::default();
+
+		ServerConfigBuilder {
+			max_request_body_size: this.max_request_body_size,
+			max_response_body_size: this.max_response_body_size,
+			max_connections: this.max_connections,
+			max_subscriptions_per_connection: this.max_subscriptions_per_connection,
+			batch_requests_config: this.batch_requests_config,
+			enable_http: this.enable_http,
+			enable_ws: this.enable_ws,
+			message_buffer_capacity: this.message_buffer_capacity,
+			ping_config: this.ping_config,
+			id_provider: this.id_provider,
+		}
+	}
+}
+
+impl ServerConfigBuilder {
+	/// Create a new [`ServerConfigBuilder`].
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	/// See [`Builder::max_request_body_size`](method@Builder::max_request_body_size) for documentation.
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.max_request_body_size = size;
+		self
+	}
+
+	/// See [`Builder::max_response_body_size`](method@Builder::max_response_body_size) for documentation.
+	pub fn max_response_body_size(mut self, size: u32) -> Self {
+		self.max_response_body_size = size;
+		self
+	}
+
+	/// See [`Builder::max_connections`](method@Builder::max_connections) for documentation.
+	pub fn max_connections(mut self, max: u32) -> Self {
+		self.max_connections = max;
+		self
+	}
+
+	/// See [`Builder::set_batch_request_config`](method@Builder::set_batch_request_config) for documentation.
+	pub fn set_batch_request_config(mut self, cfg: BatchRequestConfig) -> Self {
+		self.batch_requests_config = cfg;
+		self
+	}
+
+	/// See [`Builder::max_subscriptions_per_connection`](method@Builder::max_subscriptions_per_connection) for documentation.
+	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
+		self.max_subscriptions_per_connection = max;
+		self
+	}
+
+	/// See [`Builder::http_only`](method@Builder::http_only) for documentation.
+	pub fn http_only(mut self) -> Self {
+		self.enable_http = true;
+		self.enable_ws = false;
+		self
+	}
+
+	/// See [`Builder::ws_only`](method@Builder::ws_only) for documentation.
+	pub fn ws_only(mut self) -> Self {
+		self.enable_http = false;
+		self.enable_ws = true;
+		self
+	}
+
+	/// See [`Builder::set_message_buffer_capacity`](method@Builder::set_message_buffer_capacity) for documentation.
+	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
+		self.message_buffer_capacity = c;
+		self
+	}
+
+	/// See [`Builder::ping_interval`](method@Builder::ping_interval) for documentation.
+	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
+		if let PingConfig::WithInactivityCheck { ping_interval, inactive_limit } = config {
+			if ping_interval >= inactive_limit {
+				return Err(Error::Custom("`inactive_limit` must be bigger than `ping_interval` to work".into()));
+			}
+		}
+
+		self.ping_config = config;
+		Ok(self)
+	}
+
+	/// See [`Builder::set_id_provider`] for documentation.
+	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
+		self.id_provider = Arc::new(id_provider);
+		self
+	}
+}
+
 /// Builder to configure and create a JSON-RPC server
 #[derive(Debug)]
 pub struct Builder<HttpMiddleware, RpcMiddleware> {
-	settings: Settings,
+	settings: ServerConfig,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
@@ -324,7 +453,7 @@ pub struct Builder<HttpMiddleware, RpcMiddleware> {
 impl Default for Builder<Identity, Identity> {
 	fn default() -> Self {
 		Builder {
-			settings: Settings::default(),
+			settings: ServerConfig::default(),
 			rpc_middleware: RpcServiceBuilder::new(),
 			http_middleware: tower::ServiceBuilder::new(),
 		}
@@ -710,8 +839,8 @@ pub struct ServiceData {
 	pub conn_id: u32,
 	/// Connection guard.
 	pub conn_guard: ConnectionGuard,
-	/// Settings
-	pub cfg: Settings,
+	/// ServerConfig
+	pub cfg: ServerConfig,
 }
 
 /// jsonrpsee tower service
@@ -758,7 +887,7 @@ where
 /// jsonrpsee tower service.
 ///
 /// This will not apply specific HTTP middleware that
-/// can be enabled by [`ServerBuilder::set_http_middleware`]
+/// can be enabled by [`Builder::set_http_middleware`](method@Builder::set_http_middleware).
 ///
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].
@@ -788,22 +917,20 @@ where
 	}
 
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
+		let conn_guard = &self.inner.conn_guard;
+		let stop_handle = self.inner.stop_handle.clone();
+		let conn_id = self.inner.conn_id;
+
 		tracing::trace!("{:?}", request);
 
-		let Some(conn_permit) = self.inner.conn_guard.try_acquire() else {
+		let Some(conn_permit) = conn_guard.try_acquire() else {
 			return async move { Ok(http::response::too_many_requests()) }.boxed();
 		};
 
-		let params = Params {
-			methods: self.inner.methods.clone(),
-			conn_id: self.inner.conn_id,
-			stop_handle: self.inner.stop_handle.clone(),
-			conn_permit: Arc::new(conn_permit),
-			cfg: self.inner.cfg.clone(),
-		};
+		let conn = ConnectionState::new(stop_handle.clone(), conn_id, conn_permit);
 
-		let max_conns = self.inner.conn_guard.max_connections();
-		let curr_conns = max_conns - self.inner.conn_guard.available_connections();
+		let max_conns = conn_guard.max_connections();
+		let curr_conns = max_conns - conn_guard.available_connections();
 		tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
 
 		let is_upgrade_request = is_upgrade_request(&request);
@@ -831,7 +958,7 @@ where
 					};
 
 					let rpc_service = RpcService::new(
-						self.inner.methods.clone(),
+						this.methods.clone(),
 						this.cfg.max_response_body_size as usize,
 						this.conn_id as usize,
 						cfg,
@@ -855,7 +982,8 @@ where
 							let (sender, receiver) = ws_builder.finish();
 
 							let params = BackgroundTaskParams {
-								params,
+								server_cfg: this.cfg,
+								conn,
 								ws_sender: sender,
 								ws_receiver: receiver,
 								rpc_service,
@@ -903,7 +1031,7 @@ where
 }
 
 struct ProcessConnection {
-	settings: Settings,
+	settings: ServerConfig,
 	remote_addr: SocketAddr,
 	methods: Methods,
 	conn_id: u32,

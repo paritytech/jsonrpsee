@@ -1,10 +1,10 @@
 use http::Method;
-use jsonrpsee_core::{http_helpers::read_body, GenericTransportError};
+use jsonrpsee_core::{http_helpers::read_body, server::Methods, GenericTransportError};
 
 use crate::{
 	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol},
-	server::{handle_rpc_call, Params, Settings},
-	BatchRequestConfig,
+	server::{handle_rpc_call, ServerConfig},
+	BatchRequestConfig, ConnectionState,
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
@@ -26,7 +26,9 @@ pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 /// Fails if the HTTP request was a malformed JSON-RPC request.
 pub async fn call_with_service_builder<L>(
 	request: hyper::Request<hyper::Body>,
-	svc: Params,
+	server_cfg: ServerConfig,
+	conn: ConnectionState,
+	methods: impl Into<Methods>,
 	rpc_service: RpcServiceBuilder<L>,
 ) -> hyper::Response<hyper::Body>
 where
@@ -34,13 +36,12 @@ where
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
 {
-	let Params { methods, conn_id, conn_permit, cfg, stop_handle } = svc;
-	let Settings { max_response_body_size, batch_requests_config, max_request_body_size, .. } = cfg;
+	let ServerConfig { max_response_body_size, batch_requests_config, max_request_body_size, .. } = server_cfg;
 
 	let rpc_service = rpc_service.service(RpcService::new(
-		methods,
+		methods.into(),
 		max_response_body_size as usize,
-		conn_id as usize,
+		conn.conn_id as usize,
 		RpcServiceCfg::OnlyCalls,
 	));
 
@@ -48,8 +49,7 @@ where
 		call_with_service(request, batch_requests_config, max_request_body_size, rpc_service, max_response_body_size)
 			.await;
 
-	drop(conn_permit);
-	drop(stop_handle);
+	drop(conn);
 
 	rp
 }
