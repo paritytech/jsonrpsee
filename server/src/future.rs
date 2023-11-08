@@ -30,6 +30,13 @@ use jsonrpsee_core::Error;
 use std::sync::Arc;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 
+/// Create channel to determine whether
+/// the server shall continue to run or not.
+pub fn stop_channel() -> (StopHandle, ServerHandle) {
+	let (tx, rx) = tokio::sync::watch::channel(());
+	(StopHandle::new(rx), ServerHandle::new(tx))
+}
+
 /// Represent a stop handle which is a wrapper over a `multi-consumer receiver`
 /// and cloning [`StopHandle`] will get a separate instance of the underlying receiver.
 #[derive(Debug, Clone)]

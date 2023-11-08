@@ -47,7 +47,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceT, TransportProtocol};
 use jsonrpsee::server::{
-	http, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle,
+	http, stop_channel, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -150,11 +150,13 @@ fn run_server() -> ServerHandle {
 	// Construct our SocketAddr to listen on...
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9944));
 
-	// Maybe we want to be able to stop our server but not added here.
-	let (tx, rx) = tokio::sync::watch::channel(());
+	// Each RPC call/connection get its own `stop_handle`
+	// to able to determine whether the server has been stopped or not.
+	//
+	// To keep the server running the `server_handle`
+	// must be kept and it can also be used to stop the server.
+	let (stop_handle, server_handle) = stop_channel();
 
-	let stop_handle = StopHandle::new(rx);
-	let server_handle = ServerHandle::new(tx);
 	let methods = ().into_rpc();
 	let conn_guard = ConnectionGuard::new(100);
 	let conn_id = Arc::new(AtomicU32::new(0));

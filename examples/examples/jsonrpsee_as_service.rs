@@ -44,7 +44,7 @@ use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, TransportProtocol};
-use jsonrpsee::server::{ServerHandle, StopHandle};
+use jsonrpsee::server::{stop_channel, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::HeaderValue;
 use jsonrpsee::MethodResponse;
@@ -130,10 +130,13 @@ fn run_server() -> ServerHandle {
 	use hyper::service::{make_service_fn, service_fn};
 
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9944));
-	let (tx, rx) = tokio::sync::watch::channel(());
+	// Each RPC call/connection get its own `stop_handle`
+	// to able to determine whether the server has been stopped or not.
+	//
+	// To keep the server running the `server_handle`
+	// must be kept and it can also be used to stop the server.
+	let (stop_handle, server_handle) = stop_channel();
 
-	let server_handle = ServerHandle::new(tx);
-	let stop_handle = StopHandle::new(rx);
 	let svc_builder = jsonrpsee::server::Server::builder()
 		.set_http_middleware(tower::ServiceBuilder::new().layer(CorsLayer::permissive()))
 		.max_connections(33)

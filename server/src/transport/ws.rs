@@ -351,14 +351,15 @@ async fn graceful_shutdown<S>(
 /// must be sent back and the websocket connection will held in another task.
 ///
 /// ```no_run
-/// use jsonrpsee_server::ws;
+/// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState};
 /// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService};
-/// use jsonrpsee_server::Params;
 ///
 /// async fn handle_request<L>(
 ///     req: hyper::Request<hyper::Body>,
-///     params: Params,
-///     rpc_service: RpcServiceBuilder<L>,
+///     server_cfg: ServerConfig,
+///     methods: impl Into<Methods> + 'static,
+///     conn: ConnectionState,
+///     rpc_middleware: RpcServiceBuilder<L>,
 ///     mut disconnect: tokio::sync::mpsc::Receiver<()>
 /// ) -> hyper::Response<hyper::Body>
 /// where
@@ -366,7 +367,7 @@ async fn graceful_shutdown<S>(
 ///     <L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
 ///     for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a> + 'static,
 /// {
-///   match ws::connect(req, params, rpc_service).await {
+///   match ws::connect(req, server_cfg, methods, conn, rpc_middleware).await {
 ///     Ok((rp, conn_fut)) => {
 ///         tokio::spawn(async move {
 ///             // Keep the connection alive until
