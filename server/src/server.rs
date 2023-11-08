@@ -207,25 +207,25 @@ pub struct ServerConfig {
 #[derive(Debug, Clone)]
 pub struct ServerConfigBuilder {
 	/// Maximum size in bytes of a request.
-	pub(crate) max_request_body_size: u32,
+	max_request_body_size: u32,
 	/// Maximum size in bytes of a response.
-	pub(crate) max_response_body_size: u32,
+	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
-	pub(crate) max_connections: u32,
+	max_connections: u32,
 	/// Maximum number of subscriptions per connection.
-	pub(crate) max_subscriptions_per_connection: u32,
+	max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
-	pub(crate) batch_requests_config: BatchRequestConfig,
+	batch_requests_config: BatchRequestConfig,
 	/// Enable HTTP.
-	pub(crate) enable_http: bool,
+	enable_http: bool,
 	/// Enable WS.
-	pub(crate) enable_ws: bool,
+	enable_ws: bool,
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
-	pub(crate) message_buffer_capacity: u32,
+	message_buffer_capacity: u32,
 	/// Ping settings.
-	pub(crate) ping_config: PingConfig,
+	ping_config: PingConfig,
 	/// ID provider.
-	pub(crate) id_provider: Arc<dyn IdProvider>,
+	id_provider: Arc<dyn IdProvider>,
 }
 
 /// Service config.
@@ -828,17 +828,17 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 
 /// Data required by the server to handle requests.
 #[derive(Debug, Clone)]
-pub struct ServiceData {
+struct ServiceData {
 	/// Registered server methods.
-	pub(crate) methods: Methods,
+	methods: Methods,
 	/// Stop handle.
-	pub(crate) stop_handle: StopHandle,
+	stop_handle: StopHandle,
 	/// Connection ID
-	pub(crate) conn_id: u32,
+	conn_id: u32,
 	/// Connection guard.
-	pub(crate) conn_guard: ConnectionGuard,
+	conn_guard: ConnectionGuard,
 	/// ServerConfig
-	pub(crate) server_cfg: ServerConfig,
+	server_cfg: ServerConfig,
 }
 
 /// jsonrpsee tower service
@@ -949,7 +949,9 @@ where
 					let (pending_calls, pending_calls_completed) = mpsc::channel::<()>(1);
 
 					let cfg = RpcServiceCfg::CallsAndSubscriptions {
-						bounded_subscriptions: BoundedSubscriptions::new(this.server_cfg.max_subscriptions_per_connection),
+						bounded_subscriptions: BoundedSubscriptions::new(
+							this.server_cfg.max_subscriptions_per_connection,
+						),
 						id_provider: this.server_cfg.id_provider.clone(),
 						sink: sink.clone(),
 						_pending_calls: pending_calls,
@@ -1084,7 +1086,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 			server_cfg,
 			methods,
 			stop_handle: stop_handle.clone(),
-			conn_id: conn_id,
+			conn_id,
 			conn_guard: conn_guard.clone(),
 		},
 		rpc_middleware,

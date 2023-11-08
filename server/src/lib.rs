@@ -46,8 +46,8 @@ pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;
 pub use middleware::rpc::RpcServiceBuilder;
 pub use server::{
-	BatchRequestConfig, Builder as ServerBuilder, ConnectionState, PingConfig, Server, ServerConfig, ServiceData,
-	TowerService, TowerServiceBuilder, TowerServiceNoHttp,
+	BatchRequestConfig, Builder as ServerBuilder, ConnectionState, PingConfig, Server, ServerConfig, TowerService,
+	TowerServiceBuilder, TowerServiceNoHttp,
 };
 pub use tracing;
 
