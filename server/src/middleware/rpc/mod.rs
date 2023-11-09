@@ -116,7 +116,7 @@ impl<L> RpcServiceBuilder<L> {
 	}
 
 	/// Wrap the service `S` with the middleware.
-	pub fn service<S>(&self, service: S) -> L::Service
+	pub(crate) fn service<S>(&self, service: S) -> L::Service
 	where
 		L: tower::Layer<S>,
 	{

@@ -748,7 +748,70 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
-	/// Extract the server configuration to use jsonrpsee as service.
+	/// Convert the server builder to a [`TowerServiceBuilder`].
+	///
+	/// This can be used to utilize the [`TowerService`] from jsonrpsee.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use hyper::service::{make_service_fn, service_fn};
+	/// use hyper::server::conn::AddrStream;
+	/// use jsonrpsee_server::{Methods, ServerHandle, ws, stop_channel};
+	/// use tower::Service;
+	/// use std::{error::Error as StdError, net::SocketAddr};
+	///
+	/// fn run_server() -> ServerHandle {
+	///     let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+	///     let (stop_handle, server_handle) = stop_channel();
+	///     let svc_builder = jsonrpsee_server::Server::builder().max_connections(33).to_service_builder();
+	///     let methods = Methods::new();
+	///     let stop_handle2 = stop_handle.clone();
+	///
+	///     let make_service = make_service_fn(move |_conn: &AddrStream| {
+	///         // You may use `conn` or the actual HTTP request to get connection related details.
+	///         let stop_handle = stop_handle2.clone();
+	///         let svc_builder = svc_builder.clone();
+	///         let methods = methods.clone();
+	///
+	///         async move {
+	///             let stop_handle = stop_handle.clone();
+	///             let svc_builder = svc_builder.clone();
+	///             let methods = methods.clone();
+	///
+	///             Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
+	///                 let svc_builder = svc_builder.clone();
+	///                 let methods = methods.clone();
+	///                 let stop_handle = stop_handle.clone();
+	///                 let mut svc = svc_builder.build(methods, stop_handle);
+	///
+	///                 // It's not possible to know whether the websocket upgrade handshake failed or not here.
+	///                 let is_websocket = ws::is_upgrade_request(&req);
+	///
+	///                 if is_websocket {
+	///                     println!("websocket")
+	///                 } else {
+	///                     println!("http")
+	///                 }
+	///
+	///                 /// Call the jsonrpsee service which
+	///                 /// may upgrade it to a WebSocket connection
+	///                 /// or treat it as "ordinary HTTP request".
+	///                 svc.call(req)
+	///             }))
+	///         }
+	///     });
+	///
+	///     let server = hyper::Server::bind(&addr).serve(make_service);
+	///
+	///     tokio::spawn(async move {
+	///         let graceful = server.with_graceful_shutdown(async move { stop_handle.shutdown().await });
+	///         graceful.await.unwrap()
+	///     });
+	///
+	///     server_handle
+	/// }
+	/// ```
 	pub fn to_service_builder(self) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 		let max_conns = self.server_cfg.max_connections as usize;
 
@@ -844,8 +907,7 @@ struct ServiceData {
 /// jsonrpsee tower service
 ///
 /// This will enable both `http_middleware` and `rpc_middleware`
-/// if you want only to enable `rpc_middleware` then [`TowerServiceNoHttp`]
-/// can be used.
+/// that may be enabled by [`Builder`] or [`TowerServiceBuilder`].
 #[derive(Debug)]
 pub struct TowerService<RpcMiddleware, HttpMiddleware> {
 	rpc_middleware: TowerServiceNoHttp<RpcMiddleware>,
@@ -882,10 +944,7 @@ where
 	}
 }
 
-/// jsonrpsee tower service.
-///
-/// This will not apply specific HTTP middleware that
-/// can be enabled by [`Builder::set_http_middleware`](method@Builder::set_http_middleware).
+/// jsonrpsee tower service without HTTP specific middleware.
 ///
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].

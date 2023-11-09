@@ -354,7 +354,7 @@ async fn graceful_shutdown<S>(
 /// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState};
 /// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService};
 ///
-/// async fn handle_request<L>(
+/// async fn handle_websocket_conn<L>(
 ///     req: hyper::Request<hyper::Body>,
 ///     server_cfg: ServerConfig,
 ///     methods: impl Into<Methods> + 'static,

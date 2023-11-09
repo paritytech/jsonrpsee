@@ -27,13 +27,16 @@
 //! This example shows how to use the low-level server API
 //! in jsonrpsee.
 //!
-//! The particular example disconnects peers that exceeds
-//! the rate limit more than ten times and bans IP addr.
+//! The particular example disconnects peers that
+//! makes more than ten RPC calls and bans the IP addr.
 //!
 //! NOTE:
 //!
 //! Enabling tower middleware in this example doesn't work,
 //! to do so then the low-level API in hyper must be used.
+//!
+//! See <https://docs.rs/hyper/latest/hyper/server/conn/index.html>
+//! for further information regarding the "low-level API" in hyper.
 
 use std::collections::HashSet;
 use std::convert::Infallible;
@@ -193,7 +196,7 @@ fn run_server() -> ServerHandle {
 			let global_http_rate_limit = global_http_rate_limit.clone();
 
 			Ok::<_, Infallible>(service_fn(move |req| {
-				// jsonrpsee::server::Params expects a `conn permit` for connection.
+				// jsonrpsee expects a `conn permit` for each connection.
 				//
 				// This may be omitted if don't want to limit the number of connections
 				// to the server.
