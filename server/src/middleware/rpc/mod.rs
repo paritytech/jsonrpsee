@@ -28,7 +28,7 @@
 
 mod layers;
 
-use futures_util::future::{self, Either};
+use futures_util::future::Either;
 pub use layers::*;
 
 use tower::layer::util::{Identity, Stack};
@@ -90,8 +90,7 @@ impl<L> RpcServiceBuilder<L> {
 	///
 	/// See the documentation for [`tower::ServiceBuilder::option_layer`] for more details.
 	pub fn option_layer<T>(self, layer: Option<T>) -> RpcServiceBuilder<Stack<Either<T, Identity>, L>> {
-		let layer =
-			if let Some(layer) = layer { future::Either::Left(layer) } else { future::Either::Right(Identity::new()) };
+		let layer = if let Some(layer) = layer { Either::Left(layer) } else { Either::Right(Identity::new()) };
 		self.layer(layer)
 	}
 
