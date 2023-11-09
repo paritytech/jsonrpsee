@@ -24,8 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::error::Error as StdError;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
+use futures_util::ready;
 use jsonrpsee_core::server::{
 	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
@@ -33,6 +38,8 @@ use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
 use jsonrpsee_types::{ErrorObject, Request};
+use pin_project::pin_project;
+use tower::Layer;
 
 use super::{RpcServiceT, TransportProtocol};
 
@@ -170,5 +177,62 @@ where
 		let rp = self.service.call(request, transport).await;
 		tx_log_from_str(&rp.result, self.max);
 		rp
+	}
+}
+
+/// Similar to [`tower::util::Either`] but
+/// adjusted to satisfy the traits bound [`RpcServiceT].
+#[pin_project(project = EitherProj)]
+#[derive(Clone, Debug)]
+pub enum Either<A, B> {
+	/// One type of backing [`RpcServiceT`].
+	A(#[pin] A),
+	/// The other type of backing [`RpcServiceT`].
+	B(#[pin] B),
+}
+
+impl<A, B, T, AE, BE> Future for Either<A, B>
+where
+	A: Future<Output = Result<T, AE>>,
+	AE: Into<Box<dyn StdError + Send + Sync>>,
+	B: Future<Output = Result<T, BE>>,
+	BE: Into<Box<dyn StdError + Send + Sync>>,
+{
+	type Output = Result<T, Box<dyn StdError + Send + Sync>>;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		match self.project() {
+			EitherProj::A(fut) => Poll::Ready(Ok(ready!(fut.poll(cx)).map_err(Into::into)?)),
+			EitherProj::B(fut) => Poll::Ready(Ok(ready!(fut.poll(cx)).map_err(Into::into)?)),
+		}
+	}
+}
+
+impl<S, A, B> Layer<S> for Either<A, B>
+where
+	A: Layer<S>,
+	B: Layer<S>,
+{
+	type Service = Either<A::Service, B::Service>;
+
+	fn layer(&self, inner: S) -> Self::Service {
+		match self {
+			Either::A(layer) => Either::A(layer.layer(inner)),
+			Either::B(layer) => Either::B(layer.layer(inner)),
+		}
+	}
+}
+
+#[async_trait::async_trait]
+impl<'a, A, B> RpcServiceT<'a> for Either<A, B>
+where
+	A: RpcServiceT<'a> + Send + Sync,
+	B: RpcServiceT<'a> + Send + Sync,
+{
+	async fn call(&self, request: Request<'a>, transport: TransportProtocol) -> MethodResponse {
+		match self {
+			Either::A(service) => service.call(request, transport).await,
+			Either::B(service) => service.call(request, transport).await,
+		}
 	}
 }
