@@ -30,7 +30,6 @@ tower = { version = "0.4.13", features = ["util"] }
 route-recognizer = "0.3.1"
 http = "0.2.9"
 thiserror = "1.0.44"
-pin-project = "1.1.3"
 
 [dev-dependencies]
 anyhow = "1"
