@@ -371,57 +371,57 @@ impl ServerConfigBuilder {
 		Self::default()
 	}
 
-	/// See [`Builder::max_request_body_size`](method@Builder::max_request_body_size) for documentation.
+	/// See [`Builder::max_request_body_size`] for documentation.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
 		self
 	}
 
-	/// See [`Builder::max_response_body_size`](method@Builder::max_response_body_size) for documentation.
+	/// See [`Builder::max_response_body_size`] for documentation.
 	pub fn max_response_body_size(mut self, size: u32) -> Self {
 		self.max_response_body_size = size;
 		self
 	}
 
-	/// See [`Builder::max_connections`](method@Builder::max_connections) for documentation.
+	/// See [`Builder::max_connections`] for documentation.
 	pub fn max_connections(mut self, max: u32) -> Self {
 		self.max_connections = max;
 		self
 	}
 
-	/// See [`Builder::set_batch_request_config`](method@Builder::set_batch_request_config) for documentation.
+	/// See [`Builder::set_batch_request_config`] for documentation.
 	pub fn set_batch_request_config(mut self, cfg: BatchRequestConfig) -> Self {
 		self.batch_requests_config = cfg;
 		self
 	}
 
-	/// See [`Builder::max_subscriptions_per_connection`](method@Builder::max_subscriptions_per_connection) for documentation.
+	/// See [`Builder::max_subscriptions_per_connection`] for documentation.
 	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
 		self.max_subscriptions_per_connection = max;
 		self
 	}
 
-	/// See [`Builder::http_only`](method@Builder::http_only) for documentation.
+	/// See [`Builder::http_only`] for documentation.
 	pub fn http_only(mut self) -> Self {
 		self.enable_http = true;
 		self.enable_ws = false;
 		self
 	}
 
-	/// See [`Builder::ws_only`](method@Builder::ws_only) for documentation.
+	/// See [`Builder::ws_only`] for documentation.
 	pub fn ws_only(mut self) -> Self {
 		self.enable_http = false;
 		self.enable_ws = true;
 		self
 	}
 
-	/// See [`Builder::set_message_buffer_capacity`](method@Builder::set_message_buffer_capacity) for documentation.
+	/// See [`Builder::set_message_buffer_capacity`] for documentation.
 	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
 		self.message_buffer_capacity = c;
 		self
 	}
 
-	/// See [`Builder::ping_interval`](method@Builder::ping_interval) for documentation.
+	/// See [`Builder::ping_interval`] for documentation.
 	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
 		if let PingConfig::WithInactivityCheck { ping_interval, inactive_limit } = config {
 			if ping_interval >= inactive_limit {
