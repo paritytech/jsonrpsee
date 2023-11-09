@@ -180,7 +180,7 @@ where
 }
 
 /// Similar to [`tower::util::Either`] but
-/// adjusted to satisfy the traits bound [`RpcServiceT].
+/// adjusted to satisfy the trait bound [`RpcServiceT].
 #[pin_project(project = EitherProj)]
 #[derive(Clone, Debug)]
 pub enum Either<A, B> {
