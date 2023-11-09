@@ -228,7 +228,7 @@ pub struct ServerConfigBuilder {
 	id_provider: Arc<dyn IdProvider>,
 }
 
-/// Service config.
+/// Builder for [`TowerService`].
 #[derive(Debug, Clone)]
 pub struct TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 	/// ServerConfig
