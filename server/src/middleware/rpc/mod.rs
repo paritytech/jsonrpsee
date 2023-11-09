@@ -32,7 +32,6 @@ pub use layers::*;
 
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
-use tower::util::Either;
 
 use jsonrpsee_core::server::MethodResponse;
 use jsonrpsee_types::Request;
@@ -90,7 +89,8 @@ impl<L> RpcServiceBuilder<L> {
 	///
 	/// See the documentation for [`tower::ServiceBuilder::option_layer`] for more details.
 	pub fn option_layer<T>(self, layer: Option<T>) -> RpcServiceBuilder<Stack<Either<T, Identity>, L>> {
-		RpcServiceBuilder(self.0.option_layer(layer))
+		let layer = if let Some(layer) = layer { Either::A(layer) } else { Either::B(Identity::new()) };
+		self.layer(layer)
 	}
 
 	/// Add a new layer `T` to the [`RpcServiceBuilder`].
