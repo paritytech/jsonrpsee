@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::error::Error as StdError;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -39,7 +38,7 @@ use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
 use jsonrpsee_types::{ErrorObject, Request};
 use pin_project::pin_project;
-use tower::Layer;
+use tower::{BoxError, Layer};
 
 use super::{RpcServiceT, TransportProtocol};
 
@@ -194,11 +193,11 @@ pub enum Either<A, B> {
 impl<A, B, T, AE, BE> Future for Either<A, B>
 where
 	A: Future<Output = Result<T, AE>>,
-	AE: Into<Box<dyn StdError + Send + Sync>>,
+	AE: Into<BoxError>,
 	B: Future<Output = Result<T, BE>>,
-	BE: Into<Box<dyn StdError + Send + Sync>>,
+	BE: Into<BoxError>,
 {
-	type Output = Result<T, Box<dyn StdError + Send + Sync>>;
+	type Output = Result<T, BoxError>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		match self.project() {
