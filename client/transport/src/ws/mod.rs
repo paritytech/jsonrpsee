@@ -30,21 +30,21 @@ use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures_util::io::{BufReader, BufWriter};
 pub use futures_util::{AsyncRead, AsyncWrite};
+use futures_util::io::{BufReader, BufWriter};
+use jsonrpsee_core::{async_trait, Cow};
 use jsonrpsee_core::client::{CertificateStore, MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
-use jsonrpsee_core::{async_trait, Cow};
+use soketto::{connection, Data, Incoming};
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use soketto::{connection, Data, Incoming};
-use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
 
 pub use http::{uri::InvalidUri, HeaderMap, HeaderValue, Uri};
 pub use soketto::handshake::client::Header;
+pub use stream::EitherStream;
 pub use url::Url;
 
 /// Sending end of WebSocket transport.
