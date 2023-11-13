@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! This examples shows how to use the `jsonrpsee::server`` as
+//! This examples shows how to use the `jsonrpsee::server` as
 //! a tower service such that it's possible to get access
 //! HTTP related things by launching a `hyper::service_fn`.
 //!
