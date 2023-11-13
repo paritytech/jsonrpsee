@@ -39,7 +39,7 @@ use jsonrpsee_types::{ErrorObject, Request};
 use pin_project::pin_project;
 use tower::BoxError;
 
-use super::{RpcServiceT, TransportProtocol};
+use super::RpcServiceT;
 
 /// JSON-RPC service middleware.
 #[derive(Clone, Debug)]
@@ -73,7 +73,7 @@ impl RpcService {
 
 #[async_trait::async_trait]
 impl<'a> RpcServiceT<'a> for RpcService {
-	async fn call(&self, req: Request<'a>, _transport: TransportProtocol) -> MethodResponse {
+	async fn call(&self, req: Request<'a>) -> MethodResponse {
 		let params = req.params();
 		let name = req.method_name();
 		let id = req.id().clone();
@@ -169,10 +169,10 @@ impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
-	#[tracing::instrument(name = "method_call", skip(self, request, transport), level = "trace")]
-	async fn call(&self, request: Request<'a>, transport: TransportProtocol) -> MethodResponse {
+	#[tracing::instrument(name = "method_call", skip(self, request), level = "trace")]
+	async fn call(&self, request: Request<'a>) -> MethodResponse {
 		rx_log_from_json(&request, self.max);
-		let rp = self.service.call(request, transport).await;
+		let rp = self.service.call(request).await;
 		tx_log_from_str(&rp.result, self.max);
 		rp
 	}
@@ -231,10 +231,10 @@ where
 	A: RpcServiceT<'a> + Send + Sync,
 	B: RpcServiceT<'a> + Send + Sync,
 {
-	async fn call(&self, request: Request<'a>, transport: TransportProtocol) -> MethodResponse {
+	async fn call(&self, request: Request<'a>) -> MethodResponse {
 		match self {
-			Either::A(service) => service.call(request, transport).await,
-			Either::B(service) => service.call(request, transport).await,
+			Either::A(service) => service.call(request).await,
+			Either::B(service) => service.call(request).await,
 		}
 	}
 }

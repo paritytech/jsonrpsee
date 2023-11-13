@@ -35,7 +35,7 @@ use helpers::init_logger;
 use jsonrpsee::core::{async_trait, client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, TransportProtocol};
+use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{Server, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -62,7 +62,7 @@ impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
-	async fn call(&self, request: Request<'a>, transport: TransportProtocol) -> MethodResponse {
+	async fn call(&self, request: Request<'a>) -> MethodResponse {
 		let name = request.method.to_string();
 		let id = request.id.clone();
 
@@ -73,7 +73,7 @@ where
 			entry.0 += 1;
 		}
 
-		let rp = self.service.call(request, transport).await;
+		let rp = self.service.call(request).await;
 
 		{
 			let mut n = self.counter.lock().unwrap();

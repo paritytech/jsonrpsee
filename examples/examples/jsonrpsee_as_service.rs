@@ -43,7 +43,7 @@ use hyper::HeaderMap;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, TransportProtocol};
+use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{stop_channel, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::HeaderValue;
@@ -61,6 +61,8 @@ struct Metrics {
 struct AuthorizationMiddleware<S> {
 	headers: HeaderMap,
 	inner: S,
+	#[allow(unused)]
+	transport_label: &'static str,
 }
 
 #[async_trait]
@@ -68,7 +70,7 @@ impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>, label: TransportProtocol) -> MethodResponse {
+	async fn call(&self, req: Request<'a>) -> MethodResponse {
 		if req.method_name() == "trusted_call" {
 			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else {
 				return MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
@@ -77,9 +79,9 @@ where
 			// In this example for simplicity, the authorization value is not checked
 			// and used because it's just a toy example.
 
-			self.inner.call(req, label).await
+			self.inner.call(req).await
 		} else {
-			self.inner.call(req, label).await
+			self.inner.call(req).await
 		}
 	}
 }
@@ -166,20 +168,22 @@ fn run_server() -> ServerHandle {
 				let svc_builder = svc_builder.clone();
 				let methods = methods.clone();
 				let stop_handle = stop_handle.clone();
+				let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
+
+				let transport_label = if is_websocket { "ws" } else { "http" };
 
 				async move {
 					let headers = req.headers().clone();
 
 					// NOTE, the rpc middleware must be initialized here to be able to created once per connection
 					// with data from the connection such as the headers in this example
-					let rpc_middleware = RpcServiceBuilder::new()
-						.rpc_logger(1024)
-						.layer_fn(move |service| AuthorizationMiddleware { inner: service, headers: headers.clone() });
+					let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
+						AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
+					});
 
 					let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
 
 					// You can't determine whether the websocket upgrade handshake failed or not here.
-					let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
 					let rp = svc.call(req).await;
 					if is_websocket {
 						metrics.ws_connections.fetch_add(1, Ordering::Relaxed);

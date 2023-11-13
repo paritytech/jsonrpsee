@@ -2,7 +2,7 @@ use http::Method;
 use jsonrpsee_core::{http_helpers::read_body, server::Methods, GenericTransportError};
 
 use crate::{
-	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol},
+	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
 	server::{handle_rpc_call, ServerConfig},
 	BatchRequestConfig, ConnectionState,
 };
@@ -82,15 +82,7 @@ where
 				}
 			};
 
-			let rp = handle_rpc_call(
-				&body,
-				is_single,
-				batch_config,
-				max_response_size,
-				&rpc_service,
-				TransportProtocol::Http,
-			)
-			.await;
+			let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service).await;
 
 			// If the response is empty it means that it was a notification or empty batch.
 			// For HTTP these are just ACK:ed with a empty body.

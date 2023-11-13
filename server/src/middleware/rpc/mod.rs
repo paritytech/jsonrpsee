@@ -43,27 +43,7 @@ pub trait RpcServiceT<'a> {
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	/// In this interface they are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
-	async fn call(&self, request: Request<'a>, transport_label: TransportProtocol) -> MethodResponse;
-}
-
-/// The transport protocol used to send or receive a call or request.
-#[derive(Debug, Copy, Clone)]
-pub enum TransportProtocol {
-	/// HTTP transport.
-	Http,
-	/// WebSocket transport.
-	WebSocket,
-}
-
-impl std::fmt::Display for TransportProtocol {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let s = match self {
-			Self::Http => "http",
-			Self::WebSocket => "websocket",
-		};
-
-		write!(f, "{s}")
-	}
+	async fn call(&self, request: Request<'a>) -> MethodResponse;
 }
 
 /// Similar to [`tower::ServiceBuilder`] but doesn't

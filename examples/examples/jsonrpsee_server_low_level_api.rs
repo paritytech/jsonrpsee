@@ -48,7 +48,7 @@ use futures::FutureExt;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{RpcServiceT, TransportProtocol};
+use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
 	http, stop_channel, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle,
 };
@@ -76,14 +76,14 @@ impl<'a, S> RpcServiceT<'a> for CallLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
+	async fn call(&self, req: Request<'a>) -> MethodResponse {
 		let mut lock = self.count.lock().await;
 
 		if *lock >= 10 {
 			let _ = self.state.try_send(());
 			MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
 		} else {
-			let rp = self.service.call(req, t).await;
+			let rp = self.service.call(req).await;
 			*lock = *lock + 1;
 			rp
 		}

@@ -43,7 +43,7 @@ use std::sync::Arc;
 
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, TransportProtocol};
+use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{MethodResponse, RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -58,8 +58,8 @@ impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
-	async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
-		let rp = self.service.call(req.clone(), t).await;
+	async fn call(&self, req: Request<'a>) -> MethodResponse {
+		let rp = self.service.call(req).await;
 		self.count.fetch_add(1, Ordering::SeqCst);
 		let count = self.count.load(Ordering::SeqCst);
 		println!("the server has processed calls={count}");
@@ -77,8 +77,8 @@ impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
-	async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
-		let rp = self.service.call(req, t).await;
+	async fn call(&self, req: Request<'a>) -> MethodResponse {
+		let rp = self.service.call(req).await;
 		self.count.fetch_add(1, Ordering::SeqCst);
 		let count = self.count.load(Ordering::SeqCst);
 		println!("the server has processed calls={count}");
@@ -94,9 +94,9 @@ impl<'a, S> RpcServiceT<'a> for Logger<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
-	async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
+	async fn call(&self, req: Request<'a>) -> MethodResponse {
 		println!("logger middleware: method `{}`", req.method);
-		self.0.call(req, t).await
+		self.0.call(req).await
 	}
 }
 

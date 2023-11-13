@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
+use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
 use crate::PingConfig;
 
@@ -150,15 +150,9 @@ where
 				}
 			};
 
-			if let Some(rp) = handle_rpc_call(
-				&data[idx..],
-				is_single,
-				batch_requests_config,
-				max_response_body_size,
-				&*rpc_service,
-				TransportProtocol::WebSocket,
-			)
-			.await
+			if let Some(rp) =
+				handle_rpc_call(&data[idx..], is_single, batch_requests_config, max_response_body_size, &*rpc_service)
+					.await
 			{
 				if !rp.is_subscription {
 					_ = sink.send(rp.result).await;

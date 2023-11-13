@@ -34,7 +34,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
-use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT, TransportProtocol};
+use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
 
@@ -1217,7 +1217,6 @@ pub(crate) async fn handle_rpc_call<S>(
 	batch_config: BatchRequestConfig,
 	max_response_size: u32,
 	rpc_service: &S,
-	transport: TransportProtocol,
 ) -> Option<MethodResponse>
 where
 	for<'a> S: RpcServiceT<'a> + Send,
@@ -1225,7 +1224,7 @@ where
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = serde_json::from_slice(body) {
-			Some(rpc_service.call(req, transport).await)
+			Some(rpc_service.call(req).await)
 		} else if let Ok(_notif) = serde_json::from_slice::<Notif>(body) {
 			None
 		} else {
@@ -1257,7 +1256,7 @@ where
 
 			for call in batch {
 				if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
-					let rp = rpc_service.call(req, transport).await;
+					let rp = rpc_service.call(req).await;
 
 					if let Err(too_large) = batch_response.append(&rp) {
 						return Some(too_large);
