@@ -584,7 +584,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use std::{time::Instant, net::SocketAddr, sync::Arc};
 	/// use std::sync::atomic::{Ordering, AtomicUsize};
 	///
-	/// use jsonrpsee_server::middleware::rpc::{RpcServiceT, RpcService, TransportProtocol, RpcServiceBuilder};
+	/// use jsonrpsee_server::middleware::rpc::{RpcServiceT, RpcService, RpcServiceBuilder};
 	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
 	/// use jsonrpsee_core::async_trait;
 	/// use jsonrpsee_types::Request;
@@ -599,11 +599,11 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
 	/// where S: RpcServiceT<'a> + Send + Sync,
 	/// {
-	///     async fn call(&self, req: Request<'a>, t: TransportProtocol) -> MethodResponse {
+	///     async fn call(&self, req: Request<'a>) -> MethodResponse {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         // if one wants to access connection related context
 	///         // that can be fetched from `Context`
-	///         let rp = self.service.call(req, t).await;
+	///         let rp = self.service.call(req).await;
 	///         // Modify the state.
 	///         self.count.fetch_add(1, Ordering::Relaxed);
 	///         rp
