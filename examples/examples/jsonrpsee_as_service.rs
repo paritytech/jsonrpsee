@@ -44,10 +44,10 @@ use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
-use jsonrpsee::server::{stop_channel, ServerHandle};
+use jsonrpsee::server::{stop_channel, ServerHandle, StopHandle, TowerServiceBuilder};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::HeaderValue;
-use jsonrpsee::MethodResponse;
+use jsonrpsee::{MethodResponse, Methods};
 use tower::Service;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -132,6 +132,21 @@ fn run_server() -> ServerHandle {
 	use hyper::service::{make_service_fn, service_fn};
 
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9944));
+
+	// This state is cloned for every connection
+	// all these types based on Arcs and it should
+	// be relatively cheap to clone them.
+	//
+	// Make sure that nothing expensive is cloned here
+	// when doing this or use an `Arc`.
+	#[derive(Clone)]
+	struct PerConnection<RpcMiddleware, HttpMiddleware> {
+		methods: Methods,
+		stop_handle: StopHandle,
+		metrics: Metrics,
+		svc_builder: TowerServiceBuilder<RpcMiddleware, HttpMiddleware>,
+	}
+
 	// Each RPC call/connection get its own `stop_handle`
 	// to able to determine whether the server has been stopped or not.
 	//
@@ -139,50 +154,36 @@ fn run_server() -> ServerHandle {
 	// must be kept and it can also be used to stop the server.
 	let (stop_handle, server_handle) = stop_channel();
 
-	let svc_builder = jsonrpsee::server::Server::builder()
-		.set_http_middleware(tower::ServiceBuilder::new().layer(CorsLayer::permissive()))
-		.max_connections(33)
-		.to_service_builder();
-
-	let methods = ().into_rpc();
-	let stop_handle2 = stop_handle.clone();
-	let metrics = Metrics::default();
+	let per_conn = PerConnection {
+		methods: ().into_rpc().into(),
+		stop_handle: stop_handle.clone(),
+		metrics: Metrics::default(),
+		svc_builder: jsonrpsee::server::Server::builder()
+			.set_http_middleware(tower::ServiceBuilder::new().layer(CorsLayer::permissive()))
+			.max_connections(33)
+			.to_service_builder(),
+	};
 
 	// And a MakeService to handle each connection...
 	let make_service = make_service_fn(move |_conn: &AddrStream| {
-		// You may use `conn` or the actual HTTP request to get connection related details.
-
-		let stop_handle = stop_handle2.clone();
-		let svc_builder = svc_builder.clone();
-		let methods = methods.clone();
-		let metrics = metrics.clone();
+		let per_conn = per_conn.clone();
 
 		async move {
-			let stop_handle = stop_handle.clone();
-			let svc_builder = svc_builder.clone();
-			let methods = methods.clone();
-			let metrics = metrics.clone();
-
 			Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
-				let metrics = metrics.clone();
-				let svc_builder = svc_builder.clone();
-				let methods = methods.clone();
-				let stop_handle = stop_handle.clone();
 				let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
-
 				let transport_label = if is_websocket { "ws" } else { "http" };
+				let PerConnection { methods, stop_handle, metrics, svc_builder } = per_conn.clone();
+
+				// NOTE, the rpc middleware must be initialized here to be able to created once per connection
+				// with data from the connection such as the headers in this example
+				let headers = req.headers().clone();
+				let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
+					AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
+				});
+
+				let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
 
 				async move {
-					let headers = req.headers().clone();
-
-					// NOTE, the rpc middleware must be initialized here to be able to created once per connection
-					// with data from the connection such as the headers in this example
-					let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
-						AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
-					});
-
-					let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
-
 					// You can't determine whether the websocket upgrade handshake failed or not here.
 					let rp = svc.call(req).await;
 					if is_websocket {

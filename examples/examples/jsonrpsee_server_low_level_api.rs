@@ -40,8 +40,8 @@
 
 use std::collections::HashSet;
 use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::sync::atomic::AtomicU32;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
@@ -50,11 +50,11 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
-	http, stop_channel, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle,
+	http, stop_channel, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::MethodResponse;
+use jsonrpsee::{MethodResponse, Methods};
 use tokio::sync::Mutex as AsyncMutex;
 
 use hyper::server::conn::AddrStream;
@@ -160,24 +160,19 @@ fn run_server() -> ServerHandle {
 	// must be kept and it can also be used to stop the server.
 	let (stop_handle, server_handle) = stop_channel();
 
-	let methods = ().into_rpc();
-	let conn_guard = ConnectionGuard::new(100);
-	let conn_id = Arc::new(AtomicU32::new(0));
-	let http_rate_limit = Arc::new(AsyncMutex::new(0));
-
-	// Blacklisted peers
-	let blacklisted_peers = Arc::new(Mutex::new(HashSet::new()));
-	let stop_handle2 = stop_handle.clone();
-
-	// And a MakeService to handle each connection...
-	let make_service = make_service_fn(move |conn: &AddrStream| {
-		// Connection state.
-		let conn_id = conn_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-		let remote_addr = conn.remote_addr();
-		let stop_handle = stop_handle2.clone();
-		let conn_guard = conn_guard.clone();
-		let methods = methods.clone();
-		let blacklisted_peers = blacklisted_peers.clone();
+	// This state is cloned for every connection
+	// all these types based on Arcs and it should
+	// be relatively cheap to clone them.
+	//
+	// Make sure that nothing expensive is cloned here
+	// when doing this or use an `Arc`.
+	#[derive(Clone)]
+	struct PerConnection {
+		methods: Methods,
+		stop_handle: StopHandle,
+		conn_id: Arc<AtomicU32>,
+		conn_guard: ConnectionGuard,
+		blacklisted_peers: Arc<Mutex<HashSet<IpAddr>>>,
 		// HTTP rate limit that is shared by all connections.
 		//
 		// This is just a toy-example and one not should "limit" HTTP connections
@@ -185,17 +180,34 @@ fn run_server() -> ServerHandle {
 		//
 		// Because it's possible to blacklist a peer which has only made one or
 		// a few calls.
-		let global_http_rate_limit = http_rate_limit.clone();
+		global_http_rate_limit: Arc<AsyncMutex<usize>>,
+	}
+
+	let per_conn = PerConnection {
+		methods: ().into_rpc().into(),
+		stop_handle: stop_handle.clone(),
+		conn_id: Default::default(),
+		conn_guard: ConnectionGuard::new(100),
+		blacklisted_peers: Default::default(),
+		global_http_rate_limit: Default::default(),
+	};
+
+	// And a MakeService to handle each connection...
+	let make_service = make_service_fn(move |conn: &AddrStream| {
+		let per_conn = per_conn.clone();
+		let remote_addr = conn.remote_addr();
 
 		async move {
-			let stop_handle = stop_handle.clone();
-			let conn_guard = conn_guard.clone();
-			let methods = methods.clone();
-			let stop_handle = stop_handle.clone();
-			let blacklisted_peers = blacklisted_peers.clone();
-			let global_http_rate_limit = global_http_rate_limit.clone();
-
 			Ok::<_, Infallible>(service_fn(move |req| {
+				let PerConnection {
+					methods,
+					stop_handle,
+					conn_guard,
+					conn_id,
+					blacklisted_peers,
+					global_http_rate_limit,
+				} = per_conn.clone();
+
 				// jsonrpsee expects a `conn permit` for each connection.
 				//
 				// This may be omitted if don't want to limit the number of connections
@@ -210,10 +222,6 @@ fn run_server() -> ServerHandle {
 				}
 
 				if ws::is_upgrade_request(&req) {
-					let methods = methods.clone();
-					let stop_handle = stop_handle.clone();
-					let blacklisted_peers = blacklisted_peers.clone();
-
 					let (tx, mut disconnect) = mpsc::channel(1);
 					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
 						service,
@@ -221,7 +229,7 @@ fn run_server() -> ServerHandle {
 						state: tx.clone(),
 					});
 
-					let conn = ConnectionState::new(stop_handle.clone(), conn_id, conn_permit);
+					let conn = ConnectionState::new(stop_handle, conn_id.fetch_add(1, Ordering::Relaxed), conn_permit);
 
 					// Establishes the websocket connection
 					// and if the `CallLimit` middleware triggers the hard limit
@@ -246,8 +254,6 @@ fn run_server() -> ServerHandle {
 				} else if !ws::is_upgrade_request(&req) {
 					let (tx, mut disconnect) = mpsc::channel(1);
 
-					let global_http_rate_limit = global_http_rate_limit.clone();
-
 					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
 						service,
 						count: global_http_rate_limit.clone(),
@@ -255,8 +261,7 @@ fn run_server() -> ServerHandle {
 					});
 
 					let server_cfg = ServerConfig::default();
-					let conn = ConnectionState::new(stop_handle.clone(), conn_id, conn_permit);
-					let methods = methods.clone();
+					let conn = ConnectionState::new(stop_handle, conn_id.fetch_add(1, Ordering::Relaxed), conn_permit);
 
 					// There is another API for making call with just a service as well.
 					//
