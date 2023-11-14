@@ -775,14 +775,10 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///         let methods = methods.clone();
 	///
 	///         async move {
-	///             let stop_handle = stop_handle.clone();
-	///             let svc_builder = svc_builder.clone();
-	///             let methods = methods.clone();
-	///
 	///             Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
+	///                 let stop_handle = stop_handle.clone();
 	///                 let svc_builder = svc_builder.clone();
 	///                 let methods = methods.clone();
-	///                 let stop_handle = stop_handle.clone();
 	///                 let mut svc = svc_builder.build(methods, stop_handle);
 	///
 	///                 // It's not possible to know whether the websocket upgrade handshake failed or not here.
