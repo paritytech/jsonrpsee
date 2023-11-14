@@ -465,27 +465,27 @@ impl Builder<Identity, Identity> {
 	}
 }
 
-impl<RpcMiddleware: Clone, HttpMiddleware: Clone> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
+impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 	/// Build a tower service.
 	pub fn build(
-		&self,
+		self,
 		methods: impl Into<Methods>,
 		stop_handle: StopHandle,
 	) -> TowerService<RpcMiddleware, HttpMiddleware> {
 		let conn_id = self.conn_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
 		let rpc_middleware = TowerServiceNoHttp {
-			rpc_middleware: self.rpc_middleware.clone(),
+			rpc_middleware: self.rpc_middleware,
 			inner: ServiceData {
 				methods: methods.into(),
 				stop_handle,
 				conn_id,
-				conn_guard: self.conn_guard.clone(),
-				server_cfg: self.server_cfg.clone(),
+				conn_guard: self.conn_guard,
+				server_cfg: self.server_cfg,
 			},
 		};
 
-		TowerService { rpc_middleware, http_middleware: self.http_middleware.clone() }
+		TowerService { rpc_middleware, http_middleware: self.http_middleware }
 	}
 
 	/// Configure the connection id.
