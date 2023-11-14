@@ -908,7 +908,7 @@ struct ServiceData {
 ///
 /// This will enable both `http_middleware` and `rpc_middleware`
 /// that may be enabled by [`Builder`] or [`TowerServiceBuilder`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TowerService<RpcMiddleware, HttpMiddleware> {
 	rpc_middleware: TowerServiceNoHttp<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
