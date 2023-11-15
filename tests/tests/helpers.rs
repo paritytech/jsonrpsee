@@ -29,7 +29,9 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::{SinkExt, Stream, StreamExt};
+use fast_socks5::client::Socks5Stream;
+use fast_socks5::server;
+use futures::{AsyncRead, AsyncWrite, SinkExt, Stream, StreamExt};
 use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{
@@ -37,9 +39,12 @@ use jsonrpsee::server::{
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::SubscriptionCloseResponse;
+use pin_project::pin_project;
 use serde::Serialize;
+use tokio::net::TcpStream;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tower_http::cors::CorsLayer;
 
 #[allow(dead_code)]
@@ -245,6 +250,115 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 					// channel is full, let's be naive an just drop the message.
 					Err(TrySendError::Full(_)) => (),
 				}
+			}
+		}
+	}
+}
+
+#[allow(dead_code)]
+pub async fn socks_server_no_auth() -> SocketAddr {
+	let mut config = server::Config::default();
+	config.set_dns_resolve(false);
+	let config = std::sync::Arc::new(config);
+
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let proxy_addr = listener.local_addr().unwrap();
+
+	spawn_socks_server(listener, config).await;
+
+	proxy_addr
+}
+
+#[allow(dead_code)]
+pub async fn spawn_socks_server(listener: tokio::net::TcpListener, config: std::sync::Arc<server::Config>) {
+	let addr = listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		loop {
+			let (stream, _) = listener.accept().await.unwrap();
+			let mut socks5_socket = server::Socks5Socket::new(stream, config.clone());
+			socks5_socket.set_reply_ip(addr.ip());
+
+			socks5_socket.upgrade_to_socks5().await.unwrap();
+		}
+	});
+}
+
+#[allow(dead_code)]
+pub async fn connect_over_socks_stream(server_addr: SocketAddr) -> Socks5Stream<TcpStream> {
+	let target_addr = server_addr.ip().to_string();
+	let target_port = server_addr.port();
+
+	let socks_server = socks_server_no_auth().await;
+
+	fast_socks5::client::Socks5Stream::connect(
+		socks_server,
+		target_addr,
+		target_port,
+		fast_socks5::client::Config::default(),
+	)
+	.await
+	.unwrap()
+}
+
+#[pin_project(project = DataStreamProj)]
+#[allow(dead_code)]
+pub enum DataStream<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> {
+	Socks5(#[pin] Socks5Stream<T>),
+}
+
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> AsyncRead for DataStream<T> {
+	fn poll_read(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+		buf: &mut [u8],
+	) -> std::task::Poll<std::io::Result<usize>> {
+		match self.project() {
+			DataStreamProj::Socks5(s) => {
+				let compat = s.compat();
+				futures_util::pin_mut!(compat);
+				AsyncRead::poll_read(compat, cx, buf)
+			}
+		}
+	}
+}
+
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> AsyncWrite for DataStream<T> {
+	fn poll_write(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+		buf: &[u8],
+	) -> std::task::Poll<std::io::Result<usize>> {
+		match self.project() {
+			DataStreamProj::Socks5(s) => {
+				let compat = s.compat_write();
+				futures_util::pin_mut!(compat);
+				AsyncWrite::poll_write(compat, cx, buf)
+			}
+		}
+	}
+
+	fn poll_flush(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<std::io::Result<()>> {
+		match self.project() {
+			DataStreamProj::Socks5(s) => {
+				let compat = s.compat_write();
+				futures_util::pin_mut!(compat);
+				AsyncWrite::poll_flush(compat, cx)
+			}
+		}
+	}
+
+	fn poll_close(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<std::io::Result<()>> {
+		match self.project() {
+			DataStreamProj::Socks5(s) => {
+				let compat = s.compat_write();
+				futures_util::pin_mut!(compat);
+				AsyncWrite::poll_close(compat, cx)
 			}
 		}
 	}
