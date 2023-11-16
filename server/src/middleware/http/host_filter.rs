@@ -38,7 +38,7 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
 /// Middleware to enable host filtering.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HostFilterLayer(Option<Arc<WhitelistedHosts>>);
 
 impl HostFilterLayer {

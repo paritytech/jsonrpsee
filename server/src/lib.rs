@@ -40,9 +40,16 @@ pub mod middleware;
 #[cfg(test)]
 mod tests;
 
-pub use future::ServerHandle;
+pub use future::{stop_channel, ConnectionGuard, ConnectionPermit, ServerHandle, StopHandle};
 pub use jsonrpsee_core::server::*;
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;
-pub use server::{BatchRequestConfig, Builder as ServerBuilder, PingConfig, Server};
+pub use middleware::rpc::RpcServiceBuilder;
+pub use server::{
+	BatchRequestConfig, Builder as ServerBuilder, ConnectionState, PingConfig, Server, ServerConfig, TowerService,
+	TowerServiceBuilder,
+};
 pub use tracing;
+
+pub use transport::http;
+pub use transport::ws;
