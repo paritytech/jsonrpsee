@@ -43,7 +43,7 @@ use hyper::HeaderMap;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcService, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{stop_channel, ServerHandle, StopHandle, TowerServiceBuilder};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::HeaderValue;
@@ -58,6 +58,7 @@ struct Metrics {
 	http_connections: Arc<AtomicUsize>,
 }
 
+#[derive(Clone)]
 struct AuthorizationMiddleware<S> {
 	headers: HeaderMap,
 	inner: S,
@@ -65,23 +66,25 @@ struct AuthorizationMiddleware<S> {
 	transport_label: &'static str,
 }
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>) -> MethodResponse {
+	type Future = ResponseFuture<S::Future>;
+
+	fn call(&self, req: Request<'a>) -> Self::Future {
 		if req.method_name() == "trusted_call" {
 			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else {
-				return MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
+				let rp = MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
+				return ResponseFuture::ready(rp);
 			};
 
 			// In this example for simplicity, the authorization value is not checked
 			// and used because it's just a toy example.
 
-			self.inner.call(req).await
+			ResponseFuture::future(self.inner.call(req))
 		} else {
-			self.inner.call(req).await
+			ResponseFuture::future(self.inner.call(req))
 		}
 	}
 }
@@ -177,7 +180,7 @@ fn run_server() -> ServerHandle {
 				// NOTE, the rpc middleware must be initialized here to be able to created once per connection
 				// with data from the connection such as the headers in this example
 				let headers = req.headers().clone();
-				let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
+				let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service: RpcService| {
 					AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
 				});
 

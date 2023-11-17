@@ -28,7 +28,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_util::{ready, Future};
+use futures_util::future::BoxFuture;
+use futures_util::{ready, Future, FutureExt};
 use jsonrpsee_core::server::{
 	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
@@ -71,27 +72,33 @@ impl RpcService {
 	}
 }
 
-#[async_trait::async_trait]
 impl<'a> RpcServiceT<'a> for RpcService {
-	async fn call(&self, req: Request<'a>) -> MethodResponse {
+	type Future = ResponseFuture<BoxFuture<'a, MethodResponse>>;
+
+	fn call(&self, req: Request<'a>) -> Self::Future {
+		let conn_id = self.conn_id;
+		let max_response_body_size = self.max_response_body_size;
+
 		let params = req.params();
 		let name = req.method_name();
 		let id = req.id().clone();
 
 		match self.methods.method_with_name(name) {
-			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
+			None => {
+				let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
+				ResponseFuture::ready(rp)
+			}
 			Some((_name, method)) => match method {
 				MethodCallback::Async(callback) => {
-					let id = id.into_owned();
 					let params = params.into_owned();
-					let conn_id = self.conn_id;
-					let max_response_body_size = self.max_response_body_size;
+					let id = id.into_owned();
 
-					(callback)(id, params, conn_id, max_response_body_size).await
+					let fut = (callback)(id, params, conn_id, max_response_body_size);
+					ResponseFuture::future(fut)
 				}
 				MethodCallback::Sync(callback) => {
-					let max_response_body_size = self.max_response_body_size;
-					(callback)(id, params, max_response_body_size)
+					let rp = (callback)(id, params, max_response_body_size);
+					ResponseFuture::ready(rp)
 				}
 				MethodCallback::Subscription(callback) => {
 					let RpcServiceCfg::CallsAndSubscriptions {
@@ -99,26 +106,23 @@ impl<'a> RpcServiceT<'a> for RpcService {
 						sink,
 						id_provider,
 						_pending_calls,
-					} = &self.cfg
+					} = self.cfg.clone()
 					else {
 						tracing::warn!("Subscriptions not supported");
-						return MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+						return ResponseFuture::ready(rp);
 					};
 
 					if let Some(p) = bounded_subscriptions.acquire() {
-						let conn_state = SubscriptionState {
-							conn_id: self.conn_id,
-							id_provider: &*id_provider.clone(),
-							subscription_permit: p,
-						};
+						let conn_state =
+							SubscriptionState { conn_id, id_provider: &*id_provider.clone(), subscription_permit: p };
 
-						match callback(id, params, sink.clone(), conn_state).await {
-							Ok(r) => r,
-							Err(id) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
-						}
+						let fut = callback(id.clone(), params, sink, conn_state);
+						ResponseFuture::future(fut)
 					} else {
 						let max = bounded_subscriptions.max();
-						MethodResponse::error(id, reject_too_many_subscriptions(max))
+						let rp = MethodResponse::error(id, reject_too_many_subscriptions(max));
+						return ResponseFuture::ready(rp);
 					}
 				}
 				MethodCallback::Unsubscription(callback) => {
@@ -126,12 +130,12 @@ impl<'a> RpcServiceT<'a> for RpcService {
 
 					let RpcServiceCfg::CallsAndSubscriptions { .. } = self.cfg else {
 						tracing::warn!("Subscriptions not supported");
-						return MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+						return ResponseFuture::ready(rp);
 					};
 
-					let conn_id = self.conn_id;
-					let max_response_body_size = self.max_response_body_size;
-					callback(id, params, conn_id, max_response_body_size)
+					let rp = callback(id, params, conn_id, max_response_body_size);
+					ResponseFuture::ready(rp)
 				}
 			},
 		}
@@ -164,17 +168,24 @@ pub struct RpcLogger<S> {
 	service: S,
 }
 
-#[async_trait::async_trait]
 impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
-	S: RpcServiceT<'a> + Send + Sync,
+	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	#[tracing::instrument(name = "method_call", skip(self, request), level = "trace")]
-	async fn call(&self, request: Request<'a>) -> MethodResponse {
-		rx_log_from_json(&request, self.max);
-		let rp = self.service.call(request).await;
-		tx_log_from_str(&rp.result, self.max);
-		rp
+	type Future = BoxFuture<'a, MethodResponse>;
+
+	//#[tracing::instrument(name = "method_call", skip(self, request), level = "trace")]
+	fn call(&self, request: Request<'a>) -> Self::Future {
+		let service = self.service.clone();
+		let max = self.max;
+
+		async move {
+			rx_log_from_json(&request, max);
+			let rp = service.call(request).await;
+			tx_log_from_str(&rp.result, max);
+			rp
+		}
+		.boxed()
 	}
 }
 
@@ -225,16 +236,66 @@ where
 	}
 }
 
-#[async_trait::async_trait]
 impl<'a, A, B> RpcServiceT<'a> for Either<A, B>
 where
-	A: RpcServiceT<'a> + Send + Sync,
-	B: RpcServiceT<'a> + Send + Sync,
+	A: RpcServiceT<'a> + Send + 'a,
+	B: RpcServiceT<'a> + Send + 'a,
 {
-	async fn call(&self, request: Request<'a>) -> MethodResponse {
+	type Future = BoxFuture<'a, MethodResponse>;
+
+	fn call(&self, request: Request<'a>) -> Self::Future {
 		match self {
-			Either::A(service) => service.call(request).await,
-			Either::B(service) => service.call(request).await,
+			Either::A(service) => Box::pin(service.call(request)),
+			Either::B(service) => Box::pin(service.call(request)),
+		}
+	}
+}
+
+/// Response which may be ready or a future that needs to be
+/// polled.
+#[pin_project(project = ResponseStateProj)]
+pub enum ResponseFuture<F> {
+	/// The response is ready.
+	Ready(Option<MethodResponse>),
+	/// The response has to be polled.
+	Poll {
+		#[pin]
+		/// Future.
+		fut: F,
+	},
+}
+
+impl<F> std::fmt::Debug for ResponseFuture<F> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = match self {
+			Self::Poll { .. } => "ResponseFuture::poll",
+			Self::Ready(_) => "ResponseFuture::ready",
+		};
+		f.write_str(s)
+	}
+}
+
+impl<F> ResponseFuture<F> {
+	/// The response is ready.
+	pub fn ready(rp: MethodResponse) -> Self {
+		Self::Ready(Some(rp))
+	}
+
+	/// The response needs to be polled.
+	pub fn future(fut: F) -> Self {
+		Self::Poll { fut }
+	}
+}
+
+impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
+	type Output = MethodResponse;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		let this = self.project();
+
+		match this {
+			ResponseStateProj::Poll { fut } => fut.poll(cx),
+			ResponseStateProj::Ready(rp) => Poll::Ready(rp.take().expect("Future not polled after Ready; qed")),
 		}
 	}
 }

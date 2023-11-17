@@ -41,6 +41,8 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use jsonrpsee::core::{async_trait, client::ClientT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
@@ -48,25 +50,36 @@ use jsonrpsee::server::{MethodResponse, RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 
+// It's possible to access the connection ID
+// by using the low-level API.
+#[derive(Clone)]
 pub struct CallsPerConn<S> {
 	service: S,
-	count: AtomicUsize,
+	count: Arc<AtomicUsize>,
 }
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
 where
-	S: RpcServiceT<'a> + Send + Sync,
+	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	async fn call(&self, req: Request<'a>) -> MethodResponse {
-		let rp = self.service.call(req).await;
-		self.count.fetch_add(1, Ordering::SeqCst);
-		let count = self.count.load(Ordering::SeqCst);
-		println!("the server has processed calls={count}");
-		rp
+	type Future = BoxFuture<'a, MethodResponse>;
+
+	fn call(&self, req: Request<'a>) -> Self::Future {
+		let count = self.count.clone();
+		let service = self.service.clone();
+
+		async move {
+			let rp = service.call(req).await;
+			count.fetch_add(1, Ordering::SeqCst);
+			let count = count.load(Ordering::SeqCst);
+			println!("the server has processed calls={count} on the connection");
+			rp
+		}
+		.boxed()
 	}
 }
 
+#[derive(Clone)]
 pub struct GlobalCalls<S> {
 	service: S,
 	count: Arc<AtomicUsize>,
@@ -75,28 +88,37 @@ pub struct GlobalCalls<S> {
 #[async_trait]
 impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
 where
-	S: RpcServiceT<'a> + Send + Sync,
+	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	async fn call(&self, req: Request<'a>) -> MethodResponse {
-		let rp = self.service.call(req).await;
-		self.count.fetch_add(1, Ordering::SeqCst);
-		let count = self.count.load(Ordering::SeqCst);
-		println!("the server has processed calls={count}");
-		rp
+	type Future = BoxFuture<'a, MethodResponse>;
+
+	fn call(&self, req: Request<'a>) -> Self::Future {
+		let count = self.count.clone();
+		let service = self.service.clone();
+
+		async move {
+			let rp = service.call(req).await;
+			count.fetch_add(1, Ordering::SeqCst);
+			let count = count.load(Ordering::SeqCst);
+			println!("the server has processed calls={count} in total");
+			rp
+		}
+		.boxed()
 	}
 }
 
 #[derive(Clone)]
 pub struct Logger<S>(S);
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for Logger<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
-	async fn call(&self, req: Request<'a>) -> MethodResponse {
+	type Future = S::Future;
+
+	fn call(&self, req: Request<'a>) -> Self::Future {
 		println!("logger middleware: method `{}`", req.method);
-		self.0.call(req).await
+		self.0.call(req)
 	}
 }
 
@@ -130,7 +152,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let rpc_middleware = RpcServiceBuilder::new()
 		.layer_fn(|service| Logger(service))
 		// This state is created per connection.
-		.layer_fn(|service| CallsPerConn { service, count: AtomicUsize::new(0) })
+		.layer_fn(|service| CallsPerConn { service, count: Default::default() })
 		// This state is shared by all connections.
 		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;

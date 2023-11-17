@@ -44,7 +44,9 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
+use futures::future::BoxFuture;
 use futures::FutureExt;
+use hyper::server::conn::AddrStream;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
@@ -55,38 +57,45 @@ use jsonrpsee::server::{
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{MethodResponse, Methods};
-use tokio::sync::Mutex as AsyncMutex;
-
-use hyper::server::conn::AddrStream;
 use tokio::sync::mpsc;
+use tokio::sync::Mutex as AsyncMutex;
 use tracing_subscriber::util::SubscriberInitExt;
 
 /// This is just a counter to limit
 /// the number of calls per connection.
 /// Once the limit has been exceeded
 /// all future calls are rejected.
+#[derive(Clone)]
 struct CallLimit<S> {
 	service: S,
 	count: Arc<AsyncMutex<usize>>,
 	state: mpsc::Sender<()>,
 }
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for CallLimit<S>
 where
-	S: Send + Sync + RpcServiceT<'a>,
+	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
 {
-	async fn call(&self, req: Request<'a>) -> MethodResponse {
-		let mut lock = self.count.lock().await;
+	type Future = BoxFuture<'a, MethodResponse>;
 
-		if *lock >= 10 {
-			let _ = self.state.try_send(());
-			MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
-		} else {
-			let rp = self.service.call(req).await;
-			*lock = *lock + 1;
-			rp
+	fn call(&self, req: Request<'a>) -> Self::Future {
+		let count = self.count.clone();
+		let state = self.state.clone();
+		let service = self.service.clone();
+
+		async move {
+			let mut lock = count.lock().await;
+
+			if *lock >= 10 {
+				let _ = state.try_send(());
+				MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
+			} else {
+				let rp = service.call(req).await;
+				*lock = *lock + 1;
+				rp
+			}
 		}
+		.boxed()
 	}
 }
 

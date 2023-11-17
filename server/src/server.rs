@@ -588,6 +588,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
 	/// use jsonrpsee_core::async_trait;
 	/// use jsonrpsee_types::Request;
+	/// use futures_util::future::BoxFuture;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware<S> {
@@ -595,19 +596,23 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///     count: Arc<AtomicUsize>,
 	/// }
 	///
-	/// #[async_trait]
 	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
-	/// where S: RpcServiceT<'a> + Send + Sync,
+	/// where S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 	/// {
-	///     async fn call(&self, req: Request<'a>) -> MethodResponse {
+	///    type Future = BoxFuture<'a, MethodResponse>;  
+	///  
+	///    fn call(&self, req: Request<'a>) -> Self::Future {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
-	///         // if one wants to access connection related context
-	///         // that can be fetched from `Context`
-	///         let rp = self.service.call(req).await;
-	///         // Modify the state.
-	///         self.count.fetch_add(1, Ordering::Relaxed);
-	///         rp
-	///     }
+	///         let count = self.count.clone();
+	///         let service = self.service.clone();  
+	///
+	///         Box::pin(async move {
+	///             let rp = service.call(req).await;
+	///             // Modify the state.
+	///             count.fetch_add(1, Ordering::Relaxed);
+	///             rp         
+	///         })
+	///    }
 	/// }
 	///
 	/// // Create a state per connection

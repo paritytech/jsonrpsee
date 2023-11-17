@@ -28,6 +28,7 @@
 
 mod layers;
 
+use futures_util::Future;
 pub use layers::*;
 
 use tower::layer::util::{Identity, Stack};
@@ -38,12 +39,17 @@ use jsonrpsee_types::Request;
 
 /// Similar to `tower::Service` but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
-#[async_trait::async_trait]
 pub trait RpcServiceT<'a> {
+	/// The future response value.
+	//
+	// type Future<'cx>: Future<Output = MethodResponse> where Self: 'cx, 'a: 'cx;
+	// would be better but ran into https://github.com/rust-lang/rust/issues/100013
+	type Future: Future<Output = MethodResponse> + Send;
+
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	/// In this interface they are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
-	async fn call(&self, request: Request<'a>) -> MethodResponse;
+	fn call(&self, request: Request<'a>) -> Self::Future;
 }
 
 /// Similar to [`tower::ServiceBuilder`] but doesn't

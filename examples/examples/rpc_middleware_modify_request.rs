@@ -29,7 +29,7 @@ use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, MethodResponse, RpcModule};
+use jsonrpsee::{rpc_params, RpcModule};
 use std::borrow::Cow as StdCow;
 use std::net::SocketAddr;
 
@@ -41,7 +41,9 @@ impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	async fn call(&self, mut req: Request<'a>) -> MethodResponse {
+	type Future = S::Future;
+
+	fn call(&self, mut req: Request<'a>) -> Self::Future {
 		// Example how to modify the params in the call.
 		if req.method == "say_hello" {
 			// It's a bit awkward to create new params in the request
@@ -54,7 +56,7 @@ where
 			req.method = "say_goodbye".into();
 		}
 
-		self.0.call(req).await
+		self.0.call(req)
 	}
 }
 
