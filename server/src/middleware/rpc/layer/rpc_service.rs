@@ -69,6 +69,8 @@ impl RpcService {
 }
 
 impl<'a> RpcServiceT<'a> for RpcService {
+	// The rpc module is already boxing the futures and
+	// it's used to under the hood by the RpcService.
 	type Future = ResponseFuture<BoxFuture<'a, MethodResponse>>;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
@@ -118,7 +120,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					} else {
 						let max = bounded_subscriptions.max();
 						let rp = MethodResponse::error(id, reject_too_many_subscriptions(max));
-						return ResponseFuture::ready(rp);
+						ResponseFuture::ready(rp)
 					}
 				}
 				MethodCallback::Unsubscription(callback) => {

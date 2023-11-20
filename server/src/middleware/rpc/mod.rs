@@ -37,7 +37,7 @@ use layer::either::Either;
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
 
-/// Similar to `tower::Service` but specific for jsonrpsee and
+/// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
 pub trait RpcServiceT<'a> {
 	/// The future response value.
