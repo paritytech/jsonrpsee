@@ -26,16 +26,16 @@
 
 //! Various middleware implementations for JSON-RPC specific purposes.
 
-mod layers;
+pub mod layer;
+pub use layer::*;
 
 use futures_util::Future;
-pub use layers::*;
+use jsonrpsee_core::server::MethodResponse;
+use jsonrpsee_types::Request;
+use layer::either::Either;
 
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
-
-use jsonrpsee_core::server::MethodResponse;
-use jsonrpsee_types::Request;
 
 /// Similar to `tower::Service` but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
@@ -75,7 +75,7 @@ impl<L> RpcServiceBuilder<L> {
 	///
 	/// See the documentation for [`tower::ServiceBuilder::option_layer`] for more details.
 	pub fn option_layer<T>(self, layer: Option<T>) -> RpcServiceBuilder<Stack<Either<T, Identity>, L>> {
-		let layer = if let Some(layer) = layer { Either::A(layer) } else { Either::B(Identity::new()) };
+		let layer = if let Some(layer) = layer { Either::Left(layer) } else { Either::Right(Identity::new()) };
 		self.layer(layer)
 	}
 
