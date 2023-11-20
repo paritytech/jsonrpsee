@@ -26,12 +26,18 @@
 
 //! RPC Logger layer.
 
-use futures_util::{future::BoxFuture, FutureExt};
+use std::{
+	pin::Pin,
+	task::{Context, Poll},
+};
+
+use futures_util::Future;
 use jsonrpsee_core::{
 	server::MethodResponse,
 	tracing::{rx_log_from_json, tx_log_from_str},
 };
 use jsonrpsee_types::Request;
+use pin_project::pin_project;
 
 use crate::middleware::rpc::RpcServiceT;
 
@@ -65,19 +71,41 @@ impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = ResponseFuture<S::Future>;
 
-	//#[tracing::instrument(name = "method_call", skip(self, request), level = "trace")]
+	#[tracing::instrument(name = "method_call", skip(self, request), level = "trace")]
 	fn call(&self, request: Request<'a>) -> Self::Future {
-		let service = self.service.clone();
-		let max = self.max;
+		rx_log_from_json(&request, self.max);
 
-		async move {
-			rx_log_from_json(&request, max);
-			let rp = service.call(request).await;
+		ResponseFuture { fut: self.service.call(request), max: self.max }
+	}
+}
+
+/// Response future to log the response for a method call.
+#[pin_project]
+pub struct ResponseFuture<F> {
+	#[pin]
+	fut: F,
+	max: u32,
+}
+
+impl<F> std::fmt::Debug for ResponseFuture<F> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("ResponseFuture")
+	}
+}
+
+impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
+	type Output = F::Output;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		let max = self.max;
+		let fut = self.project().fut;
+
+		let res = fut.poll(cx);
+		if let Poll::Ready(rp) = &res {
 			tx_log_from_str(&rp.result, max);
-			rp
 		}
-		.boxed()
+		res
 	}
 }
