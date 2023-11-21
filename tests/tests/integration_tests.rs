@@ -55,6 +55,8 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
+use crate::helpers::server_with_sleeping_subscription;
+
 #[tokio::test]
 async fn ws_subscription_works() {
 	init_logger();
@@ -104,40 +106,27 @@ async fn ws_subscription_works_over_proxy_stream() {
 async fn ws_unsubscription_works() {
 	init_logger();
 
-	let server_addr = server_with_subscription().await;
+	let (tx, mut rx) = futures::channel::mpsc::channel(1);
+	let server_addr = server_with_sleeping_subscription(tx).await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<usize> =
-		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
-
-	// It's technically possible to have race-conditions between the notifications and the unsubscribe message.
-	// So let's wait for the first notification and then unsubscribe.
-	let _item = sub.next().await.unwrap().unwrap();
+	let sub: Subscription<usize> =
+		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
 
 	sub.unsubscribe().await.unwrap();
 
-	let mut success = false;
-
-	// Wait until a slot is available, as only one concurrent call is allowed.
-	// Then when this finishes we know that unsubscribe call has been finished.
-	for _ in 0..30 {
-		let res: Result<String, _> = client.request("say_hello", rpc_params![]).await;
-		if res.is_ok() {
-			success = true;
-			break;
-		}
-		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-	}
-
-	assert!(success);
+	// When the subscription is closed a message is sent out on this channel.
+	let res = rx.next().with_timeout(std::time::Duration::from_secs(10)).await.expect("Timeout 10 secs exceeded");
+	assert!(res.is_some());
 }
 
 #[tokio::test]
 async fn ws_unsubscription_works_over_proxy_stream() {
 	init_logger();
 
-	let server_addr = server_with_subscription().await;
+	let (tx, mut rx) = futures::channel::mpsc::channel(1);
+	let server_addr = server_with_sleeping_subscription(tx).await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let socks_stream = connect_over_socks_stream(server_addr).await;
@@ -149,29 +138,13 @@ async fn ws_unsubscription_works_over_proxy_stream() {
 		.await
 		.unwrap();
 
-	let mut sub: Subscription<usize> =
-		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
-
-	// It's technically possible to have race-conditions between the notifications and the unsubscribe message.
-	// So let's wait for the first notification and then unsubscribe.
-	let _item = sub.next().await.unwrap().unwrap();
+	let sub: Subscription<usize> = client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 
 	sub.unsubscribe().await.unwrap();
 
-	let mut success = false;
-
-	// Wait until a slot is available, as only one concurrent call is allowed.
-	// Then when this finishes we know that unsubscribe call has been finished.
-	for _ in 0..30 {
-		let res: Result<String, _> = client.request("say_hello", rpc_params![]).await;
-		if res.is_ok() {
-			success = true;
-			break;
-		}
-		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-	}
-
-	assert!(success);
+	// When the subscription is closed a message is sent out on this channel.
+	let res = rx.next().with_timeout(std::time::Duration::from_secs(10)).await.expect("Timeout 10 secs exceeded");
+	assert!(res.is_some());
 }
 
 #[tokio::test]
