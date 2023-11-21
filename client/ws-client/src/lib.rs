@@ -45,8 +45,10 @@ pub use http::{HeaderMap, HeaderValue};
 use std::time::Duration;
 use url::Url;
 
-use jsonrpsee_client_transport::ws::WsTransportClientBuilder;
-use jsonrpsee_core::client::{CertificateStore, ClientBuilder, IdKind};
+use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
+use jsonrpsee_core::client::{
+	CertificateStore, ClientBuilder, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
+};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
 /// Builder for [`WsClient`].
@@ -213,39 +215,25 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// Build the client with specified URL to connect to.
-	/// You must provide the port number in the URL.
+	/// Build the [`WsClient`] with specified [`TransportSenderT`] [`TransportReceiverT`] parameters
 	///
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
+	pub async fn build_with_transport<S, R>(self, sender: S, receiver: R) -> Result<WsClient, Error>
+	where
+		S: TransportSenderT + Send,
+		R: TransportReceiverT + Send,
+	{
 		let Self {
-			certificate_store,
 			max_concurrent_requests,
-			max_request_size,
-			max_response_size,
 			request_timeout,
-			connection_timeout,
 			ping_interval,
-			headers,
-			max_redirections,
 			max_buffer_capacity_per_subscription,
 			id_kind,
 			max_log_length,
+			..
 		} = self;
-
-		let transport_builder = WsTransportClientBuilder {
-			certificate_store,
-			connection_timeout,
-			headers,
-			max_request_size,
-			max_response_size,
-			max_redirections,
-		};
-
-		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
-		let (sender, receiver) = transport_builder.build(uri).await.map_err(|e| Error::Transport(e.into()))?;
 
 		let mut client = ClientBuilder::default()
 			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription)
@@ -259,5 +247,54 @@ impl WsClientBuilder {
 		}
 
 		Ok(client.build_with_tokio(sender, receiver))
+	}
+
+	/// Build the [`WsClient`] with specified data stream, using [`WsTransportClientBuilder::build_with_stream`].
+	///
+	/// ## Panics
+	///
+	/// Panics if being called outside of `tokio` runtime context.
+	pub async fn build_with_stream<T>(self, url: impl AsRef<str>, data_stream: T) -> Result<WsClient, Error>
+	where
+		T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+	{
+		let transport_builder = WsTransportClientBuilder {
+			certificate_store: self.certificate_store,
+			connection_timeout: self.connection_timeout,
+			headers: self.headers.clone(),
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
+			max_redirections: self.max_redirections,
+		};
+
+		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
+		let (sender, receiver) =
+			transport_builder.build_with_stream(uri, data_stream).await.map_err(|e| Error::Transport(e.into()))?;
+
+		let ws_client = self.build_with_transport(sender, receiver).await?;
+		Ok(ws_client)
+	}
+
+	/// Build the [`WsClient`] with specified URL to connect to, using the default
+	/// [`WsTransportClientBuilder::build_with_stream`], therefore with the default TCP as transport layer.
+	///
+	/// ## Panics
+	///
+	/// Panics if being called outside of `tokio` runtime context.
+	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
+		let transport_builder = WsTransportClientBuilder {
+			certificate_store: self.certificate_store,
+			connection_timeout: self.connection_timeout,
+			headers: self.headers.clone(),
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
+			max_redirections: self.max_redirections,
+		};
+
+		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
+		let (sender, receiver) = transport_builder.build(uri).await.map_err(|e| Error::Transport(e.into()))?;
+
+		let ws_client = self.build_with_transport(sender, receiver).await?;
+		Ok(ws_client)
 	}
 }
