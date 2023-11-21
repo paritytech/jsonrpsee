@@ -109,7 +109,7 @@ async fn ws_unsubscription_works() {
 	let (tx, mut rx) = futures::channel::mpsc::channel(1);
 	let server_addr = server_with_sleeping_subscription(tx).await;
 	let server_url = format!("ws://{}", server_addr);
-	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	let sub: Subscription<usize> =
 		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
@@ -129,16 +129,11 @@ async fn ws_unsubscription_works_over_proxy_stream() {
 	let server_addr = server_with_sleeping_subscription(tx).await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let socks_stream = connect_over_socks_stream(server_addr).await;
-	let data_stream = DataStream::new(socks_stream);
+	let stream = DataStream::new(connect_over_socks_stream(server_addr).await);
+	let client = WsClientBuilder::default().build_with_stream(&server_url, stream).await.unwrap();
 
-	let client = WsClientBuilder::default()
-		.max_concurrent_requests(1)
-		.build_with_stream(&server_url, data_stream)
-		.await
-		.unwrap();
-
-	let sub: Subscription<usize> = client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
+	let sub: Subscription<usize> =
+		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
 
 	sub.unsubscribe().await.unwrap();
 
