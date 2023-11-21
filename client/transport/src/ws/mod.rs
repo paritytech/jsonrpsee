@@ -298,6 +298,19 @@ impl WsTransportClientBuilder {
 		self.try_connect_over_tcp(uri).await
 	}
 
+	/// Try to establish the connection over the given data stream.
+	pub async fn build_with_stream<T>(
+		self,
+		uri: Url,
+		data_stream: T,
+	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
+	where
+		T: AsyncRead + AsyncWrite + Unpin,
+	{
+		let target: Target = uri.try_into()?;
+		self.try_connect(&target, data_stream).await
+	}
+
 	// Try to establish the connection over TCP.
 	async fn try_connect_over_tcp(
 		&self,
@@ -399,19 +412,6 @@ impl WsTransportClientBuilder {
 			}
 		}
 		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host)))
-	}
-
-	/// Try to establish the connection over the given data stream.
-	pub async fn build_with_stream<T>(
-		self,
-		uri: Url,
-		data_stream: T,
-	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
-	where
-		T: AsyncRead + AsyncWrite + Unpin,
-	{
-		let target: Target = uri.try_into()?;
-		self.try_connect(&target, data_stream).await
 	}
 
 	/// Try to establish the handshake over the given data stream.

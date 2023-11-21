@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
+#![allow(dead_code)]
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -47,7 +48,6 @@ use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tower_http::cors::CorsLayer;
 
-#[allow(dead_code)]
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
@@ -129,7 +129,6 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 	(addr, server_handle)
 }
 
-#[allow(dead_code)]
 pub async fn server_with_subscription() -> SocketAddr {
 	let (addr, handle) = server_with_subscription_and_handle().await;
 
@@ -138,7 +137,6 @@ pub async fn server_with_subscription() -> SocketAddr {
 	addr
 }
 
-#[allow(dead_code)]
 pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -171,7 +169,6 @@ pub async fn server() -> SocketAddr {
 }
 
 /// Yields one item then sleeps for an hour.
-#[allow(dead_code)]
 pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
@@ -198,7 +195,6 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 	addr
 }
 
-#[allow(dead_code)]
 pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
 	server_with_cors(CorsLayer::new()).await
 }
@@ -255,7 +251,6 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 	}
 }
 
-#[allow(dead_code)]
 pub async fn socks_server_no_auth() -> SocketAddr {
 	let mut config = server::Config::default();
 	config.set_dns_resolve(false);
@@ -269,7 +264,6 @@ pub async fn socks_server_no_auth() -> SocketAddr {
 	proxy_addr
 }
 
-#[allow(dead_code)]
 pub async fn spawn_socks_server(listener: tokio::net::TcpListener, config: std::sync::Arc<server::Config>) {
 	let addr = listener.local_addr().unwrap();
 	tokio::spawn(async move {
@@ -283,7 +277,6 @@ pub async fn spawn_socks_server(listener: tokio::net::TcpListener, config: std::
 	});
 }
 
-#[allow(dead_code)]
 pub async fn connect_over_socks_stream(server_addr: SocketAddr) -> Socks5Stream<TcpStream> {
 	let target_addr = server_addr.ip().to_string();
 	let target_port = server_addr.port();
@@ -300,25 +293,24 @@ pub async fn connect_over_socks_stream(server_addr: SocketAddr) -> Socks5Stream<
 	.unwrap()
 }
 
-#[pin_project(project = DataStreamProj)]
-#[allow(dead_code)]
-pub enum DataStream<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> {
-	Socks5(#[pin] Socks5Stream<T>),
+#[pin_project]
+pub struct DataStream<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin>(#[pin] Socks5Stream<T>);
+
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> DataStream<T> {
+	pub fn new(t: Socks5Stream<T>) -> Self {
+		Self(t)
+	}
 }
 
-impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> AsyncRead for DataStream<T> {
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> AsyncRead for DataStream<T> {
 	fn poll_read(
 		self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 		buf: &mut [u8],
 	) -> std::task::Poll<std::io::Result<usize>> {
-		match self.project() {
-			DataStreamProj::Socks5(s) => {
-				let compat = s.compat();
-				futures_util::pin_mut!(compat);
-				AsyncRead::poll_read(compat, cx, buf)
-			}
-		}
+		let this = self.project().0.compat();
+		futures_util::pin_mut!(this);
+		AsyncRead::poll_read(this, cx, buf)
 	}
 }
 
@@ -328,38 +320,26 @@ impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> Async
 		cx: &mut std::task::Context<'_>,
 		buf: &[u8],
 	) -> std::task::Poll<std::io::Result<usize>> {
-		match self.project() {
-			DataStreamProj::Socks5(s) => {
-				let compat = s.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_write(compat, cx, buf)
-			}
-		}
+		let this = self.project().0.compat_write();
+		futures_util::pin_mut!(this);
+		AsyncWrite::poll_write(this, cx, buf)
 	}
 
 	fn poll_flush(
 		self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<std::io::Result<()>> {
-		match self.project() {
-			DataStreamProj::Socks5(s) => {
-				let compat = s.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_flush(compat, cx)
-			}
-		}
+		let this = self.project().0.compat_write();
+		futures_util::pin_mut!(this);
+		AsyncWrite::poll_flush(this, cx)
 	}
 
 	fn poll_close(
 		self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<std::io::Result<()>> {
-		match self.project() {
-			DataStreamProj::Socks5(s) => {
-				let compat = s.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_close(compat, cx)
-			}
-		}
+		let this = self.project().0.compat_write();
+		futures_util::pin_mut!(this);
+		AsyncWrite::poll_close(this, cx)
 	}
 }

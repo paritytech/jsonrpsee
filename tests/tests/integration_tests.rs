@@ -83,7 +83,7 @@ async fn ws_subscription_works_over_proxy_stream() {
 	let target_url = format!("ws://{}", server_addr);
 
 	let socks_stream = connect_over_socks_stream(server_addr).await;
-	let data_stream = DataStream::Socks5(socks_stream);
+	let data_stream = DataStream::new(socks_stream);
 
 	let client = WsClientBuilder::default().build_with_stream(target_url, data_stream).await.unwrap();
 
@@ -141,7 +141,7 @@ async fn ws_unsubscription_works_over_proxy_stream() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let socks_stream = connect_over_socks_stream(server_addr).await;
-	let data_stream = DataStream::Socks5(socks_stream);
+	let data_stream = DataStream::new(socks_stream);
 
 	let client = WsClientBuilder::default()
 		.max_concurrent_requests(1)
@@ -198,7 +198,7 @@ async fn ws_subscription_with_input_works_over_proxy_stream() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let socks_stream = connect_over_socks_stream(server_addr).await;
-	let data_stream = DataStream::Socks5(socks_stream);
+	let data_stream = DataStream::new(socks_stream);
 
 	let client = WsClientBuilder::default().build_with_stream(&server_url, data_stream).await.unwrap();
 
@@ -230,7 +230,7 @@ async fn ws_method_call_works_over_proxy_stream() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let socks_stream = connect_over_socks_stream(server_addr).await;
-	let data_stream = DataStream::Socks5(socks_stream);
+	let data_stream = DataStream::new(socks_stream);
 
 	let client = WsClientBuilder::default().build_with_stream(&server_url, data_stream).await.unwrap();
 	let response: String = client.request("say_hello", rpc_params![]).await.unwrap();
@@ -256,7 +256,7 @@ async fn ws_method_call_str_id_works_over_proxy_stream() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let socks_stream = connect_over_socks_stream(server_addr).await;
-	let data_stream = DataStream::Socks5(socks_stream);
+	let data_stream = DataStream::new(socks_stream);
 
 	let client =
 		WsClientBuilder::default().id_format(IdKind::String).build_with_stream(&server_url, data_stream).await.unwrap();
