@@ -116,7 +116,7 @@ async fn ws_unsubscription_works() {
 
 	sub.unsubscribe().await.unwrap();
 
-	let res = rx.next().with_default_timeout.await.expect("Test must complete with 1 min");
+	let res = rx.next().with_default_timeout().await.expect("Test must complete in 1 min");
 	// When the subscription is closed a message is sent out on this channel.
 	assert!(res.is_some());
 }
@@ -137,7 +137,7 @@ async fn ws_unsubscription_works_over_proxy_stream() {
 
 	sub.unsubscribe().await.unwrap();
 
-	let res = rx.next().with_default_timeout.await.expect("Test must complete with 1 min");
+	let res = rx.next().with_default_timeout().await.expect("Test must complete in 1 min");
 	// When the subscription is closed a message is sent out on this channel.
 	assert!(res.is_some());
 }
