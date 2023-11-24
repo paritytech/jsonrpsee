@@ -53,34 +53,50 @@ impl ThreadSafeRequestManager {
 	}
 }
 
+#[derive(Debug)]
+struct ErrorFromBack(AsyncMutex<ReadErrorOnce>);
+
+impl ErrorFromBack {
+	fn new(unread: oneshot::Receiver<Error>) -> Self {
+		Self(AsyncMutex::new(ReadErrorOnce::Unread(unread)))
+	}
+
+	async fn read_error(&self) -> Error {
+		let mut lock = self.0.lock().await;
+		let state = std::mem::replace(&mut *lock, ReadErrorOnce::Unreachable);
+
+		let (next_state, err) = match state {
+			ReadErrorOnce::Unread(rx) => {
+				let arc_err = Arc::new(match rx.await {
+					Ok(err) => err,
+					// This should never happen because the receiving end is still alive.
+					// Before shutting down the background task a error message should
+					// be emitted.
+					Err(_) => Error::Custom("Error reason could not be found. This is a bug. Please open an issue.".to_string()),
+				});
+				(ReadErrorOnce::Read(arc_err.clone()), Error::RestartNeeded(arc_err))
+			}
+			ReadErrorOnce::Read(arc_err) => (ReadErrorOnce::Read(arc_err.clone()), Error::RestartNeeded(arc_err)),
+			ReadErrorOnce::Unreachable => unreachable!(),
+		};
+
+		*lock = next_state;
+		err
+	}
+}
+
 /// Wrapper over a [`oneshot::Receiver`] that reads
 /// the underlying channel once and then stores the result in String.
 /// It is possible that the error is read more than once if several calls are made
 /// when the background thread has been terminated.
 #[derive(Debug)]
-enum ErrorFromBack {
+enum ReadErrorOnce {
 	/// Error message is already read.
-	Read(String),
+	Read(Arc<Error>),
 	/// Error message is unread.
 	Unread(oneshot::Receiver<Error>),
-}
-
-impl ErrorFromBack {
-	async fn read_error(self) -> (Self, Error) {
-		match self {
-			Self::Unread(rx) => {
-				let msg = match rx.await {
-					Ok(msg) => msg.to_string(),
-					// This should never happen because the receiving end is still alive.
-					// Would be a bug in the logic of the background task.
-					Err(_) => "Error reason could not be found. This is a bug. Please open an issue.".to_string(),
-				};
-				let err = Error::RestartNeeded(msg.clone());
-				(Self::Read(msg), err)
-			}
-			Self::Read(msg) => (Self::Read(msg.clone()), Error::RestartNeeded(msg)),
-		}
-	}
+	/// Unreachable to able to workaround ownership issues.
+	Unreachable,
 }
 
 /// Builder for [`Client`].
@@ -214,7 +230,7 @@ impl ClientBuilder {
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
-			error: AsyncMutex::new(ErrorFromBack::Unread(err_from_back)),
+			error: ErrorFromBack::new(err_from_back),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
@@ -278,7 +294,7 @@ pub struct Client {
 	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
-	error: AsyncMutex<ErrorFromBack>,
+	error: ErrorFromBack,
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
@@ -302,13 +318,17 @@ impl Client {
 		!self.to_back.is_closed()
 	}
 
-	// Reads the error message from the backend thread.
-	async fn read_error_from_backend(&self) -> Error {
-		let mut err_lock = self.error.lock().await;
-		let from_back = std::mem::replace(&mut *err_lock, ErrorFromBack::Read(String::new()));
-		let (next_state, err) = from_back.read_error().await;
-		*err_lock = next_state;
-		err
+	/// This is similar to to [`Client::on_disconnect`] but it can be used to get
+	/// reason why the client was disconnected but it's not cancel-safe.
+	/// 
+	/// The typical use-case is that this method will be called after
+	/// [`Client::on_disconnect`] has returned in a "select loop".
+	/// 
+	/// # Cancel-safety
+	/// 
+	/// This method is not cancel-safe
+	pub async fn disconnect_reason(&self) -> Error {
+		self.error.read_error().await
 	}
 
 	/// Completes when the client is disconnected or the client's background task encountered an error.
@@ -318,7 +338,7 @@ impl Client {
 	///
 	/// This method is cancel safe.
 	pub async fn on_disconnect(&self) {
-		self.to_back.closed().await
+		self.to_back.closed().await;
 	}
 }
 
@@ -352,7 +372,7 @@ impl ClientT for Client {
 
 		match future::select(fut, Delay::new(self.request_timeout)).await {
 			Either::Left((Ok(()), _)) => Ok(()),
-			Either::Left((Err(_), _)) => Err(self.read_error_from_backend().await),
+			Either::Left((Err(_), _)) => Err(self.disconnect_reason().await),
 			Either::Right((_, _)) => Err(Error::RequestTimeout),
 		}
 	}
@@ -379,13 +399,13 @@ impl ClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.read_error_from_backend().await);
+			return Err(self.disconnect_reason().await);
 		}
 
 		let json_value = match call_with_timeout(self.request_timeout, send_back_rx).await {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
+			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
 		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&json_value), id), self.max_log_length);
@@ -426,14 +446,14 @@ impl ClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.read_error_from_backend().await);
+			return Err(self.disconnect_reason().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 		let json_values = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
+			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
 		rx_log_from_json(&json_values, self.max_log_length);
@@ -503,13 +523,13 @@ impl SubscriptionClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.read_error_from_backend().await);
+			return Err(self.disconnect_reason().await);
 		}
 
 		let (notifs_rx, sub_id) = match call_with_timeout(self.request_timeout, send_back_rx).await {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
+			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
 		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&sub_id), id_unsub), self.max_log_length);
@@ -534,7 +554,7 @@ impl SubscriptionClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.read_error_from_backend().await);
+			return Err(self.disconnect_reason().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
@@ -542,7 +562,7 @@ impl SubscriptionClientT for Client {
 		let (notifs_rx, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
+			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Method(method)))
