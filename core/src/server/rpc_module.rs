@@ -59,9 +59,8 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
-pub type SubscriptionMethod<'a> = Arc<
-	dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, Result<MethodResponse, Id<'a>>>,
->;
+pub type SubscriptionMethod<'a> =
+	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
 
@@ -342,10 +341,7 @@ impl Methods {
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
-				let res = match (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await {
-					Ok(rp) => rp,
-					Err(id) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
-				};
+				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await;
 
 				// This message is not used because it's used for metrics so we discard in other to
 				// not read once this is used for subscriptions.
@@ -719,15 +715,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					Box::pin(async move {
 						match rx.await {
-							Ok(msg) => {
+							Ok(rp) => {
 								// If the subscription was accepted then send a message
 								// to subscription task otherwise rely on the drop impl.
-								if msg.is_success() {
+								if rp.is_success() {
 									let _ = accepted_tx.send(());
 								}
-								Ok(msg)
+								rp
 							}
-							Err(_) => Err(id),
+							Err(_) => MethodResponse::error(id, ErrorCode::InternalError),
 						}
 					})
 				})),
@@ -823,8 +819,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					Box::pin(async move {
 						match rx.await {
-							Ok(msg) => Ok(msg),
-							Err(_) => Err(id),
+							Ok(rp) => rp,
+							Err(_) => MethodResponse::error(id, ErrorCode::InternalError),
 						}
 					})
 				})),

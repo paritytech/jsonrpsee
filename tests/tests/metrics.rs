@@ -33,6 +33,8 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use helpers::init_logger;
 use jsonrpsee::core::{async_trait, client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -62,30 +64,38 @@ pub struct CounterMiddleware<S> {
 #[async_trait]
 impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
-	S: RpcServiceT<'a> + Send + Sync,
+	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	async fn call(&self, request: Request<'a>) -> MethodResponse {
-		let name = request.method.to_string();
-		let id = request.id.clone();
+	type Future = BoxFuture<'a, MethodResponse>;
 
-		{
-			let mut n = self.counter.lock().unwrap();
-			n.requests.0 += 1;
-			let entry = n.calls.entry(name.clone()).or_insert((0, Vec::new()));
-			entry.0 += 1;
-		}
+	fn call(&self, request: Request<'a>) -> Self::Future {
+		let counter = self.counter.clone();
+		let service = self.service.clone();
 
-		let rp = self.service.call(request).await;
+		async move {
+			let name = request.method.to_string();
+			let id = request.id.clone();
 
-		{
-			let mut n = self.counter.lock().unwrap();
-			n.requests.1 += 1;
-			if rp.is_success() {
-				n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
+			{
+				let mut n = counter.lock().unwrap();
+				n.requests.0 += 1;
+				let entry = n.calls.entry(name.clone()).or_insert((0, Vec::new()));
+				entry.0 += 1;
 			}
-		}
 
-		rp
+			let rp = service.call(request).await;
+
+			{
+				let mut n = counter.lock().unwrap();
+				n.requests.1 += 1;
+				if rp.is_success() {
+					n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
+				}
+			}
+
+			rp
+		}
+		.boxed()
 	}
 }
 

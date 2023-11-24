@@ -26,24 +26,27 @@
 
 //! Various middleware implementations for JSON-RPC specific purposes.
 
-mod layers;
+pub mod layer;
+pub use layer::*;
 
-pub use layers::*;
+use futures_util::Future;
+use jsonrpsee_core::server::MethodResponse;
+use jsonrpsee_types::Request;
+use layer::either::Either;
 
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
 
-use jsonrpsee_core::server::MethodResponse;
-use jsonrpsee_types::Request;
-
-/// Similar to `tower::Service` but specific for jsonrpsee and
+/// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
-#[async_trait::async_trait]
 pub trait RpcServiceT<'a> {
+	/// The future response value.
+	type Future: Future<Output = MethodResponse> + Send;
+
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	/// In this interface they are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
-	async fn call(&self, request: Request<'a>) -> MethodResponse;
+	fn call(&self, request: Request<'a>) -> Self::Future;
 }
 
 /// Similar to [`tower::ServiceBuilder`] but doesn't
@@ -69,7 +72,7 @@ impl<L> RpcServiceBuilder<L> {
 	///
 	/// See the documentation for [`tower::ServiceBuilder::option_layer`] for more details.
 	pub fn option_layer<T>(self, layer: Option<T>) -> RpcServiceBuilder<Stack<Either<T, Identity>, L>> {
-		let layer = if let Some(layer) = layer { Either::A(layer) } else { Either::B(Identity::new()) };
+		let layer = if let Some(layer) = layer { Either::Left(layer) } else { Either::Right(Identity::new()) };
 		self.layer(layer)
 	}
 

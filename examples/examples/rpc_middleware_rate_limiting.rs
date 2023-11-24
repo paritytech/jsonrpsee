@@ -31,8 +31,8 @@
 //! stored in something to provide interior mutability
 //! such as `Arc<Mutex>`
 
-use jsonrpsee::core::{async_trait, client::ClientT};
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::client::ClientT;
+use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -80,12 +80,16 @@ impl<S> RateLimit<S> {
 	}
 }
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for RateLimit<S>
 where
-	S: Send + Sync + RpcServiceT<'a>,
+	S: Send + RpcServiceT<'a>,
 {
-	async fn call(&self, req: Request<'a>) -> MethodResponse {
+	// Instead of `Boxing` the future in this example
+	// we are using a jsonrpsee's ResponseFuture future
+	// type to avoid those extra allocations.
+	type Future = ResponseFuture<S::Future>;
+
+	fn call(&self, req: Request<'a>) -> Self::Future {
 		let now = Instant::now();
 
 		let is_denied = {
@@ -117,9 +121,9 @@ where
 		};
 
 		if is_denied {
-			MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
+			ResponseFuture::ready(MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 		} else {
-			self.service.call(req).await
+			ResponseFuture::future(self.service.call(req))
 		}
 	}
 }
