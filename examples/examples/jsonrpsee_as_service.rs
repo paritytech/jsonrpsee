@@ -42,7 +42,7 @@ use hyper::HeaderMap;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcService, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{stop_channel, ServerHandle, StopHandle, TowerServiceBuilder};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::HeaderValue;
@@ -67,7 +67,7 @@ struct AuthorizationMiddleware<S> {
 
 impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
-	S: Send + Sync + RpcServiceT<'a>,
+	S: Send + Clone + Sync + RpcServiceT<'a>,
 {
 	type Future = ResponseFuture<S::Future>;
 
@@ -179,7 +179,7 @@ fn run_server() -> ServerHandle {
 				// NOTE, the rpc middleware must be initialized here to be able to created once per connection
 				// with data from the connection such as the headers in this example
 				let headers = req.headers().clone();
-				let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service: RpcService| {
+				let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
 					AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
 				});
 
