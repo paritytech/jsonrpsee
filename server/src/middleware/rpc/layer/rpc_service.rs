@@ -62,7 +62,7 @@ pub(crate) enum RpcServiceCfg {
 }
 
 impl RpcService {
-	/// Create a new service with doesn't support subscriptions.
+	/// Create a new service.
 	pub(crate) fn new(methods: Methods, max_response_body_size: usize, conn_id: usize, cfg: RpcServiceCfg) -> Self {
 		Self { methods, max_response_body_size, conn_id, cfg }
 	}
