@@ -36,7 +36,6 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use futures::FutureExt;
 use hyper::header::AUTHORIZATION;
 use hyper::server::conn::AddrStream;
 use hyper::HeaderMap;
@@ -196,7 +195,6 @@ fn run_server() -> ServerHandle {
 					}
 					rp
 				}
-				.boxed()
 			}))
 		}
 	});
