@@ -69,7 +69,7 @@ pub struct RpcLogger<S> {
 
 impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
-	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	S: RpcServiceT<'a>,
 {
 	type Future = ResponseFuture<S::Future>;
 
