@@ -36,39 +36,24 @@ pub use rpc_service::*;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures_util::Future;
+use futures_util::future::{Either, Future};
 use jsonrpsee_core::server::MethodResponse;
 use pin_project::pin_project;
 
-/// Response which may be ready or a future that needs to be
-/// polled.
-#[pin_project(project = ResponseStateProj)]
-pub enum ResponseFuture<F> {
-	/// The response is ready.
-	Ready(Option<MethodResponse>),
-	/// The response has to be polled.
-	Poll(#[pin] F),
-}
-
-impl<F> std::fmt::Debug for ResponseFuture<F> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let s = match self {
-			Self::Poll { .. } => "ResponseFuture::poll",
-			Self::Ready(_) => "ResponseFuture::ready",
-		};
-		f.write_str(s)
-	}
-}
+/// Response which may be ready or a future.
+#[derive(Debug)]
+#[pin_project]
+pub struct ResponseFuture<F>(#[pin] futures_util::future::Either<F, std::future::Ready<MethodResponse>>);
 
 impl<F> ResponseFuture<F> {
-	/// The response is ready.
-	pub fn ready(rp: MethodResponse) -> Self {
-		Self::Ready(Some(rp))
+	/// Returns a future that resolves to a response.
+	pub fn future(f: F) -> ResponseFuture<F> {
+		ResponseFuture(Either::Left(f))
 	}
 
-	/// The response needs to be polled.
-	pub fn future(fut: F) -> Self {
-		Self::Poll(fut)
+	/// Return a response which is already computed.
+	pub fn ready(response: MethodResponse) -> ResponseFuture<F> {
+		ResponseFuture(Either::Right(std::future::ready(response)))
 	}
 }
 
@@ -76,11 +61,6 @@ impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
 	type Output = MethodResponse;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		let this = self.project();
-
-		match this {
-			ResponseStateProj::Poll(fut) => fut.poll(cx),
-			ResponseStateProj::Ready(rp) => Poll::Ready(rp.take().expect("Future not polled after Ready; qed")),
-		}
+		self.project().0.poll(cx)
 	}
 }
