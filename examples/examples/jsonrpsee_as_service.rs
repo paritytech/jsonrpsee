@@ -60,14 +60,15 @@ struct Metrics {
 #[derive(Clone)]
 struct AuthorizationMiddleware<S> {
 	headers: HeaderMap,
-	inner: S,
+	// Wrap the service in an Arc to clone it efficiently.
+	inner: Arc<S>,
 	#[allow(unused)]
 	transport_label: &'static str,
 }
 
 impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
-	S: Send + Clone + Sync + RpcServiceT<'a>,
+	S: RpcServiceT<'a>,
 {
 	type Future = ResponseFuture<S::Future>;
 
@@ -187,6 +188,9 @@ fn run_server() -> ServerHandle {
 
 				async move {
 					// You can't determine whether the websocket upgrade handshake failed or not here.
+					//
+					// `svc.call(..)` requires Clone which requires our middleware type to be Clone
+					// as well.
 					let rp = svc.call(req).await;
 					if is_websocket {
 						metrics.ws_connections.fetch_add(1, Ordering::Relaxed);

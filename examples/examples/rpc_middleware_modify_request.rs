@@ -38,7 +38,7 @@ pub struct ModifyRequestIf<S>(S);
 
 impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
 where
-	S: Send + Sync + RpcServiceT<'a>,
+	S: RpcServiceT<'a>,
 {
 	type Future = S::Future;
 
