@@ -66,16 +66,22 @@ use tracing_subscriber::util::SubscriberInitExt;
 /// Once the limit has been exceeded
 /// all future calls are rejected.
 #[derive(Clone)]
-struct CallLimit<S>((S, AsyncMutex<usize>, mpsc::Sender<()>));
+struct CallLimit<S> {
+	service: S,
+	count: Arc<AsyncMutex<usize>>,
+	state: mpsc::Sender<()>,
+}
 
 impl<'a, S> RpcServiceT<'a> for CallLimit<S>
 where
-	S: RpcServiceT,
+	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
 {
 	type Future = BoxFuture<'a, MethodResponse>;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
-		let (service, lock, state) = self.0.clone();
+		let count = self.count.clone();
+		let state = self.state.clone();
+		let service = self.service.clone();
 
 		async move {
 			let mut lock = count.lock().await;
@@ -226,8 +232,11 @@ fn run_server() -> ServerHandle {
 
 				if ws::is_upgrade_request(&req) {
 					let (tx, mut disconnect) = mpsc::channel(1);
-					let rpc_service = RpcServiceBuilder::new()
-						.layer_fn(move |service| CallLimit(Arc::new((service, AsyncMutex::default(), tx.clone()))));
+					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
+						service,
+						count: Default::default(),
+						state: tx.clone(),
+					});
 
 					let conn = ConnectionState::new(stop_handle, conn_id.fetch_add(1, Ordering::Relaxed), conn_permit);
 
@@ -254,9 +263,12 @@ fn run_server() -> ServerHandle {
 				} else if !ws::is_upgrade_request(&req) {
 					let (tx, mut disconnect) = mpsc::channel(1);
 
-					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| {
-						CallLimit(Arc::new((service, global_http_rate_limit.clone(), tx.clone())))
+					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
+						service,
+						count: global_http_rate_limit.clone(),
+						state: tx.clone(),
 					});
+
 					let server_cfg = ServerConfig::default();
 					let conn = ConnectionState::new(stop_handle, conn_id.fetch_add(1, Ordering::Relaxed), conn_permit);
 

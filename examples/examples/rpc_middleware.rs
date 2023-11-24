@@ -53,16 +53,20 @@ use jsonrpsee::ws_client::WsClientBuilder;
 // It's possible to access the connection ID
 // by using the low-level API.
 #[derive(Clone)]
-pub struct CallsPerConn<S>(Arc<(S, AtomicUsize)>);
+pub struct CallsPerConn<S> {
+	service: S,
+	count: Arc<AtomicUsize>,
+}
 
 impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
 where
-	S: RpcServiceT<'a>,
+	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
 	type Future = BoxFuture<'a, MethodResponse>;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
-		let (service, count) = self.0.clone();
+		let count = self.count.clone();
+		let service = self.service.clone();
 
 		async move {
 			let rp = service.call(req).await;
@@ -89,7 +93,8 @@ where
 	type Future = BoxFuture<'a, MethodResponse>;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
-		let (service, count) = self.0.clone();
+		let count = self.count.clone();
+		let service = self.service.clone();
 
 		async move {
 			let rp = service.call(req).await;
@@ -107,7 +112,7 @@ pub struct Logger<S>(S);
 
 impl<'a, S> RpcServiceT<'a> for Logger<S>
 where
-	S: RpcServiceT<'a>,
+	S: RpcServiceT<'a> + Send + Sync,
 {
 	type Future = S::Future;
 
@@ -147,7 +152,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let rpc_middleware = RpcServiceBuilder::new()
 		.layer_fn(|service| Logger(service))
 		// This state is created per connection.
-		.layer_fn(|service| CallsPerConn(Arc::new((service, Default::default()))))
+		.layer_fn(|service| CallsPerConn { service, count: Default::default() })
 		// This state is shared by all connections.
 		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
