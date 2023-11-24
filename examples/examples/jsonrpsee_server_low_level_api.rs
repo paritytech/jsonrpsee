@@ -43,8 +43,8 @@ use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::future::Future;
 
-use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::server::conn::AddrStream;
 use jsonrpsee::core::async_trait;
@@ -76,26 +76,25 @@ impl<'a, S> RpcServiceT<'a> for CallLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
-
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
+		/*let req = req.into_owned();
 		let count = self.count.clone();
-		let state = self.state.clone();
 		let service = self.service.clone();
 
 		async move {
 			let mut lock = count.lock().await;
 
 			if *lock >= 10 {
-				let _ = state.try_send(());
+				let _ = self.state.try_send(());
 				MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
 			} else {
 				let rp = service.call(req).await;
 				*lock = *lock + 1;
 				rp
 			}
-		}
-		.boxed()
+		}*/
+
+		async { todo!() }
 	}
 }
 

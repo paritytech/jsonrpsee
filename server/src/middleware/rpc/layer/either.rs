@@ -38,6 +38,7 @@ use std::{
 
 use crate::middleware::rpc::RpcServiceT;
 use futures_util::Future;
+use jsonrpsee_core::server::MethodResponse;
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
 
@@ -71,9 +72,7 @@ where
 	A: RpcServiceT<'a> + Send + 'a,
 	B: RpcServiceT<'a> + Send + 'a,
 {
-	type Future = ResponseFuture<A::Future, B::Future>;
-
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> {
 		match self {
 			Either::Left(service) => ResponseFuture::Left(service.call(request)),
 			Either::Right(service) => ResponseFuture::Right(service.call(request)),

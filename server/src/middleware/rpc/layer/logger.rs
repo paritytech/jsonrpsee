@@ -71,10 +71,8 @@ impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = ResponseFuture<S::Future>;
-
 	#[tracing::instrument(name = "method_call", skip(self, request), level = "trace")]
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> {
 		rx_log_from_json(&request, self.max);
 
 		ResponseFuture { fut: self.service.call(request), max: self.max }

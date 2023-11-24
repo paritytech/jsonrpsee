@@ -1080,10 +1080,11 @@ where
 				RpcServiceCfg::OnlyCalls,
 			));
 
-			Box::pin(
+			todo!();
+			/*Box::pin(
 				http::call_with_service(request, batch_config, max_request_size, rpc_service, max_response_size)
 					.map(Ok),
-			)
+			)*/
 		} else {
 			Box::pin(async { http::response::denied() }.map(Ok))
 		}

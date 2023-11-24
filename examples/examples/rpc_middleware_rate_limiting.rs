@@ -31,6 +31,7 @@
 //! stored in something to provide interior mutability
 //! such as `Arc<Mutex>`
 
+use futures::Future;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
@@ -84,12 +85,7 @@ impl<'a, S> RpcServiceT<'a> for RateLimit<S>
 where
 	S: Send + RpcServiceT<'a>,
 {
-	// Instead of `Boxing` the future in this example
-	// we are using a jsonrpsee's ResponseFuture future
-	// type to avoid those extra allocations.
-	type Future = ResponseFuture<S::Future>;
-
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
 		let now = Instant::now();
 
 		let is_denied = {

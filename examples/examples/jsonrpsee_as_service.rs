@@ -33,10 +33,12 @@
 
 use std::error::Error as StdError;
 use std::net::SocketAddr;
+use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use hyper::header::AUTHORIZATION;
 use hyper::server::conn::AddrStream;
 use hyper::HeaderMap;
@@ -70,21 +72,19 @@ impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-	type Future = ResponseFuture<S::Future>;
-
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call(&self, req: Request<'a>) -> BoxFuture<'_, MethodResponse> {
 		if req.method_name() == "trusted_call" {
 			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else {
 				let rp = MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
-				return ResponseFuture::ready(rp);
+				return async { rp }.boxed()
 			};
 
 			// In this example for simplicity, the authorization value is not checked
 			// and used because it's just a toy example.
 
-			ResponseFuture::future(self.inner.call(req))
+			self.inner.call(req).boxed()
 		} else {
-			ResponseFuture::future(self.inner.call(req))
+			self.inner.call(req).boxed()
 		}
 	}
 }

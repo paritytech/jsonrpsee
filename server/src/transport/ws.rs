@@ -138,7 +138,7 @@ where
 		let rpc_service = rpc_service.clone();
 		let sink = sink.clone();
 
-		tokio::spawn(async move {
+		/*tokio::spawn(async move {
 			let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
 			let (idx, is_single) = match first_non_whitespace {
@@ -158,7 +158,7 @@ where
 					_ = sink.send(rp.result).await;
 				}
 			}
-		});
+		});*/
 	};
 
 	// Drive all running methods to completion.

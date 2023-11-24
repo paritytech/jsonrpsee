@@ -30,6 +30,7 @@ use super::ResponseFuture;
 use std::sync::Arc;
 
 use crate::middleware::rpc::RpcServiceT;
+use futures_util::Future;
 use futures_util::future::BoxFuture;
 use jsonrpsee_core::server::{
 	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
@@ -71,9 +72,8 @@ impl RpcService {
 impl<'a> RpcServiceT<'a> for RpcService {
 	// The rpc module is already boxing the futures and
 	// it's used to under the hood by the RpcService.
-	type Future = ResponseFuture<BoxFuture<'a, MethodResponse>>;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
 		let conn_id = self.conn_id;
 		let max_response_body_size = self.max_response_body_size;
 

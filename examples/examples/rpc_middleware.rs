@@ -40,6 +40,7 @@
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::future::Future;
 
 use futures::future::BoxFuture;
 use futures::FutureExt;
@@ -62,9 +63,7 @@ impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
-
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
 		let count = self.count.clone();
 		let service = self.service.clone();
 
@@ -75,7 +74,6 @@ where
 			println!("the server has processed calls={count} on the connection");
 			rp
 		}
-		.boxed()
 	}
 }
 
@@ -85,14 +83,12 @@ pub struct GlobalCalls<S> {
 	count: Arc<AtomicUsize>,
 }
 
-#[async_trait]
+
 impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
-
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
 		let count = self.count.clone();
 		let service = self.service.clone();
 
@@ -103,7 +99,6 @@ where
 			println!("the server has processed calls={count} in total");
 			rp
 		}
-		.boxed()
 	}
 }
 
@@ -114,9 +109,7 @@ impl<'a, S> RpcServiceT<'a> for Logger<S>
 where
 	S: RpcServiceT<'a> + Send + Sync,
 {
-	type Future = S::Future;
-
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
 		println!("logger middleware: method `{}`", req.method);
 		self.0.call(req)
 	}

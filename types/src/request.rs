@@ -73,6 +73,12 @@ impl<'a> Request<'a> {
 	pub fn params(&self) -> Params {
 		Params::new(self.params.as_ref().map(|p| RawValue::get(p)))
 	}
+
+	pub fn into_owned(&self) -> Request<'static> {
+		todo!();
+	}
+
+
 }
 
 /// JSON-RPC Invalid request as defined in the [spec](https://www.jsonrpc.org/specification#request-object).

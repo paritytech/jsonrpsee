@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::future::Future;
 
 use futures::future::BoxFuture;
 use futures::FutureExt;
@@ -59,21 +60,19 @@ pub struct CounterMiddleware<S> {
 	counter: Arc<Mutex<Counter>>,
 }
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
 
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> {
 		let counter = self.counter.clone();
 		let service = self.service.clone();
 
-		async move {
-			let name = request.method.to_string();
-			let id = request.id.clone();
+		let name = request.method.to_string();
+		let id = request.id.clone();
 
+		async move {
 			{
 				let mut n = counter.lock().unwrap();
 				n.requests.0 += 1;
@@ -93,7 +92,6 @@ where
 
 			rp
 		}
-		.boxed()
 	}
 }
 
