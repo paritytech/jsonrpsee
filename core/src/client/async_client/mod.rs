@@ -26,7 +26,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
-use async_lock::Mutex as AsyncMutex;
+use async_lock::RwLock as AsyncRwLock;
 use async_trait::async_trait;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
@@ -54,18 +54,22 @@ impl ThreadSafeRequestManager {
 }
 
 #[derive(Debug)]
-struct ErrorFromBack(AsyncMutex<ReadErrorOnce>);
+struct ErrorFromBack(AsyncRwLock<ReadErrorOnce>);
 
 impl ErrorFromBack {
 	fn new(unread: oneshot::Receiver<Error>) -> Self {
-		Self(AsyncMutex::new(ReadErrorOnce::Unread(unread)))
+		Self(AsyncRwLock::new(ReadErrorOnce::Unread(unread)))
 	}
 
 	async fn read_error(&self) -> Error {
-		let mut lock = self.0.lock().await;
-		let state = std::mem::replace(&mut *lock, ReadErrorOnce::Unreachable);
+		if let ReadErrorOnce::Read(ref err) = *self.0.read().await {
+			return Error::RestartNeeded(err.clone());
+		};
 
-		let (next_state, err) = match state {
+		let mut write = self.0.write().await;
+		let state = std::mem::replace(&mut *write, ReadErrorOnce::Unreachable);
+
+		let err = match state {
 			ReadErrorOnce::Unread(rx) => {
 				let arc_err = Arc::new(match rx.await {
 					Ok(err) => err,
@@ -74,14 +78,17 @@ impl ErrorFromBack {
 					// be emitted.
 					Err(_) => Error::Custom("Error reason could not be found. This is a bug. Please open an issue.".to_string()),
 				});
-				(ReadErrorOnce::Read(arc_err.clone()), Error::RestartNeeded(arc_err))
+				*write = ReadErrorOnce::Read(arc_err.clone());
+				arc_err
 			}
-			ReadErrorOnce::Read(arc_err) => (ReadErrorOnce::Read(arc_err.clone()), Error::RestartNeeded(arc_err)),
+			ReadErrorOnce::Read(arc_err) => {
+				*write = ReadErrorOnce::Read(arc_err.clone());
+				arc_err
+			}
 			ReadErrorOnce::Unreachable => unreachable!(),
 		};
 
-		*lock = next_state;
-		err
+		Error::RestartNeeded(err)
 	}
 }
 
