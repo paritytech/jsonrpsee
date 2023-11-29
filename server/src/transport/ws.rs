@@ -1,13 +1,14 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
+use crate::future::IntervalStream;
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
 use crate::PingConfig;
 
-use futures_util::future::{self, Either, Fuse};
+use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::{Future, FutureExt, StreamExt, TryStreamExt};
+use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::MethodSink;
 use jsonrpsee_core::server::{BoundedSubscriptions, Methods};
@@ -18,7 +19,7 @@ use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 
 use tokio::sync::{mpsc, oneshot};
-use tokio_stream::wrappers::{IntervalStream, ReceiverStream};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
@@ -77,7 +78,7 @@ where
 	let (conn_tx, conn_rx) = oneshot::channel();
 
 	// Spawn another task that sends out the responses on the Websocket.
-	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config.ping_interval(), conn_rx));
+	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config, conn_rx));
 
 	let stopped = conn.stop_handle.clone().shutdown();
 	let rpc_service = Arc::new(rpc_service);
@@ -174,15 +175,10 @@ where
 async fn send_task(
 	rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
-	ping_interval: Duration,
+	ping_config: PingConfig,
 	stop: oneshot::Receiver<()>,
 ) {
-	// Interval to send out continuously `pings`.
-	let mut ping_interval = tokio::time::interval(ping_interval);
-	// This returns immediately so make sure it doesn't resolve before the ping_interval has been elapsed.
-	ping_interval.tick().await;
-
-	let ping_interval = IntervalStream::new(ping_interval);
+	let ping_interval = ping_config.ping_interval().await;
 	let rx = ReceiverStream::new(rx);
 
 	tokio::pin!(ping_interval, rx, stop);
@@ -250,10 +246,14 @@ where
 	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
 {
 	let mut last_active = Instant::now();
+	let inactivity_check = match ping_config.inactive_limit() {
+		Some(period) => IntervalStream::new(period).await,
+		None => IntervalStream::pending(),
+	};
 
-	let inactivity_check =
-		Box::pin(ping_config.inactive_limit().map(|d| tokio::time::sleep(d).fuse()).unwrap_or_else(Fuse::terminated));
-	let mut futs = futures_util::future::select(ws_stream.next(), inactivity_check);
+	tokio::pin!(inactivity_check);
+
+	let mut futs = futures_util::future::select(ws_stream.next(), inactivity_check.next());
 
 	loop {
 		match futures_util::future::select(futs, stopped).await {
@@ -279,12 +279,8 @@ where
 				}
 
 				stopped = s;
-				// use really large duration instead of Duration::MAX to
-				// solve the panic issue with interval initialization
-				let inactivity_check = Box::pin(
-					ping_config.inactive_limit().map(|d| tokio::time::sleep(d).fuse()).unwrap_or_else(Fuse::terminated),
-				);
-				futs = futures_util::future::select(rcv, inactivity_check);
+
+				futs = futures_util::future::select(rcv, inactivity_check.next());
 			}
 			// Server has been stopped.
 			Either::Right(_) => break Receive::Stopped,

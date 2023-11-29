@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
+use crate::future::{ConnectionGuard, IntervalStream, ServerHandle, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -286,28 +286,31 @@ impl ConnectionState {
 pub enum PingConfig {
 	/// The server pings the connected clients continuously at the configured interval but
 	/// doesn't disconnect them if no pongs are received from the client.
-	WithoutInactivityCheck(Duration),
+	OnlyPing(Duration),
 	/// The server pings the connected clients continuously at the configured interval
 	/// and terminates the connection if no websocket messages received from client
 	/// after the max limit is exceeded.
-	WithInactivityCheck {
+	Ping {
 		/// Time interval between consequent pings from server
 		ping_interval: Duration,
 		/// Max allowed time for connection to stay idle
 		inactive_limit: Duration,
 	},
+	/// Pings are disabled.
+	Disabled,
 }
 
 impl PingConfig {
-	pub(crate) fn ping_interval(&self) -> Duration {
+	pub(crate) async fn ping_interval(&self) -> IntervalStream {
 		match self {
-			Self::WithoutInactivityCheck(ping_interval) => *ping_interval,
-			Self::WithInactivityCheck { ping_interval, .. } => *ping_interval,
+			Self::OnlyPing(ping_interval) => IntervalStream::new(*ping_interval).await,
+			Self::Ping { ping_interval, .. } => IntervalStream::new(*ping_interval).await,
+			Self::Disabled => IntervalStream::pending(),
 		}
 	}
 
 	pub(crate) fn inactive_limit(&self) -> Option<Duration> {
-		if let Self::WithInactivityCheck { inactive_limit, .. } = self {
+		if let Self::Ping { inactive_limit, .. } = self {
 			Some(*inactive_limit)
 		} else {
 			None
@@ -317,7 +320,7 @@ impl PingConfig {
 
 impl Default for PingConfig {
 	fn default() -> Self {
-		Self::WithoutInactivityCheck(Duration::from_secs(60))
+		Self::OnlyPing(Duration::from_secs(60))
 	}
 }
 
@@ -333,7 +336,7 @@ impl Default for ServerConfig {
 			enable_http: true,
 			enable_ws: true,
 			message_buffer_capacity: 1024,
-			ping_config: PingConfig::WithoutInactivityCheck(Duration::from_secs(60)),
+			ping_config: PingConfig::OnlyPing(Duration::from_secs(60)),
 			id_provider: Arc::new(RandomIntegerIdProvider),
 		}
 	}
@@ -423,7 +426,7 @@ impl ServerConfigBuilder {
 
 	/// See [`Builder::ping_interval`] for documentation.
 	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
-		if let PingConfig::WithInactivityCheck { ping_interval, inactive_limit } = config {
+		if let PingConfig::Ping { ping_interval, inactive_limit } = config {
 			if ping_interval >= inactive_limit {
 				return Err(Error::Custom("`inactive_limit` must be bigger than `ping_interval` to work".into()));
 			}
@@ -646,10 +649,10 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use jsonrpsee_server::{ServerBuilder, PingConfig};
 	///
 	/// // Set the ping interval to 10 seconds but terminate the connection if a client is inactive for more than 2 minutes
-	/// let builder = ServerBuilder::default().ping_interval(PingConfig::WithInactivityCheck { ping_interval: Duration::from_secs(10), inactive_limit: Duration::from_secs(2 * 60) }).unwrap();
+	/// let builder = ServerBuilder::default().ping_interval(PingConfig::Ping { ping_interval: Duration::from_secs(10), inactive_limit: Duration::from_secs(2 * 60) }).unwrap();
 	/// ```
 	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
-		if let PingConfig::WithInactivityCheck { ping_interval, inactive_limit } = config {
+		if let PingConfig::Ping { ping_interval, inactive_limit } = config {
 			if ping_interval >= inactive_limit {
 				return Err(Error::Custom("`inactive_limit` must be bigger than `ping_interval` to work".into()));
 			}
