@@ -285,8 +285,6 @@ where
 		}
 	}
 
-	/// Perform a request towards the server.
-
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
 	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where

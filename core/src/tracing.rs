@@ -1,45 +1,100 @@
 use serde::Serialize;
 use tracing::Level;
 
-/// Helper for writing trace logs from str.
-pub fn tx_log_from_str(s: impl AsRef<str>, max: u32) {
-	if tracing::enabled!(Level::TRACE) {
-		let msg = truncate_at_char_boundary(s.as_ref(), max as usize);
-		tracing::trace!(send = msg);
+const CLIENT: &str = "jsonrpsee-client";
+const SERVER: &str = "jsonrpsee-server";
+
+/// Logging with jsonrpsee client target.
+pub mod client {
+	use super::*;
+
+	/// Helper for writing trace logs from str.
+	pub fn tx_log_from_str(s: impl AsRef<str>, max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let msg = truncate_at_char_boundary(s.as_ref(), max as usize);
+			tracing::trace!(target: CLIENT, send = msg);
+		}
+	}
+
+	/// Helper for writing trace logs from JSON.
+	pub fn tx_log_from_json(s: &impl Serialize, max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let json = serde_json::to_string(s).unwrap_or_default();
+			let msg = truncate_at_char_boundary(&json, max as usize);
+			tracing::trace!(target: CLIENT, send = msg);
+		}
+	}
+
+	/// Helper for writing trace logs from str.
+	pub fn rx_log_from_str(s: impl AsRef<str>, max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let msg = truncate_at_char_boundary(s.as_ref(), max as usize);
+			tracing::trace!(target: CLIENT, recv = msg);
+		}
+	}
+
+	/// Helper for writing trace logs from JSON.
+	pub fn rx_log_from_json(s: &impl Serialize, max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let res = serde_json::to_string(s).unwrap_or_default();
+			let msg = truncate_at_char_boundary(res.as_str(), max as usize);
+			tracing::trace!(target: CLIENT, recv = msg);
+		}
+	}
+
+	/// Helper for writing trace logs from bytes.
+	pub fn rx_log_from_bytes(bytes: &[u8], max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let res = serde_json::from_slice::<serde_json::Value>(bytes).unwrap_or_default();
+			rx_log_from_json(&res, max);
+		}
 	}
 }
 
-/// Helper for writing trace logs from JSON.
-pub fn tx_log_from_json(s: &impl Serialize, max: u32) {
-	if tracing::enabled!(Level::TRACE) {
-		let json = serde_json::to_string(s).unwrap_or_default();
-		let msg = truncate_at_char_boundary(&json, max as usize);
-		tracing::trace!(send = msg);
-	}
-}
+/// Logging with jsonrpsee server target.
+pub mod server {
+	use super::*;
 
-/// Helper for writing trace logs from str.
-pub fn rx_log_from_str(s: impl AsRef<str>, max: u32) {
-	if tracing::enabled!(Level::TRACE) {
-		let msg = truncate_at_char_boundary(s.as_ref(), max as usize);
-		tracing::trace!(recv = msg);
+	/// Helper for writing trace logs from str.
+	pub fn tx_log_from_str(s: impl AsRef<str>, max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let msg = truncate_at_char_boundary(s.as_ref(), max as usize);
+			tracing::trace!(target: SERVER, send = msg);
+		}
 	}
-}
 
-/// Helper for writing trace logs from JSON.
-pub fn rx_log_from_json(s: &impl Serialize, max: u32) {
-	if tracing::enabled!(Level::TRACE) {
-		let res = serde_json::to_string(s).unwrap_or_default();
-		let msg = truncate_at_char_boundary(res.as_str(), max as usize);
-		tracing::trace!(recv = msg);
+	/// Helper for writing trace logs from JSON.
+	pub fn tx_log_from_json(s: &impl Serialize, max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let json = serde_json::to_string(s).unwrap_or_default();
+			let msg = truncate_at_char_boundary(&json, max as usize);
+			tracing::trace!(target: SERVER, send = msg);
+		}
 	}
-}
 
-/// Helper for writing trace logs from bytes.
-pub fn rx_log_from_bytes(bytes: &[u8], max: u32) {
-	if tracing::enabled!(Level::TRACE) {
-		let res = serde_json::from_slice::<serde_json::Value>(bytes).unwrap_or_default();
-		rx_log_from_json(&res, max);
+	/// Helper for writing trace logs from str.
+	pub fn rx_log_from_str(s: impl AsRef<str>, max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let msg = truncate_at_char_boundary(s.as_ref(), max as usize);
+			tracing::trace!(target: SERVER, recv = msg);
+		}
+	}
+
+	/// Helper for writing trace logs from JSON.
+	pub fn rx_log_from_json(s: &impl Serialize, max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let res = serde_json::to_string(s).unwrap_or_default();
+			let msg = truncate_at_char_boundary(res.as_str(), max as usize);
+			tracing::trace!(target: SERVER, recv = msg);
+		}
+	}
+
+	/// Helper for writing trace logs from bytes.
+	pub fn rx_log_from_bytes(bytes: &[u8], max: u32) {
+		if tracing::enabled!(Level::TRACE) {
+			let res = serde_json::from_slice::<serde_json::Value>(bytes).unwrap_or_default();
+			rx_log_from_json(&res, max);
+		}
 	}
 }
 

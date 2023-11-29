@@ -37,6 +37,7 @@ use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
+use crate::LOG_TARGET;
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
@@ -159,7 +160,7 @@ where
 					stopped = stop;
 				}
 				AcceptConnection::Err((e, stop)) => {
-					tracing::debug!("Error while awaiting a new connection: {:?}", e);
+					tracing::debug!(target: LOG_TARGET, "Error while awaiting a new connection: {:?}", e);
 					stopped = stop;
 				}
 				AcceptConnection::Shutdown => break,
@@ -979,7 +980,7 @@ where
 		let stop_handle = self.inner.stop_handle.clone();
 		let conn_id = self.inner.conn_id;
 
-		tracing::trace!("{:?}", request);
+		tracing::trace!(target: LOG_TARGET, "{:?}", request);
 
 		let Some(conn_permit) = conn_guard.try_acquire() else {
 			return async move { Ok(http::response::too_many_requests()) }.boxed();
@@ -989,7 +990,7 @@ where
 
 		let max_conns = conn_guard.max_connections();
 		let curr_conns = max_conns - conn_guard.available_connections();
-		tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
+		tracing::debug!(target: LOG_TARGET, "Accepting new connection {}/{}", curr_conns, max_conns);
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
@@ -1031,7 +1032,7 @@ where
 							let upgraded = match hyper::upgrade::on(request).await {
 								Ok(u) => u,
 								Err(e) => {
-									tracing::debug!("Could not upgrade connection: {}", e);
+									tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
 									return;
 								}
 							};
@@ -1060,7 +1061,7 @@ where
 					response.map(|()| hyper::Body::empty())
 				}
 				Err(e) => {
-					tracing::debug!("Could not upgrade connection: {}", e);
+					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
 					hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}")))
 				}
 			};
@@ -1137,7 +1138,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 	} = params;
 
 	if let Err(e) = socket.set_nodelay(true) {
-		tracing::warn!("Could not set NODELAY on socket: {:?}", e);
+		tracing::warn!(target: LOG_TARGET, "Could not set NODELAY on socket: {:?}", e);
 		return;
 	}
 
@@ -1186,7 +1187,7 @@ where
 	};
 
 	if let Err(e) = res {
-		tracing::debug!("HTTP serve connection failed {:?}", e);
+		tracing::debug!(target: LOG_TARGET, "HTTP serve connection failed {:?}", e);
 	}
 }
 

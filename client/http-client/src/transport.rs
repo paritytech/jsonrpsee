@@ -12,7 +12,7 @@ use hyper::http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
-use jsonrpsee_core::tracing::{rx_log_from_bytes, tx_log_from_str};
+use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
 use std::error::Error as StdError;
 use std::future::Future;
 use std::pin::Pin;
@@ -168,8 +168,6 @@ where
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
-		tx_log_from_str(&body, self.max_log_length);
-
 		if body.len() > self.max_request_size as usize {
 			return Err(Error::RequestTooLarge);
 		}
@@ -190,6 +188,8 @@ where
 
 	/// Send serialized message and wait until all bytes from the HTTP message body have been read.
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
+		tx_log_from_str(&body, self.max_log_length);
+
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
 		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_response_size).await?;

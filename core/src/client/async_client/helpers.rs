@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::client::async_client::LOG_TARGET;
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::{RequestMessage, TransportSenderT};
 use crate::params::ArrayParams;
@@ -63,7 +64,7 @@ pub(crate) fn process_batch_response(
 	let batch_state = match manager.complete_pending_batch(range.clone()) {
 		Some(state) => state,
 		None => {
-			tracing::warn!("Received unknown batch response");
+			tracing::warn!(target: LOG_TARGET, "Received unknown batch response");
 			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)).into());
 		}
 	};
@@ -101,7 +102,7 @@ pub(crate) fn process_subscription_response(
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => {
-			tracing::debug!("Subscription {:?} is not active", sub_id);
+			tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
 			return Err(None);
 		}
 	};
@@ -110,12 +111,12 @@ pub(crate) fn process_subscription_response(
 		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
 			Err(err) => {
-				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
+				tracing::error!(target: LOG_TARGET, "Dropping subscription {:?} error: {:?}", sub_id, err);
 				Err(Some(sub_id))
 			}
 		},
 		None => {
-			tracing::debug!("Subscription {:?} is not active", sub_id);
+			tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
 			Err(None)
 		}
 	}
@@ -137,7 +138,7 @@ pub(crate) fn process_subscription_close_response(
 			manager.remove_subscription(request_id, sub_id).expect("Both request ID and sub ID in RequestManager; qed");
 		}
 		None => {
-			tracing::debug!("The server tried to close an non-pending subscription: {:?}", sub_id);
+			tracing::debug!(target: LOG_TARGET, "The server tried to close an non-pending subscription: {:?}", sub_id);
 		}
 	}
 }
@@ -153,12 +154,12 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => (),
 			Err(err) => {
-				tracing::warn!("Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
+				tracing::warn!(target: LOG_TARGET, "Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
 				let _ = manager.remove_notification_handler(notif.method.into_owned());
 			}
 		},
 		None => {
-			tracing::debug!("Notification: {:?} not a registered method", notif.method);
+			tracing::debug!(target: LOG_TARGET, "Notification: {:?} not a registered method", notif.method);
 		}
 	}
 }

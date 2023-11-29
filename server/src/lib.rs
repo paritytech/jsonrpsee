@@ -53,3 +53,5 @@ pub use tracing;
 
 pub use transport::http;
 pub use transport::ws;
+
+pub(crate) const LOG_TARGET: &str = "jsonrpsee-server";

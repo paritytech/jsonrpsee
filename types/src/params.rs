@@ -176,18 +176,14 @@ impl<'a> ParamsSequence<'a> {
 		T: Deserialize<'a>,
 	{
 		let mut json = self.0;
-		tracing::trace!("[next_inner] Params JSON: {:?}", json);
 		match json.as_bytes().first()? {
 			b']' => {
 				self.0 = "";
-
-				tracing::trace!("[next_inner] Reached end of sequence.");
 				return None;
 			}
 			b'[' | b',' => json = &json[1..],
 			_ => {
 				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {json:?}");
-				tracing::trace!("[next_inner] {}", errmsg);
 				return Some(Err(invalid_params(errmsg)));
 			}
 		}
@@ -201,15 +197,15 @@ impl<'a> ParamsSequence<'a> {
 				Some(Ok(value))
 			}
 			Err(e) => {
-				tracing::trace!(
-					"[next_inner] Deserialization to {:?} failed. Error: {:?}, input JSON: {:?}",
+				let err = format!(
+					"Deserialization to {:?} failed. Error: {:?}, input JSON: {:?}",
 					std::any::type_name::<T>(),
 					e,
 					json
 				);
 				self.0 = "";
 
-				Some(Err(invalid_params(e)))
+				Some(Err(invalid_params(err)))
 			}
 		}
 	}
