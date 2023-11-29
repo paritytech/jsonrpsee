@@ -197,15 +197,8 @@ impl<'a> ParamsSequence<'a> {
 				Some(Ok(value))
 			}
 			Err(e) => {
-				let err = format!(
-					"Deserialization to {:?} failed. Error: {:?}, input JSON: {:?}",
-					std::any::type_name::<T>(),
-					e,
-					json
-				);
 				self.0 = "";
-
-				Some(Err(invalid_params(err)))
+				Some(Err(invalid_params(e)))
 			}
 		}
 	}
