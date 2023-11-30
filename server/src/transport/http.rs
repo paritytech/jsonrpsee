@@ -4,7 +4,7 @@ use jsonrpsee_core::{http_helpers::read_body, server::Methods, GenericTransportE
 use crate::{
 	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
 	server::{handle_rpc_call, ServerConfig},
-	BatchRequestConfig, ConnectionState,
+	BatchRequestConfig, ConnectionState, LOG_TARGET,
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
@@ -77,7 +77,7 @@ where
 				Err(GenericTransportError::TooLarge) => return response::too_large(max_request_size),
 				Err(GenericTransportError::Malformed) => return response::malformed(),
 				Err(GenericTransportError::Inner(e)) => {
-					tracing::warn!("Internal error reading request body: {}", e);
+					tracing::warn!(target: LOG_TARGET, "Internal error reading request body: {}", e);
 					return response::internal_error();
 				}
 			};

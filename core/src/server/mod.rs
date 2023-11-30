@@ -42,6 +42,8 @@ pub use subscription::*;
 
 use jsonrpsee_types::{ErrorObjectOwned, ResponsePayload};
 
+const LOG_TARGET: &str = "jsonrpsee-server";
+
 /// Something that can be converted into a JSON-RPC method call response.
 ///
 /// If the value couldn't be serialized/encoded, jsonrpsee will sent out an error

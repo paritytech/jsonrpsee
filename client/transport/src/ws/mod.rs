@@ -47,6 +47,8 @@ pub use soketto::handshake::client::Header;
 pub use stream::EitherStream;
 pub use url::Url;
 
+const LOG_TARGET: &str = "jsonrpsee-client";
+
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
 pub struct Sender<T> {
@@ -238,7 +240,6 @@ where
 			return Err(WsError::MessageTooLarge);
 		}
 
-		tracing::trace!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
 		Ok(())
@@ -247,7 +248,7 @@ where
 	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	async fn send_ping(&mut self) -> Result<(), Self::Error> {
-		tracing::debug!("Send ping");
+		tracing::debug!(target: LOG_TARGET, "Send ping");
 		// Submit empty slice as "optional" parameter.
 		let slice: &[u8] = &[];
 		// Byte slice fails if the provided slice is larger than 125 bytes.
@@ -327,7 +328,7 @@ impl WsTransportClientBuilder {
 		};
 
 		for _ in 0..self.max_redirections {
-			tracing::debug!("Connecting to target: {:?}", target);
+			tracing::debug!(target: LOG_TARGET, "Connecting to target: {:?}", target);
 
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
@@ -336,7 +337,7 @@ impl WsTransportClientBuilder {
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref()).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						tracing::debug!(target: LOG_TARGET, "Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
@@ -346,7 +347,7 @@ impl WsTransportClientBuilder {
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						tracing::debug!(target: LOG_TARGET, "Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
@@ -356,13 +357,13 @@ impl WsTransportClientBuilder {
 					Ok(result) => return Ok(result),
 
 					Err(WsHandshakeError::Redirected { status_code, location }) => {
-						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
+						tracing::debug!(target: LOG_TARGET, "Redirection: status_code: {}, location: {}", status_code, location);
 						match Url::parse(&location) {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
 								target = uri.try_into().map_err(|e| {
-									tracing::error!("Redirection failed: {:?}", e);
+									tracing::error!(target: LOG_TARGET, "Redirection failed: {:?}", e);
 									e
 								})?;
 
@@ -436,7 +437,7 @@ impl WsTransportClientBuilder {
 		// Perform the initial handshake.
 		match client.handshake().await {
 			Ok(ServerResponse::Accepted { .. }) => {
-				tracing::debug!("Connection established to target: {:?}", target);
+				tracing::debug!(target: LOG_TARGET, "Connection established to target: {:?}", target);
 				let mut builder = client.into_builder();
 				builder.set_max_message_size(self.max_response_size as usize);
 				let (sender, receiver) = builder.finish();
@@ -444,12 +445,12 @@ impl WsTransportClientBuilder {
 			}
 
 			Ok(ServerResponse::Rejected { status_code }) => {
-				tracing::debug!("Connection rejected: {:?}", status_code);
+				tracing::debug!(target: LOG_TARGET, "Connection rejected: {:?}", status_code);
 				Err(WsHandshakeError::Rejected { status_code })
 			}
 
 			Ok(ServerResponse::Redirect { status_code, location }) => {
-				tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
+				tracing::debug!(target: LOG_TARGET, "Redirection: status_code: {}, location: {}", status_code, location);
 				Err(WsHandshakeError::Redirected { status_code, location })
 			}
 
@@ -471,7 +472,7 @@ async fn connect(
 		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
-				tracing::warn!("set nodelay failed: {:?}", err);
+				tracing::warn!(target: LOG_TARGET, "set nodelay failed: {:?}", err);
 			}
 			match tls_connector {
 				None => Ok(EitherStream::Plain(socket)),
@@ -494,7 +495,7 @@ async fn connect(sockaddr: SocketAddr, timeout_dur: Duration) -> Result<EitherSt
 		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
-				tracing::warn!("set nodelay failed: {:?}", err);
+				tracing::warn!(target: LOG_TARGET, "set nodelay failed: {:?}", err);
 			}
 			Ok(EitherStream::Plain(socket))
 		}

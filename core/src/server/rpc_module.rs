@@ -32,6 +32,7 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use crate::id_providers::RandomIntegerIdProvider;
+use crate::server::LOG_TARGET;
 use crate::server::helpers::{MethodResponse, MethodSink};
 use crate::server::subscription::{
 	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
@@ -274,7 +275,7 @@ impl Methods {
 	) -> Result<T, Error> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
-		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
+		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
 		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(Error::Call)
@@ -316,7 +317,7 @@ impl Methods {
 		request: &str,
 		buf_size: usize,
 	) -> Result<(MethodResponse, mpsc::Receiver<String>), Error> {
-		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
+		tracing::trace!(target: LOG_TARGET, "[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
@@ -354,7 +355,7 @@ impl Methods {
 			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
 
-		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
+		tracing::trace!(target: LOG_TARGET, "[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
 
 		(response, rx)
 	}
@@ -401,7 +402,7 @@ impl Methods {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 
-		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
+		tracing::trace!(target: LOG_TARGET, "[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
@@ -539,7 +540,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				.map(|result| match result {
 					Ok(r) => r,
 					Err(err) => {
-						tracing::error!("Join error for blocking RPC method: {:?}", err);
+						tracing::error!(target: LOG_TARGET, "Join error for blocking RPC method: {:?}", err);
 						MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
 					}
 				})
@@ -856,6 +857,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
 							tracing::warn!(
+								target: LOG_TARGET,
 								"Unsubscribe call `{}` failed: couldn't parse subscription id={:?} request id={:?}",
 								unsubscribe_method_name,
 								params,
@@ -871,6 +873,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					if !result {
 						tracing::debug!(
+							target: LOG_TARGET,
 							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
 							unsubscribe_method_name,
 							key,
