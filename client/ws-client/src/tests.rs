@@ -25,9 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
-use crate::types::error::{ErrorCode, ErrorObject};
 
+use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
+
 use jsonrpsee_core::client::{BatchResponse, ClientT, SubscriptionClientT};
 use jsonrpsee_core::client::{IdKind, Subscription};
 use jsonrpsee_core::params::BatchRequestBuilder;
@@ -68,8 +69,8 @@ async fn method_call_with_wrong_id_kind() {
 	let client =
 		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
 
-	let err: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
-	assert!(matches!(err, Err(Error::RestartNeeded(e)) if e == "request ID=0 is not a pending call"));
+	let err: Result<String, _> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
+	assert!(matches!(err, Err(Error::RestartNeeded(e)) if matches!(*e, Error::InvalidRequestId(_))));
 }
 
 #[tokio::test]
