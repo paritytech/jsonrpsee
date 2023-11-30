@@ -658,7 +658,8 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use jsonrpsee_server::{ServerBuilder, PingConfig};
 	///
 	/// // Set the ping interval to 10 seconds but terminate the connection if a client is inactive for more than 2 minutes
-	/// let builder = ServerBuilder::default().enable_ws_ping(PingConfig::new(Duration::from_secs(10), NonZeroUsize::new(1).unwrap(), Duration::from_secs(10))).unwrap();
+	/// let ping_cfg = PingConfig::new().ping_interval(Duration::from_secs(10)).inactive_limit(Duration::from_secs(60 * 2));
+	/// let builder = ServerBuilder::default().enable_ws_ping(ping_cfg);
 	/// ```
 	pub fn enable_ws_ping(mut self, config: PingConfig) -> Self {
 		self.server_cfg.ping_config = Some(config);
