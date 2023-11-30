@@ -48,15 +48,15 @@ pub enum EitherStream {
 }
 
 impl AsyncRead for EitherStream {
-	fn poll_read(self: Pin<&mut Self>, cx: &mut Context, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<Result<(), IoError>> {
+	fn poll_read(
+		self: Pin<&mut Self>,
+		cx: &mut Context,
+		buf: &mut tokio::io::ReadBuf<'_>,
+	) -> Poll<Result<(), IoError>> {
 		match self.project() {
-			EitherStreamProj::Plain(stream) => {
-				AsyncRead::poll_read(stream, cx, buf)
-			}
+			EitherStreamProj::Plain(stream) => AsyncRead::poll_read(stream, cx, buf),
 			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(stream) => {
-				AsyncRead::poll_read(stream, cx, buf)
-			}
+			EitherStreamProj::Tls(stream) => AsyncRead::poll_read(stream, cx, buf),
 		}
 	}
 }
@@ -64,37 +64,25 @@ impl AsyncRead for EitherStream {
 impl AsyncWrite for EitherStream {
 	fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<Result<usize, IoError>> {
 		match self.project() {
-			EitherStreamProj::Plain(stream) => {
-				AsyncWrite::poll_write(stream, cx, buf)
-			}
+			EitherStreamProj::Plain(stream) => AsyncWrite::poll_write(stream, cx, buf),
 			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(stream) => {
-				AsyncWrite::poll_write(stream, cx, buf)
-			}
+			EitherStreamProj::Tls(stream) => AsyncWrite::poll_write(stream, cx, buf),
 		}
 	}
 
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
 		match self.project() {
-			EitherStreamProj::Plain(stream) => {
-				AsyncWrite::poll_flush(stream, cx)
-			}
+			EitherStreamProj::Plain(stream) => AsyncWrite::poll_flush(stream, cx),
 			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(stream) => {
-				AsyncWrite::poll_flush(stream, cx)
-			}
+			EitherStreamProj::Tls(stream) => AsyncWrite::poll_flush(stream, cx),
 		}
 	}
 
 	fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
 		match self.project() {
-			EitherStreamProj::Plain(stream) => {
-				AsyncWrite::poll_shutdown(stream, cx)
-			}
+			EitherStreamProj::Plain(stream) => AsyncWrite::poll_shutdown(stream, cx),
 			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(stream) => {
-				AsyncWrite::poll_shutdown(stream, cx)
-			}
+			EitherStreamProj::Tls(stream) => AsyncWrite::poll_shutdown(stream, cx),
 		}
 	}
 }

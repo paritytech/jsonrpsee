@@ -37,7 +37,7 @@ use futures::stream::FuturesUnordered;
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
 	connect_over_socks_stream, init_logger, pipe_from_stream_and_drop, server, server_with_cors,
-	server_with_health_api, server_with_subscription, server_with_subscription_and_handle
+	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
@@ -220,8 +220,11 @@ async fn ws_method_call_str_id_works_over_proxy_stream() {
 
 	let socks_stream = connect_over_socks_stream(server_addr).await;
 
-	let client =
-		WsClientBuilder::default().id_format(IdKind::String).build_with_stream(&server_url, socks_stream).await.unwrap();
+	let client = WsClientBuilder::default()
+		.id_format(IdKind::String)
+		.build_with_stream(&server_url, socks_stream)
+		.await
+		.unwrap();
 	let response: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "hello");
 }

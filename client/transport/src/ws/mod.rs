@@ -40,12 +40,12 @@ use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use soketto::{connection, Data, Incoming};
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio_util::compat::{TokioAsyncReadCompatExt, Compat};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-pub use tokio::io::{AsyncRead, AsyncWrite};
 pub use http::{uri::InvalidUri, HeaderMap, HeaderValue, Uri};
 pub use soketto::handshake::client::Header;
 pub use stream::EitherStream;
+pub use tokio::io::{AsyncRead, AsyncWrite};
 pub use url::Url;
 
 const LOG_TARGET: &str = "jsonrpsee-client";
@@ -296,7 +296,10 @@ impl WsTransportClientBuilder {
 	/// Try to establish the connection.
 	///
 	/// Uses the default connection over TCP.
-	pub async fn build(self, uri: Url) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
+	pub async fn build(
+		self,
+		uri: Url,
+	) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
 		self.try_connect_over_tcp(uri).await
 	}
 
