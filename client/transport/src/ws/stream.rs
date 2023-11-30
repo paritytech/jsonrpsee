@@ -31,11 +31,9 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
-use futures_util::io::{IoSlice, IoSliceMut};
-use futures_util::*;
 use pin_project::pin_project;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 /// Stream to represent either a unencrypted or encrypted socket stream.
 #[pin_project(project = EitherStreamProj)]
@@ -50,38 +48,14 @@ pub enum EitherStream {
 }
 
 impl AsyncRead for EitherStream {
-	fn poll_read(self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]) -> Poll<Result<usize, IoError>> {
+	fn poll_read(self: Pin<&mut Self>, cx: &mut Context, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<Result<(), IoError>> {
 		match self.project() {
-			EitherStreamProj::Plain(s) => {
-				let compat = s.compat();
-				futures_util::pin_mut!(compat);
-				AsyncRead::poll_read(compat, cx, buf)
+			EitherStreamProj::Plain(stream) => {
+				AsyncRead::poll_read(stream, cx, buf)
 			}
 			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(t) => {
-				let compat = t.compat();
-				futures_util::pin_mut!(compat);
-				AsyncRead::poll_read(compat, cx, buf)
-			}
-		}
-	}
-
-	fn poll_read_vectored(
-		self: Pin<&mut Self>,
-		cx: &mut Context,
-		bufs: &mut [IoSliceMut],
-	) -> Poll<Result<usize, IoError>> {
-		match self.project() {
-			EitherStreamProj::Plain(s) => {
-				let compat = s.compat();
-				futures_util::pin_mut!(compat);
-				AsyncRead::poll_read_vectored(compat, cx, bufs)
-			}
-			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(t) => {
-				let compat = t.compat();
-				futures_util::pin_mut!(compat);
-				AsyncRead::poll_read_vectored(compat, cx, bufs)
+			EitherStreamProj::Tls(stream) => {
+				AsyncRead::poll_read(stream, cx, buf)
 			}
 		}
 	}
@@ -90,64 +64,36 @@ impl AsyncRead for EitherStream {
 impl AsyncWrite for EitherStream {
 	fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<Result<usize, IoError>> {
 		match self.project() {
-			EitherStreamProj::Plain(s) => {
-				let compat = s.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_write(compat, cx, buf)
+			EitherStreamProj::Plain(stream) => {
+				AsyncWrite::poll_write(stream, cx, buf)
 			}
 			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(t) => {
-				let compat = t.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_write(compat, cx, buf)
+			EitherStreamProj::Tls(stream) => {
+				AsyncWrite::poll_write(stream, cx, buf)
 			}
 		}
 	}
 
-	fn poll_write_vectored(self: Pin<&mut Self>, cx: &mut Context, bufs: &[IoSlice]) -> Poll<Result<usize, IoError>> {
+	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
 		match self.project() {
-			EitherStreamProj::Plain(s) => {
-				let compat = s.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_write_vectored(compat, cx, bufs)
+			EitherStreamProj::Plain(stream) => {
+				AsyncWrite::poll_flush(stream, cx)
 			}
 			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(t) => {
-				let compat = t.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_write_vectored(compat, cx, bufs)
+			EitherStreamProj::Tls(stream) => {
+				AsyncWrite::poll_flush(stream, cx)
 			}
 		}
 	}
 
-	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), IoError>> {
+	fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
 		match self.project() {
-			EitherStreamProj::Plain(s) => {
-				let compat = s.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_flush(compat, cx)
+			EitherStreamProj::Plain(stream) => {
+				AsyncWrite::poll_shutdown(stream, cx)
 			}
 			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(t) => {
-				let compat = t.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_flush(compat, cx)
-			}
-		}
-	}
-
-	fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), IoError>> {
-		match self.project() {
-			EitherStreamProj::Plain(s) => {
-				let compat = s.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_close(compat, cx)
-			}
-			#[cfg(feature = "__tls")]
-			EitherStreamProj::Tls(t) => {
-				let compat = t.compat_write();
-				futures_util::pin_mut!(compat);
-				AsyncWrite::poll_close(compat, cx)
+			EitherStreamProj::Tls(stream) => {
+				AsyncWrite::poll_shutdown(stream, cx)
 			}
 		}
 	}
