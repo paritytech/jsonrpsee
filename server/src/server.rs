@@ -296,14 +296,20 @@ pub struct PingConfig {
 	pub(crate) max_failures: NonZeroUsize,
 }
 
-impl PingConfig {
-	/// Create a new PingConfig.
-	pub fn new() -> Self {
+impl Default for PingConfig {
+	fn default() -> Self {
 		Self {
 			ping_interval: Duration::from_secs(30),
 			max_failures: NonZeroUsize::new(1).expect("1 > 0; qed"),
 			inactive_limit: Duration::from_secs(40),
 		}
+	}
+}
+
+impl PingConfig {
+	/// Create a new PingConfig.
+	pub fn new() -> Self {
+		Self::default()
 	}
 
 	/// Configure the interval when the WebSocket pings are sent out.
