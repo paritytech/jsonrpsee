@@ -10,7 +10,7 @@ use crate::client::{
 };
 use crate::error::Error;
 use crate::params::BatchRequestBuilder;
-use crate::tracing::{rx_log_from_json, tx_log_from_str};
+use crate::tracing::client::{rx_log_from_json, tx_log_from_str};
 use crate::traits::ToRpcParams;
 use crate::JsonRawValue;
 use std::borrow::Cow as StdCow;
@@ -39,6 +39,8 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
+
+const LOG_TARGET: &str = "jsonrpsee-client";
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ThreadSafeRequestManager(Arc<std::sync::Mutex<RequestManager>>);
@@ -668,7 +670,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 
 	match message {
 		Some(Ok(ReceivedMessage::Pong)) => {
-			tracing::debug!("Received pong");
+			tracing::debug!(target: LOG_TARGET, "Received pong");
 			Ok(None)
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
@@ -692,7 +694,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 	match message {
 		FrontToBack::Batch(batch) => {
 			if let Err(send_back) = manager.lock().insert_pending_batch(batch.ids.clone(), batch.send_back) {
-				tracing::warn!("[backend]: Batch request already pending: {:?}", batch.ids);
+				tracing::warn!(target: LOG_TARGET, "Batch request already pending: {:?}", batch.ids);
 				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!("{:?}", batch.ids)).into()));
 				return Ok(());
 			}
@@ -706,7 +708,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		// User called `request` on the front-end
 		FrontToBack::Request(request) => {
 			if let Err(send_back) = manager.lock().insert_pending_call(request.id.clone(), request.send_back) {
-				tracing::warn!("Denied duplicate method call");
+				tracing::warn!(target: LOG_TARGET, "Denied duplicate method call");
 
 				if let Some(s) = send_back {
 					let _ = s.send(Err(InvalidRequestId::Occupied(request.id.to_string()).into()));
@@ -724,7 +726,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				sub.send_back,
 				sub.unsubscribe_method,
 			) {
-				tracing::warn!("Denied duplicate subscription");
+				tracing::warn!(target: LOG_TARGET, "Denied duplicate subscription");
 
 				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!(
 					"sub_id={}:req_id={}",
@@ -738,7 +740,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User dropped a subscription.
 		FrontToBack::SubscriptionClosed(sub_id) => {
-			tracing::trace!("[backend]: Closing subscription: {:?}", sub_id);
+			tracing::trace!(target: LOG_TARGET, "Closing subscription: {:?}", sub_id);
 			// NOTE: The subscription may have been closed earlier if
 			// the channel was full or disconnected.
 
@@ -822,13 +824,13 @@ where
 					if let Err(e) =
 						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
 					{
-						tracing::error!("Could not send message: {e}");
+						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
 						break Err(Error::Transport(e.into()));
 					}
 				}
 				_ = ping.tick() => {
 					if let Err(err) = sender.send_ping().await {
-						tracing::error!("[backend]: Could not send ping frame: {err}");
+						tracing::error!(target: LOG_TARGET, "Could not send ping frame: {err}");
 						break Err(Error::Custom("Could not send ping frame".into()));
 					}
 				}
@@ -847,7 +849,7 @@ where
 					if let Err(e) =
 						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
 					{
-						tracing::error!("Could not send message: {e}");
+						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
 						break Err(Error::Transport(e.into()));
 					}
 				}
@@ -905,7 +907,7 @@ where
 						pending_unsubscribes.push(to_send_task.send(msg));
 					}
 					Err(e) => {
-						tracing::error!("[backend]: Failed to read message: {e}");
+						tracing::error!(target: LOG_TARGET, "Failed to read message: {e}");
 						break Err(e);
 					}
 					Ok(None) => (),

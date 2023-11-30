@@ -34,10 +34,11 @@ use std::{
 use futures_util::Future;
 use jsonrpsee_core::{
 	server::MethodResponse,
-	tracing::{rx_log_from_json, tx_log_from_str},
+	tracing::server::{rx_log_from_json, tx_log_from_str},
 };
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
+use tracing::{instrument::Instrumented, Instrument};
 
 use crate::middleware::rpc::RpcServiceT;
 
@@ -71,13 +72,13 @@ impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a>,
 {
-	type Future = ResponseFuture<S::Future>;
+	type Future = Instrumented<ResponseFuture<S::Future>>;
 
-	#[tracing::instrument(name = "method_call", skip(self, request), level = "trace")]
+	#[tracing::instrument(name = "method_call", skip_all, fields(method = request.method_name()), level = "trace")]
 	fn call(&self, request: Request<'a>) -> Self::Future {
 		rx_log_from_json(&request, self.max);
 
-		ResponseFuture { fut: self.service.call(request), max: self.max }
+		ResponseFuture { fut: self.service.call(request), max: self.max }.in_current_span()
 	}
 }
 
