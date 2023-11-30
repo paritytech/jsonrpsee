@@ -54,24 +54,29 @@ impl ThreadSafeRequestManager {
 		self.0.lock().expect("Not poisoned; qed")
 	}
 }
-
+/// If the background thread is terminated, this type
+/// can be used to read the error cause.
+///
+// NOTE: This is an AsyncRwLock to be &self.
 #[derive(Debug)]
-struct ErrorFromBack(AsyncRwLock<ReadErrorOnce>);
+struct ErrorFromBack(AsyncRwLock<Option<ReadErrorOnce>>);
 
 impl ErrorFromBack {
 	fn new(unread: oneshot::Receiver<Error>) -> Self {
-		Self(AsyncRwLock::new(ReadErrorOnce::Unread(unread)))
+		Self(AsyncRwLock::new(Some(ReadErrorOnce::Unread(unread))))
 	}
 
 	async fn read_error(&self) -> Error {
-		if let ReadErrorOnce::Read(ref err) = *self.0.read().await {
+		const PROOF: &str = "Option is only is used to workaround ownership issue and is always Some; qed";
+
+		if let ReadErrorOnce::Read(ref err) = self.0.read().await.as_ref().expect(PROOF) {
 			return Error::RestartNeeded(err.clone());
 		};
 
 		let mut write = self.0.write().await;
-		let state = std::mem::replace(&mut *write, ReadErrorOnce::Unreachable);
+		let state = write.take();
 
-		let err = match state {
+		let err = match state.expect(PROOF) {
 			ReadErrorOnce::Unread(rx) => {
 				let arc_err = Arc::new(match rx.await {
 					Ok(err) => err,
@@ -80,14 +85,13 @@ impl ErrorFromBack {
 					// be emitted.
 					Err(_) => Error::Custom("Error reason could not be found. This is a bug. Please open an issue.".to_string()),
 				});
-				*write = ReadErrorOnce::Read(arc_err.clone());
+				*write = Some(ReadErrorOnce::Read(arc_err.clone()));
 				arc_err
 			}
 			ReadErrorOnce::Read(arc_err) => {
-				*write = ReadErrorOnce::Read(arc_err.clone());
+				*write = Some(ReadErrorOnce::Read(arc_err.clone()));
 				arc_err
 			}
-			ReadErrorOnce::Unreachable => unreachable!(),
 		};
 
 		Error::RestartNeeded(err)
@@ -104,8 +108,6 @@ enum ReadErrorOnce {
 	Read(Arc<Error>),
 	/// Error message is unread.
 	Unread(oneshot::Receiver<Error>),
-	/// Unreachable to able to workaround ownership issues.
-	Unreachable,
 }
 
 /// Builder for [`Client`].
@@ -301,8 +303,6 @@ impl ClientBuilder {
 pub struct Client {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
-	/// If the background thread terminates the error is sent to this channel.
-	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: ErrorFromBack,
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
@@ -327,8 +327,8 @@ impl Client {
 		!self.to_back.is_closed()
 	}
 
-	/// This is similar to to [`Client::on_disconnect`] but it can be used to get
-	/// reason why the client was disconnected but it's not cancel-safe.
+	/// This is similar to [`Client::on_disconnect`] but it can be used to get
+	/// the reason why the client was disconnected but it's not cancel-safe.
 	/// 
 	/// The typical use-case is that this method will be called after
 	/// [`Client::on_disconnect`] has returned in a "select loop".
