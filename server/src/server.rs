@@ -27,13 +27,14 @@
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
+use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, IntervalStream, ServerHandle, StopHandle};
+use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -142,7 +143,6 @@ where
 			match try_accept_conn(&listener, stopped).await {
 				AcceptConnection::Established { socket, remote_addr, stop } => {
 
-
 					process_connection(ProcessConnection {
 						http_middleware: &self.http_middleware,
 						rpc_middleware: self.rpc_middleware.clone(),
@@ -199,7 +199,7 @@ pub struct ServerConfig {
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
 	pub(crate) message_buffer_capacity: u32,
 	/// Ping settings.
-	pub(crate) ping_config: PingConfig,
+	pub(crate) ping_config: Option<PingConfig>,
 	/// ID provider.
 	pub(crate) id_provider: Arc<dyn IdProvider>,
 }
@@ -223,7 +223,7 @@ pub struct ServerConfigBuilder {
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
 	message_buffer_capacity: u32,
 	/// Ping settings.
-	ping_config: PingConfig,
+	ping_config: Option<PingConfig>,
 	/// ID provider.
 	id_provider: Arc<dyn IdProvider>,
 }
@@ -273,54 +273,60 @@ impl ConnectionState {
 	}
 }
 
-/// Configuration for WebSocket ping's.
+/// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect inactive
+/// clients.
 ///
-/// If the server sends out a ping then remote peer must reply with a corresponding pong message.
+/// It's possible to configure how often pings are sent out and how long the server will
+/// wait until a client is determined as "inactive".
 ///
-/// It's possible to just send out pings then don't care about response
-/// or terminate the connection if the ping isn't replied to the configured `max_inactivity` limit.
+/// jsonrpsee doesn't associate the ping/pong frames just that if
+/// pong frame isn't received within `inactive_limit` it's regarded
+/// as missed.
 ///
-/// NOTE: It's possible that a `ping` may be backpressured and if you expect a connection
-/// to be reassumed after interruption it's not recommended to enable the activity check.
+/// Such that the `inactive_limit` should be configured to longer than a single
+/// WebSocket ping takes or it might be missed and may end up
+/// terminating the connection.
 #[derive(Debug, Copy, Clone)]
-pub enum PingConfig {
-	/// The server pings the connected clients continuously at the configured interval but
-	/// doesn't disconnect them if no pongs are received from the client.
-	OnlyPing(Duration),
-	/// The server pings the connected clients continuously at the configured interval
-	/// and terminates the connection if no websocket messages received from client
-	/// after the max limit is exceeded.
-	Ping {
-		/// Time interval between consequent pings from server
-		ping_interval: Duration,
-		/// Max allowed time for connection to stay idle
-		inactive_limit: Duration,
-	},
-	/// Pings are disabled.
-	Disabled,
+pub struct PingConfig {
+	/// Period which the server pings the connected client.
+	pub(crate) ping_interval: Duration,
+	/// Max allowed time for a connection to stay idle.
+	pub(crate) inactive_limit: Duration,
+	/// Max failures.
+	pub(crate) max_failures: NonZeroUsize,
 }
 
 impl PingConfig {
-	pub(crate) fn ping_interval(&self) -> IntervalStream {
-		match self {
-			Self::OnlyPing(ping_interval) => IntervalStream::new(*ping_interval),
-			Self::Ping { ping_interval, .. } => IntervalStream::new(*ping_interval),
-			Self::Disabled => IntervalStream::pending(),
+	/// Create a new PingConfig.
+	pub fn new() -> Self {
+		Self {
+			ping_interval: Duration::from_secs(30),
+			max_failures: NonZeroUsize::new(1).expect("1 > 0; qed"),
+			inactive_limit: Duration::from_secs(40),
 		}
 	}
 
-	pub(crate) fn inactive_limit(&self) -> Option<Duration> {
-		if let Self::Ping { inactive_limit, .. } = self {
-			Some(*inactive_limit)
-		} else {
-			None
-		}
+	/// Configure the interval when the WebSocket pings are sent out.
+	pub fn ping_interval(mut self, ping_interval: Duration) -> Self {
+		self.ping_interval = ping_interval;
+		self
 	}
-}
 
-impl Default for PingConfig {
-	fn default() -> Self {
-		Self::OnlyPing(Duration::from_secs(60))
+	/// Configure how long to wait until for WebSocket pong.
+	/// When this limit is expired it's regarded as the client is unresponsive.
+	///
+	/// You may configure how many times the client is allowed to be "inactive" by
+	/// [`PingConfig::max_failures`].
+	pub fn inactive_limit(mut self, inactivity_limit: Duration) -> Self {
+		self.inactive_limit = inactivity_limit;
+		self
+	}
+
+	/// Configure how many times the remote peer is allowed be
+	/// inactive until the connection is closed.
+	pub fn max_failures(mut self, max: NonZeroUsize) -> Self {
+		self.max_failures = max;
+		self
 	}
 }
 
@@ -336,7 +342,7 @@ impl Default for ServerConfig {
 			enable_http: true,
 			enable_ws: true,
 			message_buffer_capacity: 1024,
-			ping_config: PingConfig::OnlyPing(Duration::from_secs(60)),
+			ping_config: None,
 			id_provider: Arc::new(RandomIntegerIdProvider),
 		}
 	}
@@ -424,16 +430,16 @@ impl ServerConfigBuilder {
 		self
 	}
 
-	/// See [`Builder::ping_interval`] for documentation.
-	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
-		if let PingConfig::Ping { ping_interval, inactive_limit } = config {
-			if ping_interval >= inactive_limit {
-				return Err(Error::Custom("`inactive_limit` must be bigger than `ping_interval` to work".into()));
-			}
-		}
-
-		self.ping_config = config;
+	/// See [`Builder::enable_ws_ping`] for documentation.
+	pub fn enable_ws_ping(mut self, config: PingConfig) -> Result<Self, Error> {
+		self.ping_config = Some(config);
 		Ok(self)
+	}
+
+	/// See [`Builder::disable_ws_ping`] for documentation.
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.ping_config = None;
+		self
 	}
 
 	/// See [`Builder::set_id_provider`] for documentation.
@@ -635,31 +641,30 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
-	/// Configure the interval at which pings are submitted,
-	/// and optionally enable connection inactivity check
+	/// Enable WebSocket pings on the server.
 	///
-	/// This option is used to keep the connection alive, and can be configured to just submit `Ping` frames or with extra parameter, configuring max interval when a `Pong` frame should be received
-	///
-	/// Default: ping interval is set to 60 seconds and the inactivity check is disabled
+	/// Default: pings are disabled.
 	///
 	/// # Examples
 	///
 	/// ```rust
-	/// use std::time::Duration;
+	/// use std::{time::Duration, num::NonZeroUsize};
 	/// use jsonrpsee_server::{ServerBuilder, PingConfig};
 	///
 	/// // Set the ping interval to 10 seconds but terminate the connection if a client is inactive for more than 2 minutes
-	/// let builder = ServerBuilder::default().ping_interval(PingConfig::Ping { ping_interval: Duration::from_secs(10), inactive_limit: Duration::from_secs(2 * 60) }).unwrap();
+	/// let builder = ServerBuilder::default().enable_ws_ping(PingConfig::new(Duration::from_secs(10), NonZeroUsize::new(1).unwrap(), Duration::from_secs(10))).unwrap();
 	/// ```
-	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
-		if let PingConfig::Ping { ping_interval, inactive_limit } = config {
-			if ping_interval >= inactive_limit {
-				return Err(Error::Custom("`inactive_limit` must be bigger than `ping_interval` to work".into()));
-			}
-		}
+	pub fn enable_ws_ping(mut self, config: PingConfig) -> Self {
+		self.server_cfg.ping_config = Some(config);
+		self
+	}
 
-		self.server_cfg.ping_config = config;
-		Ok(self)
+	/// Disable WebSocket ping/pong on the server.
+	///
+	/// Default: pings are disabled.
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.server_cfg.ping_config = None;
+		self
 	}
 
 	/// Configure custom `subscription ID` provider for the server to use

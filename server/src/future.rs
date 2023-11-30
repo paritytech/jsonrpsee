@@ -34,7 +34,7 @@ use futures_util::{Stream, StreamExt};
 use jsonrpsee_core::Error;
 use pin_project::pin_project;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
-use tokio::time::{interval_at, Instant};
+use tokio::time::Interval;
 
 /// Create channel to determine whether
 /// the server shall continue to run or not.
@@ -136,9 +136,7 @@ impl IntervalStream {
 	}
 
 	/// Creates a stream which produces elements with interval of `period`.
-	pub(crate) fn new(period: std::time::Duration) -> Self {
-		let first_tick = Instant::now() + period;
-		let interval = interval_at(first_tick, period);
+	pub(crate) fn new(interval: Interval) -> Self {
 		Self(Some(tokio_stream::wrappers::IntervalStream::new(interval)))
 	}
 }

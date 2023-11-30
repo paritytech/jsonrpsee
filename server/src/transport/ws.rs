@@ -19,6 +19,7 @@ use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 
 use tokio::sync::{mpsc, oneshot};
+use tokio::time::{interval, interval_at};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
@@ -175,10 +176,16 @@ where
 async fn send_task(
 	rx: mpsc::Receiver<String>,
 	mut ws_sender: Sender,
-	ping_config: PingConfig,
+	ping_config: Option<PingConfig>,
 	stop: oneshot::Receiver<()>,
 ) {
-	let ping_interval = ping_config.ping_interval();
+	let ping_interval = match ping_config {
+		None => IntervalStream::pending(),
+		// NOTE: we are emitted a tick here immidiately to sync
+		// with how the receive task work because it starts measuring the pong
+		// when it starts up.
+		Some(p) => IntervalStream::new(interval(p.ping_interval)),
+	};
 	let rx = ReceiverStream::new(rx);
 
 	tokio::pin!(ping_interval, rx, stop);
@@ -240,16 +247,17 @@ enum Receive<S> {
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.
-async fn try_recv<T, S>(ws_stream: &mut T, mut stopped: S, ping_config: PingConfig) -> Receive<S>
+async fn try_recv<T, S>(ws_stream: &mut T, mut stopped: S, ping_config: Option<PingConfig>) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
 	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
 {
 	let mut last_active = Instant::now();
-	let inactivity_check = match ping_config.inactive_limit() {
-		Some(period) => IntervalStream::new(period),
+	let inactivity_check = match ping_config {
+		Some(p) => IntervalStream::new(interval_at(tokio::time::Instant::now() + p.ping_interval, p.ping_interval)),
 		None => IntervalStream::pending(),
 	};
+	let mut missed = 0;
 
 	tokio::pin!(inactivity_check);
 
@@ -271,11 +279,14 @@ where
 			Either::Left((Either::Left((Some(Err(e)), _)), s)) => break Receive::Err(e, s),
 			// Max inactivity timeout fired, check if the connection has been idle too long.
 			Either::Left((Either::Right((_instant, rcv)), s)) => {
-				let inactive_limit_exceeded =
-					ping_config.inactive_limit().map_or(false, |duration| last_active.elapsed() > duration);
+				if let Some(p) = ping_config {
+					if last_active.elapsed() > p.inactive_limit {
+						missed += 1;
 
-				if inactive_limit_exceeded {
-					break Receive::Err(SokettoError::Closed, s);
+						if missed >= p.max_failures.get() {
+							break Receive::ConnectionClosed;
+						}
+					}
 				}
 
 				stopped = s;

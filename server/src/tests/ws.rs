@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
 use crate::server::BatchRequestConfig;
@@ -880,8 +881,7 @@ async fn server_with_infinite_call(
 ) -> (crate::ServerHandle, std::net::SocketAddr) {
 	let server = ServerBuilder::default()
 		// Make sure that the ping_interval doesn't force the connection to be closed
-		.ping_interval(crate::server::PingConfig::OnlyPing(timeout))
-		.unwrap()
+		.enable_ws_ping(crate::server::PingConfig::new().max_failures(NonZeroUsize::MAX).ping_interval(timeout))
 		.build("127.0.0.1:0")
 		.with_default_timeout()
 		.await
