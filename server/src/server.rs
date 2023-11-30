@@ -319,7 +319,7 @@ impl PingConfig {
 		self
 	}
 
-	/// Configure how long to wait until for WebSocket pong.
+	/// Configure how long to wait for the WebSocket pong.
 	/// When this limit is expired it's regarded as the client is unresponsive.
 	///
 	/// You may configure how many times the client is allowed to be "inactive" by
