@@ -4,7 +4,7 @@ use std::time::Instant;
 use crate::future::IntervalStream;
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
-use crate::PingConfig;
+use crate::{PingConfig, LOG_TARGET};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -39,7 +39,7 @@ pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Resul
 }
 
 pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
-	tracing::debug!("Send ping");
+	tracing::debug!(target: LOG_TARGET, "Send ping");
 	// Submit empty slice as "optional" parameter.
 	let slice: &[u8] = &[];
 	// Byte slice fails if the provided slice is larger than 125 bytes.
@@ -114,12 +114,12 @@ where
 
 				match err {
 					SokettoError::Closed => {
-						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn.conn_id);
 						break Ok(Shutdown::ConnectionClosed);
 					}
 					SokettoError::MessageTooLarge { current, maximum } => {
 						tracing::debug!(
-							"WS transport error: request length: {} exceeded max limit: {} bytes",
+							target: LOG_TARGET,
+							"WS recv error: message too large current={}/max={}",
 							current,
 							maximum
 						);
@@ -130,7 +130,7 @@ where
 						continue;
 					}
 					err => {
-						tracing::debug!("WS transport error: {}; terminate connection: {}", err, conn.conn_id);
+						tracing::debug!(target: LOG_TARGET, "WS error: {}; terminate connection: {}", err, conn.conn_id);
 						break Err(err);
 					}
 				};
@@ -203,7 +203,7 @@ async fn send_task(
 			Either::Left((Some(response), not_ready)) => {
 				// If websocket message send fail then terminate the connection.
 				if let Err(err) = send_message(&mut ws_sender, response).await {
-					tracing::debug!("WS transport error: send failed: {}", err);
+					tracing::debug!(target: LOG_TARGET, "WS send error: {}", err);
 					break;
 				}
 
@@ -220,7 +220,7 @@ async fn send_task(
 			Either::Right((Either::Left((_instant, _stopped)), next_rx)) => {
 				stop = _stopped;
 				if let Err(err) = send_ping(&mut ws_sender).await {
-					tracing::debug!("WS transport error: send ping failed: {}", err);
+					tracing::debug!(target: LOG_TARGET, "WS send ping error: {}", err);
 					break;
 				}
 
@@ -326,7 +326,7 @@ async fn graceful_shutdown<S>(
 			_ = graceful_shutdown => {}
 			res = disconnect => {
 				if let Err(err) = res {
-					tracing::warn!("Graceful shutdown terminated because of error: `{err}`");
+					tracing::warn!(target: LOG_TARGET, "Graceful shutdown terminated because of error: `{err}`");
 				}
 			}
 			_ = conn_tx.closed() => {}
@@ -427,7 +427,7 @@ where
 				let upgraded = match hyper::upgrade::on(req).await {
 					Ok(u) => u,
 					Err(e) => {
-						tracing::debug!("Could not upgrade connection: {}", e);
+						tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
 						return;
 					}
 				};
@@ -454,7 +454,7 @@ where
 			Ok((response.map(|()| hyper::Body::empty()), fut))
 		}
 		Err(e) => {
-			tracing::debug!("Could not upgrade connection: {}", e);
+			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
 			Err(hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}"))))
 		}
 	}

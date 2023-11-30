@@ -50,7 +50,6 @@ impl TransportSenderT for Sender {
 	type Error = Error;
 
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
-		tracing::trace!("tx: {:?}", msg);
 		self.0.send(Message::Text(msg)).await.map_err(|e| Error::WebSocket(e))?;
 		Ok(())
 	}
@@ -62,14 +61,10 @@ impl TransportReceiverT for Receiver {
 
 	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
 		match self.0.next().await {
-			Some(Ok(msg)) => {
-				tracing::trace!("rx: {:?}", msg);
-
-				match msg {
-					Message::Bytes(bytes) => Ok(ReceivedMessage::Bytes(bytes)),
-					Message::Text(txt) => Ok(ReceivedMessage::Text(txt)),
-				}
-			}
+			Some(Ok(msg)) => match msg {
+				Message::Bytes(bytes) => Ok(ReceivedMessage::Bytes(bytes)),
+				Message::Text(txt) => Ok(ReceivedMessage::Text(txt)),
+			},
 			Some(Err(err)) => Err(Error::WebSocket(err)),
 			None => Err(Error::SenderDisconnected),
 		}

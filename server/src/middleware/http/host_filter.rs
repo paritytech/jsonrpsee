@@ -28,6 +28,7 @@
 
 use crate::middleware::http::authority::{Authority, AuthorityError, Port};
 use crate::transport::http;
+use crate::LOG_TARGET;
 use futures_util::{Future, FutureExt, TryFutureExt};
 use hyper::{Body, Request, Response};
 use route_recognizer::Router;
@@ -117,7 +118,7 @@ where
 		if self.filter.as_ref().map_or(true, |f| f.recognize(&authority)) {
 			Box::pin(self.inner.call(request).map_err(Into::into))
 		} else {
-			tracing::debug!("Denied request: {:?}", request);
+			tracing::debug!(target: LOG_TARGET, "Denied request: {:?}", request);
 			async { Ok(http::response::host_not_allowed()) }.boxed()
 		}
 	}

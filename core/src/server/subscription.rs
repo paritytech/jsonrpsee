@@ -27,6 +27,7 @@
 //! Subscription related types and traits for server implementations.
 
 use super::helpers::{MethodResponse, MethodSink};
+use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
 use crate::{traits::IdProvider, Error, StringError};
@@ -424,7 +425,7 @@ pub struct Subscription {
 impl Subscription {
 	/// Close the subscription channel.
 	pub fn close(&mut self) {
-		tracing::trace!("[Subscription::close] Notifying");
+		tracing::trace!(target: LOG_TARGET, "[Subscription::close] Notifying");
 		self.rx.close();
 	}
 
@@ -437,7 +438,7 @@ impl Subscription {
 	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), Error>> {
 		let raw = self.rx.recv().await?;
 
-		tracing::debug!("[Subscription::next]: rx {}", raw);
+		tracing::debug!(target: LOG_TARGET, "[Subscription::next]: rx {}", raw);
 
 		// clippy complains about this but it doesn't compile without the extra res binding.
 		#[allow(clippy::let_and_return)]

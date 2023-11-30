@@ -56,14 +56,14 @@ where
 
 	futures_util::pin_mut!(body);
 
-	// only allocate up to 16KB initially
+	// Allocate up to 16KB initially.
 	let mut received_data = Vec::with_capacity(std::cmp::min(body_size as usize, 16 * 1024));
 	let mut is_single = None;
 
 	while let Some(d) = body.data().await {
 		let data = d.map_err(|e| GenericTransportError::Inner(anyhow!(e.into())))?;
 
-		// if it's the first chunk, trim the whitespaces to determine whether it's valid JSON-RPC call.
+		// If it's the first chunk, trim the whitespaces to determine whether it's valid JSON-RPC call.
 		if received_data.is_empty() {
 			let first_non_whitespace =
 				data.chunk().iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
@@ -98,6 +98,7 @@ where
 	match is_single {
 		Some(single) if !received_data.is_empty() => {
 			tracing::trace!(
+				target: "jsonrpsee-http",
 				"HTTP response body: {}",
 				std::str::from_utf8(&received_data).unwrap_or("Invalid UTF-8 data")
 			);
