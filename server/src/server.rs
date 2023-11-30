@@ -301,10 +301,10 @@ pub enum PingConfig {
 }
 
 impl PingConfig {
-	pub(crate) async fn ping_interval(&self) -> IntervalStream {
+	pub(crate) fn ping_interval(&self) -> IntervalStream {
 		match self {
-			Self::OnlyPing(ping_interval) => IntervalStream::new(*ping_interval).await,
-			Self::Ping { ping_interval, .. } => IntervalStream::new(*ping_interval).await,
+			Self::OnlyPing(ping_interval) => IntervalStream::new(*ping_interval),
+			Self::Ping { ping_interval, .. } => IntervalStream::new(*ping_interval),
 			Self::Disabled => IntervalStream::pending(),
 		}
 	}

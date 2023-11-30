@@ -178,7 +178,7 @@ async fn send_task(
 	ping_config: PingConfig,
 	stop: oneshot::Receiver<()>,
 ) {
-	let ping_interval = ping_config.ping_interval().await;
+	let ping_interval = ping_config.ping_interval();
 	let rx = ReceiverStream::new(rx);
 
 	tokio::pin!(ping_interval, rx, stop);
@@ -247,7 +247,7 @@ where
 {
 	let mut last_active = Instant::now();
 	let inactivity_check = match ping_config.inactive_limit() {
-		Some(period) => IntervalStream::new(period).await,
+		Some(period) => IntervalStream::new(period),
 		None => IntervalStream::pending(),
 	};
 
@@ -279,7 +279,6 @@ where
 				}
 
 				stopped = s;
-
 				futs = futures_util::future::select(rcv, inactivity_check.next());
 			}
 			// Server has been stopped.

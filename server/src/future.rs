@@ -26,18 +26,15 @@
 
 //! Utilities for handling async code.
 
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
+
 use futures_util::{Stream, StreamExt};
 use jsonrpsee_core::Error;
 use pin_project::pin_project;
-use std::{
-	pin::Pin,
-	sync::Arc,
-	task::{Context, Poll},
-};
-use tokio::{
-	sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError},
-	time::interval,
-};
+use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
+use tokio::time::{interval_at, Instant};
 
 /// Create channel to determine whether
 /// the server shall continue to run or not.
@@ -138,11 +135,10 @@ impl IntervalStream {
 		Self(None)
 	}
 
-	/// Creates a stream which produces elements with `period`.
-	pub(crate) async fn new(period: std::time::Duration) -> Self {
-		let mut interval = interval(period);
-		interval.tick().await;
-
+	/// Creates a stream which produces elements with interval of `period`.
+	pub(crate) fn new(period: std::time::Duration) -> Self {
+		let first_tick = Instant::now() + period;
+		let interval = interval_at(first_tick, period);
 		Self(Some(tokio_stream::wrappers::IntervalStream::new(interval)))
 	}
 }
