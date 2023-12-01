@@ -4,12 +4,69 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.20.0] - 2023-08-11
+
+Another breaking release where the major changes are:
+- `host filtering` has been moved to tower middleware instead of the server API.
+- the clients now supports default port number such `wss://my.server.com`
+- the background task for the async client has been refactored to multiplex send and read operations.
+
+Regarding host filtering prior to this release one had to do:
+
+```rust
+let acl = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
+let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
+```
+
+After this release then one have to do:
+
+```rust
+let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::new(["example.com"]).unwrap());
+let server = Server::builder().set_middleware(middleware).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+```
+
+Thanks to the external contributors [@polachok](https://github.com/polachok), [@bobs4462](https://github.com/bobs4462) and [@aj3n](https://github.com/aj3n) that contributed to this release.
+
+### [Added]
+- feat(server): add `SubscriptionMessage::new` ([#1176](https://github.com/paritytech/jsonrpsee/pull/1176))
+- feat(server): add `SubscriptionSink::connection_id` ([#1175](https://github.com/paritytech/jsonrpsee/pull/1175))
+- feat(server): add `Params::get` ([#1173](https://github.com/paritytech/jsonrpsee/pull/1173))
+- feat(server): add `PendingSubscriptionSink::connection_id` ([#1163](https://github.com/paritytech/jsonrpsee/pull/1163))
+
+### [Fixed]
+- fix(server): host filtering URI read authority ([#1178](https://github.com/paritytech/jsonrpsee/pull/1178))
+
+### [Changed]
+- refactor: make ErrorObject::borrowed accept `&str`  ([#1160](https://github.com/paritytech/jsonrpsee/pull/1160))
+- refactor(client): support default port number  ([#1172](https://github.com/paritytech/jsonrpsee/pull/1172))
+- refactor(server): server host filtering  ([#1174](https://github.com/paritytech/jsonrpsee/pull/1174))
+- refactor(client): refactor background task  ([#1145](https://github.com/paritytech/jsonrpsee/pull/1145))
+- refactor: use `RootCertStore::add_trust_anchors`  ([#1165](https://github.com/paritytech/jsonrpsee/pull/1165))
+- chore(deps): update criterion v0.5 and pprof 0.12  ([#1161](https://github.com/paritytech/jsonrpsee/pull/1161))
+- chore(deps): update webpki-roots requirement from 0.24 to 0.25  ([#1158](https://github.com/paritytech/jsonrpsee/pull/1158))
+- refactor(server): move host filtering to tower middleware  ([#1179](https://github.com/paritytech/jsonrpsee/pull/1179))
+
+## [v0.19.0] - 2023-07-20
+
+### [Fixed]
+
+- Fixed connections processing await on server shutdown  ([#1153](https://github.com/paritytech/jsonrpsee/pull/1153))
+- fix: include error code in RpcLogger  ([#1135](https://github.com/paritytech/jsonrpsee/pull/1135))
+- fix: downgrade more logs to `debug`  ([#1127](https://github.com/paritytech/jsonrpsee/pull/1127))
+- fix(server): remove `MethodSinkPermit` to fix backpressure issue on concurrent subscriptions  ([#1126](https://github.com/paritytech/jsonrpsee/pull/1126))
+- fix readme links  ([#1152](https://github.com/paritytech/jsonrpsee/pull/1152))
+
+### [Changed]
+
+- server: downgrade connection logs to debug  ([#1123](https://github.com/paritytech/jsonrpsee/pull/1123))
+- refactor(server): make `Server::start` infallible and add `fn builder()`  ([#1137](https://github.com/paritytech/jsonrpsee/pull/1137))
 
 ## [v0.18.2] - 2023-05-10
 
 This release improves error message for `too big batch response` and exposes the `BatchRequestConfig type` in order to make it possible to use `ServerBuilder::set_batch_request_config`
 
-### Fixed
+### [Fixed]
+
 - server: export BatchRequestConfig  ([#1112](https://github.com/paritytech/jsonrpsee/pull/1112))
 - fix(server): improve too big batch response msg  ([#1107](https://github.com/paritytech/jsonrpsee/pull/1107))
 
@@ -18,10 +75,12 @@ This release improves error message for `too big batch response` and exposes the
 This release fixes a couple bugs and improves the ergonomics for the HTTP client
 when no tower middleware is enabled.
 
-### Changed
+### [Changed]
+
 - http client: add default generic param for the backend ([#1099](https://github.com/paritytech/jsonrpsee/pull/1099))
 
-### Fixed
+### [Fixed]
+
 - rpc module: fix race in subscription close callback  ([#1098](https://github.com/paritytech/jsonrpsee/pull/1098))
 - client: add missing batch request tracing span  ([#1097](https://github.com/paritytech/jsonrpsee/pull/1097))
 - ws server: don't wait for graceful shutdown when connection already closed  ([#1103](https://github.com/paritytech/jsonrpsee/pull/1103))

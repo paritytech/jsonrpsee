@@ -36,8 +36,8 @@ use std::time::Duration;
 use futures::stream::FuturesUnordered;
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
-	init_logger, pipe_from_stream_and_drop, server, server_with_access_control, server_with_health_api,
-	server_with_subscription, server_with_subscription_and_handle,
+	connect_over_socks_stream, init_logger, pipe_from_stream_and_drop, server, server_with_cors,
+	server_with_health_api, server_with_subscription, server_with_subscription_and_handle, DataStream,
 };
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
@@ -45,6 +45,7 @@ use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::JsonValue;
 use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -53,6 +54,8 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
+
+use crate::helpers::server_with_sleeping_subscription;
 
 #[tokio::test]
 async fn ws_subscription_works() {
@@ -75,36 +78,68 @@ async fn ws_subscription_works() {
 }
 
 #[tokio::test]
-async fn ws_unsubscription_works() {
+async fn ws_subscription_works_over_proxy_stream() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
-	let server_url = format!("ws://{}", server_addr);
-	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
+	let target_url = format!("ws://{}", server_addr);
 
-	let mut sub: Subscription<usize> =
+	let socks_stream = connect_over_socks_stream(server_addr).await;
+	let data_stream = DataStream::new(socks_stream);
+
+	let client = WsClientBuilder::default().build_with_stream(target_url, data_stream).await.unwrap();
+
+	let mut hello_sub: Subscription<String> =
+		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+	let mut foo_sub: Subscription<u64> =
 		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 
-	// It's technically possible to have race-conditions between the notifications and the unsubscribe message.
-	// So let's wait for the first notification and then unsubscribe.
-	let _item = sub.next().await.unwrap().unwrap();
+	for _ in 0..10 {
+		let hello = hello_sub.next().await.unwrap().unwrap();
+		let foo = foo_sub.next().await.unwrap().unwrap();
+		assert_eq!(hello, "hello from subscription".to_string());
+		assert_eq!(foo, 1337);
+	}
+}
+
+#[tokio::test]
+async fn ws_unsubscription_works() {
+	init_logger();
+
+	let (tx, mut rx) = futures::channel::mpsc::channel(1);
+	let server_addr = server_with_sleeping_subscription(tx).await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let sub: Subscription<usize> =
+		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
 
 	sub.unsubscribe().await.unwrap();
 
-	let mut success = false;
+	let res = rx.next().with_default_timeout().await.expect("Test must complete in 1 min");
+	// When the subscription is closed a message is sent out on this channel.
+	assert!(res.is_some());
+}
 
-	// Wait until a slot is available, as only one concurrent call is allowed.
-	// Then when this finishes we know that unsubscribe call has been finished.
-	for _ in 0..30 {
-		let res: Result<String, _> = client.request("say_hello", rpc_params![]).await;
-		if res.is_ok() {
-			success = true;
-			break;
-		}
-		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-	}
+#[tokio::test]
+async fn ws_unsubscription_works_over_proxy_stream() {
+	init_logger();
 
-	assert!(success);
+	let (tx, mut rx) = futures::channel::mpsc::channel(1);
+	let server_addr = server_with_sleeping_subscription(tx).await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let stream = DataStream::new(connect_over_socks_stream(server_addr).await);
+	let client = WsClientBuilder::default().build_with_stream(&server_url, stream).await.unwrap();
+
+	let sub: Subscription<usize> =
+		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
+
+	sub.unsubscribe().await.unwrap();
+
+	let res = rx.next().with_default_timeout().await.expect("Test must complete in 1 min");
+	// When the subscription is closed a message is sent out on this channel.
+	assert!(res.is_some());
 }
 
 #[tokio::test]
@@ -114,6 +149,27 @@ async fn ws_subscription_with_input_works() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let mut add_one: Subscription<u64> =
+		client.subscribe("subscribe_add_one", rpc_params![1], "unsubscribe_add_one").await.unwrap();
+
+	for i in 2..4 {
+		let next = add_one.next().await.unwrap().unwrap();
+		assert_eq!(next, i);
+	}
+}
+
+#[tokio::test]
+async fn ws_subscription_with_input_works_over_proxy_stream() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let socks_stream = connect_over_socks_stream(server_addr).await;
+	let data_stream = DataStream::new(socks_stream);
+
+	let client = WsClientBuilder::default().build_with_stream(&server_url, data_stream).await.unwrap();
+
 	let mut add_one: Subscription<u64> =
 		client.subscribe("subscribe_add_one", rpc_params![1], "unsubscribe_add_one").await.unwrap();
 
@@ -135,12 +191,43 @@ async fn ws_method_call_works() {
 }
 
 #[tokio::test]
+async fn ws_method_call_works_over_proxy_stream() {
+	init_logger();
+
+	let server_addr = server().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let socks_stream = connect_over_socks_stream(server_addr).await;
+	let data_stream = DataStream::new(socks_stream);
+
+	let client = WsClientBuilder::default().build_with_stream(&server_url, data_stream).await.unwrap();
+	let response: String = client.request("say_hello", rpc_params![]).await.unwrap();
+	assert_eq!(&response, "hello");
+}
+
+#[tokio::test]
 async fn ws_method_call_str_id_works() {
 	init_logger();
 
 	let server_addr = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().id_format(IdKind::String).build(&server_url).await.unwrap();
+	let response: String = client.request("say_hello", rpc_params![]).await.unwrap();
+	assert_eq!(&response, "hello");
+}
+
+#[tokio::test]
+async fn ws_method_call_str_id_works_over_proxy_stream() {
+	init_logger();
+
+	let server_addr = server().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let socks_stream = connect_over_socks_stream(server_addr).await;
+	let data_stream = DataStream::new(socks_stream);
+
+	let client =
+		WsClientBuilder::default().id_format(IdKind::String).build_with_stream(&server_url, data_stream).await.unwrap();
 	let response: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "hello");
 }
@@ -255,7 +342,7 @@ async fn ws_subscription_several_clients_with_drop() {
 }
 
 #[tokio::test]
-async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
+async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
@@ -272,7 +359,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 		assert!(hello_sub.next().await.unwrap().is_ok());
 	}
 
-	// NOTE: this is now unuseable and unregistered.
+	// NOTE: this is now unusable and unregistered.
 	assert!(hello_sub.next().await.is_none());
 
 	// The client should still be useable => make sure it still works.
@@ -330,7 +417,7 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 async fn https_works() {
 	init_logger();
 
-	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io:443").unwrap();
+	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
 	let response: String = client.request("system_chain", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
@@ -339,25 +426,9 @@ async fn https_works() {
 async fn wss_works() {
 	init_logger();
 
-	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io:443").await.unwrap();
+	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
 	let response: String = client.request("system_chain", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "Kusama");
-}
-
-#[tokio::test]
-async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
-	init_logger();
-
-	let err = WsClientBuilder::default().build("wss://♥♥♥♥♥♥∀∂").await;
-	assert!(matches!(err, Err(Error::Transport(_))));
-}
-
-#[tokio::test]
-async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
-	init_logger();
-
-	let err = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂");
-	assert!(matches!(err, Err(Error::Transport(_))));
 }
 
 #[tokio::test]
@@ -914,7 +985,6 @@ async fn http_correct_content_type_required() {
 #[tokio::test]
 async fn http_cors_preflight_works() {
 	use hyper::{Body, Client, Method, Request};
-	use jsonrpsee::server::AllowHosts;
 
 	init_logger();
 
@@ -922,7 +992,7 @@ async fn http_cors_preflight_works() {
 		.allow_methods([Method::POST])
 		.allow_origin("https://foo.com".parse::<HeaderValue>().unwrap())
 		.allow_headers([hyper::header::CONTENT_TYPE]);
-	let (server_addr, _handle) = server_with_access_control(AllowHosts::Any, cors).await;
+	let (server_addr, _handle) = server_with_cors(cors).await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
@@ -1024,9 +1094,10 @@ async fn ws_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let acl = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
+	let middleware =
+		tower::ServiceBuilder::new().layer(HostFilterLayer::new(["http://localhost:*", "http://127.0.0.1:*"]).unwrap());
 
-	let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1045,9 +1116,10 @@ async fn http_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let allowed_hosts = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
+	let middleware =
+		tower::ServiceBuilder::new().layer(HostFilterLayer::new(["http://localhost:*", "http://127.0.0.1:*"]).unwrap());
 
-	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1066,9 +1138,9 @@ async fn deny_invalid_host() {
 
 	init_logger();
 
-	let allowed_hosts = AllowHosts::Only(vec!["http://example.com".into()]);
+	let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::new(["example.com"]).unwrap());
 
-	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
+	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -1089,6 +1161,35 @@ async fn deny_invalid_host() {
 		assert!(
 			matches!(err, Error::Transport(e) if e.to_string().contains("Connection rejected with status code: 403"))
 		)
+	}
+}
+
+#[tokio::test]
+async fn disable_host_filter_works() {
+	use jsonrpsee::server::*;
+
+	init_logger();
+
+	let middleware = tower::ServiceBuilder::new().layer(HostFilterLayer::disable());
+
+	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let mut module = RpcModule::new(());
+	let addr = server.local_addr().unwrap();
+	module.register_method("say_hello", |_, _| "hello").unwrap();
+
+	let _handle = server.start(module);
+
+	// HTTP
+	{
+		let server_url = format!("http://{}", addr);
+		let client = HttpClientBuilder::default().build(&server_url).unwrap();
+		assert!(client.request::<String, _>("say_hello", rpc_params![]).await.is_ok());
+	}
+
+	// WebSocket
+	{
+		let server_url = format!("ws://{}", addr);
+		assert!(WsClientBuilder::default().build(&server_url).await.is_ok());
 	}
 }
 
@@ -1158,14 +1259,14 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 	call_answered: Arc<AtomicBool>,
 	mut call_ack: tokio::sync::mpsc::UnboundedReceiver<()>,
 ) {
-	let mut calls: FuturesUnordered<_> = (0..10)
+	const LEN: usize = 10;
+
+	let mut calls: FuturesUnordered<_> = (0..LEN)
 		.map(|_| {
 			let c = client.clone();
 			async move { c.request::<String, _>("sleep_20s", rpc_params!()).await }
 		})
 		.collect();
-
-	let calls_len = calls.len();
 
 	let res = tokio::spawn(async move {
 		let mut c = 0;
@@ -1176,7 +1277,7 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 	});
 
 	// All calls has been received by server => then stop.
-	for _ in 0..calls_len {
+	for _ in 0..LEN {
 		call_ack.recv().await.unwrap();
 	}
 
@@ -1199,7 +1300,7 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 	assert!(call_after_stop.await.unwrap().is_err());
 
 	// The pending calls should be answered before shutdown.
-	assert_eq!(res.await.unwrap(), 10);
+	assert_eq!(res.await.unwrap(), LEN);
 
 	// The server should be closed now.
 	assert!(client.request::<String, _>("sleep_20s", rpc_params!()).await.is_err());

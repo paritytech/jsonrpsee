@@ -54,7 +54,6 @@ cfg_server! {
 
 cfg_client! {
 	pub mod client;
-
 	pub use client::Error as ClientError;
 }
 

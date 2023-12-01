@@ -39,7 +39,7 @@ use std::{
 
 use crate::{
 	client::BatchEntry,
-	client::{error::RegisterMethodError, Error},
+	client::Error, error::RegisterMethodError,
 };
 use jsonrpsee_types::{Id, SubscriptionId};
 use rustc_hash::FxHashMap;
@@ -98,6 +98,7 @@ pub(crate) struct RequestManager {
 
 impl RequestManager {
 	/// Create a new `RequestManager`.
+	#[allow(unused)]
 	pub(crate) fn new() -> Self {
 		Self::default()
 	}
@@ -185,12 +186,12 @@ impl RequestManager {
 		&mut self,
 		method: &str,
 		send_back: SubscriptionSink,
-	) -> Result<(), Error> {
+	) -> Result<(), RegisterMethodError> {
 		if let Entry::Vacant(handle) = self.notification_handlers.entry(method.to_owned()) {
 			handle.insert(send_back);
 			Ok(())
 		} else {
-			Err(Error::RegisterMethod(RegisterMethodError::AlreadyRegistered(method.to_owned())))
+			Err(RegisterMethodError::AlreadyRegistered(method.to_owned()))
 		}
 	}
 
@@ -249,9 +250,9 @@ impl RequestManager {
 		}
 	}
 
-	/// Tries to remove a subscription.
+	/// Removes the subscription without waiting for the unsubscribe call.
 	///
-	/// Returns `Some` if the subscription was removed otherwise `None`.
+	/// Returns `Some` if the subscription was removed.
 	pub(crate) fn remove_subscription(
 		&mut self,
 		request_id: RequestId,
@@ -261,7 +262,35 @@ impl RequestManager {
 			(Entry::Occupied(request), Entry::Occupied(subscription))
 				if matches!(request.get(), Kind::Subscription(_)) =>
 			{
+				// Mark the request ID as pending unsubscription.
 				let (_req_id, kind) = request.remove_entry();
+				let (sub_id, _req_id) = subscription.remove_entry();
+				if let Kind::Subscription((unsub_req_id, send_back, unsub)) = kind {
+					Some((unsub_req_id, send_back, unsub, sub_id))
+				} else {
+					unreachable!("Subscription is Subscription checked above; qed");
+				}
+			}
+			_ => None,
+		}
+	}
+
+	/// Initiates an unsubscribe which is not completed until the unsubscribe call
+	/// has been acknowledged.
+	///
+	/// Returns `Some` if the subscription was unsubscribed.
+	pub(crate) fn unsubscribe(
+		&mut self,
+		request_id: RequestId,
+		subscription_id: SubscriptionId<'static>,
+	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId)> {
+		match (self.requests.entry(request_id), self.subscriptions.entry(subscription_id)) {
+			(Entry::Occupied(mut request), Entry::Occupied(subscription))
+				if matches!(request.get(), Kind::Subscription(_)) =>
+			{
+				// Mark the request ID as "pending unsubscription" which will be resolved once the
+				// unsubscribe call has been acknowledged.
+				let kind = std::mem::replace(request.get_mut(), Kind::PendingMethodCall(None));
 				let (sub_id, _req_id) = subscription.remove_entry();
 				if let Kind::Subscription((unsub_req_id, send_back, unsub)) = kind {
 					Some((unsub_req_id, send_back, unsub, sub_id))
@@ -472,5 +501,8 @@ mod tests {
 		assert!(manager.complete_pending_subscription(Id::Number(3)).is_none());
 		assert!(manager.remove_subscription(Id::Number(3), SubscriptionId::Num(1)).is_none());
 		assert!(manager.remove_subscription(Id::Number(3), SubscriptionId::Num(0)).is_some());
+
+		assert!(manager.requests.is_empty());
+		assert!(manager.subscriptions.is_empty());
 	}
 }

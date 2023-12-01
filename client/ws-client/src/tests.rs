@@ -25,10 +25,11 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
-use crate::types::error::{ErrorCode, ErrorObject};
 
+use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
-use jsonrpsee_core::client::{BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT};
+
+use jsonrpsee_core::client::{BatchResponse, ClientT, SubscriptionClientT, Error, IdKind, Subscription};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::{rpc_params, DeserializeOwned};
 use jsonrpsee_test_utils::helpers::*;
@@ -67,8 +68,8 @@ async fn method_call_with_wrong_id_kind() {
 	let client =
 		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
 
-	let err: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
-	assert!(matches!(err, Err(Error::RestartNeeded(e)) if e == "Invalid request ID"));
+	let err: Result<String, _> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
+	assert!(matches!(err, Err(Error::RestartNeeded(e)) if matches!(*e, Error::InvalidRequestId(_))));
 }
 
 #[tokio::test]
@@ -190,6 +191,8 @@ async fn notification_handler_works() {
 
 #[tokio::test]
 async fn notification_without_polling_doesnt_make_client_unuseable() {
+	init_logger();
+
 	let server = WebSocketTestServer::with_hardcoded_notification(
 		"127.0.0.1:0".parse().unwrap(),
 		server_notification("test", "server originated notification".into()),

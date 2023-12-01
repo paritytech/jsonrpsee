@@ -25,23 +25,28 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
+#![allow(dead_code)]
 
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
+use fast_socks5::client::Socks5Stream;
+use fast_socks5::server;
+use futures::{AsyncRead, AsyncWrite, SinkExt, Stream, StreamExt};
+use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{
-	AllowHosts, PendingSubscriptionSink, RpcModule, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
+	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::SubscriptionCloseResponse;
+use pin_project::pin_project;
 use serde::Serialize;
+use tokio::net::TcpStream;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tower_http::cors::CorsLayer;
 
-#[allow(dead_code)]
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
@@ -123,16 +128,12 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 	(addr, server_handle)
 }
 
-#[allow(dead_code)]
 pub async fn server_with_subscription() -> SocketAddr {
 	let (addr, handle) = server_with_subscription_and_handle().await;
-
 	tokio::spawn(handle.stopped());
-
 	addr
 }
 
-#[allow(dead_code)]
 pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -165,7 +166,6 @@ pub async fn server() -> SocketAddr {
 }
 
 /// Yields one item then sleeps for an hour.
-#[allow(dead_code)]
 pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
@@ -192,24 +192,18 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 	addr
 }
 
-#[allow(dead_code)]
 pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
-	server_with_access_control(AllowHosts::Any, CorsLayer::new()).await
+	server_with_cors(CorsLayer::new()).await
 }
 
-pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLayer) -> (SocketAddr, ServerHandle) {
+pub async fn server_with_cors(cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
 		// Add `CORS` layer.
 		.layer(cors);
 
-	let server = ServerBuilder::default()
-		.set_host_filtering(allowed_hosts)
-		.set_middleware(middleware)
-		.build("127.0.0.1:0")
-		.await
-		.unwrap();
+	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| "hello").unwrap();
@@ -251,5 +245,98 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 				}
 			}
 		}
+	}
+}
+
+pub async fn socks_server_no_auth() -> SocketAddr {
+	let mut config = server::Config::default();
+	config.set_dns_resolve(false);
+	let config = std::sync::Arc::new(config);
+
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let proxy_addr = listener.local_addr().unwrap();
+
+	spawn_socks_server(listener, config).await;
+
+	proxy_addr
+}
+
+pub async fn spawn_socks_server(listener: tokio::net::TcpListener, config: std::sync::Arc<server::Config>) {
+	let addr = listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		loop {
+			let (stream, _) = listener.accept().await.unwrap();
+			let mut socks5_socket = server::Socks5Socket::new(stream, config.clone());
+			socks5_socket.set_reply_ip(addr.ip());
+
+			socks5_socket.upgrade_to_socks5().await.unwrap();
+		}
+	});
+}
+
+pub async fn connect_over_socks_stream(server_addr: SocketAddr) -> Socks5Stream<TcpStream> {
+	let target_addr = server_addr.ip().to_string();
+	let target_port = server_addr.port();
+
+	let socks_server = socks_server_no_auth().await;
+
+	fast_socks5::client::Socks5Stream::connect(
+		socks_server,
+		target_addr,
+		target_port,
+		fast_socks5::client::Config::default(),
+	)
+	.await
+	.unwrap()
+}
+
+#[pin_project]
+pub struct DataStream<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin>(#[pin] Socks5Stream<T>);
+
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> DataStream<T> {
+	pub fn new(t: Socks5Stream<T>) -> Self {
+		Self(t)
+	}
+}
+
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> AsyncRead for DataStream<T> {
+	fn poll_read(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+		buf: &mut [u8],
+	) -> std::task::Poll<std::io::Result<usize>> {
+		let this = self.project().0.compat();
+		futures_util::pin_mut!(this);
+		AsyncRead::poll_read(this, cx, buf)
+	}
+}
+
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> AsyncWrite for DataStream<T> {
+	fn poll_write(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+		buf: &[u8],
+	) -> std::task::Poll<std::io::Result<usize>> {
+		let this = self.project().0.compat_write();
+		futures_util::pin_mut!(this);
+		AsyncWrite::poll_write(this, cx, buf)
+	}
+
+	fn poll_flush(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<std::io::Result<()>> {
+		let this = self.project().0.compat_write();
+		futures_util::pin_mut!(this);
+		AsyncWrite::poll_flush(this, cx)
+	}
+
+	fn poll_close(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<std::io::Result<()>> {
+		let this = self.project().0.compat_write();
+		futures_util::pin_mut!(this);
+		AsyncWrite::poll_close(this, cx)
 	}
 }

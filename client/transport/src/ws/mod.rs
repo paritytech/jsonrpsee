@@ -27,38 +27,42 @@
 mod stream;
 
 use std::io;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures_util::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT};
+pub use futures_util::{AsyncRead, AsyncWrite};
+use jsonrpsee_core::client::{CertificateStore, MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use soketto::{connection, Data, Incoming};
-use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
 
 pub use http::{uri::InvalidUri, HeaderMap, HeaderValue, Uri};
 pub use soketto::handshake::client::Header;
+pub use stream::EitherStream;
+pub use url::Url;
+
+const LOG_TARGET: &str = "jsonrpsee-client";
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
-pub struct Sender {
-	inner: connection::Sender<BufReader<BufWriter<EitherStream>>>,
+pub struct Sender<T> {
+	inner: connection::Sender<BufReader<BufWriter<T>>>,
 	max_request_size: u32,
 }
 
 /// Receiving end of WebSocket transport.
 #[derive(Debug)]
-pub struct Receiver {
-	inner: connection::Receiver<BufReader<BufWriter<EitherStream>>>,
+pub struct Receiver<T> {
+	inner: connection::Receiver<BufReader<BufWriter<T>>>,
 }
 
-/// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
+/// Builder for a WebSocket transport [`Sender`] and [`Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder {
 	/// What certificate store to use
@@ -189,6 +193,15 @@ pub enum WsHandshakeError {
 		status_code: u16,
 	},
 
+	/// Server redirected to other location.
+	#[error("Connection redirected with status code: {status_code} and location: {location}")]
+	Redirected {
+		/// HTTP status code that the server returned.
+		status_code: u16,
+		/// The location URL redirected to.
+		location: String,
+	},
+
 	/// Timeout while trying to connect.
 	#[error("Connection timeout exceeded: {0:?}")]
 	Timeout(Duration),
@@ -214,7 +227,10 @@ pub enum WsError {
 }
 
 #[async_trait]
-impl TransportSenderT for Sender {
+impl<T> TransportSenderT for Sender<T>
+where
+	T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+{
 	type Error = WsError;
 
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
@@ -224,7 +240,6 @@ impl TransportSenderT for Sender {
 			return Err(WsError::MessageTooLarge);
 		}
 
-		tracing::trace!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
 		Ok(())
@@ -233,7 +248,7 @@ impl TransportSenderT for Sender {
 	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	async fn send_ping(&mut self) -> Result<(), Self::Error> {
-		tracing::debug!("Send ping");
+		tracing::debug!(target: LOG_TARGET, "Send ping");
 		// Submit empty slice as "optional" parameter.
 		let slice: &[u8] = &[];
 		// Byte slice fails if the provided slice is larger than 125 bytes.
@@ -251,7 +266,10 @@ impl TransportSenderT for Sender {
 }
 
 #[async_trait]
-impl TransportReceiverT for Receiver {
+impl<T> TransportReceiverT for Receiver<T>
+where
+	T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+{
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
@@ -275,12 +293,31 @@ impl TransportReceiverT for Receiver {
 
 impl WsTransportClientBuilder {
 	/// Try to establish the connection.
-	pub async fn build(self, uri: Uri) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let target: Target = uri.try_into()?;
-		self.try_connect(target).await
+	///
+	/// Uses the default connection over TCP.
+	pub async fn build(self, uri: Url) -> Result<(Sender<EitherStream>, Receiver<EitherStream>), WsHandshakeError> {
+		self.try_connect_over_tcp(uri).await
 	}
 
-	async fn try_connect(self, mut target: Target) -> Result<(Sender, Receiver), WsHandshakeError> {
+	/// Try to establish the connection over the given data stream.
+	pub async fn build_with_stream<T>(
+		self,
+		uri: Url,
+		data_stream: T,
+	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
+	where
+		T: AsyncRead + AsyncWrite + Unpin,
+	{
+		let target: Target = uri.try_into()?;
+		self.try_connect(&target, data_stream).await
+	}
+
+	// Try to establish the connection over TCP.
+	async fn try_connect_over_tcp(
+		&self,
+		uri: Url,
+	) -> Result<(Sender<EitherStream>, Receiver<EitherStream>), WsHandshakeError> {
+		let mut target: Target = uri.try_into()?;
 		let mut err = None;
 
 		// Only build TLS connector if `wss` in URL.
@@ -291,7 +328,7 @@ impl WsTransportClientBuilder {
 		};
 
 		for _ in 0..self.max_redirections {
-			tracing::debug!("Connecting to target: {:?}", target);
+			tracing::debug!(target: LOG_TARGET, "Connecting to target: {:?}", target);
 
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
@@ -300,7 +337,7 @@ impl WsTransportClientBuilder {
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref()).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						tracing::debug!(target: LOG_TARGET, "Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
@@ -310,104 +347,115 @@ impl WsTransportClientBuilder {
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						tracing::debug!(target: LOG_TARGET, "Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
 				};
 
-				let mut client = WsHandshakeClient::new(
-					BufReader::new(BufWriter::new(tcp_stream)),
-					&target.host_header,
-					&target.path_and_query,
-				);
+				match self.try_connect(&target, tcp_stream).await {
+					Ok(result) => return Ok(result),
 
-				let headers: Vec<_> = self
-					.headers
-					.iter()
-					.map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() })
-					.collect();
-				client.set_headers(&headers);
-
-				// Perform the initial handshake.
-				match client.handshake().await {
-					Ok(ServerResponse::Accepted { .. }) => {
-						tracing::debug!("Connection established to target: {:?}", target);
-						let mut builder = client.into_builder();
-						builder.set_max_message_size(self.max_response_size as usize);
-						let (sender, receiver) = builder.finish();
-						return Ok((
-							Sender { inner: sender, max_request_size: self.max_request_size },
-							Receiver { inner: receiver },
-						));
-					}
-
-					Ok(ServerResponse::Rejected { status_code }) => {
-						tracing::debug!("Connection rejected: {:?}", status_code);
-						err = Some(Err(WsHandshakeError::Rejected { status_code }));
-					}
-					Ok(ServerResponse::Redirect { status_code, location }) => {
-						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
-						match location.parse::<Uri>() {
+					Err(WsHandshakeError::Redirected { status_code, location }) => {
+						tracing::debug!(target: LOG_TARGET, "Redirection: status_code: {}, location: {}", status_code, location);
+						match Url::parse(&location) {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
-								if uri.scheme().is_some() {
-									target = uri.try_into().map_err(|e| {
-										tracing::error!("Redirection failed: {:?}", e);
-										e
-									})?;
+								target = uri.try_into().map_err(|e| {
+									tracing::error!(target: LOG_TARGET, "Redirection failed: {:?}", e);
+									e
+								})?;
 
-									// Only build TLS connector if `wss` in redirection URL.
-									#[cfg(feature = "__tls")]
-									match target._mode {
-										Mode::Tls if connector.is_none() => {
-											connector = Some(build_tls_config(&self.certificate_store)?);
-										}
-										Mode::Tls => (),
-										// Drop connector if it was configured previously.
-										Mode::Plain => {
-											connector = None;
+								// Only build TLS connector if `wss` in redirection URL.
+								#[cfg(feature = "__tls")]
+								match target._mode {
+									Mode::Tls if connector.is_none() => {
+										connector = Some(build_tls_config(&self.certificate_store)?);
+									}
+									Mode::Tls => (),
+									// Drop connector if it was configured previously.
+									Mode::Plain => {
+										connector = None;
+									}
+								};
+							}
+
+							// Relative URI such as `/foo/bar.html` or `cake.html`
+							Err(url::ParseError::RelativeUrlWithoutBase) => {
+								// Replace the entire path_and_query if `location` starts with `/` or `//`.
+								if location.starts_with('/') {
+									target.path_and_query = location;
+								} else {
+									match target.path_and_query.rfind('/') {
+										Some(offset) => target.path_and_query.replace_range(offset + 1.., &location),
+										None => {
+											let e = format!("path_and_query: {location}; this is a bug it must contain `/` please open issue");
+											err = Some(Err(WsHandshakeError::Url(e.into())));
+											continue;
 										}
 									};
 								}
-								// Relative URI.
-								else {
-									// Replace the entire path_and_query if `location` starts with `/` or `//`.
-									if location.starts_with('/') {
-										target.path_and_query = location;
-									} else {
-										match target.path_and_query.rfind('/') {
-											Some(offset) => {
-												target.path_and_query.replace_range(offset + 1.., &location)
-											}
-											None => {
-												err = Some(Err(WsHandshakeError::Url(
-													format!(
-														"path_and_query: {location}; this is a bug it must contain `/` please open issue"
-													)
-													.into(),
-												)));
-												continue;
-											}
-										};
-									}
-									target.sockaddrs = sockaddrs;
-								}
+								target.sockaddrs = sockaddrs;
 								break;
 							}
+
 							Err(e) => {
 								err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
 							}
 						};
 					}
+
 					Err(e) => {
-						err = Some(Err(e.into()));
+						err = Some(Err(e));
 					}
 				};
 			}
 		}
 		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host)))
+	}
+
+	/// Try to establish the handshake over the given data stream.
+	async fn try_connect<T>(
+		&self,
+		target: &Target,
+		data_stream: T,
+	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
+	where
+		T: AsyncRead + AsyncWrite + Unpin,
+	{
+		let mut client = WsHandshakeClient::new(
+			BufReader::new(BufWriter::new(data_stream)),
+			&target.host_header,
+			&target.path_and_query,
+		);
+
+		let headers: Vec<_> =
+			self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() }).collect();
+		client.set_headers(&headers);
+
+		// Perform the initial handshake.
+		match client.handshake().await {
+			Ok(ServerResponse::Accepted { .. }) => {
+				tracing::debug!(target: LOG_TARGET, "Connection established to target: {:?}", target);
+				let mut builder = client.into_builder();
+				builder.set_max_message_size(self.max_response_size as usize);
+				let (sender, receiver) = builder.finish();
+				Ok((Sender { inner: sender, max_request_size: self.max_request_size }, Receiver { inner: receiver }))
+			}
+
+			Ok(ServerResponse::Rejected { status_code }) => {
+				tracing::debug!(target: LOG_TARGET, "Connection rejected: {:?}", status_code);
+				Err(WsHandshakeError::Rejected { status_code })
+			}
+
+			Ok(ServerResponse::Redirect { status_code, location }) => {
+				tracing::debug!(target: LOG_TARGET, "Redirection: status_code: {}, location: {}", status_code, location);
+				Err(WsHandshakeError::Redirected { status_code, location })
+			}
+
+			Err(e) => Err(e.into()),
+		}
 	}
 }
 
@@ -424,7 +472,7 @@ async fn connect(
 		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
-				tracing::warn!("set nodelay failed: {:?}", err);
+				tracing::warn!(target: LOG_TARGET, "set nodelay failed: {:?}", err);
 			}
 			match tls_connector {
 				None => Ok(EitherStream::Plain(socket)),
@@ -447,7 +495,7 @@ async fn connect(sockaddr: SocketAddr, timeout_dur: Duration) -> Result<EitherSt
 		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
-				tracing::warn!("set nodelay failed: {:?}", err);
+				tracing::warn!(target: LOG_TARGET, "set nodelay failed: {:?}", err);
 			}
 			Ok(EitherStream::Plain(socket))
 		}
@@ -488,35 +536,35 @@ pub struct Target {
 	path_and_query: String,
 }
 
-impl TryFrom<Uri> for Target {
+impl TryFrom<url::Url> for Target {
 	type Error = WsHandshakeError;
 
-	fn try_from(uri: Uri) -> Result<Self, Self::Error> {
-		let _mode = match uri.scheme_str() {
-			Some("ws") => Mode::Plain,
+	fn try_from(url: Url) -> Result<Self, Self::Error> {
+		let _mode = match url.scheme() {
+			"ws" => Mode::Plain,
 			#[cfg(feature = "__tls")]
-			Some("wss") => Mode::Tls,
+			"wss" => Mode::Tls,
 			invalid_scheme => {
-				let scheme = invalid_scheme.unwrap_or("no scheme");
 				#[cfg(feature = "__tls")]
-				let err = format!("`{scheme}` not supported, expects 'ws' or 'wss'");
+				let err = format!("`{invalid_scheme}` not supported, expects 'ws' or 'wss'");
 				#[cfg(not(feature = "__tls"))]
-				let err = format!("`{}` not supported, expects 'ws' ('wss' requires the tls feature)", scheme);
+				let err = format!("`{invalid_scheme}` not supported, expects 'ws' ('wss' requires the tls feature)");
 				return Err(WsHandshakeError::Url(err.into()));
 			}
 		};
-		let host = uri.host().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
-		let port = uri
-			.port_u16()
-			.ok_or_else(|| WsHandshakeError::Url("No port number in URL (default port is not supported)".into()))?;
-		let host_header = format!("{host}:{port}");
-		let parts = uri.into_parts();
-		let path_and_query = parts.path_and_query.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
-		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
+		let host = url.host_str().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("Invalid host".into()))?;
+
+		let mut path_and_query = url.path().to_owned();
+		if let Some(query) = url.query() {
+			path_and_query.push('?');
+			path_and_query.push_str(query);
+		}
+
+		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
 		Ok(Self {
-			sockaddrs: sockaddrs.collect(),
+			sockaddrs,
 			host,
-			host_header,
+			host_header: url.authority().to_string(),
 			_mode,
 			path_and_query: path_and_query.to_string(),
 		})
@@ -549,7 +597,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 		}
 		#[cfg(feature = "webpki-tls")]
 		CertificateStore::WebPki => {
-			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+			roots.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
 				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
 			}));
 		}
@@ -567,8 +615,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 
 #[cfg(test)]
 mod tests {
-	use super::{Mode, Target, Uri, WsHandshakeError};
-	use http::uri::InvalidUri;
+	use super::{Mode, Target, Url, WsHandshakeError};
 
 	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
 		assert_eq!(&target.host, host);
@@ -578,26 +625,26 @@ mod tests {
 	}
 
 	fn parse_target(uri: &str) -> Result<Target, WsHandshakeError> {
-		uri.parse::<Uri>().map_err(|e: InvalidUri| WsHandshakeError::Url(e.to_string().into()))?.try_into()
+		Url::parse(uri).map_err(|e| WsHandshakeError::Url(e.to_string().into()))?.try_into()
 	}
 
 	#[test]
-	fn ws_works() {
+	fn ws_works_with_port() {
 		let target = parse_target("ws://127.0.0.1:9933").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
 	}
 
 	#[cfg(feature = "__tls")]
 	#[test]
-	fn wss_works() {
-		let target = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap();
-		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:443", Mode::Tls, "/");
+	fn wss_works_with_port() {
+		let target = parse_target("wss://kusama-rpc.polkadot.io:9999").unwrap();
+		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:9999", Mode::Tls, "/");
 	}
 
 	#[cfg(not(feature = "__tls"))]
 	#[test]
 	fn wss_fails_with_tls_feature() {
-		let err = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap_err();
+		let err = parse_target("wss://kusama-rpc.polkadot.io").unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
@@ -617,19 +664,32 @@ mod tests {
 
 	#[test]
 	fn url_with_path_works() {
-		let target = parse_target("ws://127.0.0.1:443/my-special-path").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my-special-path");
+		let target = parse_target("ws://127.0.0.1/my-special-path").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
-		let target = parse_target("ws://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my?name1=value1&name2=value2");
+		let target = parse_target("ws://127.0.0.1/my?name1=value1&name2=value2").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
-		let target = parse_target("ws://127.0.0.1:443/my.htm#ignore").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my.htm");
+		let target = parse_target("ws://127.0.0.1:/my.htm#ignore").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my.htm");
+	}
+
+	#[cfg(feature = "__tls")]
+	#[test]
+	fn wss_default_port_is_omitted() {
+		let target = parse_target("wss://127.0.0.1:443").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Tls, "/");
+	}
+
+	#[test]
+	fn ws_default_port_is_omitted() {
+		let target = parse_target("ws://127.0.0.1:80").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/");
 	}
 }

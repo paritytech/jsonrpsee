@@ -18,6 +18,7 @@ jsonrpsee-types = { workspace = true }
 jsonrpsee-client-transport = { workspace = true, features = ["ws"] }
 jsonrpsee-core = { workspace = true, features = ["async-client"] }
 http = "0.2.0"
+url = "2.4.0"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

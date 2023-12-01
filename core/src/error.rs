@@ -24,23 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::fmt;
-
-/// Convenience type for displaying errors.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Mismatch<T> {
-	/// Expected value.
-	pub expected: T,
-	/// Actual value.
-	pub got: T,
-}
-
-impl<T: fmt::Display> fmt::Display for Mismatch<T> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.write_fmt(format_args!("Expected: {}, Got: {}", self.expected, self.got))
-	}
-}
-
 /// Generic transport error.
 #[derive(Debug, thiserror::Error)]
 pub enum GenericTransportError {

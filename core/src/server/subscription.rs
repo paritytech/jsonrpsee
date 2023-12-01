@@ -27,9 +27,11 @@
 //! Subscription related types and traits for server implementations.
 
 use super::helpers::{MethodResponse, MethodSink};
+use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{error::StringError, traits::IdProvider};
+use crate::{traits::IdProvider, error::StringError};
+use jsonrpsee_types::SubscriptionPayload;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorObjectOwned, Id, ResponsePayload, SubscriptionId, SubscriptionResponse,
 };
@@ -132,6 +134,18 @@ impl SubscriptionMessage {
 		serde_json::to_string(t).map(|json| SubscriptionMessage(SubscriptionMessageInner::NeedsData(json)))
 	}
 
+	/// Create a subscription message this is more efficient than [`SubscriptionMessage::from_json`]
+	/// because it only allocates once.
+	///
+	/// Fails if the json `result` couldn't be serialized.
+	pub fn new(method: &str, subscription: SubscriptionId, result: &impl Serialize) -> Result<Self, serde_json::Error> {
+		let json = serde_json::to_string(&SubscriptionResponse::new(
+			method.into(),
+			SubscriptionPayload { subscription, result },
+		))?;
+		Ok(Self::from_complete_message(json))
+	}
+
 	pub(crate) fn from_complete_message(msg: String) -> Self {
 		SubscriptionMessage(SubscriptionMessageInner::Complete(msg))
 	}
@@ -216,10 +230,10 @@ impl IsUnsubscribed {
 ///
 /// Thus, if you want a customized error message then `PendingSubscription::reject` must be called.
 #[derive(Debug)]
-#[must_use = "PendningSubscriptionSink does nothing unless `accept` or `reject` is called"]
+#[must_use = "PendingSubscriptionSink does nothing unless `accept` or `reject` is called"]
 pub struct PendingSubscriptionSink {
 	/// Sink.
-	pub(crate) inner: MethodSink,
+	pub inner: MethodSink,
 	/// MethodCallback.
 	pub(crate) method: &'static str,
 	/// Shared Mutex of subscriptions for this method.
@@ -245,7 +259,7 @@ impl PendingSubscriptionSink {
 	/// the return value is simply ignored because no further notification are propagated
 	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
-		let err = MethodResponse::error(self.id, err.into());
+		let err = MethodResponse::subscription_error(self.id, err.into());
 		_ = self.inner.send(err.result.clone()).await;
 		_ = self.subscribe.send(err);
 	}
@@ -256,12 +270,12 @@ impl PendingSubscriptionSink {
 	///
 	/// Panics if the subscription response exceeded the `max_response_size`.
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
-		let response = MethodResponse::response(
+		let response = MethodResponse::subscription_response(
 			self.id,
 			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
 		);
-		let success = response.success;
+		let success = response.is_success();
 
 		// TODO: #1052
 		//
@@ -286,6 +300,11 @@ impl PendingSubscriptionSink {
 		} else {
 			panic!("The subscription response was too big; adjust the `max_response_size` or change Subscription ID generation");
 		}
+	}
+
+	/// Returns connection identifier, which was used to perform pending subscription request
+	pub fn connection_id(&self) -> ConnectionId {
+		self.uniq_sub.conn_id
 	}
 }
 
@@ -315,6 +334,11 @@ impl SubscriptionSink {
 	/// Get the method name.
 	pub fn method_name(&self) -> &str {
 		self.method
+	}
+
+	/// Get the connection ID.
+	pub fn connection_id(&self) -> ConnectionId {
+		self.uniq_sub.conn_id
 	}
 
 	/// Send out a response on the subscription and wait until there is capacity.
@@ -401,7 +425,7 @@ pub struct Subscription {
 impl Subscription {
 	/// Close the subscription channel.
 	pub fn close(&mut self) {
-		tracing::trace!("[Subscription::close] Notifying");
+		tracing::trace!(target: LOG_TARGET, "[Subscription::close] Notifying");
 		self.rx.close();
 	}
 
@@ -416,7 +440,10 @@ impl Subscription {
 	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), String>> {
 		let raw = self.rx.recv().await?;
 
-		tracing::debug!("[Subscription::next]: rx {}", raw);
+		tracing::debug!(target: LOG_TARGET, "[Subscription::next]: rx {}", raw);
+
+		// clippy complains about this but it doesn't compile without the extra res binding.
+		#[allow(clippy::let_and_return)]
 		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
 			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
 			Err(e) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {

@@ -24,44 +24,38 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::net::SocketAddr;
-use std::time::Instant;
-
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params, TransportProtocol};
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::server::Server;
+use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
+use std::borrow::Cow as StdCow;
+use std::net::SocketAddr;
 
 #[derive(Clone)]
-struct Timings;
+pub struct ModifyRequestIf<S>(S);
 
-impl logger::Logger for Timings {
-	type Instant = Instant;
+impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
+where
+	S: Send + Sync + RpcServiceT<'a>,
+{
+	type Future = S::Future;
 
-	fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest, _t: TransportProtocol) {
-		println!("[Logger::on_connect] remote_addr {:?}, headers: {:?}", remote_addr, request);
-	}
+	fn call(&self, mut req: Request<'a>) -> Self::Future {
+		// Example how to modify the params in the call.
+		if req.method == "say_hello" {
+			// It's a bit awkward to create new params in the request
+			// but this shows how to do it.
+			let raw_value = serde_json::value::to_raw_value("myparams").unwrap();
+			req.params = Some(StdCow::Owned(raw_value));
+		}
+		// Re-direct all calls that isn't `say_hello` to `say_goodbye`
+		else if req.method != "say_hello" {
+			req.method = "say_goodbye".into();
+		}
 
-	fn on_request(&self, _t: TransportProtocol) -> Self::Instant {
-		println!("[Logger::on_request]");
-		Instant::now()
-	}
-
-	fn on_call(&self, name: &str, params: Params, kind: MethodKind, _t: TransportProtocol) {
-		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
-	}
-
-	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant, _t: TransportProtocol) {
-		println!("[Logger::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
-	}
-
-	fn on_response(&self, result: &str, started_at: Self::Instant, _t: TransportProtocol) {
-		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
-	}
-
-	fn on_disconnect(&self, remote_addr: SocketAddr, _t: TransportProtocol) {
-		println!("[Logger::on_disconnect] remote_addr: {:?}", remote_addr);
+		self.0.call(req)
 	}
 }
 
@@ -76,8 +70,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", rpc_params![]).await?;
-	println!("response: {:?}", response);
+	let _response: String = client.request("say_hello", rpc_params![]).await?;
 	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
 	let _: String = client.request("say_hello", rpc_params![]).await?;
 
@@ -85,9 +78,11 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
+	let rpc_middleware = RpcServiceBuilder::new().layer_fn(|service| ModifyRequestIf(service));
+	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
+	module.register_method("say_goodbye", |_, _| "goodbye")?;
 	let addr = server.local_addr()?;
 
 	let handle = server.start(module);

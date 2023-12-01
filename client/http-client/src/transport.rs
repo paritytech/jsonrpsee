@@ -9,17 +9,17 @@
 use hyper::body::{Body, HttpBody};
 use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
-use hyper::Uri;
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
-use jsonrpsee_core::tracing::{rx_log_from_bytes, tx_log_from_str};
+use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
 use std::error::Error as StdError;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use thiserror::Error;
 use tower::{Layer, Service, ServiceExt};
+use url::Url;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
@@ -77,7 +77,7 @@ where
 #[derive(Debug, Clone)]
 pub struct HttpTransportClient<S> {
 	/// Target to connect to.
-	target: ParsedUri,
+	target: String,
 	/// HTTP client
 	client: S,
 	/// Configurable max request body size
@@ -109,13 +109,16 @@ where
 		headers: HeaderMap,
 		service_builder: tower::ServiceBuilder<L>,
 	) -> Result<Self, Error> {
-		let uri = ParsedUri::try_from(target.as_ref())?;
+		let mut url = Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
+		if url.host_str().is_none() {
+			return Err(Error::Url("Invalid host".into()));
+		}
+		url.set_fragment(None);
 
-		let client = match uri.0.scheme_str() {
-			#[cfg(not(feature = "__tls"))]
-			Some("http") => HttpBackend::Http(Client::new()),
+		let client = match url.scheme() {
+			"http" => HttpBackend::Http(Client::new()),
 			#[cfg(feature = "__tls")]
-			Some("https") | Some("http") => {
+			"https" => {
 				let connector = match cert_store {
 					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
@@ -155,7 +158,7 @@ where
 		}
 
 		Ok(Self {
-			target: uri,
+			target: url.as_str().to_owned(),
 			client: service_builder.service(client),
 			max_request_size,
 			max_response_size,
@@ -165,13 +168,11 @@ where
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
-		tx_log_from_str(&body, self.max_log_length);
-
 		if body.len() > self.max_request_size as usize {
 			return Err(Error::RequestTooLarge);
 		}
 
-		let mut req = hyper::Request::post(&self.target.0);
+		let mut req = hyper::Request::post(&self.target);
 		if let Some(headers) = req.headers_mut() {
 			*headers = self.headers.clone();
 		}
@@ -187,6 +188,8 @@ where
 
 	/// Send serialized message and wait until all bytes from the HTTP message body have been read.
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
+		tx_log_from_str(&body, self.max_log_length);
+
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
 		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_response_size).await?;
@@ -201,22 +204,6 @@ where
 		let _ = self.inner_send(body).await?;
 
 		Ok(())
-	}
-}
-
-#[derive(Debug, Clone)]
-struct ParsedUri(Uri);
-
-impl TryFrom<&str> for ParsedUri {
-	type Error = Error;
-
-	fn try_from(target: &str) -> Result<Self, Self::Error> {
-		let uri: Uri = target.parse().map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
-		if uri.port_u16().is_none() {
-			Err(Error::Url("Port number is missing in the URL".into()))
-		} else {
-			Ok(ParsedUri(uri))
-		}
 	}
 }
 
@@ -272,21 +259,6 @@ mod tests {
 	use super::*;
 	use jsonrpsee_core::client::CertificateStore;
 
-	fn assert_target(
-		client: &HttpTransportClient<HttpBackend>,
-		host: &str,
-		scheme: &str,
-		path_and_query: &str,
-		port: u16,
-		max_request_size: u32,
-	) {
-		assert_eq!(client.target.0.scheme_str(), Some(scheme));
-		assert_eq!(client.target.0.path_and_query().map(|pq| pq.as_str()), Some(path_and_query));
-		assert_eq!(client.target.0.host(), Some(host));
-		assert_eq!(client.target.0.port_u16(), Some(port));
-		assert_eq!(client.max_request_size, max_request_size);
-	}
-
 	#[test]
 	fn invalid_http_url_rejected() {
 		let err = HttpTransportClient::new(
@@ -307,7 +279,7 @@ mod tests {
 	fn https_works() {
 		let client = HttpTransportClient::new(
 			80,
-			"https://localhost:9933",
+			"https://localhost",
 			80,
 			CertificateStore::Native,
 			80,
@@ -315,7 +287,7 @@ mod tests {
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_target(&client, "localhost", "https", "/", 9933, 80);
+		assert_eq!(&client.target, "https://localhost/");
 	}
 
 	#[cfg(not(feature = "__tls"))]
@@ -364,7 +336,7 @@ mod tests {
 	fn url_with_path_works() {
 		let client = HttpTransportClient::new(
 			1337,
-			"http://localhost:9944/my-special-path",
+			"http://localhost/my-special-path",
 			1337,
 			CertificateStore::Native,
 			80,
@@ -372,14 +344,14 @@ mod tests {
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_target(&client, "localhost", "http", "/my-special-path", 9944, 1337);
+		assert_eq!(&client.target, "http://localhost/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
 		let client = HttpTransportClient::new(
 			u32::MAX,
-			"http://127.0.0.1:9999/my?name1=value1&name2=value2",
+			"http://127.0.0.1/my?name1=value1&name2=value2",
 			u32::MAX,
 			CertificateStore::Native,
 			80,
@@ -387,14 +359,14 @@ mod tests {
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_target(&client, "127.0.0.1", "http", "/my?name1=value1&name2=value2", 9999, u32::MAX);
+		assert_eq!(&client.target, "http://127.0.0.1/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
 		let client = HttpTransportClient::new(
 			999,
-			"http://127.0.0.1:9944/my.htm#ignore",
+			"http://127.0.0.1/my.htm#ignore",
 			999,
 			CertificateStore::Native,
 			80,
@@ -402,7 +374,53 @@ mod tests {
 			tower::ServiceBuilder::new(),
 		)
 		.unwrap();
-		assert_target(&client, "127.0.0.1", "http", "/my.htm", 9944, 999);
+		assert_eq!(&client.target, "http://127.0.0.1/my.htm");
+	}
+
+	#[test]
+	fn url_default_port_is_omitted() {
+		let client = HttpTransportClient::new(
+			999,
+			"http://127.0.0.1:80",
+			999,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap();
+		assert_eq!(&client.target, "http://127.0.0.1/");
+	}
+
+	#[cfg(feature = "__tls")]
+	#[test]
+	fn https_custom_port_works() {
+		let client = HttpTransportClient::new(
+			80,
+			"https://localhost:9999",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap();
+		assert_eq!(&client.target, "https://localhost:9999/");
+	}
+
+	#[test]
+	fn http_custom_port_works() {
+		let client = HttpTransportClient::new(
+			80,
+			"http://localhost:9999",
+			80,
+			CertificateStore::Native,
+			80,
+			HeaderMap::new(),
+			tower::ServiceBuilder::new(),
+		)
+		.unwrap();
+		assert_eq!(&client.target, "http://localhost:9999/");
 	}
 
 	#[tokio::test]

@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, client::Subscription, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder, SubscriptionMessage};
+use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -51,6 +51,9 @@ where
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
 	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> SubscriptionResult;
+
+	#[subscription(name = "subscribeSync" => "sync", item = Vec<Hash>)]
+	fn s(&self, keys: Option<Vec<StorageKey>>);
 }
 
 pub struct RpcServerImpl;
@@ -76,6 +79,14 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 
 		Ok(())
 	}
+
+	fn s(&self, pending: PendingSubscriptionSink, _keys: Option<Vec<ExampleStorageKey>>) {
+		tokio::spawn(async move {
+			let sink = pending.accept().await.unwrap();
+			let msg = SubscriptionMessage::from_json(&vec![[0; 32]]).unwrap();
+			sink.send(msg).await.unwrap();
+		});
+	}
 }
 
 #[tokio::main]
@@ -99,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = Server::builder().build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(RpcServerImpl.into_rpc());

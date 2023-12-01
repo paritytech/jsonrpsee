@@ -31,7 +31,7 @@ use hyper::body::Bytes;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::{RpcModule, Server};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
 			.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
 	);
 
-	let client = HttpClientBuilder::default().set_middleware(middleware).build(url)?;
+	let client = HttpClientBuilder::default().set_http_middleware(middleware).build(url)?;
 	let params = rpc_params![1_u64, 2, 3];
 	let response: Result<String, _> = client.request("say_hello", params).await;
 	tracing::info!("r: {:?}", response);
@@ -67,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let server = Server::builder().build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 

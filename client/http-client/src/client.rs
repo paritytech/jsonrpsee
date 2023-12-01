@@ -43,7 +43,7 @@ use jsonrpsee_core::client::{
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::{ErrorObject, ResponseSuccess, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -161,7 +161,7 @@ impl<L> HttpClientBuilder<L> {
 	}
 
 	/// Set custom tower middleware.
-	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
+	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
 		HttpClientBuilder {
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
@@ -233,6 +233,13 @@ impl Default for HttpClientBuilder<Identity> {
 	}
 }
 
+impl HttpClientBuilder<Identity> {
+	/// Create a new builder.
+	pub fn new() -> HttpClientBuilder<Identity> {
+		HttpClientBuilder::default()
+	}
+}
+
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
 pub struct HttpClient<S = HttpBackend> {
@@ -242,6 +249,13 @@ pub struct HttpClient<S = HttpBackend> {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
+}
+
+impl<S> HttpClient<S> {
+	/// Create a builder for the HttpClient.
+	pub fn builder() -> HttpClientBuilder {
+		HttpClientBuilder::new()
+	}
 }
 
 #[async_trait]
@@ -270,8 +284,6 @@ where
 			Ok(Err(e)) => Err(Error::Transport(e.into())),
 		}
 	}
-
-	/// Perform a request towards the server.
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
 	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
@@ -306,7 +318,7 @@ where
 		if response.id == id {
 			Ok(result)
 		} else {
-			Err(Error::InvalidRequestId)
+			Err(InvalidRequestId::NotPendingRequest(response.id.to_string()).into())
 		}
 	}
 
@@ -346,11 +358,11 @@ where
 		let mut failed_calls = 0;
 
 		for _ in 0..json_rps.len() {
-			responses.push(Err(ErrorObject::borrowed(0, &"", None)));
+			responses.push(Err(ErrorObject::borrowed(0, "", None)));
 		}
 
 		for rp in json_rps {
-			let id = rp.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+			let id = rp.id.try_parse_inner_as_number()?;
 
 			let res = match ResponseSuccess::try_from(rp) {
 				Ok(r) => {
@@ -372,7 +384,7 @@ where
 			if let Some(elem) = maybe_elem {
 				*elem = res;
 			} else {
-				return Err(Error::InvalidRequestId);
+				return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
 			}
 		}
 

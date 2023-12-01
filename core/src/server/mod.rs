@@ -30,20 +30,19 @@
 mod error;
 /// Helpers.
 pub mod helpers;
-/// Host filtering.
-mod host_filtering;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 mod rpc_module;
 /// Subscription related types.
 mod subscription;
 
 pub use error::*;
-pub use helpers::{BatchResponseBuilder, BoundedWriter, MethodResponse, MethodSink, MethodSinkPermit};
-pub use host_filtering::*;
+pub use helpers::{BatchResponseBuilder, BoundedWriter, MethodResponse, MethodSink};
 pub use rpc_module::*;
 pub use subscription::*;
 
 use jsonrpsee_types::{ErrorObjectOwned, ResponsePayload};
+
+const LOG_TARGET: &str = "jsonrpsee-server";
 
 /// Something that can be converted into a JSON-RPC method call response.
 ///

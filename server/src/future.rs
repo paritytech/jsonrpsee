@@ -26,22 +26,36 @@
 
 //! Utilities for handling async code.
 
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
+
+use futures_util::{Stream, StreamExt};
+use pin_project::pin_project;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
+use tokio::time::Interval;
+
+/// Create channel to determine whether
+/// the server shall continue to run or not.
+pub fn stop_channel() -> (StopHandle, ServerHandle) {
+	let (tx, rx) = tokio::sync::watch::channel(());
+	(StopHandle::new(rx), ServerHandle::new(tx))
+}
 
 /// Represent a stop handle which is a wrapper over a `multi-consumer receiver`
 /// and cloning [`StopHandle`] will get a separate instance of the underlying receiver.
 #[derive(Debug, Clone)]
-pub(crate) struct StopHandle(watch::Receiver<()>);
+pub struct StopHandle(watch::Receiver<()>);
 
 impl StopHandle {
+	/// Create a new stop handle.
 	pub(crate) fn new(rx: watch::Receiver<()>) -> Self {
 		Self(rx)
 	}
 
 	/// A future that resolves when server has been stopped
 	/// it consumes the stop handle.
-	pub(crate) async fn shutdown(mut self) {
+	pub async fn shutdown(mut self) {
 		let _ = self.0.changed().await;
 	}
 }
@@ -55,7 +69,7 @@ pub struct ServerHandle(Arc<watch::Sender<()>>);
 
 impl ServerHandle {
 	/// Create a new server handle.
-	pub fn new(tx: watch::Sender<()>) -> Self {
+	pub(crate) fn new(tx: watch::Sender<()>) -> Self {
 		Self(Arc::new(tx))
 	}
 
@@ -76,23 +90,66 @@ impl ServerHandle {
 }
 
 /// Limits the number of connections.
-#[derive(Debug)]
-pub(crate) struct ConnectionGuard(Arc<Semaphore>);
+#[derive(Clone, Debug)]
+pub struct ConnectionGuard {
+	inner: Arc<Semaphore>,
+	max: usize,
+}
 
 impl ConnectionGuard {
-	pub(crate) fn new(limit: usize) -> Self {
-		Self(Arc::new(Semaphore::new(limit)))
+	/// Create a new connection guard.
+	pub fn new(limit: usize) -> Self {
+		Self { inner: Arc::new(Semaphore::new(limit)), max: limit }
 	}
 
-	pub(crate) fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
-		match self.0.clone().try_acquire_owned() {
+	/// Acquire a connection permit.
+	pub fn try_acquire(&self) -> Option<ConnectionPermit> {
+		match self.inner.clone().try_acquire_owned() {
 			Ok(guard) => Some(guard),
 			Err(TryAcquireError::Closed) => unreachable!("Semaphore::Close is never called and can't be closed; qed"),
 			Err(TryAcquireError::NoPermits) => None,
 		}
 	}
 
-	pub(crate) fn available_connections(&self) -> usize {
-		self.0.available_permits()
+	/// Get the number of available connection slots.
+	pub fn available_connections(&self) -> usize {
+		self.inner.available_permits()
+	}
+
+	/// Get the maximum number of connections.
+	pub fn max_connections(&self) -> usize {
+		self.max
+	}
+}
+
+/// Connection permit.
+pub type ConnectionPermit = OwnedSemaphorePermit;
+
+#[pin_project]
+pub(crate) struct IntervalStream(#[pin] Option<tokio_stream::wrappers::IntervalStream>);
+
+impl IntervalStream {
+	/// Creates a stream which never returns any elements.
+	pub(crate) fn pending() -> Self {
+		Self(None)
+	}
+
+	/// Creates a stream which produces elements with interval of `period`.
+	pub(crate) fn new(interval: Interval) -> Self {
+		Self(Some(tokio_stream::wrappers::IntervalStream::new(interval)))
+	}
+}
+
+impl Stream for IntervalStream {
+	type Item = tokio::time::Instant;
+
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		if let Some(mut stream) = self.project().0.as_pin_mut() {
+			stream.poll_next_unpin(cx)
+		} else {
+			// NOTE: this will not be woken up again and it's by design
+			// to be a pending stream that never returns.
+			Poll::Pending
+		}
 	}
 }

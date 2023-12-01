@@ -26,10 +26,10 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
+use jsonrpsee::client_transport::ws::{Url, WsTransportClientBuilder};
 use jsonrpsee::core::client::{Client, ClientBuilder, ClientT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::{RpcModule, Server};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 		.expect("setting default subscriber failed");
 
 	let addr = run_server().await?;
-	let uri: Uri = format!("ws://{}", addr).parse()?;
+	let uri = Url::parse(&format!("ws://{}", addr))?;
 
 	let (tx, rx) = WsTransportClientBuilder::default().build(uri).await?;
 	let client: Client = ClientBuilder::default().build_with_tokio(tx, rx);
@@ -50,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = Server::builder().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 	let addr = server.local_addr()?;

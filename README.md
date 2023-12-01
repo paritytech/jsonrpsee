@@ -1,12 +1,12 @@
 # jsonrpsee
 
-[![GitLab Status](https://gitlab.parity.io/parity/jsonrpsee/badges/master/pipeline.svg)](https://gitlab.parity.io/parity/jsonrpsee/pipelines)
+[![GitLab Status](https://gitlab.parity.io/parity/mirrors/jsonrpsee/badges/master/pipeline.svg)](https://gitlab.parity.io/parity/mirrors/jsonrpsee/-/pipelines)
 [![crates.io](https://img.shields.io/crates/v/jsonrpsee)](https://crates.io/crates/jsonrpsee)
 [![Docs](https://docs.rs/jsonrpsee/badge.svg)](https://docs.rs/jsonrpsee)
 ![MIT](https://img.shields.io/crates/l/jsonrpsee.svg)
 [![CI](https://github.com/paritytech/jsonrpsee/actions/workflows/ci.yml/badge.svg)](https://github.com/paritytech/jsonrpsee/actions/workflows/ci.yml)
-[![Benchmarks](https://github.com/paritytech/jsonrpsee/actions/workflows/benchmarks.yml/badge.svg)](https://github.com/paritytech/jsonrpsee/actions/workflows/benchmarks.yml)
-[![dependency status](https://deps.rs/crate/jsonrpsee/0.18.1/status.svg)](https://deps.rs/crate/jsonrpsee/0.18.1)
+[![Benchmarks](https://github.com/paritytech/jsonrpsee/actions/workflows/benchmarks_gitlab.yml/badge.svg)](https://github.com/paritytech/jsonrpsee/actions/workflows/benchmarks_gitlab.yml)
+[![dependency status](https://deps.rs/crate/jsonrpsee/0.18.1/status.svg)](https://deps.rs/crate/jsonrpsee/0.20.0)
 
 JSON-RPC library designed for async/await in Rust.
 
@@ -48,8 +48,10 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 - [substrate](https://github.com/paritytech/substrate)
 - [substrate-api-client](https://github.com/scs/substrate-api-client)
 - [subwasm](https://github.com/chevdor/subwasm)
+- [subway](https://github.com/AcalaNetwork/subway)
 - [subxt](https://github.com/paritytech/subxt)
-- [Trin](https://github.com/ethereum/trin)
+- [Trin](https://github.com/ethereum/trin)   
+- [Uptest](https://github.com/uptest-sc/uptest)   
 
 ## Benchmarks
 

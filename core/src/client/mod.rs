@@ -26,8 +26,6 @@
 
 //! Shared utilities for `jsonrpsee` clients.
 
-mod error;
-
 cfg_async_client! {
 	pub mod async_client;
 	pub use async_client::{Client, ClientBuilder};
@@ -40,17 +38,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
+use crate::error::{RegisterMethodError};
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
+use jsonrpsee_types::{ErrorObject, Id, SubscriptionId, InvalidRequestId, ErrorObjectOwned};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 use tokio::sync::{mpsc, oneshot};
-
-pub use error::{Error, RegisterMethodError};
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
@@ -59,6 +56,50 @@ pub mod __reexports {
 	pub use crate::traits::ToRpcParams;
 	// Main builder object for constructing the rpc parameters.
 	pub use crate::params::ArrayParams;
+}
+
+/// Error type.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	/// JSON-RPC error which can occur when a JSON-RPC call fails.
+	#[error("{0}")]
+	Call(#[from] ErrorObjectOwned),
+	/// Networking error or error on the low-level protocol layer.
+	#[error("Networking or low-level protocol error: {0}")]
+	Transport(#[source] anyhow::Error),
+	/// The background task has been terminated.
+	#[error("The background task been terminated because: {0}; restart required")]
+	RestartNeeded(Arc<Error>),
+	/// Failed to parse the data.
+	#[error("Parse error: {0}")]
+	ParseError(#[from] serde_json::Error),
+	/// Invalid subscription ID.
+	#[error("Invalid subscription ID")]
+	InvalidSubscriptionId,
+	/// Invalid request ID.
+	#[error("{0}")]
+	InvalidRequestId(#[from] InvalidRequestId),
+	/// A request with the same request ID has already been registered.
+	#[error("A request with the same request ID has already been registered")]
+	DuplicateRequestId,
+	/// Request timeout
+	#[error("Request timeout")]
+	RequestTimeout,
+	/// Configured max number of request slots exceeded.
+	#[error("Configured max number of request slots exceeded")]
+	MaxSlotsExceeded,
+	/// Custom error.
+	#[error("Custom error: {0}")]
+	Custom(String),
+	/// Not implemented for HTTP clients.
+	#[error("Not implemented")]
+	HttpNotImplemented,
+	/// Empty batch request.
+	#[error("Empty batch request is not allowed")]
+	EmptyBatchRequest,
+	/// The error returned when registering a method or subscription failed.
+	#[error("{0}")]
+	RegisterMethod(#[from] RegisterMethodError),
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
@@ -490,7 +531,7 @@ impl IdKind {
 
 /// Generate a range of IDs to be used in a batch request.
 pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<Range<u64>, Error> {
-	let id_start = guard.inner().try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+	let id_start = guard.inner().try_parse_inner_as_number()?;
 	let id_end = id_start
 		.checked_add(len)
 		.ok_or_else(|| Error::Custom("BatchID range wrapped; restart the client or try again later".to_string()))?;

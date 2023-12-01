@@ -59,8 +59,8 @@ async fn method_call_with_wrong_id_kind() {
 		http_server_with_hardcoded_response(ok_response(exp.into(), Id::Num(0))).with_default_timeout().await.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
-	let res: Result<String, _> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
-	assert!(matches!(res, Err(ClientError::InvalidRequestId)));
+	let res: Result<String, ClientError> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
+	assert!(matches!(res, Err(ClientError::InvalidRequestId(_))));
 }
 
 #[tokio::test]
@@ -96,7 +96,7 @@ async fn response_with_wrong_id() {
 		.await
 		.unwrap()
 		.unwrap_err();
-	assert!(matches!(err, ClientError::InvalidRequestId));
+	assert!(matches!(err, ClientError::InvalidRequestId(_)));
 }
 
 #[tokio::test]
@@ -199,7 +199,7 @@ async fn batch_request_with_failed_call_gives_proper_error() {
 		.unwrap()
 		.unwrap();
 	let err: Vec<_> = res.into_ok().unwrap_err().collect();
-	assert_eq!(err, vec![ErrorObject::from(ErrorCode::MethodNotFound), ErrorObject::borrowed(-32602, &"foo", None)]);
+	assert_eq!(err, vec![ErrorObject::from(ErrorCode::MethodNotFound), ErrorObject::borrowed(-32602, "foo", None)]);
 }
 
 #[tokio::test]

@@ -5,11 +5,12 @@ mod manager;
 
 use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
 use crate::client::{
-	BatchMessage, BatchResponse, ClientT, Error, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
-	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
+	BatchMessage, BatchResponse, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
+	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT, Error
 };
+use crate::error::RegisterMethodError;
 use crate::params::BatchRequestBuilder;
-use crate::tracing::{rx_log_from_json, tx_log_from_str};
+use crate::tracing::client::{rx_log_from_json, tx_log_from_str};
 use crate::traits::ToRpcParams;
 use crate::JsonRawValue;
 use std::borrow::Cow as StdCow;
@@ -19,52 +20,94 @@ use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
-use jsonrpsee_types::{ResponseSuccess, TwoPointZero};
+use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Waker};
 
-use async_lock::Mutex;
+use async_lock::RwLock as AsyncRwLock;
 use async_trait::async_trait;
 use futures_timer::Delay;
-use futures_util::future::{self, Either, Fuse};
-use futures_util::stream::StreamExt;
-use futures_util::FutureExt;
+use futures_util::future::{self, Either};
+use futures_util::stream::{FuturesUnordered, StreamExt};
+use futures_util::{Future, Stream};
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
-use super::error::RegisterMethodError;
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
-/// Wrapper over a [`oneshot::Receiver`](tokio::sync::oneshot::Receiver) that reads
+const LOG_TARGET: &str = "jsonrpsee-client";
+
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ThreadSafeRequestManager(Arc<std::sync::Mutex<RequestManager>>);
+
+impl ThreadSafeRequestManager {
+	pub(crate) fn new() -> Self {
+		Self::default()
+	}
+
+	pub(crate) fn lock(&self) -> std::sync::MutexGuard<RequestManager> {
+		self.0.lock().expect("Not poisoned; qed")
+	}
+}
+/// If the background thread is terminated, this type
+/// can be used to read the error cause.
+///
+// NOTE: This is an AsyncRwLock to be &self.
+#[derive(Debug)]
+struct ErrorFromBack(AsyncRwLock<Option<ReadErrorOnce>>);
+
+impl ErrorFromBack {
+	fn new(unread: oneshot::Receiver<Error>) -> Self {
+		Self(AsyncRwLock::new(Some(ReadErrorOnce::Unread(unread))))
+	}
+
+	async fn read_error(&self) -> Error {
+		const PROOF: &str = "Option is only is used to workaround ownership issue and is always Some; qed";
+
+		if let ReadErrorOnce::Read(ref err) = self.0.read().await.as_ref().expect(PROOF) {
+			return Error::RestartNeeded(err.clone());
+		};
+
+		let mut write = self.0.write().await;
+		let state = write.take();
+
+		let err = match state.expect(PROOF) {
+			ReadErrorOnce::Unread(rx) => {
+				let arc_err = Arc::new(match rx.await {
+					Ok(err) => err,
+					// This should never happen because the receiving end is still alive.
+					// Before shutting down the background task a error message should
+					// be emitted.
+					Err(_) => Error::Custom("Error reason could not be found. This is a bug. Please open an issue.".to_string()),
+				});
+				*write = Some(ReadErrorOnce::Read(arc_err.clone()));
+				arc_err
+			}
+			ReadErrorOnce::Read(arc_err) => {
+				*write = Some(ReadErrorOnce::Read(arc_err.clone()));
+				arc_err
+			}
+		};
+
+		Error::RestartNeeded(err)
+	}
+}
+
+/// Wrapper over a [`oneshot::Receiver`] that reads
 /// the underlying channel once and then stores the result in String.
 /// It is possible that the error is read more than once if several calls are made
 /// when the background thread has been terminated.
 #[derive(Debug)]
-enum ErrorFromBack {
+enum ReadErrorOnce {
 	/// Error message is already read.
-	Read(String),
+	Read(Arc<Error>),
 	/// Error message is unread.
 	Unread(oneshot::Receiver<Error>),
-}
-
-impl ErrorFromBack {
-	async fn read_error(self) -> (Self, Error) {
-		match self {
-			Self::Unread(rx) => {
-				let msg = match rx.await {
-					Ok(msg) => msg.to_string(),
-					// This should never happen because the receiving end is still alive.
-					// Would be a bug in the logic of the background task.
-					Err(_) => "Error reason could not be found. This is a bug. Please open an issue.".to_string(),
-				};
-				let err = Error::RestartNeeded(msg.clone());
-				(Self::Read(msg), err)
-			}
-			Self::Read(msg) => (Self::Read(msg.clone()), Error::RestartNeeded(msg)),
-		}
-	}
 }
 
 /// Builder for [`Client`].
@@ -92,6 +135,11 @@ impl Default for ClientBuilder {
 }
 
 impl ClientBuilder {
+	/// Create a builder for the client.
+	pub fn new() -> ClientBuilder {
+		ClientBuilder::default()
+	}
+
 	/// Set request timeout (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
@@ -164,30 +212,39 @@ impl ClientBuilder {
 		R: TransportReceiverT + Send,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_tx, err_rx) = oneshot::channel();
+		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let ping_interval = self.ping_interval;
-		let (on_exit_tx, on_exit_rx) = oneshot::channel();
+		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
+		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
+		let manager = ThreadSafeRequestManager::new();
 
-		tokio::spawn(async move {
-			background_task(
-				sender,
-				receiver,
-				from_front,
-				err_tx,
-				max_buffer_capacity_per_subscription,
-				ping_interval,
-				on_exit_rx,
-			)
-			.await;
-		});
+		tokio::spawn(send_task(SendTaskParams {
+			sender,
+			from_frontend: from_front,
+			close_tx: send_receive_task_sync_tx.clone(),
+			manager: manager.clone(),
+			max_buffer_capacity_per_subscription,
+			ping_interval,
+		}));
+
+		tokio::spawn(read_task(ReadTaskParams {
+			receiver,
+			close_tx: send_receive_task_sync_tx,
+			to_send_task: to_back.clone(),
+			manager,
+			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+		}));
+
+		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, err_to_front));
+
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
-			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
+			error: ErrorFromBack::new(err_from_back),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
-			on_exit: Some(on_exit_tx),
+			on_exit: Some(client_dropped_tx),
 		}
 	}
 
@@ -200,29 +257,43 @@ impl ClientBuilder {
 		R: TransportReceiverT,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_tx, err_rx) = oneshot::channel();
+		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
-		let (on_exit_tx, on_exit_rx) = oneshot::channel();
+		let ping_interval = self.ping_interval;
+		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
+		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
+		let manager = ThreadSafeRequestManager::new();
 
-		wasm_bindgen_futures::spawn_local(async move {
-			background_task(
-				sender,
-				receiver,
-				from_front,
-				err_tx,
-				max_buffer_capacity_per_subscription,
-				None,
-				on_exit_rx,
-			)
-			.await;
-		});
+		wasm_bindgen_futures::spawn_local(send_task(SendTaskParams {
+			sender,
+			from_frontend: from_front,
+			close_tx: send_receive_task_sync_tx.clone(),
+			manager: manager.clone(),
+			max_buffer_capacity_per_subscription,
+			ping_interval,
+		}));
+
+		wasm_bindgen_futures::spawn_local(read_task(ReadTaskParams {
+			receiver,
+			close_tx: send_receive_task_sync_tx,
+			to_send_task: to_back.clone(),
+			manager,
+			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+		}));
+
+		wasm_bindgen_futures::spawn_local(wait_for_shutdown(
+			send_receive_task_sync_rx,
+			client_dropped_rx,
+			err_to_front,
+		));
+
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
-			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
+			error: ErrorFromBack::new(err_from_back),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
-			on_exit: Some(on_exit_tx),
+			on_exit: Some(client_dropped_tx),
 		}
 	}
 }
@@ -232,9 +303,7 @@ impl ClientBuilder {
 pub struct Client {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
-	/// If the background thread terminates the error is sent to this channel.
-	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
-	error: Mutex<ErrorFromBack>,
+	error: ErrorFromBack,
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
@@ -244,22 +313,31 @@ pub struct Client {
 	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
 	/// When the client is dropped a message is sent to the background thread.
-	on_exit: Option<tokio::sync::oneshot::Sender<()>>,
+	on_exit: Option<oneshot::Sender<()>>,
 }
 
 impl Client {
+	/// Create a builder for the server.
+	pub fn builder() -> ClientBuilder {
+		ClientBuilder::new()
+	}
+
 	/// Checks if the client is connected to the target.
 	pub fn is_connected(&self) -> bool {
 		!self.to_back.is_closed()
 	}
 
-	// Reads the error message from the backend thread.
-	async fn read_error_from_backend(&self) -> Error {
-		let mut err_lock = self.error.lock().await;
-		let from_back = std::mem::replace(&mut *err_lock, ErrorFromBack::Read(String::new()));
-		let (next_state, err) = from_back.read_error().await;
-		*err_lock = next_state;
-		err
+	/// This is similar to [`Client::on_disconnect`] but it can be used to get
+	/// the reason why the client was disconnected but it's not cancel-safe.
+	/// 
+	/// The typical use-case is that this method will be called after
+	/// [`Client::on_disconnect`] has returned in a "select loop".
+	/// 
+	/// # Cancel-safety
+	/// 
+	/// This method is not cancel-safe
+	pub async fn disconnect_reason(&self) -> Error {
+		self.error.read_error().await
 	}
 
 	/// Completes when the client is disconnected or the client's background task encountered an error.
@@ -269,7 +347,7 @@ impl Client {
 	///
 	/// This method is cancel safe.
 	pub async fn on_disconnect(&self) {
-		self.to_back.closed().await
+		self.to_back.closed().await;
 	}
 }
 
@@ -303,7 +381,7 @@ impl ClientT for Client {
 
 		match future::select(fut, Delay::new(self.request_timeout)).await {
 			Either::Left((Ok(()), _)) => Ok(()),
-			Either::Left((Err(_), _)) => Err(self.read_error_from_backend().await),
+			Either::Left((Err(_), _)) => Err(self.disconnect_reason().await),
 			Either::Right((_, _)) => Err(Error::RequestTimeout),
 		}
 	}
@@ -330,13 +408,13 @@ impl ClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.read_error_from_backend().await);
+			return Err(self.disconnect_reason().await);
 		}
 
 		let json_value = match call_with_timeout(self.request_timeout, send_back_rx).await {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
+			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
 		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&json_value), id), self.max_log_length);
@@ -378,14 +456,14 @@ impl ClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.read_error_from_backend().await);
+			return Err(self.disconnect_reason().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 		let json_values = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
+			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
 		rx_log_from_json(&json_values, self.max_log_length);
@@ -457,13 +535,13 @@ impl SubscriptionClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.read_error_from_backend().await);
+			return Err(self.disconnect_reason().await);
 		}
 
 		let (notifs_rx, sub_id) = match call_with_timeout(self.request_timeout, send_back_rx).await {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
+			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
 		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&sub_id), id_unsub), self.max_log_length);
@@ -488,7 +566,7 @@ impl SubscriptionClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.read_error_from_backend().await);
+			return Err(self.disconnect_reason().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
@@ -496,7 +574,7 @@ impl SubscriptionClientT for Client {
 		let (notifs_rx, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
+			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Method(method)))
@@ -506,46 +584,43 @@ impl SubscriptionClientT for Client {
 /// Handle backend messages.
 ///
 /// Returns an error if the main background loop should be terminated.
-async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
+fn handle_backend_messages<R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
-	manager: &mut RequestManager,
-	sender: &mut S,
+	manager: &ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
-) -> Result<(), Error> {
+) -> Result<Option<FrontToBack>, Error> {
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
-	async fn handle_recv_message<S: TransportSenderT>(
+	fn handle_recv_message(
 		raw: &[u8],
-		manager: &mut RequestManager,
-		sender: &mut S,
+		manager: &ThreadSafeRequestManager,
 		max_buffer_capacity_per_subscription: usize,
-	) -> Result<(), Error> {
+	) -> Result<Option<FrontToBack>, Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
 
 		match first_non_whitespace {
 			Some(b'{') => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
-					match process_single_response(manager, single, max_buffer_capacity_per_subscription) {
-						Ok(Some(unsub)) => {
-							stop_subscription(sender, manager, unsub).await;
-						}
-						Ok(None) => (),
-						Err(err) => return Err(err),
+					let maybe_unsub =
+						process_single_response(&mut manager.lock(), single, max_buffer_capacity_per_subscription)?;
+
+					if let Some(unsub) = maybe_unsub {
+						return Ok(Some(FrontToBack::Request(unsub)));
 					}
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
-					if let Err(Some(unsub)) = process_subscription_response(manager, response) {
-						stop_subscription(sender, manager, unsub).await;
+					if let Err(Some(sub_id)) = process_subscription_response(&mut manager.lock(), response) {
+						return Ok(Some(FrontToBack::SubscriptionClosed(sub_id)));
 					}
 				}
 				// Subscription error response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
-					let _ = process_subscription_close_response(manager, response);
+					process_subscription_close_response(&mut manager.lock(), response);
 				}
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
-					let _ = process_notification(manager, notif);
+					process_notification(&mut manager.lock(), notif);
 				} else {
 					return Err(unparse_error(raw));
 				}
@@ -562,7 +637,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 							return Err(unparse_error(raw));
 						};
 
-						let id = response.id.try_parse_inner_as_number().ok_or(Error::InvalidRequestId)?;
+						let id = response.id.try_parse_inner_as_number()?;
 						let result = ResponseSuccess::try_from(response).map(|s| s.result);
 						batch.push(InnerBatchResponse { id, result });
 
@@ -580,7 +655,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 					if let Some(mut range) = range {
 						// the range is exclusive so need to add one.
 						range.end += 1;
-						process_batch_response(manager, batch, range)?;
+						process_batch_response(&mut manager.lock(), batch, range)?;
 					} else {
 						return Err(Error::EmptyBatchRequest);
 					}
@@ -593,96 +668,101 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			}
 		};
 
-		Ok(())
+		Ok(None)
 	}
 
 	match message {
 		Some(Ok(ReceivedMessage::Pong)) => {
-			tracing::debug!("Received pong");
+			tracing::debug!(target: LOG_TARGET, "Received pong");
+			Ok(None)
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, sender, max_buffer_capacity_per_subscription).await?;
+			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)
 		}
 		Some(Ok(ReceivedMessage::Text(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, sender, max_buffer_capacity_per_subscription).await?;
+			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)
 		}
-		Some(Err(e)) => {
-			return Err(Error::Transport(e.into()));
-		}
-		None => {
-			return Err(Error::Custom("TransportReceiver dropped".into()));
-		}
+		Some(Err(e)) => Err(Error::Transport(e.into())),
+		None => Err(Error::Custom("TransportReceiver dropped".into())),
 	}
-
-	Ok(())
 }
 
 /// Handle frontend messages.
 async fn handle_frontend_messages<S: TransportSenderT>(
 	message: FrontToBack,
-	manager: &mut RequestManager,
+	manager: &ThreadSafeRequestManager,
 	sender: &mut S,
 	max_buffer_capacity_per_subscription: usize,
-) {
+) -> Result<(), S::Error> {
 	match message {
 		FrontToBack::Batch(batch) => {
-			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
-				tracing::warn!("[backend]: Batch request already pending: {:?}", batch.ids);
-				let _ = send_back.send(Err(Error::InvalidRequestId));
-				return;
+			if let Err(send_back) = manager.lock().insert_pending_batch(batch.ids.clone(), batch.send_back) {
+				tracing::warn!(target: LOG_TARGET, "Batch request already pending: {:?}", batch.ids);
+				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!("{:?}", batch.ids)).into()));
+				return Ok(());
 			}
 
-			if let Err(e) = sender.send(batch.raw).await {
-				tracing::warn!("[backend]: Batch request failed: {:?}", e);
-				manager.complete_pending_batch(batch.ids);
-			}
+			sender.send(batch.raw).await?;
 		}
 		// User called `notification` on the front-end
 		FrontToBack::Notification(notif) => {
-			if let Err(e) = sender.send(notif).await {
-				tracing::warn!("[backend]: Notification failed: {:?}", e);
-			}
+			sender.send(notif).await?;
 		}
 		// User called `request` on the front-end
-		FrontToBack::Request(request) => match sender.send(request.raw).await {
-			Ok(_) => manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed"),
-			Err(e) => {
-				tracing::warn!("[backend]: Request failed: {:?}", e);
-				let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
+		FrontToBack::Request(request) => {
+			if let Err(send_back) = manager.lock().insert_pending_call(request.id.clone(), request.send_back) {
+				tracing::warn!(target: LOG_TARGET, "Denied duplicate method call");
+
+				if let Some(s) = send_back {
+					let _ = s.send(Err(InvalidRequestId::Occupied(request.id.to_string()).into()));
+				}
+				return Ok(());
 			}
-		},
+
+			sender.send(request.raw).await?;
+		}
 		// User called `subscribe` on the front-end.
-		FrontToBack::Subscribe(sub) => match sender.send(sub.raw).await {
-			Ok(_) => manager
-				.insert_pending_subscription(
-					sub.subscribe_id,
-					sub.unsubscribe_id,
-					sub.send_back,
-					sub.unsubscribe_method,
-				)
-				.expect("Request ID unused checked above; qed"),
-			Err(e) => {
-				tracing::warn!("[backend]: Subscription failed: {:?}", e);
-				let _ = sub.send_back.send(Err(Error::Transport(e.into())));
+		FrontToBack::Subscribe(sub) => {
+			if let Err(send_back) = manager.lock().insert_pending_subscription(
+				sub.subscribe_id.clone(),
+				sub.unsubscribe_id.clone(),
+				sub.send_back,
+				sub.unsubscribe_method,
+			) {
+				tracing::warn!(target: LOG_TARGET, "Denied duplicate subscription");
+
+				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!(
+					"sub_id={}:req_id={}",
+					sub.subscribe_id, sub.unsubscribe_id
+				))
+				.into()));
+				return Ok(());
 			}
-		},
+
+			sender.send(sub.raw).await?;
+		}
 		// User dropped a subscription.
 		FrontToBack::SubscriptionClosed(sub_id) => {
-			tracing::trace!("[backend]: Closing subscription: {:?}", sub_id);
+			tracing::trace!(target: LOG_TARGET, "Closing subscription: {:?}", sub_id);
 			// NOTE: The subscription may have been closed earlier if
 			// the channel was full or disconnected.
-			if let Some(unsub) = manager
-				.get_request_id_by_subscription_id(&sub_id)
-				.and_then(|req_id| build_unsubscribe_message(manager, req_id, sub_id))
-			{
-				stop_subscription(sender, manager, unsub).await;
+
+			let maybe_unsub = {
+				let m = &mut *manager.lock();
+
+				m.get_request_id_by_subscription_id(&sub_id)
+					.and_then(|req_id| build_unsubscribe_message(m, req_id, sub_id))
+			};
+
+			if let Some(unsub) = maybe_unsub {
+				stop_subscription::<S>(sender, unsub).await?;
 			}
 		}
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
 
-			if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
+			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
 			} else {
 				let _ =
@@ -691,115 +771,11 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User dropped the NotificationHandler for this method
 		FrontToBack::UnregisterNotification(method) => {
-			let _ = manager.remove_notification_handler(&method);
+			let _ = manager.lock().remove_notification_handler(&method);
 		}
-	}
-}
+	};
 
-/// Function being run in the background that processes messages from the frontend.
-async fn background_task<S, R>(
-	mut sender: S,
-	receiver: R,
-	frontend: mpsc::Receiver<FrontToBack>,
-	front_error: oneshot::Sender<Error>,
-	max_buffer_capacity_per_subscription: usize,
-	ping_interval: Option<Duration>,
-	on_exit: oneshot::Receiver<()>,
-) where
-	S: TransportSenderT,
-	R: TransportReceiverT,
-{
-	// Create either a valid delay fuse triggered every provided `duration`,
-	// or create a terminated fuse that's never selected if the provided `duration` is None.
-	fn ping_fut(ping_interval: Option<Duration>) -> Fuse<Delay> {
-		if let Some(duration) = ping_interval {
-			Delay::new(duration).fuse()
-		} else {
-			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
-			Fuse::<Delay>::terminated()
-		}
-	}
-
-	let mut manager = RequestManager::new();
-
-	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
-		let res = receiver.receive().await;
-		Some((res, receiver))
-	});
-	let frontend = tokio_stream::wrappers::ReceiverStream::new(frontend);
-
-	tokio::pin!(backend_event, frontend);
-
-	// Place frontend and backend messages into their own select.
-	// This implies that either messages are received (both front or backend),
-	// or the submitted ping timer expires (if provided).
-	let mut message_fut = future::select(frontend.next(), backend_event.next());
-	let mut exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
-
-	loop {
-		match future::select(message_fut, exit_or_ping_fut).await {
-			// Message received from the frontend.
-			Either::Left((Either::Left((frontend_value, backend)), exit_or_ping)) => {
-				let frontend_value = if let Some(value) = frontend_value {
-					value
-				} else {
-					// User dropped the sender side of the channel.
-					// There is nothing to do just terminate.
-					tracing::debug!("[backend]: Client dropped");
-					break;
-				};
-
-				handle_frontend_messages(
-					frontend_value,
-					&mut manager,
-					&mut sender,
-					max_buffer_capacity_per_subscription,
-				)
-				.await;
-
-				// Advance frontend, save backend.
-				message_fut = future::select(frontend.next(), backend);
-				exit_or_ping_fut = exit_or_ping;
-			}
-			// Message received from the backend.
-			Either::Left((Either::Right((backend_value, frontend)), exit_or_ping)) => {
-				if let Err(err) = handle_backend_messages::<S, R>(
-					backend_value,
-					&mut manager,
-					&mut sender,
-					max_buffer_capacity_per_subscription,
-				)
-				.await
-				{
-					tracing::error!("[backend]: {}", err);
-					let _ = front_error.send(err);
-					break;
-				}
-				// Advance backend, save frontend.
-				message_fut = future::select(frontend, backend_event.next());
-				exit_or_ping_fut = exit_or_ping;
-			}
-			// The client is closed.
-			Either::Right((Either::Left((_, _)), _)) => {
-				break;
-			}
-			// Submit ping interval was triggered if enabled.
-			Either::Right((Either::Right((_, on_exit)), msg)) => {
-				if let Err(err) = sender.send_ping().await {
-					tracing::error!("[backend]: Could not send ping frame: {}", err);
-					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
-					break;
-				}
-				message_fut = msg;
-				exit_or_ping_fut = future::select(on_exit, ping_fut(ping_interval));
-			}
-		};
-	}
-
-	// Wake the `on_disconnect` method.
-	frontend.close();
-	// Send close message to the server.
-	_ = sender.close().await;
+	Ok(())
 }
 
 fn unparse_error(raw: &[u8]) -> Error {
@@ -811,4 +787,187 @@ fn unparse_error(raw: &[u8]) -> Error {
 	};
 
 	Error::Custom(format!("Unparseable message: {json_str}"))
+}
+
+struct SendTaskParams<S: TransportSenderT> {
+	sender: S,
+	from_frontend: mpsc::Receiver<FrontToBack>,
+	close_tx: mpsc::Sender<Result<(), Error>>,
+	manager: ThreadSafeRequestManager,
+	max_buffer_capacity_per_subscription: usize,
+	ping_interval: Option<Duration>,
+}
+
+async fn send_task<S>(params: SendTaskParams<S>)
+where
+	S: TransportSenderT,
+{
+	let SendTaskParams {
+		mut sender,
+		mut from_frontend,
+		close_tx,
+		manager,
+		max_buffer_capacity_per_subscription,
+		ping_interval,
+	} = params;
+
+	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
+	// are cancel-safe.
+	let res = if let Some(ping_interval) = ping_interval {
+		let mut ping = tokio::time::interval_at(tokio::time::Instant::now() + ping_interval, ping_interval);
+
+		loop {
+			tokio::select! {
+				biased;
+				_ = close_tx.closed() => break Ok(()),
+				maybe_msg = from_frontend.recv() => {
+					let Some(msg) = maybe_msg else {
+						break Ok(());
+					};
+
+					if let Err(e) =
+						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+					{
+						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
+						break Err(Error::Transport(e.into()));
+					}
+				}
+				_ = ping.tick() => {
+					if let Err(err) = sender.send_ping().await {
+						tracing::error!(target: LOG_TARGET, "Could not send ping frame: {err}");
+						break Err(Error::Custom("Could not send ping frame".into()));
+					}
+				}
+			}
+		}
+	} else {
+		loop {
+			tokio::select! {
+				biased;
+				_ = close_tx.closed() => break Ok(()),
+				maybe_msg = from_frontend.recv() => {
+					let Some(msg) = maybe_msg else {
+						break Ok(());
+					};
+
+					if let Err(e) =
+						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+					{
+						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
+						break Err(Error::Transport(e.into()));
+					}
+				}
+			}
+		}
+	};
+
+	from_frontend.close();
+	let _ = sender.close().await;
+	let _ = close_tx.send(res).await;
+}
+
+struct ReadTaskParams<R: TransportReceiverT> {
+	receiver: R,
+	close_tx: mpsc::Sender<Result<(), Error>>,
+	to_send_task: mpsc::Sender<FrontToBack>,
+	manager: ThreadSafeRequestManager,
+	max_buffer_capacity_per_subscription: usize,
+}
+
+async fn read_task<R>(params: ReadTaskParams<R>)
+where
+	R: TransportReceiverT,
+{
+	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription } = params;
+
+	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
+		let res = receiver.receive().await;
+		Some((res, receiver))
+	});
+
+	// These "unsubscription" occurs if a subscription gets dropped by frontend before ack:ed or that if
+	// a subscription couldn't keep with the server.
+	//
+	// Thus, these needs to be sent to the server inorder to tell the server to not bother
+	// with those messages anymore.
+	let pending_unsubscribes = MaybePendingFutures::new();
+
+	tokio::pin!(backend_event, pending_unsubscribes);
+
+	// This is safe because futures::Stream and tokio::mpsc::Sender are cancel-safe.
+	let res = loop {
+		tokio::select! {
+			// Closed.
+			biased;
+			_ = close_tx.closed() => break Ok(()),
+			// Unsubscribe completed.
+			_ = pending_unsubscribes.next() => (),
+			// New message received.
+			maybe_msg = backend_event.next() => {
+				let Some(msg) = maybe_msg else { break Ok(()) };
+
+				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
+					Ok(Some(msg)) => {
+						pending_unsubscribes.push(to_send_task.send(msg));
+					}
+					Err(e) => {
+						tracing::error!(target: LOG_TARGET, "Failed to read message: {e}");
+						break Err(e);
+					}
+					Ok(None) => (),
+				}
+
+			}
+		}
+	};
+
+	let _ = close_tx.send(res).await;
+}
+
+async fn wait_for_shutdown(
+	mut close_rx: mpsc::Receiver<Result<(), Error>>,
+	client_dropped: oneshot::Receiver<()>,
+	err_to_front: oneshot::Sender<Error>,
+) {
+	let rx_item = close_rx.recv();
+
+	tokio::pin!(rx_item);
+
+	// Send an error to the frontend if the send or receive task completed with an error.
+	if let Either::Left((Some(Err(err)), _)) = future::select(rx_item, client_dropped).await {
+		let _ = err_to_front.send(err);
+	}
+}
+
+/// A wrapper around `FuturesUnordered` that doesn't return `None` when it's empty.
+struct MaybePendingFutures<Fut> {
+	futs: FuturesUnordered<Fut>,
+	waker: Option<Waker>,
+}
+
+impl<Fut> MaybePendingFutures<Fut> {
+	fn new() -> Self {
+		Self { futs: FuturesUnordered::new(), waker: None }
+	}
+
+	fn push(&mut self, fut: Fut) {
+		self.futs.push(fut);
+
+		if let Some(w) = self.waker.take() {
+			w.wake();
+		}
+	}
+}
+
+impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
+	type Item = Fut::Output;
+
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		if self.futs.is_empty() {
+			self.waker = Some(cx.waker().clone());
+			return Poll::Pending;
+		}
+
+		self.futs.poll_next_unpin(cx)
+	}
 }
