@@ -40,8 +40,8 @@ pub mod middleware;
 #[cfg(test)]
 mod tests;
 
-pub use jsonrpsee_core::error::RegisterMethodError;
 pub use future::{stop_channel, ConnectionGuard, ConnectionPermit, ServerHandle, StopHandle};
+pub use jsonrpsee_core::error::RegisterMethodError;
 pub use jsonrpsee_core::server::*;
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;

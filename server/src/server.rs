@@ -891,7 +891,10 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///   let server = Server::builder().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> std::io::Result<Server<HttpMiddleware, RpcMiddleware>> {
+	pub fn build_from_tcp(
+		self,
+		listener: impl Into<StdTcpListener>,
+	) -> std::io::Result<Server<HttpMiddleware, RpcMiddleware>> {
 		let listener = TcpListener::from_std(listener.into())?;
 
 		Ok(Server {

@@ -47,7 +47,7 @@ use url::Url;
 
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
 use jsonrpsee_core::client::{
-	CertificateStore, ClientBuilder, IdKind, MaybeSend, TransportReceiverT, TransportSenderT, Error
+	CertificateStore, ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
 };
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 
