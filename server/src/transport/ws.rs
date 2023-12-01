@@ -181,7 +181,7 @@ async fn send_task(
 ) {
 	let ping_interval = match ping_config {
 		None => IntervalStream::pending(),
-		// NOTE: we are emitted a tick here immidiately to sync
+		// NOTE: we are emitted a tick here immediately to sync
 		// with how the receive task work because it starts measuring the pong
 		// when it starts up.
 		Some(p) => IntervalStream::new(interval(p.ping_interval)),
