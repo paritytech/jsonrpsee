@@ -40,7 +40,7 @@ use helpers::{
 	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
-use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT, SubscriptionError};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{Error, JsonValue};
@@ -296,7 +296,7 @@ async fn ws_subscription_several_clients_with_drop() {
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
 		let client = WsClientBuilder::default()
-			.max_buffer_capacity_per_subscription(u32::MAX as usize)
+			.max_buffer_capacity_per_subscription(u16::MAX as usize)
 			.build(&server_url)
 			.await
 			.unwrap();
@@ -339,7 +339,7 @@ async fn ws_subscription_several_clients_with_drop() {
 }
 
 #[tokio::test]
-async fn ws_subscription_without_polling_does_not_make_client_unusable() {
+async fn ws_subscription_slow_reader() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
@@ -349,24 +349,14 @@ async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 	let mut hello_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
-	// don't poll the subscription stream for 2 seconds, should be full now.
+	// Don't read the subscription stream for 2 seconds, should be full now.
 	tokio::time::sleep(Duration::from_secs(2)).await;
 
-	for _ in 0..4 {
-		assert!(hello_sub.next().await.unwrap().is_ok());
-	}
+	assert!(matches!(hello_sub.next().await, Some(Err(SubscriptionError::Lagged(_)))));
 
-	// NOTE: this is now unusable and unregistered.
-	assert!(hello_sub.next().await.is_none());
-
-	// The client should still be useable => make sure it still works.
-	let _hello_req: JsonValue = client.request("say_hello", rpc_params![]).await.unwrap();
-
-	// The same subscription should be possible to register again.
-	let mut other_sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-
-	other_sub.next().await.unwrap().unwrap();
+	// Ensure that subscription stream yields after lagging.
+	assert!(hello_sub.next().with_default_timeout().await.unwrap().unwrap().is_ok());
+	assert!(client.is_connected());
 }
 
 #[tokio::test]

@@ -37,11 +37,11 @@ use std::{
 	ops::Range,
 };
 
-use crate::{client::BatchEntry, Error};
+use crate::{client::{BatchEntry, SubscriptionStream}, Error};
 use jsonrpsee_types::{Id, SubscriptionId};
 use rustc_hash::FxHashMap;
 use serde_json::value::Value as JsonValue;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{oneshot, broadcast};
 
 #[derive(Debug)]
 enum Kind {
@@ -63,10 +63,10 @@ pub(crate) enum RequestStatus {
 	Invalid,
 }
 
-type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
+type PendingCallOneshot = Option<oneshot::Sender<Result<serde_json::Value, Error>>>;
 type PendingBatchOneshot = oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>;
-type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>;
-type SubscriptionSink = mpsc::Sender<JsonValue>;
+type PendingSubscriptionOneshot = oneshot::Sender<Result<(SubscriptionStream, SubscriptionId<'static>), Error>>;
+type SubscriptionSink = broadcast::Sender<serde_json::Value>;
 type UnsubscribeMethod = String;
 type RequestId = Id<'static>;
 
@@ -343,7 +343,7 @@ mod tests {
 	use super::{Error, RequestManager};
 	use jsonrpsee_types::{Id, SubscriptionId};
 	use serde_json::Value as JsonValue;
-	use tokio::sync::{mpsc, oneshot};
+	use tokio::sync::{oneshot, broadcast};
 
 	#[test]
 	fn insert_remove_pending_request_works() {
@@ -356,8 +356,8 @@ mod tests {
 
 	#[test]
 	fn insert_remove_subscription_works() {
-		let (pending_sub_tx, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
-		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
+		let (pending_sub_tx, _) = oneshot::channel();
+		let (sub_tx, _) = broadcast::channel(1);
 		let mut manager = RequestManager::new();
 		assert!(manager
 			.insert_pending_subscription(Id::Number(1), Id::Number(2), pending_sub_tx, "unsubscribe_method".into())
@@ -383,10 +383,10 @@ mod tests {
 
 	#[test]
 	fn insert_subscription_with_same_sub_and_unsub_id_should_err() {
-		let (tx1, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
-		let (tx2, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
-		let (tx3, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
-		let (tx4, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
+		let (tx1, _) = oneshot::channel();
+		let (tx2, _) = oneshot::channel();
+		let (tx3, _) = oneshot::channel();
+		let (tx4, _) = oneshot::channel();
 		let mut manager = RequestManager::new();
 		assert!(manager
 			.insert_pending_subscription(Id::Str("1".into()), Id::Str("1".into()), tx1, "unsubscribe_method".into())
@@ -420,10 +420,10 @@ mod tests {
 
 	#[test]
 	fn pending_method_call_faulty() {
-		let (request_tx1, _) = oneshot::channel::<Result<JsonValue, Error>>();
-		let (request_tx2, _) = oneshot::channel::<Result<JsonValue, Error>>();
-		let (pending_sub_tx, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
-		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
+		let (request_tx1, _) = oneshot::channel();
+		let (request_tx2, _) = oneshot::channel();
+		let (pending_sub_tx, _) = oneshot::channel();
+		let (sub_tx, _) = broadcast::channel(1);
 
 		let mut manager = RequestManager::new();
 		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx1)).is_ok());
@@ -448,10 +448,10 @@ mod tests {
 
 	#[test]
 	fn pending_subscription_faulty() {
-		let (request_tx, _) = oneshot::channel::<Result<JsonValue, Error>>();
-		let (pending_sub_tx1, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
-		let (pending_sub_tx2, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
-		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
+		let (request_tx, _) = oneshot::channel();
+		let (pending_sub_tx1, _) = oneshot::channel();
+		let (pending_sub_tx2, _) = oneshot::channel();
+		let (sub_tx, _) = broadcast::channel(1);
 
 		let mut manager = RequestManager::new();
 		assert!(manager
@@ -479,10 +479,10 @@ mod tests {
 
 	#[test]
 	fn active_subscriptions_faulty() {
-		let (request_tx, _) = oneshot::channel::<Result<JsonValue, Error>>();
-		let (pending_sub_tx, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
-		let (sub_tx1, _) = mpsc::channel::<JsonValue>(1);
-		let (sub_tx2, _) = mpsc::channel::<JsonValue>(1);
+		let (request_tx, _) = oneshot::channel();
+		let (pending_sub_tx, _) = oneshot::channel();
+		let (sub_tx1, _) = broadcast::channel(1);
+		let (sub_tx2, _) = broadcast::channel(1);
 
 		let mut manager = RequestManager::new();
 

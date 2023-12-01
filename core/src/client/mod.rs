@@ -37,12 +37,17 @@ use crate::error::Error;
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
 use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, broadcast};
+
+pub(crate) type SubscriptionStream = broadcast::Receiver<serde_json::Value>;
+
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
@@ -213,18 +218,39 @@ pub enum SubscriptionKind {
 	Method(String),
 }
 
-/// Active subscription on the client.
-///
-/// It will try to `unsubscribe` in the drop implementation
-/// but it may fail if the underlying buffer is full.
-/// Thus, if you want to ensure it's actually unsubscribed then
-/// [`Subscription::unsubscribe`] is recommended to use.
+/// Represent a client-side subscription which is implemented on top of 
+/// a bounded mpsc channel where it's possible that the receiver may
+/// not keep it with the sender side a.k.a "slow receiver problem"
+/// 
+/// ## Lagging
+/// 
+/// As all sent messages must be kept in a buffer until the underlying
+/// stream is polled, it's possible that the server is producing
+/// subscription notifications faster than the client can handle.
+/// 
+/// When that occurs an error [`SubscriptionError::Lagged`] is emitted
+/// and after that point it's not possible to use the subscription anymore.
+/// The connection is still alive and you may just re-subscribe again
+/// but some messages may be lost if that occurs.
+/// 
+/// To avoid `Lagging` from happening you may increase the buffer capacity
+/// or ensure that [`Subscription::next`] polled often enough such as 
+/// in a separate tokio task.
+/// 
+/// ## Connection closed
+/// 
+/// When the connection is closed the underlying stream will eventually
+/// return `None` to indicate that.
+/// 
+/// Because the subscription is implemented on top of a mpsc channel
+/// it will not instantly return `None` when the connection is closed 
+/// because all messages buffered must be read before it to return `None`.
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
-	notifs_rx: mpsc::Receiver<JsonValue>,
+	notifs_rx: BroadcastStream<serde_json::Value>,
 	/// Callback kind.
 	kind: Option<SubscriptionKind>,
 	/// Marker in order to pin the `Notif` parameter.
@@ -239,9 +265,10 @@ impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
 	pub fn new(
 		to_back: mpsc::Sender<FrontToBack>,
-		notifs_rx: mpsc::Receiver<JsonValue>,
+		notifs_rx: broadcast::Receiver<serde_json::Value>,
 		kind: SubscriptionKind,
 	) -> Self {
+		let notifs_rx = BroadcastStream::new(notifs_rx);
 		Self { to_back, notifs_rx, kind: Some(kind), marker: PhantomData }
 	}
 
@@ -259,8 +286,9 @@ impl<Notif> Subscription<Notif> {
 		// If this fails the connection was already closed i.e, already "unsubscribed".
 		let _ = self.to_back.send(msg).await;
 
-		// wait until notif channel is closed then the subscription was closed.
-		while self.notifs_rx.recv().await.is_some() {}
+		// wait until notif channel is closed then the subscription is closed.
+		while self.notifs_rx.next().await.is_some() {}
+
 		Ok(())
 	}
 }
@@ -301,7 +329,7 @@ pub struct SubscriptionMessage {
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>,
+	pub send_back: oneshot::Sender<Result<(broadcast::Receiver<serde_json::Value>, SubscriptionId<'static>), Error>>,
 }
 
 /// RegisterNotification message.
@@ -312,7 +340,7 @@ pub struct RegisterNotificationMessage {
 	/// We return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, String), Error>>,
+	pub send_back: oneshot::Sender<Result<(broadcast::Receiver<serde_json::Value>, String), Error>>,
 }
 
 /// Message that the Client can send to the background task.
@@ -343,29 +371,52 @@ where
 	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream.
-	/// This may return `None` if the subscription has been terminated,
-	/// which may happen if the channel becomes full or is dropped.
+	/// 
+	/// The return values can be:
+	/// - `Some(Ok(val)`: The message was succesfully received and decoded.
+	/// - `Some(Err(SubscriptionError::Lagged))`: The subscription buffer was full and the message could not be received.
+	/// - `Some(Err(SubscriptionError::Parse: the value failed to be decode as `Notif`
+	/// - `None`: The connection was closed.
 	///
 	/// **Note:** This has an identical signature to the [`StreamExt::next`]
 	/// method (and delegates to that). Import [`StreamExt`] if you'd like
 	/// access to other stream combinator methods.
 	#[allow(clippy::should_implement_trait)]
-	pub async fn next(&mut self) -> Option<Result<Notif, Error>> {
+	pub async fn next(&mut self) -> Option<Result<Notif, SubscriptionError>> {
 		StreamExt::next(self).await
 	}
 }
+
+/// Error that may occur when subscribing.
+#[derive(Debug, thiserror::Error)]
+pub enum SubscriptionError {
+	/// The subscription lagged too far behind i.e, could not keep up with the server.
+	/// The error itself indicates how many messages that were missed.
+	/// 
+	/// You may decide to drop the subscription or continue
+	/// and the next recv will fetch the oldest message in the buffer.
+	#[error("The subscription lagged and missed {0} messages")]
+	Lagged(u64),
+	/// The subscription notification parsing failed. 
+	#[error("{0}")]
+	Parse(#[from] serde_json::Error)
+}
+
 
 impl<Notif> Stream for Subscription<Notif>
 where
 	Notif: DeserializeOwned,
 {
-	type Item = Result<Notif, Error>;
+	type Item = Result<Notif, SubscriptionError>;
+
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
-		let n = futures_util::ready!(self.notifs_rx.poll_recv(cx));
-		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
-			Ok(parsed) => Ok(parsed),
-			Err(e) => Err(Error::ParseError(e)),
-		});
+		
+		let res = match futures_util::ready!(self.notifs_rx.poll_next_unpin(cx)) {
+			Some(Ok(val)) => Some(serde_json::from_value::<Notif>(val).map_err(|e| SubscriptionError::Parse(e))),
+			Some(Err(BroadcastStreamRecvError::Lagged(n))) => Some(Err(SubscriptionError::Lagged(n))),
+			None => None,
+		};
+
 		task::Poll::Ready(res)
 	}
 }

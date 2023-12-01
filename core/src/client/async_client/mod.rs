@@ -35,7 +35,7 @@ use futures_util::{Future, Stream};
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, broadcast};
 use tracing::instrument;
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
@@ -164,6 +164,8 @@ impl ClientBuilder {
 	///
 	/// This function panics if `max` is 0.
 	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
+		assert!(max > 0 && max < tokio::sync::Semaphore::MAX_PERMITS);
+
 		self.max_buffer_capacity_per_subscription = max;
 		self
 	}
@@ -757,7 +759,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
+			let (subscribe_tx, subscribe_rx) = broadcast::channel(max_buffer_capacity_per_subscription);
 
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));

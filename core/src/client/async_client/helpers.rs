@@ -33,7 +33,7 @@ use crate::Error;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{oneshot, broadcast};
 
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
@@ -108,10 +108,10 @@ pub(crate) fn process_subscription_response(
 	};
 
 	match manager.as_subscription_mut(&request_id) {
-		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
-			Ok(()) => Ok(()),
-			Err(err) => {
-				tracing::error!(target: LOG_TARGET, "Dropping subscription {:?} error: {:?}", sub_id, err);
+		Some(send_back_sink) => match send_back_sink.send(response.params.result) {
+			Ok(_) => Ok(()),
+			Err(_) => {
+				tracing::error!(target: LOG_TARGET, "Connection is closed, dropping subscription {:?}", sub_id);
 				Err(Some(sub_id))
 			}
 		},
@@ -151,12 +151,9 @@ pub(crate) fn process_subscription_close_response(
 /// It's possible that user close down the subscription before this notification is received.
 pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
-		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
-			Ok(()) => (),
-			Err(err) => {
-				tracing::warn!(target: LOG_TARGET, "Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
-				let _ = manager.remove_notification_handler(notif.method.into_owned());
-			}
+		Some(send_back_sink) => if send_back_sink.send(notif.params).is_err() {
+			tracing::warn!(target: LOG_TARGET, "Connection is closed, dropping notification handler for {:?}", notif.method);
+			let _ = manager.remove_notification_handler(notif.method.into_owned());
 		},
 		None => {
 			tracing::debug!(target: LOG_TARGET, "Notification: {:?} not a registered method", notif.method);
@@ -207,7 +204,7 @@ pub(crate) fn process_single_response(
 				}
 			};
 
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
+			let (subscribe_tx, subscribe_rx) = broadcast::channel(max_capacity_per_subscription);
 			if manager
 				.insert_subscription(response_id.clone(), unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
 				.is_ok()
