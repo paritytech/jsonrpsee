@@ -281,7 +281,7 @@ impl ConnectionState {
 /// wait until a client is determined as "inactive".
 ///
 /// jsonrpsee doesn't associate the ping/pong frames just that if
-/// pong frame isn't received within `inactive_limit` it's regarded
+/// pong frame isn't received within `inactive_limit` then it's regarded
 /// as missed.
 ///
 /// Such that the `inactive_limit` should be configured to longer than a single
