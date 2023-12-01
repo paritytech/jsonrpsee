@@ -213,12 +213,33 @@ pub enum SubscriptionKind {
 	Method(String),
 }
 
-/// Active subscription on the client.
-///
-/// It will try to `unsubscribe` in the drop implementation
-/// but it may fail if the underlying buffer is full.
-/// Thus, if you want to ensure it's actually unsubscribed then
-/// [`Subscription::unsubscribe`] is recommended to use.
+/// Represent a client-side subscription which is implemented on top of 
+/// a bounded mpsc channel where it's possible that the receiver may
+/// not keep it with the sender side a.k.a "slow receiver problem"
+/// 
+/// ## Lagging
+/// 
+/// As all sent messages must be kept in a buffer until the underlying
+/// stream is polled, it's possible that the server is producing
+/// subscription notifications faster than the client can handle.
+/// 
+/// When that occurs an error [`SubscriptionError::Lagged`] is emitted
+/// and after that point it's not possible to use the subscription anymore.
+/// The connection is still alive and you may just re-subscribe again
+/// but some messages may be lost if that occurs.
+/// 
+/// To avoid `Lagging` from happening you may increase the buffer capacity
+/// or ensure that [`Subscription::next`] polled often enough such as 
+/// in a separate tokio task.
+/// 
+/// ## Connection closed
+/// 
+/// When the connection is closed the underlying stream will eventually
+/// return `None` to indicate that.
+/// 
+/// Because the subscription is implemented on top of a mpsc channel
+/// it will not instantly return `None` when the connection is closed 
+/// because all messages buffered must be read before it to return `None`.
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
@@ -343,29 +364,59 @@ where
 	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream.
-	/// This may return `None` if the subscription has been terminated,
-	/// which may happen if the channel becomes full or is dropped.
+	/// 
+	/// The return values can be:
+	/// - `Some(Ok(val)`: The message was succesfully received and decoded.
+	/// - `Some(Err(SubscriptionError::Lagged))`: The subscription buffer was full and the message could not be received.
+	/// - `Some(Err(SubscriptionError::Parse: the value failed to be decode as `Notif`
+	/// - `None`: The connection was closed.
 	///
 	/// **Note:** This has an identical signature to the [`StreamExt::next`]
 	/// method (and delegates to that). Import [`StreamExt`] if you'd like
 	/// access to other stream combinator methods.
 	#[allow(clippy::should_implement_trait)]
-	pub async fn next(&mut self) -> Option<Result<Notif, Error>> {
+	pub async fn next(&mut self) -> Option<Result<Notif, SubscriptionError>> {
 		StreamExt::next(self).await
 	}
 }
+
+/// Error that may occur when subscribing.
+#[derive(Debug, thiserror::Error)]
+pub enum SubscriptionError {
+	/// Some message could not be handled because
+	/// the underlying channel capacity was full. 
+	/// 
+	/// After this point, it's not possible to utilize the
+	/// subscription again and you need to re-subscribe again.
+	#[error("The subscription lagged and missed at least one message")]
+	Lagged,
+	/// The subscription notification parsing failed. 
+	#[error("{0}")]
+	Parse(#[from] serde_json::Error)
+}
+
 
 impl<Notif> Stream for Subscription<Notif>
 where
 	Notif: DeserializeOwned,
 {
-	type Item = Result<Notif, Error>;
+	type Item = Result<Notif, SubscriptionError>;
+
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let n = futures_util::ready!(self.notifs_rx.poll_recv(cx));
 		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
 			Ok(parsed) => Ok(parsed),
-			Err(e) => Err(Error::ParseError(e)),
+			Err(e) => Err(SubscriptionError::Parse(e)),
 		});
+
+		let res = match res {
+			Some(res) => Some(res),
+			// The tx for the subscription was simply dropped but 
+			// the connection is still alive.
+			None if !self.to_back.is_closed() => Some(Err(SubscriptionError::Lagged)),
+			None => None,
+		};
+
 		task::Poll::Ready(res)
 	}
 }
