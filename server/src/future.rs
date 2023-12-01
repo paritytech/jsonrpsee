@@ -26,9 +26,15 @@
 
 //! Utilities for handling async code.
 
-use jsonrpsee_core::Error;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
+
+use futures_util::{Stream, StreamExt};
+use jsonrpsee_core::Error;
+use pin_project::pin_project;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
+use tokio::time::Interval;
 
 /// Create channel to determine whether
 /// the server shall continue to run or not.
@@ -119,3 +125,32 @@ impl ConnectionGuard {
 
 /// Connection permit.
 pub type ConnectionPermit = OwnedSemaphorePermit;
+
+#[pin_project]
+pub(crate) struct IntervalStream(#[pin] Option<tokio_stream::wrappers::IntervalStream>);
+
+impl IntervalStream {
+	/// Creates a stream which never returns any elements.
+	pub(crate) fn pending() -> Self {
+		Self(None)
+	}
+
+	/// Creates a stream which produces elements with interval of `period`.
+	pub(crate) fn new(interval: Interval) -> Self {
+		Self(Some(tokio_stream::wrappers::IntervalStream::new(interval)))
+	}
+}
+
+impl Stream for IntervalStream {
+	type Item = tokio::time::Instant;
+
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		if let Some(mut stream) = self.project().0.as_pin_mut() {
+			stream.poll_next_unpin(cx)
+		} else {
+			// NOTE: this will not be woken up again and it's by design
+			// to be a pending stream that never returns.
+			Poll::Pending
+		}
+	}
+}
