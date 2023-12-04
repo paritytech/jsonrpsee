@@ -79,9 +79,6 @@ pub enum Error {
 	/// Invalid request ID.
 	#[error("{0}")]
 	InvalidRequestId(#[from] InvalidRequestId),
-	/// A request with the same request ID has already been registered.
-	#[error("A request with the same request ID has already been registered")]
-	DuplicateRequestId,
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,

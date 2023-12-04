@@ -506,9 +506,9 @@ impl SubscriptionClientT for Client {
 		Notif: DeserializeOwned,
 	{
 		if subscribe_method == unsubscribe_method {
-			return Err(Error::RegisterMethod(RegisterMethodError::SubscriptionNameConflict(
+			return Err(RegisterMethodError::SubscriptionNameConflict(
 				unsubscribe_method.to_owned(),
-			)));
+			).into());
 		}
 
 		let guard = self.id_manager.next_request_two_ids()?;
@@ -765,7 +765,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
 			} else {
 				let _ =
-					reg.send_back.send(Err(Error::RegisterMethod(RegisterMethodError::AlreadyRegistered(reg.method))));
+					reg.send_back.send(Err(RegisterMethodError::AlreadyRegistered(reg.method).into()));
 			}
 		}
 		// User dropped the NotificationHandler for this method
