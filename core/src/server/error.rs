@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::SubscriptionMessage;
-use jsonrpsee_types::ErrorObjectOwned;
 use tokio::sync::mpsc;
 
 /// Error that may occur during [`crate::server::MethodSink::try_send`] or [`crate::server::SubscriptionSink::try_send`].
@@ -83,18 +82,4 @@ impl From<mpsc::error::SendTimeoutError<String>> for SendTimeoutError {
 			mpsc::error::SendTimeoutError::Timeout(m) => Self::Timeout(SubscriptionMessage::from_complete_message(m)),
 		}
 	}
-}
-
-/// The error that can occur when [`RpcModule::call`] or [`RpcModule::subscribe`] is invoked.
-#[derive(thiserror::Error, Debug)]
-pub enum CallError {
-	/// Failed to parse the call as valid JSON-RPC.
-	#[error("{0}")]
-	Parse(#[from] serde_json::Error),
-	/// Specific JSON-RPC error.
-	#[error("{0}")]
-	JsonRpc(#[from] ErrorObjectOwned),
-	#[error("Invalid subscription ID: `{0}`")]
-	/// Invalid subscription ID.
-	InvalidSubscriptionId(String),
 }

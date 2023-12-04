@@ -116,7 +116,7 @@ async fn calling_method_without_server() {
 	let err = module.call::<_, EmptyServerParams>("foo", (false,)).await.unwrap_err();
 	assert!(matches!(
 		err,
-		CallError::JsonRpc(err) if err.code() == ErrorCode::InvalidParams.code() && err.message() == INVALID_PARAMS_MSG && err.data().unwrap().get().contains("invalid type: boolean `false`, expected u16 at line 1 column 6")
+		MethodsError::JsonRpc(err) if err.code() == ErrorCode::InvalidParams.code() && err.message() == INVALID_PARAMS_MSG && err.data().unwrap().get().contains("invalid type: boolean `false`, expected u16 at line 1 column 6")
 	));
 
 	// Call async method with params and context
@@ -210,7 +210,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	let err = module.call::<_, EmptyServerParams>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
 
 	assert!(matches!(err,
-		CallError::JsonRpc(err) if err.data().unwrap().get().contains("invalid type: boolean `false`, expected a map at line 1 column 5") &&
+		MethodsError::JsonRpc(err) if err.data().unwrap().get().contains("invalid type: boolean `false`, expected a map at line 1 column 5") &&
 		err.code() == ErrorCode::InvalidParams.code() && err.message() == INVALID_PARAMS_MSG
 	));
 
@@ -229,7 +229,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	// Call async method with option which should `Err`.
 	let err = module.call::<_, Option<String>>("can_have_options", vec![2]).await.unwrap_err();
 	assert!(matches!(err,
-		CallError::JsonRpc(err) if err.message() == "too big number"
+		MethodsError::JsonRpc(err) if err.message() == "too big number"
 	));
 }
 
@@ -335,7 +335,7 @@ async fn subscribing_without_server_bad_params() {
 	let sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
 
 	assert!(
-		matches!(sub, CallError::JsonRpc(e) if e.data().unwrap().get().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code()
+		matches!(sub, MethodsError::JsonRpc(e) if e.data().unwrap().get().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code()
 				&& e.message() == INVALID_PARAMS_MSG
 		)
 	);
@@ -412,7 +412,7 @@ async fn rejected_subscription_without_server() {
 
 	let sub_err = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap_err();
 	assert!(
-		matches!(sub_err, CallError::JsonRpc(e) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
+		matches!(sub_err, MethodsError::JsonRpc(e) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
 	);
 }
 

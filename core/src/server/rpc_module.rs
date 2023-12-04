@@ -43,13 +43,13 @@ use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
-	Id, Params, Request, Response, ResponsePayload, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
+	Id, Params, Request, Response, ResponsePayload, ResponseSuccess, SubscriptionId as RpcSubscriptionId, ErrorObjectOwned,
 };
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 
-use super::{CallError, IntoResponse};
+use super::IntoResponse;
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -77,6 +77,21 @@ pub type MaxResponseSize = usize;
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>);
+
+
+/// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
+#[derive(thiserror::Error, Debug)]
+pub enum MethodsError {
+	/// Failed to parse the call as valid JSON-RPC.
+	#[error("{0}")]
+	Parse(#[from] serde_json::Error),
+	/// Specific JSON-RPC error.
+	#[error("{0}")]
+	JsonRpc(#[from] ErrorObjectOwned),
+	#[error("Invalid subscription ID: `{0}`")]
+	/// Invalid subscription ID.
+	InvalidSubscriptionId(String),
+}
 
 /// This represent a response to a RPC call
 /// and `Subscribe` calls are handled differently
@@ -272,13 +287,13 @@ impl Methods {
 		&self,
 		method: &str,
 		params: Params,
-	) -> Result<T, CallError> {
+	) -> Result<T, MethodsError> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
-		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| CallError::JsonRpc(e.into_owned()))
+		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| MethodsError::JsonRpc(e.into_owned()))
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
@@ -391,7 +406,7 @@ impl Methods {
 		&self,
 		sub_method: &str,
 		params: impl ToRpcParams,
-	) -> Result<Subscription, CallError> {
+	) -> Result<Subscription, MethodsError> {
 		self.subscribe(sub_method, params, u32::MAX as usize).await
 	}
 
@@ -403,7 +418,7 @@ impl Methods {
 		sub_method: &str,
 		params: impl ToRpcParams,
 		buf_size: usize,
-	) -> Result<Subscription, CallError> {
+	) -> Result<Subscription, MethodsError> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 
@@ -415,7 +430,7 @@ impl Methods {
 		let as_success: ResponseSuccess<serde_json::Value> =
 			serde_json::from_str::<Response<_>>(&resp.result)?.try_into()?;
 
-		let sub_id = as_success.result.try_into().map_err(|_| CallError::InvalidSubscriptionId(resp.result.clone()))?;
+		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.result.clone()))?;
 
 		Ok(Subscription { sub_id, rx })
 	}
