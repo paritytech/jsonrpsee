@@ -85,7 +85,7 @@ pub enum Error {
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,
-	/// Configured max number of request slots exceeded.
+	/// Max number of request slots exceeded.
 	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,
 	/// Custom error.

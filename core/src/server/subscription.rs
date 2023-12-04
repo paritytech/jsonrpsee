@@ -26,6 +26,7 @@
 
 //! Subscription related types and traits for server implementations.
 
+use super::MethodsError;
 use super::helpers::{MethodResponse, MethodSink};
 use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
@@ -434,10 +435,8 @@ impl Subscription {
 		&self.sub_id
 	}
 
-	/// Receives the next value on the subscription if value could be decoded as T.
-	///
-	// todo fix error type.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), String>> {
+	/// Receives the next value on the subscription if the value could be decoded as T.
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), MethodsError>> {
 		let raw = self.rx.recv().await?;
 
 		tracing::debug!(target: LOG_TARGET, "[Subscription::next]: rx {}", raw);
@@ -448,7 +447,7 @@ impl Subscription {
 			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
 			Err(e) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {
 				Ok(_) => None,
-				Err(_) => Some(Err(e.to_string())),
+				Err(_) => Some(Err(e.into())),
 			},
 		};
 		res
