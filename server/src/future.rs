@@ -64,7 +64,6 @@ impl StopHandle {
 #[error("The server is already stopped")]
 pub struct AlreadyStoppedError;
 
-
 /// Server handle.
 ///
 /// When all [`StopHandle`]'s have been `dropped` or `stop` has been called
