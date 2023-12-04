@@ -372,7 +372,7 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::core::{Error, EmptyServerParams, RpcResult};
+	///     use jsonrpsee::core::{EmptyServerParams, RpcResult};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {

@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, Error, Serialize};
+use jsonrpsee::core::{async_trait, ClientError, Serialize};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{IntoResponse, ServerBuilder};
 use jsonrpsee::types::ResponsePayload;
@@ -87,7 +87,7 @@ impl RpcServer for RpcServerImpl {
 
 // TODO: https://github.com/paritytech/jsonrpsee/issues/1067
 //
-// The client accepts only return types that are `Result<T, E>`.
+// The client accepts only return types that are `Result<T, ClientError>`.
 #[rpc(client, namespace = "foo")]
 pub trait RpcClient {
 	#[method(name = "async_method1")]
@@ -144,9 +144,9 @@ async fn main() {
 	assert_method2(error);
 }
 
-fn assert_method1(error: Error) {
+fn assert_method1(error: ClientError) {
 	let get_error_object = |err| match err {
-		jsonrpsee::core::Error::Call(object) => object,
+		ClientError::Call(object) => object,
 		_ => panic!("wrong error kind: {:?}", err),
 	};
 
@@ -156,9 +156,9 @@ fn assert_method1(error: Error) {
 	assert!(error_object.data().is_none());
 }
 
-fn assert_method2(error: Error) {
+fn assert_method2(error: ClientError) {
 	let get_error_object = |err| match err {
-		jsonrpsee::core::Error::Call(object) => object,
+		ClientError::Call(object) => object,
 		_ => panic!("wrong error kind: {:?}", err),
 	};
 
