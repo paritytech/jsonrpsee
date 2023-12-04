@@ -216,7 +216,7 @@ pub(crate) fn process_single_response(
 					Err(_) => Ok(build_unsubscribe_message(manager, response_id, sub_id)),
 				}
 			} else {
-				let _ = send_back_oneshot.send(Err(Error::InvalidRequestId(InvalidRequestId::Invalid("Invalid subscription ID".into()))));
+				let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
 				Ok(None)
 			}
 		}
