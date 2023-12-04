@@ -197,7 +197,7 @@ pub(crate) fn process_single_response(
 			let sub_id = match sub_id {
 				Ok(Some(sub_id)) => sub_id,
 				Ok(None) => {
-					let _ = send_back_oneshot.send(Err(Error::InvalidRequestId(InvalidRequestId::Invalid("Invalid subscription ID".into()))));
+					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
 					return Ok(None);
 				}
 				Err(e) => {
