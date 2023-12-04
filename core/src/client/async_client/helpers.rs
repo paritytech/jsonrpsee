@@ -64,7 +64,7 @@ pub(crate) fn process_batch_response(
 		Some(state) => state,
 		None => {
 			tracing::warn!(target: LOG_TARGET, "Received unknown batch response");
-			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)).into());
+			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)));
 		}
 	};
 
@@ -80,7 +80,7 @@ pub(crate) fn process_batch_response(
 		if let Some(elem) = maybe_elem {
 			*elem = rp.result;
 		} else {
-			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into());
+			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()));
 		}
 	}
 
@@ -181,7 +181,7 @@ pub(crate) fn process_single_response(
 			let send_back_oneshot = match manager.complete_pending_call(response_id.clone()) {
 				Some(Some(send)) => send,
 				Some(None) => return Ok(None),
-				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into()),
+				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string())),
 			};
 
 			let _ = send_back_oneshot.send(result);
@@ -222,7 +222,7 @@ pub(crate) fn process_single_response(
 		}
 
 		RequestStatus::Subscription | RequestStatus::Invalid => {
-			Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into())
+			Err(InvalidRequestId::NotPendingRequest(response_id.to_string()))
 		}
 	}
 }

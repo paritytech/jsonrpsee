@@ -38,8 +38,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
-use crate::error::{RegisterMethodError};
-use crate::params::BatchRequestBuilder;
+use crate::error::RegisterMethodError;
+use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
 use core::marker::PhantomData;
@@ -95,9 +95,9 @@ pub enum Error {
 	#[error("Not implemented")]
 	HttpNotImplemented,
 	/// Empty batch request.
-	#[error("Empty batch request is not allowed")]
-	EmptyBatchRequest,
-	/// The error returned when registering a method or subscription failed.
+	#[error("{0}")]
+	EmptyBatchRequest(#[from] EmptyBatchRequest),
+	/// The error returned w hen registering a method or subscription failed.
 	#[error("{0}")]
 	RegisterMethod(#[from] RegisterMethodError),
 }

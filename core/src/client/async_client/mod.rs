@@ -9,7 +9,7 @@ use crate::client::{
 	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT, Error
 };
 use crate::error::RegisterMethodError;
-use crate::params::BatchRequestBuilder;
+use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::tracing::client::{rx_log_from_json, tx_log_from_str};
 use crate::traits::ToRpcParams;
 use crate::JsonRawValue;
@@ -657,7 +657,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 						range.end += 1;
 						process_batch_response(&mut manager.lock(), batch, range)?;
 					} else {
-						return Err(Error::EmptyBatchRequest);
+						return Err(EmptyBatchRequest.into());
 					}
 				} else {
 					return Err(unparse_error(raw));

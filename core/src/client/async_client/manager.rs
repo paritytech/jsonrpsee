@@ -196,7 +196,7 @@ impl RequestManager {
 	}
 
 	/// Removes a notification handler.
-	pub(crate) fn remove_notification_handler<'a>(&mut self, method: &'a str) -> Option<SubscriptionSink> {
+	pub(crate) fn remove_notification_handler(&mut self, method: &str) -> Option<SubscriptionSink> {
 		self.notification_handlers.remove(method)
 	}
 

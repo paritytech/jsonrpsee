@@ -221,6 +221,11 @@ impl ToRpcParams for ArrayParams {
 /// Initial number of parameters in a batch request.
 const BATCH_PARAMS_NUM_CAPACITY: usize = 4;
 
+/// Error representing an empty batch request.
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("Empty batch request is not allowed")]
+pub struct EmptyBatchRequest;
+
 /// Request builder that serializes RPC parameters to construct a valid batch parameter.
 /// This is the equivalent of chaining multiple RPC requests.
 #[derive(Clone, Debug, Default)]
@@ -240,9 +245,9 @@ impl<'a> BatchRequestBuilder<'a> {
 
 	/// Finish the building process and return a valid batch parameter.
 	#[allow(clippy::type_complexity)]
-	pub fn build(self) -> Result<Vec<(&'a str, Option<Box<RawValue>>)>, ()> {
+	pub fn build(self) -> Result<Vec<(&'a str, Option<Box<RawValue>>)>, EmptyBatchRequest> {
 		if self.0.is_empty() {
-			Err(())
+			Err(EmptyBatchRequest)
 		} else {
 			Ok(self.0)
 		}
