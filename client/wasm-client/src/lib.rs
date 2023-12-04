@@ -36,7 +36,7 @@ pub use jsonrpsee_types as types;
 use std::time::Duration;
 
 use jsonrpsee_client_transport::web;
-use jsonrpsee_core::client::{ClientBuilder, IdKind, Error};
+use jsonrpsee_core::client::{ClientBuilder, Error, IdKind};
 
 /// Builder for [`Client`].
 ///
