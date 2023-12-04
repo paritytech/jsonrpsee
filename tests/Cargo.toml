@@ -13,7 +13,7 @@ beef = { version = "0.5.1", features = ["impl_serde"] }
 fast-socks5 = { version = "0.9.1" }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.14", default-features = false, features = ["alloc"]}
-hyper = { version = "0.14", features = ["http1", "client"] }
+hyper = { version = "1.0", features = ["http1", "client"] }
 jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
 jsonrpsee-test-utils = { path = "../test-utils" }
 serde = "1"
