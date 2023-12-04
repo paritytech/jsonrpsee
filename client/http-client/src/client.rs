@@ -327,7 +327,6 @@ where
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
-		// TODO fix unwrap.
 		let batch = batch.build()?;
 		let guard = self.id_manager.next_request_id()?;
 		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
