@@ -162,9 +162,14 @@ impl ClientBuilder {
 	///
 	/// # Panics
 	///
-	/// This function panics if `max` is 0.
+	/// This function panics if `max` is 0 or bigger than usize::MAX / 2.
 	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
-		assert!(max > 0 && max < tokio::sync::Semaphore::MAX_PERMITS);
+		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
+		assert!(max > 0, "subscription buffer capacity cannot be zero");
+        assert!(
+            max <= usize::MAX >> 1,
+            "subscription buffer capacity exceeded `usize::MAX / 2`"
+        );
 
 		self.max_buffer_capacity_per_subscription = max;
 		self

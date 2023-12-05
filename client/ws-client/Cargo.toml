@@ -19,13 +19,13 @@ jsonrpsee-client-transport = { workspace = true, features = ["ws"] }
 jsonrpsee-core = { workspace = true, features = ["async-client"] }
 http = "0.2.0"
 url = "2.4.0"
-tokio = { version = "1.16", features = ["macros", "sync"] }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 jsonrpsee-test-utils = { path = "../../test-utils" }
 serde_json = "1"
 serde = "1"
+tokio = { version = "1.16", features = ["macros"] }
 
 [features]
 native-tls = ["jsonrpsee-client-transport/native-tls"]
