@@ -32,11 +32,14 @@ use crate::LOG_TARGET;
 use futures_util::{Future, FutureExt, TryFutureExt};
 use hyper::{Body, Request, Response};
 use route_recognizer::Router;
+use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
+
+type Ports = Vec<Port>;
 
 /// Middleware to enable host filtering.
 #[derive(Debug, Clone)]
@@ -126,7 +129,7 @@ where
 
 /// Represent the URL patterns that is whitelisted.
 #[derive(Default, Debug, Clone)]
-pub struct WhitelistedHosts(Router<Port>);
+pub struct WhitelistedHosts(Router<Ports>);
 
 impl<T> From<T> for WhitelistedHosts
 where
@@ -134,9 +137,22 @@ where
 {
 	fn from(value: T) -> Self {
 		let mut router = Router::new();
+		let mut uniq_hosts: BTreeMap<String, Ports> = BTreeMap::new();
 
+		// Ensure that no ports are "overwritten"
+		// since it's possible add the same hostname with
+		// several port numbers.
 		for auth in value.into_iter() {
-			router.add(&auth.host, auth.port);
+			uniq_hosts
+				.entry(auth.host)
+				.and_modify(|v| {
+					v.push(auth.port);
+				})
+				.or_insert_with(|| vec![auth.port]);
+		}
+
+		for (host, ports) in uniq_hosts.into_iter() {
+			router.add(&host, ports);
 		}
 
 		Self(router)
@@ -146,14 +162,14 @@ where
 impl WhitelistedHosts {
 	fn recognize(&self, other: &Authority) -> bool {
 		if let Ok(p) = self.0.recognize(&other.host) {
-			let p = p.handler();
+			let ports = p.handler();
 
-			match (p, &other.port) {
+			ports.iter().any(|p| match (p, &other.port) {
 				(Port::Any, _) => true,
 				(Port::Default, Port::Default) => true,
 				(Port::Fixed(p1), Port::Fixed(p2)) if p1 == p2 => true,
 				_ => false,
-			}
+			})
 		} else {
 			false
 		}
@@ -187,8 +203,9 @@ mod tests {
 
 	#[test]
 	fn should_accept_if_on_the_list_with_port() {
-		let filter = unwrap_filter(&["parity.io:443"]);
+		let filter = unwrap_filter(&["parity.io:443", "parity.io:9944"]);
 		assert!(filter.recognize(&unwrap_auth("parity.io:443")));
+		assert!(filter.recognize(&unwrap_auth("parity.io:9944")));
 		assert!(!filter.recognize(&unwrap_auth("parity.io")));
 	}
 
