@@ -228,13 +228,17 @@ pub enum SubscriptionKind {
 /// stream is polled, it's possible that the server is producing
 /// subscription notifications faster than the client can handle.
 /// 
-/// When that occurs an error [`SubscriptionError::Lagged`] is emitted
-/// to indicate the n messages were lost. You can decide to continue using
-/// the subscription if that's accepted the oldest messaage in the buffer
-/// will be returned on the next read operation.
+/// If that occurs, an error [`SubscriptionError::Lagged`] is emitted.
+/// to indicate the n messages were lost. It still possibe to use
+/// the subscription after it has lagged and the subsequent read operation 
+/// will return the oldest message in the buffer but that  `n messages` were 
+/// lost.
+/// 
+/// Thus, it's application dependent and if loosing message is not acceptable
+/// just drop the subscription and create a new subscription.
 /// 
 /// To avoid `Lagging` from happening you may increase the buffer capacity
-/// or ensure that [`Subscription::next`] polled often enough such as 
+/// or ensure that [`Subscription::next`] is polled often enough such as 
 /// in a separate tokio task.
 /// 
 /// ## Connection closed
@@ -263,7 +267,7 @@ impl<Notif> std::marker::Unpin for Subscription<Notif> {}
 
 impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
-	pub fn new(
+	pub(crate) fn new(
 		to_back: mpsc::Sender<FrontToBack>,
 		notifs_rx: broadcast::Receiver<serde_json::Value>,
 		kind: SubscriptionKind,
@@ -295,57 +299,57 @@ impl<Notif> Subscription<Notif> {
 
 /// Batch request message.
 #[derive(Debug)]
-pub struct BatchMessage {
+pub(crate) struct BatchMessage {
 	/// Serialized batch request.
-	pub raw: String,
+	raw: String,
 	/// Request IDs.
-	pub ids: Range<u64>,
+	ids: Range<u64>,
 	/// One-shot channel over which we send back the result of this request.
-	pub send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>,
+	send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>,
 }
 
 /// Request message.
 #[derive(Debug)]
-pub struct RequestMessage {
+pub(crate) struct RequestMessage {
 	/// Serialized message.
-	pub raw: String,
+	raw: String,
 	/// Request ID.
-	pub id: Id<'static>,
+	id: Id<'static>,
 	/// One-shot channel over which we send back the result of this request.
-	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
+	send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
 }
 
 /// Subscription message.
 #[derive(Debug)]
-pub struct SubscriptionMessage {
+pub(crate) struct SubscriptionMessage {
 	/// Serialized message.
-	pub raw: String,
+	raw: String,
 	/// Request ID of the subscribe message.
-	pub subscribe_id: Id<'static>,
+	subscribe_id: Id<'static>,
 	/// Request ID of the unsubscribe message.
-	pub unsubscribe_id: Id<'static>,
+	unsubscribe_id: Id<'static>,
 	/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
-	pub unsubscribe_method: String,
+	unsubscribe_method: String,
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(broadcast::Receiver<serde_json::Value>, SubscriptionId<'static>), Error>>,
+	send_back: oneshot::Sender<Result<(broadcast::Receiver<serde_json::Value>, SubscriptionId<'static>), Error>>,
 }
 
 /// RegisterNotification message.
 #[derive(Debug)]
-pub struct RegisterNotificationMessage {
+pub(crate) struct RegisterNotificationMessage {
 	/// Method name this notification handler is attached to
-	pub method: String,
+	method: String,
 	/// We return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(broadcast::Receiver<serde_json::Value>, String), Error>>,
+	send_back: oneshot::Sender<Result<(broadcast::Receiver<serde_json::Value>, String), Error>>,
 }
 
 /// Message that the Client can send to the background task.
 #[derive(Debug)]
-pub enum FrontToBack {
+pub(crate) enum FrontToBack {
 	/// Send a batch request to the server.
 	Batch(BatchMessage),
 	/// Send a notification to the server.
@@ -375,7 +379,7 @@ where
 	/// The return values can be:
 	/// - `Some(Ok(val)`: The message was succesfully received and decoded.
 	/// - `Some(Err(SubscriptionError::Lagged(n)))`: The subscription buffer was full and n messages were lost.
-	/// - `Some(Err(SubscriptionError::Parse: the value failed to be decode as `Notif`
+	/// - `Some(Err(SubscriptionError::Parse))`: the value failed to be decode as `Notif`
 	/// - `None`: The connection was closed.
 	///
 	/// **Note:** This has an identical signature to the [`StreamExt::next`]
@@ -411,11 +415,10 @@ where
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		
-		let res = match futures_util::ready!(self.notifs_rx.poll_next_unpin(cx)) {
-			Some(Ok(val)) => Some(serde_json::from_value::<Notif>(val).map_err(|e| SubscriptionError::Parse(e))),
-			Some(Err(BroadcastStreamRecvError::Lagged(n))) => Some(Err(SubscriptionError::Lagged(n))),
-			None => None,
-		};
+		let res = futures_util::ready!(self.notifs_rx.poll_next_unpin(cx)).and_then(|res| match res {
+			Ok(val) => Some(serde_json::from_value::<Notif>(val).map_err(Into::into)),
+			Err(BroadcastStreamRecvError::Lagged(n)) => Some(Err(SubscriptionError::Lagged(n))),
+		});
 
 		task::Poll::Ready(res)
 	}
