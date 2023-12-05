@@ -31,7 +31,6 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures_util::io::{BufReader, BufWriter};
-pub use futures_util::{AsyncRead, AsyncWrite};
 use jsonrpsee_core::client::{CertificateStore, MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
@@ -41,10 +40,12 @@ use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use soketto::{connection, Data, Incoming};
 use thiserror::Error;
 use tokio::net::TcpStream;
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 pub use http::{uri::InvalidUri, HeaderMap, HeaderValue, Uri};
 pub use soketto::handshake::client::Header;
 pub use stream::EitherStream;
+pub use tokio::io::{AsyncRead, AsyncWrite};
 pub use url::Url;
 
 const LOG_TARGET: &str = "jsonrpsee-client";
@@ -229,7 +230,7 @@ pub enum WsError {
 #[async_trait]
 impl<T> TransportSenderT for Sender<T>
 where
-	T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Unpin + MaybeSend + 'static,
 {
 	type Error = WsError;
 
@@ -268,7 +269,7 @@ where
 #[async_trait]
 impl<T> TransportReceiverT for Receiver<T>
 where
-	T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Unpin + MaybeSend + 'static,
 {
 	type Error = WsError;
 
@@ -295,7 +296,10 @@ impl WsTransportClientBuilder {
 	/// Try to establish the connection.
 	///
 	/// Uses the default connection over TCP.
-	pub async fn build(self, uri: Url) -> Result<(Sender<EitherStream>, Receiver<EitherStream>), WsHandshakeError> {
+	pub async fn build(
+		self,
+		uri: Url,
+	) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
 		self.try_connect_over_tcp(uri).await
 	}
 
@@ -304,19 +308,19 @@ impl WsTransportClientBuilder {
 		self,
 		uri: Url,
 		data_stream: T,
-	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
+	) -> Result<(Sender<Compat<T>>, Receiver<Compat<T>>), WsHandshakeError>
 	where
-		T: AsyncRead + AsyncWrite + Unpin,
+		T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 	{
 		let target: Target = uri.try_into()?;
-		self.try_connect(&target, data_stream).await
+		self.try_connect(&target, data_stream.compat()).await
 	}
 
 	// Try to establish the connection over TCP.
 	async fn try_connect_over_tcp(
 		&self,
 		uri: Url,
-	) -> Result<(Sender<EitherStream>, Receiver<EitherStream>), WsHandshakeError> {
+	) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
 		let mut target: Target = uri.try_into()?;
 		let mut err = None;
 
@@ -353,7 +357,7 @@ impl WsTransportClientBuilder {
 					}
 				};
 
-				match self.try_connect(&target, tcp_stream).await {
+				match self.try_connect(&target, tcp_stream.compat()).await {
 					Ok(result) => return Ok(result),
 
 					Err(WsHandshakeError::Redirected { status_code, location }) => {
@@ -422,7 +426,7 @@ impl WsTransportClientBuilder {
 		data_stream: T,
 	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
 	where
-		T: AsyncRead + AsyncWrite + Unpin,
+		T: futures_util::AsyncRead + futures_util::AsyncWrite + Unpin,
 	{
 		let mut client = WsHandshakeClient::new(
 			BufReader::new(BufWriter::new(data_stream)),
