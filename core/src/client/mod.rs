@@ -219,7 +219,7 @@ pub enum SubscriptionKind {
 }
 
 /// Represent a client-side subscription which is implemented on top of 
-/// a bounded mpsc channel where it's possible that the receiver may
+/// a bounded channel where it's possible that the receiver may
 /// not keep it with the sender side a.k.a "slow receiver problem"
 /// 
 /// ## Lagging
@@ -229,9 +229,9 @@ pub enum SubscriptionKind {
 /// subscription notifications faster than the client can handle.
 /// 
 /// When that occurs an error [`SubscriptionError::Lagged`] is emitted
-/// and after that point it's not possible to use the subscription anymore.
-/// The connection is still alive and you may just re-subscribe again
-/// but some messages may be lost if that occurs.
+/// to indicate the n messages were lost. You can decide to continue using
+/// the subscription if that's accepted the oldest messaage in the buffer
+/// will be returned on the next read operation.
 /// 
 /// To avoid `Lagging` from happening you may increase the buffer capacity
 /// or ensure that [`Subscription::next`] polled often enough such as 
@@ -242,7 +242,7 @@ pub enum SubscriptionKind {
 /// When the connection is closed the underlying stream will eventually
 /// return `None` to indicate that.
 /// 
-/// Because the subscription is implemented on top of a mpsc channel
+/// Because the subscription is implemented on top of a bounded channel
 /// it will not instantly return `None` when the connection is closed 
 /// because all messages buffered must be read before it to return `None`.
 #[derive(Debug)]
@@ -374,7 +374,7 @@ where
 	/// 
 	/// The return values can be:
 	/// - `Some(Ok(val)`: The message was succesfully received and decoded.
-	/// - `Some(Err(SubscriptionError::Lagged))`: The subscription buffer was full and the message could not be received.
+	/// - `Some(Err(SubscriptionError::Lagged(n)))`: The subscription buffer was full and n messages were lost.
 	/// - `Some(Err(SubscriptionError::Parse: the value failed to be decode as `Notif`
 	/// - `None`: The connection was closed.
 	///
