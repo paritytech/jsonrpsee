@@ -38,17 +38,17 @@
 #[cfg(test)]
 mod tests;
 
+pub use http::{HeaderMap, HeaderValue};
 pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
-pub use http::{HeaderMap, HeaderValue};
 
-use std::time::Duration;
-use url::Url;
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
 use jsonrpsee_core::client::{
 	CertificateStore, ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
 };
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
+use std::time::Duration;
+use url::Url;
 
 /// Builder for [`WsClient`].
 ///
