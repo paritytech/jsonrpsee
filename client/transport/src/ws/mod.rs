@@ -481,8 +481,8 @@ async fn connect(
 			match tls_connector {
 				None => Ok(EitherStream::Plain(socket)),
 				Some(connector) => {
-					let server_name: tokio_rustls::rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {host} {e:?}").into()))?;
-					let tls_stream = connector.connect(server_name, socket).await?;
+					let server_name: rustls_pki_types::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {host} {e:?}").into()))?;
+					let tls_stream = connector.connect(server_name.to_owned(), socket).await?;
 					Ok(EitherStream::Tls(tls_stream))
 				}
 			}
@@ -588,8 +588,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 			let mut first_error = None;
 			let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
 			for cert in certs {
-				let cert = rustls::Certificate(cert.0);
-				if let Err(err) = roots.add(&cert) {
+				if let Err(err) = roots.add(cert) {
 					first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
 				}
 			}
@@ -612,7 +611,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 	};
 
 	let config =
-		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(roots).with_no_client_auth();
+		rustls::ClientConfig::builder().with_root_certificates(roots).with_no_client_auth();
 
 	Ok(std::sync::Arc::new(config).into())
 }

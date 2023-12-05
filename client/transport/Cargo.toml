@@ -28,9 +28,10 @@ pin-project = { version = "1", optional = true }
 url = { version = "2.4.0", optional = true }
 
 # tls
-rustls-native-certs = { version = "0.6", optional = true }
-webpki-roots = { version = "0.25", optional = true }
+rustls-native-certs = { version = "0.7", optional = true }
+webpki-roots = { version = "0.26", optional = true }
 tokio-rustls = { version = "0.25", optional = true }
+rustls-pki-types = { version = "1", optional = true }
 
 # ws
 soketto = { version = "0.7.1", optional = true }
@@ -44,7 +45,7 @@ webpki-tls = ["webpki-roots", "__tls"]
 
 # Internal feature to indicate whether TLS is enabled.
 # Does nothing on its own.
-__tls = ["tokio-rustls"]
+__tls = ["tokio-rustls", "rustls-pki-types"]
 
 ws = [
     "futures-util",
