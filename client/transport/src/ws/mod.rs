@@ -610,8 +610,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 		}
 	};
 
-	let config =
-		rustls::ClientConfig::builder().with_root_certificates(roots).with_no_client_auth();
+	let config = rustls::ClientConfig::builder().with_root_certificates(roots).with_no_client_auth();
 
 	Ok(std::sync::Arc::new(config).into())
 }
