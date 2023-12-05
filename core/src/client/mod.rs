@@ -232,7 +232,6 @@ pub enum SubscriptionKind {
 /// to indicate the n messages were lost. It still possibe to use
 /// the subscription after it has lagged and the subsequent read operation 
 /// will return the oldest message in the buffer but without some lost messages.
-/// lost.
 /// 
 /// Thus, it's application dependent and if loosing message is not acceptable
 /// just drop the subscription and create a new subscription.
