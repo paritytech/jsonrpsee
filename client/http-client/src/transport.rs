@@ -124,13 +124,13 @@ where
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
 						.https_or_http()
-						.enable_http1()
+						.enable_all_versions()
 						.build(),
 					#[cfg(feature = "webpki-tls")]
 					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_webpki_roots()
 						.https_or_http()
-						.enable_http1()
+						.enable_all_versions()
 						.build(),
 					_ => return Err(Error::InvalidCertficateStore),
 				};

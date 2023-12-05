@@ -648,7 +648,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
-	/// Enable WebSocket pings on the server.
+	/// Enable WebSocket ping/pong on the server.
 	///
 	/// Default: pings are disabled.
 	///
@@ -658,7 +658,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use std::{time::Duration, num::NonZeroUsize};
 	/// use jsonrpsee_server::{ServerBuilder, PingConfig};
 	///
-	/// // Set the ping interval to 10 seconds but terminate the connection if a client is inactive for more than 2 minutes
+	/// // Set the ping interval to 10 seconds but terminates the connection if a client is inactive for more than 2 minutes
 	/// let ping_cfg = PingConfig::new().ping_interval(Duration::from_secs(10)).inactive_limit(Duration::from_secs(60 * 2));
 	/// let builder = ServerBuilder::default().enable_ws_ping(ping_cfg);
 	/// ```

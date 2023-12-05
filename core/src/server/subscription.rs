@@ -234,7 +234,7 @@ impl IsUnsubscribed {
 #[must_use = "PendingSubscriptionSink does nothing unless `accept` or `reject` is called"]
 pub struct PendingSubscriptionSink {
 	/// Sink.
-	pub inner: MethodSink,
+	pub(crate) inner: MethodSink,
 	/// MethodCallback.
 	pub(crate) method: &'static str,
 	/// Shared Mutex of subscriptions for this method.

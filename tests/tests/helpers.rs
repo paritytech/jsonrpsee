@@ -32,19 +32,17 @@ use std::time::Duration;
 
 use fast_socks5::client::Socks5Stream;
 use fast_socks5::server;
-use futures::{AsyncRead, AsyncWrite, SinkExt, Stream, StreamExt};
+use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{
 	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::SubscriptionCloseResponse;
-use pin_project::pin_project;
 use serde::Serialize;
 use tokio::net::TcpStream;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tower_http::cors::CorsLayer;
 
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
@@ -288,55 +286,4 @@ pub async fn connect_over_socks_stream(server_addr: SocketAddr) -> Socks5Stream<
 	)
 	.await
 	.unwrap()
-}
-
-#[pin_project]
-pub struct DataStream<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin>(#[pin] Socks5Stream<T>);
-
-impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> DataStream<T> {
-	pub fn new(t: Socks5Stream<T>) -> Self {
-		Self(t)
-	}
-}
-
-impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> AsyncRead for DataStream<T> {
-	fn poll_read(
-		self: std::pin::Pin<&mut Self>,
-		cx: &mut std::task::Context<'_>,
-		buf: &mut [u8],
-	) -> std::task::Poll<std::io::Result<usize>> {
-		let this = self.project().0.compat();
-		futures_util::pin_mut!(this);
-		AsyncRead::poll_read(this, cx, buf)
-	}
-}
-
-impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin> AsyncWrite for DataStream<T> {
-	fn poll_write(
-		self: std::pin::Pin<&mut Self>,
-		cx: &mut std::task::Context<'_>,
-		buf: &[u8],
-	) -> std::task::Poll<std::io::Result<usize>> {
-		let this = self.project().0.compat_write();
-		futures_util::pin_mut!(this);
-		AsyncWrite::poll_write(this, cx, buf)
-	}
-
-	fn poll_flush(
-		self: std::pin::Pin<&mut Self>,
-		cx: &mut std::task::Context<'_>,
-	) -> std::task::Poll<std::io::Result<()>> {
-		let this = self.project().0.compat_write();
-		futures_util::pin_mut!(this);
-		AsyncWrite::poll_flush(this, cx)
-	}
-
-	fn poll_close(
-		self: std::pin::Pin<&mut Self>,
-		cx: &mut std::task::Context<'_>,
-	) -> std::task::Poll<std::io::Result<()>> {
-		let this = self.project().0.compat_write();
-		futures_util::pin_mut!(this);
-		AsyncWrite::poll_close(this, cx)
-	}
 }

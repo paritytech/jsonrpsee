@@ -40,11 +40,10 @@ mod tests;
 
 pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
-
 pub use http::{HeaderMap, HeaderValue};
+
 use std::time::Duration;
 use url::Url;
-
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
 use jsonrpsee_core::client::{
 	CertificateStore, ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
@@ -216,6 +215,10 @@ impl WsClientBuilder {
 	}
 
 	/// Build the [`WsClient`] with specified [`TransportSenderT`] [`TransportReceiverT`] parameters
+	///
+	/// ## Panics
+	///
+	/// Panics if being called outside of `tokio` runtime context.
 	pub fn build_with_transport<S, R>(self, sender: S, receiver: R) -> WsClient
 	where
 		S: TransportSenderT + Send,
