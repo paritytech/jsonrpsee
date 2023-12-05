@@ -29,13 +29,16 @@
 
 use std::borrow::Cow as StdCow;
 
-use crate::params::{Id, TwoPointZero};
+use crate::{
+	params::{Id, TwoPointZero},
+	Params,
+};
 use beef::Cow;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 /// JSON-RPC request object as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Request<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -47,13 +50,28 @@ pub struct Request<'a> {
 	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	#[serde(borrow)]
-	pub params: Option<&'a RawValue>,
+	pub params: Option<StdCow<'a, RawValue>>,
 }
 
 impl<'a> Request<'a> {
 	/// Create a new [`Request`].
 	pub fn new(method: Cow<'a, str>, params: Option<&'a RawValue>, id: Id<'a>) -> Self {
-		Self { jsonrpc: TwoPointZero, id, method, params }
+		Self { jsonrpc: TwoPointZero, id, method, params: params.map(StdCow::Borrowed) }
+	}
+
+	/// Get the ID of the request.
+	pub fn id(&self) -> Id<'a> {
+		self.id.clone()
+	}
+
+	/// Get the method name of the request.
+	pub fn method_name(&self) -> &str {
+		&self.method
+	}
+
+	/// Get the params of the request.
+	pub fn params(&self) -> Params {
+		Params::new(self.params.as_ref().map(|p| RawValue::get(p)))
 	}
 }
 
@@ -67,7 +85,7 @@ pub struct InvalidRequest<'a> {
 
 /// JSON-RPC notification (a request object without a request ID) as defined in the
 /// [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Notification<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -86,7 +104,7 @@ impl<'a, T> Notification<'a, T> {
 }
 
 /// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct RequestSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -118,7 +136,7 @@ impl<'a> RequestSer<'a> {
 }
 
 /// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct NotificationSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -151,7 +169,7 @@ mod test {
 		assert_eq!(request.jsonrpc, TwoPointZero);
 		assert_eq!(request.id, id);
 		assert_eq!(request.method, method);
-		assert_eq!(request.params.map(RawValue::get), params);
+		assert_eq!(request.params.as_ref().map(|p| RawValue::get(p)), params);
 	}
 
 	/// Checks that we can deserialize the object with or without non-mandatory fields.

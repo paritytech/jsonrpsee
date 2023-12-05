@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use jsonrpsee_types::{params::InvalidRequestId, ErrorObjectOwned};
 
@@ -57,7 +57,7 @@ pub enum Error {
 	InvalidResponse(Mismatch<String>),
 	/// The background task has been terminated.
 	#[error("The background task been terminated because: {0}; restart required")]
-	RestartNeeded(String),
+	RestartNeeded(Arc<Error>),
 	/// Failed to parse the data.
 	#[error("Parse error: {0}")]
 	ParseError(#[from] serde_json::Error),

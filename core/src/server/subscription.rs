@@ -27,6 +27,7 @@
 //! Subscription related types and traits for server implementations.
 
 use super::helpers::{MethodResponse, MethodSink};
+use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
 use crate::{traits::IdProvider, Error, StringError};
@@ -232,7 +233,7 @@ impl IsUnsubscribed {
 #[must_use = "PendingSubscriptionSink does nothing unless `accept` or `reject` is called"]
 pub struct PendingSubscriptionSink {
 	/// Sink.
-	pub inner: MethodSink,
+	pub(crate) inner: MethodSink,
 	/// MethodCallback.
 	pub(crate) method: &'static str,
 	/// Shared Mutex of subscriptions for this method.
@@ -258,7 +259,7 @@ impl PendingSubscriptionSink {
 	/// the return value is simply ignored because no further notification are propagated
 	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
-		let err = MethodResponse::error(self.id, err.into());
+		let err = MethodResponse::subscription_error(self.id, err.into());
 		_ = self.inner.send(err.result.clone()).await;
 		_ = self.subscribe.send(err);
 	}
@@ -269,7 +270,7 @@ impl PendingSubscriptionSink {
 	///
 	/// Panics if the subscription response exceeded the `max_response_size`.
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
-		let response = MethodResponse::response(
+		let response = MethodResponse::subscription_response(
 			self.id,
 			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
@@ -424,7 +425,7 @@ pub struct Subscription {
 impl Subscription {
 	/// Close the subscription channel.
 	pub fn close(&mut self) {
-		tracing::trace!("[Subscription::close] Notifying");
+		tracing::trace!(target: LOG_TARGET, "[Subscription::close] Notifying");
 		self.rx.close();
 	}
 
@@ -437,7 +438,7 @@ impl Subscription {
 	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), Error>> {
 		let raw = self.rx.recv().await?;
 
-		tracing::debug!("[Subscription::next]: rx {}", raw);
+		tracing::debug!(target: LOG_TARGET, "[Subscription::next]: rx {}", raw);
 
 		// clippy complains about this but it doesn't compile without the extra res binding.
 		#[allow(clippy::let_and_return)]

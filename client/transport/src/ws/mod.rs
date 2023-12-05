@@ -31,35 +31,39 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures_util::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT};
+use jsonrpsee_core::client::{CertificateStore, MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use soketto::{connection, Data, Incoming};
-use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 pub use http::{uri::InvalidUri, HeaderMap, HeaderValue, Uri};
 pub use soketto::handshake::client::Header;
+pub use stream::EitherStream;
+pub use tokio::io::{AsyncRead, AsyncWrite};
 pub use url::Url;
+
+const LOG_TARGET: &str = "jsonrpsee-client";
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
-pub struct Sender {
-	inner: connection::Sender<BufReader<BufWriter<EitherStream>>>,
+pub struct Sender<T> {
+	inner: connection::Sender<BufReader<BufWriter<T>>>,
 	max_request_size: u32,
 }
 
 /// Receiving end of WebSocket transport.
 #[derive(Debug)]
-pub struct Receiver {
-	inner: connection::Receiver<BufReader<BufWriter<EitherStream>>>,
+pub struct Receiver<T> {
+	inner: connection::Receiver<BufReader<BufWriter<T>>>,
 }
 
-/// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
+/// Builder for a WebSocket transport [`Sender`] and [`Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder {
 	/// What certificate store to use
@@ -190,6 +194,15 @@ pub enum WsHandshakeError {
 		status_code: u16,
 	},
 
+	/// Server redirected to other location.
+	#[error("Connection redirected with status code: {status_code} and location: {location}")]
+	Redirected {
+		/// HTTP status code that the server returned.
+		status_code: u16,
+		/// The location URL redirected to.
+		location: String,
+	},
+
 	/// Timeout while trying to connect.
 	#[error("Connection timeout exceeded: {0:?}")]
 	Timeout(Duration),
@@ -215,7 +228,10 @@ pub enum WsError {
 }
 
 #[async_trait]
-impl TransportSenderT for Sender {
+impl<T> TransportSenderT for Sender<T>
+where
+	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Unpin + MaybeSend + 'static,
+{
 	type Error = WsError;
 
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
@@ -225,7 +241,6 @@ impl TransportSenderT for Sender {
 			return Err(WsError::MessageTooLarge);
 		}
 
-		tracing::trace!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
 		Ok(())
@@ -234,7 +249,7 @@ impl TransportSenderT for Sender {
 	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	async fn send_ping(&mut self) -> Result<(), Self::Error> {
-		tracing::debug!("Send ping");
+		tracing::debug!(target: LOG_TARGET, "Send ping");
 		// Submit empty slice as "optional" parameter.
 		let slice: &[u8] = &[];
 		// Byte slice fails if the provided slice is larger than 125 bytes.
@@ -252,7 +267,10 @@ impl TransportSenderT for Sender {
 }
 
 #[async_trait]
-impl TransportReceiverT for Receiver {
+impl<T> TransportReceiverT for Receiver<T>
+where
+	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Unpin + MaybeSend + 'static,
+{
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
@@ -276,12 +294,34 @@ impl TransportReceiverT for Receiver {
 
 impl WsTransportClientBuilder {
 	/// Try to establish the connection.
-	pub async fn build(self, uri: Url) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let target: Target = uri.try_into()?;
-		self.try_connect(target).await
+	///
+	/// Uses the default connection over TCP.
+	pub async fn build(
+		self,
+		uri: Url,
+	) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
+		self.try_connect_over_tcp(uri).await
 	}
 
-	async fn try_connect(self, mut target: Target) -> Result<(Sender, Receiver), WsHandshakeError> {
+	/// Try to establish the connection over the given data stream.
+	pub async fn build_with_stream<T>(
+		self,
+		uri: Url,
+		data_stream: T,
+	) -> Result<(Sender<Compat<T>>, Receiver<Compat<T>>), WsHandshakeError>
+	where
+		T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+	{
+		let target: Target = uri.try_into()?;
+		self.try_connect(&target, data_stream.compat()).await
+	}
+
+	// Try to establish the connection over TCP.
+	async fn try_connect_over_tcp(
+		&self,
+		uri: Url,
+	) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
+		let mut target: Target = uri.try_into()?;
 		let mut err = None;
 
 		// Only build TLS connector if `wss` in URL.
@@ -292,7 +332,7 @@ impl WsTransportClientBuilder {
 		};
 
 		for _ in 0..self.max_redirections {
-			tracing::debug!("Connecting to target: {:?}", target);
+			tracing::debug!(target: LOG_TARGET, "Connecting to target: {:?}", target);
 
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
@@ -301,7 +341,7 @@ impl WsTransportClientBuilder {
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref()).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						tracing::debug!(target: LOG_TARGET, "Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
@@ -311,50 +351,23 @@ impl WsTransportClientBuilder {
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						tracing::debug!(target: LOG_TARGET, "Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
 				};
 
-				let mut client = WsHandshakeClient::new(
-					BufReader::new(BufWriter::new(tcp_stream)),
-					&target.host_header,
-					&target.path_and_query,
-				);
+				match self.try_connect(&target, tcp_stream.compat()).await {
+					Ok(result) => return Ok(result),
 
-				let headers: Vec<_> = self
-					.headers
-					.iter()
-					.map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() })
-					.collect();
-				client.set_headers(&headers);
-
-				// Perform the initial handshake.
-				match client.handshake().await {
-					Ok(ServerResponse::Accepted { .. }) => {
-						tracing::debug!("Connection established to target: {:?}", target);
-						let mut builder = client.into_builder();
-						builder.set_max_message_size(self.max_response_size as usize);
-						let (sender, receiver) = builder.finish();
-						return Ok((
-							Sender { inner: sender, max_request_size: self.max_request_size },
-							Receiver { inner: receiver },
-						));
-					}
-
-					Ok(ServerResponse::Rejected { status_code }) => {
-						tracing::debug!("Connection rejected: {:?}", status_code);
-						err = Some(Err(WsHandshakeError::Rejected { status_code }));
-					}
-					Ok(ServerResponse::Redirect { status_code, location }) => {
-						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
+					Err(WsHandshakeError::Redirected { status_code, location }) => {
+						tracing::debug!(target: LOG_TARGET, "Redirection: status_code: {}, location: {}", status_code, location);
 						match Url::parse(&location) {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
 								target = uri.try_into().map_err(|e| {
-									tracing::error!("Redirection failed: {:?}", e);
+									tracing::error!(target: LOG_TARGET, "Redirection failed: {:?}", e);
 									e
 								})?;
 
@@ -396,13 +409,57 @@ impl WsTransportClientBuilder {
 							}
 						};
 					}
+
 					Err(e) => {
-						err = Some(Err(e.into()));
+						err = Some(Err(e));
 					}
 				};
 			}
 		}
 		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host)))
+	}
+
+	/// Try to establish the handshake over the given data stream.
+	async fn try_connect<T>(
+		&self,
+		target: &Target,
+		data_stream: T,
+	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
+	where
+		T: futures_util::AsyncRead + futures_util::AsyncWrite + Unpin,
+	{
+		let mut client = WsHandshakeClient::new(
+			BufReader::new(BufWriter::new(data_stream)),
+			&target.host_header,
+			&target.path_and_query,
+		);
+
+		let headers: Vec<_> =
+			self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() }).collect();
+		client.set_headers(&headers);
+
+		// Perform the initial handshake.
+		match client.handshake().await {
+			Ok(ServerResponse::Accepted { .. }) => {
+				tracing::debug!(target: LOG_TARGET, "Connection established to target: {:?}", target);
+				let mut builder = client.into_builder();
+				builder.set_max_message_size(self.max_response_size as usize);
+				let (sender, receiver) = builder.finish();
+				Ok((Sender { inner: sender, max_request_size: self.max_request_size }, Receiver { inner: receiver }))
+			}
+
+			Ok(ServerResponse::Rejected { status_code }) => {
+				tracing::debug!(target: LOG_TARGET, "Connection rejected: {:?}", status_code);
+				Err(WsHandshakeError::Rejected { status_code })
+			}
+
+			Ok(ServerResponse::Redirect { status_code, location }) => {
+				tracing::debug!(target: LOG_TARGET, "Redirection: status_code: {}, location: {}", status_code, location);
+				Err(WsHandshakeError::Redirected { status_code, location })
+			}
+
+			Err(e) => Err(e.into()),
+		}
 	}
 }
 
@@ -419,7 +476,7 @@ async fn connect(
 		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
-				tracing::warn!("set nodelay failed: {:?}", err);
+				tracing::warn!(target: LOG_TARGET, "set nodelay failed: {:?}", err);
 			}
 			match tls_connector {
 				None => Ok(EitherStream::Plain(socket)),
@@ -442,7 +499,7 @@ async fn connect(sockaddr: SocketAddr, timeout_dur: Duration) -> Result<EitherSt
 		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
-				tracing::warn!("set nodelay failed: {:?}", err);
+				tracing::warn!(target: LOG_TARGET, "set nodelay failed: {:?}", err);
 			}
 			Ok(EitherStream::Plain(socket))
 		}

@@ -32,6 +32,7 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use crate::id_providers::RandomIntegerIdProvider;
+use crate::server::LOG_TARGET;
 use crate::server::helpers::{MethodResponse, MethodSink};
 use crate::server::subscription::{
 	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
@@ -59,9 +60,8 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
-pub type SubscriptionMethod<'a> = Arc<
-	dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, Result<MethodResponse, Id<'a>>>,
->;
+pub type SubscriptionMethod<'a> =
+	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
 
@@ -121,6 +121,32 @@ pub enum MethodCallback {
 	Subscription(SubscriptionMethod<'static>),
 	/// Unsubscription method handler.
 	Unsubscription(UnsubscriptionMethod),
+}
+
+/// The kind of the JSON-RPC method call, it can be a subscription, method call or unknown.
+#[derive(Debug, Copy, Clone)]
+pub enum MethodKind {
+	/// Subscription Call.
+	Subscription,
+	/// Unsubscription Call.
+	Unsubscription,
+	/// Method call.
+	MethodCall,
+	/// The method was not found.
+	NotFound,
+}
+
+impl std::fmt::Display for MethodKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = match self {
+			Self::Subscription => "subscription",
+			Self::MethodCall => "method call",
+			Self::NotFound => "method not found",
+			Self::Unsubscription => "unsubscription",
+		};
+
+		write!(f, "{s}")
+	}
 }
 
 /// Result of a method, either direct value or a future of one.
@@ -249,7 +275,7 @@ impl Methods {
 	) -> Result<T, Error> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
-		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
+		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
 		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(Error::Call)
@@ -291,7 +317,7 @@ impl Methods {
 		request: &str,
 		buf_size: usize,
 	) -> Result<(MethodResponse, mpsc::Receiver<String>), Error> {
-		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
+		tracing::trace!(target: LOG_TARGET, "[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
@@ -307,7 +333,7 @@ impl Methods {
 	) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::channel(buf_size);
 		let id = req.id.clone();
-		let params = Params::new(req.params.map(|params| params.get()));
+		let params = Params::new(req.params.as_ref().map(|params| params.as_ref().get()));
 
 		let response = match self.method(&req.method) {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
@@ -316,10 +342,7 @@ impl Methods {
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
-				let res = match (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await {
-					Ok(rp) => rp,
-					Err(id) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
-				};
+				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await;
 
 				// This message is not used because it's used for metrics so we discard in other to
 				// not read once this is used for subscriptions.
@@ -332,7 +355,7 @@ impl Methods {
 			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
 
-		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
+		tracing::trace!(target: LOG_TARGET, "[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
 
 		(response, rx)
 	}
@@ -379,7 +402,7 @@ impl Methods {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 
-		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
+		tracing::trace!(target: LOG_TARGET, "[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
@@ -517,7 +540,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				.map(|result| match result {
 					Ok(r) => r,
 					Err(err) => {
-						tracing::error!("Join error for blocking RPC method: {:?}", err);
+						tracing::error!(target: LOG_TARGET, "Join error for blocking RPC method: {:?}", err);
 						MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
 					}
 				})
@@ -693,15 +716,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					Box::pin(async move {
 						match rx.await {
-							Ok(msg) => {
+							Ok(rp) => {
 								// If the subscription was accepted then send a message
 								// to subscription task otherwise rely on the drop impl.
-								if msg.is_success() {
+								if rp.is_success() {
 									let _ = accepted_tx.send(());
 								}
-								Ok(msg)
+								rp
 							}
-							Err(_) => Err(id),
+							Err(_) => MethodResponse::error(id, ErrorCode::InternalError),
 						}
 					})
 				})),
@@ -797,8 +820,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					Box::pin(async move {
 						match rx.await {
-							Ok(msg) => Ok(msg),
-							Err(_) => Err(id),
+							Ok(rp) => rp,
+							Err(_) => MethodResponse::error(id, ErrorCode::InternalError),
 						}
 					})
 				})),
@@ -834,6 +857,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
 							tracing::warn!(
+								target: LOG_TARGET,
 								"Unsubscribe call `{}` failed: couldn't parse subscription id={:?} request id={:?}",
 								unsubscribe_method_name,
 								params,
@@ -849,6 +873,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					if !result {
 						tracing::debug!(
+							target: LOG_TARGET,
 							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
 							unsubscribe_method_name,
 							key,

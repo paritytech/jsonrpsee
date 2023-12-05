@@ -161,7 +161,7 @@ impl<L> HttpClientBuilder<L> {
 	}
 
 	/// Set custom tower middleware.
-	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
+	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
 		HttpClientBuilder {
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
@@ -284,8 +284,6 @@ where
 			Ok(Err(e)) => Err(Error::Transport(e.into())),
 		}
 	}
-
-	/// Perform a request towards the server.
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
 	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>

@@ -26,6 +26,8 @@
 
 //! Example of using proc macro to generate working client and server.
 
+#![cfg(test)]
+
 mod helpers;
 
 use std::net::SocketAddr;

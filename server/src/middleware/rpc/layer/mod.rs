@@ -24,34 +24,43 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! # jsonrpsee-server
-//!
-//! `jsonrpsee-server` is a [JSON RPC](https://www.jsonrpc.org/specification) server that supports both HTTP and WebSocket transport.
+//! Specific middleware layer implementation provided by jsonrpsee.
 
-#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+pub mod either;
+pub mod logger;
+pub mod rpc_service;
 
-mod future;
-mod server;
-mod transport;
+pub use logger::*;
+pub use rpc_service::*;
 
-pub mod middleware;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
-#[cfg(test)]
-mod tests;
+use futures_util::future::{Either, Future};
+use jsonrpsee_core::server::MethodResponse;
+use pin_project::pin_project;
 
-pub use future::{stop_channel, ConnectionGuard, ConnectionPermit, ServerHandle, StopHandle};
-pub use jsonrpsee_core::server::*;
-pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
-pub use jsonrpsee_types as types;
-pub use middleware::rpc::RpcServiceBuilder;
-pub use server::{
-	BatchRequestConfig, Builder as ServerBuilder, ConnectionState, PingConfig, Server, ServerConfig, TowerService,
-	TowerServiceBuilder,
-};
-pub use tracing;
+/// Response which may be ready or a future.
+#[derive(Debug)]
+#[pin_project]
+pub struct ResponseFuture<F>(#[pin] futures_util::future::Either<F, std::future::Ready<MethodResponse>>);
 
-pub use transport::http;
-pub use transport::ws;
+impl<F> ResponseFuture<F> {
+	/// Returns a future that resolves to a response.
+	pub fn future(f: F) -> ResponseFuture<F> {
+		ResponseFuture(Either::Left(f))
+	}
 
-pub(crate) const LOG_TARGET: &str = "jsonrpsee-server";
+	/// Return a response which is already computed.
+	pub fn ready(response: MethodResponse) -> ResponseFuture<F> {
+		ResponseFuture(Either::Right(std::future::ready(response)))
+	}
+}
+
+impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
+	type Output = MethodResponse;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		self.project().0.poll(cx)
+	}
+}
