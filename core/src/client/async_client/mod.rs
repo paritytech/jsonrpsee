@@ -326,7 +326,7 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
-		let ping_interval = self.ping_interval;
+		let ping_config = self.ping_config;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
@@ -337,7 +337,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
 			max_buffer_capacity_per_subscription,
-			ping_interval,
+			ping_config,
 		}));
 
 		wasm_bindgen_futures::spawn_local(read_task(ReadTaskParams {
@@ -346,6 +346,7 @@ impl ClientBuilder {
 			to_send_task: to_back.clone(),
 			manager,
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+			ping_config,
 		}));
 
 		wasm_bindgen_futures::spawn_local(wait_for_shutdown(
