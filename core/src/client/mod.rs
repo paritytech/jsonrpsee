@@ -220,7 +220,7 @@ pub enum SubscriptionKind {
 
 /// Represent a client-side subscription which is implemented on top of 
 /// a bounded channel where it's possible that the receiver may
-/// not keep it with the sender side a.k.a "slow receiver problem"
+/// not keep up with the sender side a.k.a "slow receiver problem"
 /// 
 /// ## Lagging
 /// 
