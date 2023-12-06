@@ -881,7 +881,7 @@ async fn server_with_infinite_call(
 ) -> (crate::ServerHandle, std::net::SocketAddr) {
 	let server = ServerBuilder::default()
 		// Make sure that the ping_interval doesn't force the connection to be closed
-		.enable_ws_ping(crate::server::PingConfig::new().max_failures(NonZeroUsize::MAX).ping_interval(timeout))
+		.enable_ws_ping(crate::PingConfig::new().max_failures(NonZeroUsize::MAX).ping_interval(timeout))
 		.build("127.0.0.1:0")
 		.with_default_timeout()
 		.await

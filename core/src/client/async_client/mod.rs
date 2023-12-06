@@ -16,12 +16,16 @@ use crate::JsonRawValue;
 use std::borrow::Cow as StdCow;
 
 use core::time::Duration;
+use std::num::NonZeroUsize;
+use std::time::Instant;
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
 use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
+use pin_project::pin_project;
+use tokio::time::{interval, Interval, interval_at};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
@@ -41,6 +45,67 @@ use tracing::instrument;
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
 const LOG_TARGET: &str = "jsonrpsee-client";
+
+/// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect
+/// an inactive connection.
+///
+/// jsonrpsee doesn't associate the ping/pong frames just that if
+/// pong frame isn't received within `inactive_limit` then it's regarded
+/// as missed.
+///
+/// Such that the `inactive_limit` should be configured to longer than a single
+/// WebSocket ping takes or it might be missed and may end up
+/// terminating the connection.
+#[derive(Debug, Copy, Clone)]
+pub struct PingConfig {
+	/// Period which the server pings the connected client.
+	pub(crate) ping_interval: Duration,
+	/// Max allowed time for a connection to stay idle.
+	pub(crate) inactive_limit: Duration,
+	/// Max failures.
+	pub(crate) max_failures: NonZeroUsize,
+}
+
+impl Default for PingConfig {
+	fn default() -> Self {
+		Self {
+			ping_interval: Duration::from_secs(30),
+			max_failures: NonZeroUsize::new(1).expect("1 > 0; qed"),
+			inactive_limit: Duration::from_secs(40),
+		}
+	}
+}
+
+impl PingConfig {
+	/// Create a new PingConfig.
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	/// Configure the interval when the WebSocket pings are sent out.
+	pub fn ping_interval(mut self, ping_interval: Duration) -> Self {
+		self.ping_interval = ping_interval;
+		self
+	}
+
+	/// Configure how long to wait for the WebSocket pong.
+	/// When this limit is expired it's regarded as the client is unresponsive.
+	///
+	/// You may configure how many times the client is allowed to be "inactive" by
+	/// [`PingConfig::max_failures`].
+	pub fn inactive_limit(mut self, inactivity_limit: Duration) -> Self {
+		self.inactive_limit = inactivity_limit;
+		self
+	}
+
+	/// Configure how many times the remote peer is allowed be
+	/// inactive until the connection is closed.
+	pub fn max_failures(mut self, max: NonZeroUsize) -> Self {
+		self.max_failures = max;
+		self
+	}
+}
+
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ThreadSafeRequestManager(Arc<std::sync::Mutex<RequestManager>>);
@@ -118,7 +183,7 @@ pub struct ClientBuilder {
 	max_buffer_capacity_per_subscription: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
-	ping_interval: Option<Duration>,
+	ping_config: Option<PingConfig>,
 }
 
 impl Default for ClientBuilder {
@@ -129,7 +194,7 @@ impl Default for ClientBuilder {
 			max_buffer_capacity_per_subscription: 1024,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
-			ping_interval: None,
+			ping_config: None,
 		}
 	}
 }
@@ -182,20 +247,21 @@ impl ClientBuilder {
 		self
 	}
 
-	/// Set the interval at which pings frames are submitted (disabled by default).
+	/// Enable WebSocket ping/pong on the client.
+	/// 
+	/// This only works if the transport supports WebSocket pings.
 	///
-	/// Periodically submitting pings at a defined interval has mainly two benefits:
-	///  - Directly, it acts as a "keep-alive" alternative in the WebSocket world.
-	///  - Indirectly by inspecting debug logs, it ensures that the endpoint is still responding to messages.
+	/// Default: pings are disabled.
+	pub fn enable_ws_ping(mut self, cfg: PingConfig) -> Self {
+		self.ping_config = Some(cfg);
+		self
+	}
+
+	/// Disable WebSocket ping/pong on the server.
 	///
-	/// The underlying implementation does not make any assumptions about at which intervals pongs are received.
-	///
-	/// Note: The interval duration is restarted when
-	///  - a frontend command is submitted
-	///  - a reply is received from the backend
-	///  - the interval duration expires
-	pub fn ping_interval(mut self, interval: Duration) -> Self {
-		self.ping_interval = Some(interval);
+	/// Default: pings are disabled.
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.ping_config = None;
 		self
 	}
 
@@ -214,7 +280,7 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
-		let ping_interval = self.ping_interval;
+		let ping_config = self.ping_config;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
@@ -225,7 +291,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
 			max_buffer_capacity_per_subscription,
-			ping_interval,
+			ping_config,
 		}));
 
 		tokio::spawn(read_task(ReadTaskParams {
@@ -234,6 +300,7 @@ impl ClientBuilder {
 			to_send_task: to_back.clone(),
 			manager,
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+			ping_config,
 		}));
 
 		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, err_to_front));
@@ -794,7 +861,7 @@ struct SendTaskParams<S: TransportSenderT> {
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	manager: ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
-	ping_interval: Option<Duration>,
+	ping_config: Option<PingConfig>,
 }
 
 async fn send_task<S>(params: SendTaskParams<S>)
@@ -807,15 +874,20 @@ where
 		close_tx,
 		manager,
 		max_buffer_capacity_per_subscription,
-		ping_interval,
+		ping_config,
 	} = params;
+
+	let mut ping_interval = match ping_config {
+		None => IntervalStream::pending(),
+		// NOTE: we are emitted a tick here immediately to sync
+		// with how the receive task work because it starts measuring the pong
+		// when it starts up.
+		Some(p) => IntervalStream::new(interval(p.ping_interval)),
+	};
 
 	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
 	// are cancel-safe.
-	let res = if let Some(ping_interval) = ping_interval {
-		let mut ping = tokio::time::interval_at(tokio::time::Instant::now() + ping_interval, ping_interval);
-
-		loop {
+		let res = loop {
 			tokio::select! {
 				biased;
 				_ = close_tx.closed() => break Ok(()),
@@ -831,34 +903,14 @@ where
 						break Err(Error::Transport(e.into()));
 					}
 				}
-				_ = ping.tick() => {
+				_ = ping_interval.next() => {
 					if let Err(err) = sender.send_ping().await {
 						tracing::error!(target: LOG_TARGET, "Could not send ping frame: {err}");
 						break Err(Error::Custom("Could not send ping frame".into()));
 					}
 				}
 			}
-		}
-	} else {
-		loop {
-			tokio::select! {
-				biased;
-				_ = close_tx.closed() => break Ok(()),
-				maybe_msg = from_frontend.recv() => {
-					let Some(msg) = maybe_msg else {
-						break Ok(());
-					};
-
-					if let Err(e) =
-						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
-					{
-						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
-						break Err(Error::Transport(e.into()));
-					}
-				}
-			}
-		}
-	};
+		};
 
 	from_frontend.close();
 	let _ = sender.close().await;
@@ -871,13 +923,21 @@ struct ReadTaskParams<R: TransportReceiverT> {
 	to_send_task: mpsc::Sender<FrontToBack>,
 	manager: ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
+	ping_config: Option<PingConfig>,
 }
 
 async fn read_task<R>(params: ReadTaskParams<R>)
 where
 	R: TransportReceiverT,
 {
-	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription } = params;
+	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription, ping_config } = params;
+
+	let mut last_active = Instant::now();
+	let mut inactivity_check = match ping_config {
+		Some(p) => IntervalStream::new(interval_at(tokio::time::Instant::now() + p.ping_interval, p.ping_interval)),
+		None => IntervalStream::pending(),
+	};
+	let mut missed = 0;
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
@@ -903,6 +963,7 @@ where
 			_ = pending_unsubscribes.next() => (),
 			// New message received.
 			maybe_msg = backend_event.next() => {
+				last_active = Instant::now();
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
 				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
@@ -915,7 +976,17 @@ where
 					}
 					Ok(None) => (),
 				}
+			}
+			_ = inactivity_check.next() => {
+				if let Some(p) = ping_config {
+					if last_active.elapsed() > p.inactive_limit {
+						missed += 1;
 
+						if missed >= p.max_failures.get() {
+							break Ok(());
+						}
+					}
+				}
 			}
 		}
 	};
@@ -968,5 +1039,35 @@ impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
 		}
 
 		self.futs.poll_next_unpin(cx)
+	}
+}
+
+
+#[pin_project]
+pub(crate) struct IntervalStream(#[pin] Option<tokio_stream::wrappers::IntervalStream>);
+
+impl IntervalStream {
+	/// Creates a stream which never returns any elements.
+	pub(crate) fn pending() -> Self {
+		Self(None)
+	}
+
+	/// Creates a stream which produces elements with interval of `period`.
+	pub(crate) fn new(interval: Interval) -> Self {
+		Self(Some(tokio_stream::wrappers::IntervalStream::new(interval)))
+	}
+}
+
+impl Stream for IntervalStream {
+	type Item = tokio::time::Instant;
+
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		if let Some(mut stream) = self.project().0.as_pin_mut() {
+			stream.poll_next_unpin(cx)
+		} else {
+			// NOTE: this will not be woken up again and it's by design
+			// to be a pending stream that never returns.
+			Poll::Pending
+		}
 	}
 }
