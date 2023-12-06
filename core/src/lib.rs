@@ -88,4 +88,4 @@ pub use serde_json::{
 pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 
 /// The return type if the subscription wants to return `Result`.
-pub type SubscriptionResult = Result<(), error::StringError>;
+pub type SubscriptionResult = Result<(), StringError>;

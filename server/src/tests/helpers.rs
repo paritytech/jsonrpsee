@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 
 use crate::{RpcModule, ServerBuilder, ServerHandle};
 
-use jsonrpsee_core::{error::StringError, DeserializeOwned, RpcResult};
+use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::{error::ErrorCode, ErrorObject, ErrorObjectOwned, Response, ResponseSuccess};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
