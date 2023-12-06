@@ -222,19 +222,19 @@ pub enum SubscriptionKind {
 
 /// Represent a client-side subscription which is implemented on top of 
 /// a bounded channel where it's possible that the receiver may
-/// not keep it with the sender side a.k.a "slow receiver problem"
+/// not keep up with the sender side a.k.a "slow receiver problem"
 /// 
 /// ## Lagging
 /// 
-/// As all sent messages must be kept in a buffer until the underlying
-/// stream is polled, it's possible that the server is producing
-/// subscription notifications faster than the client can handle.
+/// All messages from the server must be kept in a buffer in the client
+/// until they are read by polling the [`Subscription`]. If you don't 
+/// poll the client subscription quickly enough, the buffer may fill 
+/// up, which will result in messages being lost.
 /// 
 /// If that occurs, an error [`SubscriptionError::Lagged`] is emitted.
 /// to indicate the n messages were lost. It still possibe to use
 /// the subscription after it has lagged and the subsequent read operation 
-/// will return the oldest message in the buffer but that  `n messages` were 
-/// lost.
+/// will return the oldest message in the buffer but without some lost messages.
 /// 
 /// Thus, it's application dependent and if loosing message is not acceptable
 /// just drop the subscription and create a new subscription.
@@ -250,7 +250,7 @@ pub enum SubscriptionKind {
 /// 
 /// Because the subscription is implemented on top of a bounded channel
 /// it will not instantly return `None` when the connection is closed 
-/// because all messages buffered must be read before it to return `None`.
+/// because all messages buffered must be read before it returns `None`.
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
