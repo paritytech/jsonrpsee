@@ -85,7 +85,7 @@ pub struct WsClientBuilder {
 	ping_interval: Option<Duration>,
 	headers: http::HeaderMap,
 	max_concurrent_requests: usize,
-	max_buffer_capacity_per_subscription: usize,
+	subscription_buf_cap: usize,
 	max_redirections: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
@@ -102,7 +102,7 @@ impl Default for WsClientBuilder {
 			ping_interval: None,
 			headers: HeaderMap::new(),
 			max_concurrent_requests: 256,
-			max_buffer_capacity_per_subscription: 1024,
+			subscription_buf_cap: 16,
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
@@ -188,13 +188,13 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// See documentation [`ClientBuilder::max_buffer_capacity_per_subscription`] (default is 1024).
-	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
+	/// See documentation [`ClientBuilder::with_buf_capacity_per_subscription`] (default is 16).
+	pub fn with_buf_capacity_per_subscription(mut self, capacity: usize) -> Self {
 		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
-		assert!(max > 0, "subscription buffer capacity cannot be zero");
-		assert!(max <= usize::MAX >> 1, "subscription buffer capacity exceeded `usize::MAX / 2`");
+		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
+		assert!(capacity <= usize::MAX >> 1, "subscription buffer capacity exceeded `usize::MAX / 2`");
 
-		self.max_buffer_capacity_per_subscription = max;
+		self.subscription_buf_cap = capacity;
 		self
 	}
 
@@ -232,14 +232,14 @@ impl WsClientBuilder {
 			max_concurrent_requests,
 			request_timeout,
 			ping_interval,
-			max_buffer_capacity_per_subscription,
+			subscription_buf_cap,
 			id_kind,
 			max_log_length,
 			..
 		} = self;
 
 		let mut client = ClientBuilder::default()
-			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription)
+			.with_buf_capacity_per_subscription(subscription_buf_cap)
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)

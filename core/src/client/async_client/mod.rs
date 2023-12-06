@@ -115,7 +115,7 @@ enum ReadErrorOnce {
 pub struct ClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
-	max_buffer_capacity_per_subscription: usize,
+	subscription_buf_cap: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
 	ping_interval: Option<Duration>,
@@ -126,7 +126,7 @@ impl Default for ClientBuilder {
 		Self {
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
-			max_buffer_capacity_per_subscription: 1024,
+			subscription_buf_cap: 1024,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			ping_interval: None,
@@ -152,26 +152,30 @@ impl ClientBuilder {
 		self
 	}
 
-	/// Set max buffer capacity for each subscription; when the capacity is exceeded the subscription
-	/// will be dropped (default is 1024).
+	/// All the subscription messages from the server must be kept in a buffer in the client
+	/// until they are read by polling the [`Subscription`]. If you don't 
+	/// poll the client subscription quickly enough, the buffer may fill
+	/// up, which will result in messages being lost.
 	///
-	/// You may prevent the subscription from being dropped by polling often enough
-	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) such that
-	/// it can keep with the rate as server produces new items on the subscription.
+	/// For such cases you may decide to increase the subscription buffer by using
+	/// this API.
 	///
+	/// Beware of that this API configures the buffer size allocated up front a subscription when [`SubscriptionClientT::subscribe`]
+	/// is invoked which works similar to Vec::with_capacity.
+	/// Such as if one opening lots of concurrent subscriptions it may allocate plenty of memory.
 	///
 	/// # Panics
 	///
 	/// This function panics if `max` is 0 or bigger than usize::MAX / 2.
-	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
+	pub fn with_buf_capacity_per_subscription(mut self, capacity: usize) -> Self {
 		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
-		assert!(max > 0, "subscription buffer capacity cannot be zero");
+		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
         assert!(
-            max <= usize::MAX >> 1,
+            capacity <= usize::MAX >> 1,
             "subscription buffer capacity exceeded `usize::MAX / 2`"
         );
 
-		self.max_buffer_capacity_per_subscription = max;
+		self.subscription_buf_cap = capacity;
 		self
 	}
 
@@ -220,7 +224,7 @@ impl ClientBuilder {
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
-		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
+		let subscription_buf_cap = self.subscription_buf_cap;
 		let ping_interval = self.ping_interval;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
@@ -231,7 +235,7 @@ impl ClientBuilder {
 			from_frontend: from_front,
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
-			max_buffer_capacity_per_subscription,
+			subscription_buf_cap,
 			ping_interval,
 		}));
 
@@ -240,7 +244,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+			subscription_buf_cap: self.subscription_buf_cap,
 		}));
 
 		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, err_to_front));
@@ -800,7 +804,7 @@ struct SendTaskParams<S: TransportSenderT> {
 	from_frontend: mpsc::Receiver<FrontToBack>,
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	manager: ThreadSafeRequestManager,
-	max_buffer_capacity_per_subscription: usize,
+	subscription_buf_cap: usize,
 	ping_interval: Option<Duration>,
 }
 
@@ -813,7 +817,7 @@ where
 		mut from_frontend,
 		close_tx,
 		manager,
-		max_buffer_capacity_per_subscription,
+		subscription_buf_cap,
 		ping_interval,
 	} = params;
 
@@ -832,7 +836,7 @@ where
 					};
 
 					if let Err(e) =
-						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+						handle_frontend_messages(msg, &manager, &mut sender, subscription_buf_cap).await
 					{
 						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
 						break Err(Error::Transport(e.into()));
@@ -857,7 +861,7 @@ where
 					};
 
 					if let Err(e) =
-						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+						handle_frontend_messages(msg, &manager, &mut sender, subscription_buf_cap).await
 					{
 						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
 						break Err(Error::Transport(e.into()));
@@ -877,14 +881,14 @@ struct ReadTaskParams<R: TransportReceiverT> {
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	to_send_task: mpsc::Sender<FrontToBack>,
 	manager: ThreadSafeRequestManager,
-	max_buffer_capacity_per_subscription: usize,
+	subscription_buf_cap: usize,
 }
 
 async fn read_task<R>(params: ReadTaskParams<R>)
 where
 	R: TransportReceiverT,
 {
-	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription } = params;
+	let ReadTaskParams { receiver, close_tx, to_send_task, manager, subscription_buf_cap } = params;
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
@@ -912,7 +916,7 @@ where
 			maybe_msg = backend_event.next() => {
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
-				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
+				match handle_backend_messages::<R>(Some(msg), &manager, subscription_buf_cap) {
 					Ok(Some(msg)) => {
 						pending_unsubscribes.push(to_send_task.send(msg));
 					}

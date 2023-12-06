@@ -37,7 +37,6 @@ use std::{
 	ops::Range,
 };
 
-
 use crate::{
 	client::{BatchEntry, SubscriptionStream, Error},
 	error::RegisterMethodError,

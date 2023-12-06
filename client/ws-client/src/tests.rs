@@ -205,7 +205,7 @@ async fn notification_slow_reader() {
 
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default()
-		.max_buffer_capacity_per_subscription(4)
+		.with_buf_capacity_per_subscription(4)
 		.build(&uri)
 		.with_default_timeout()
 		.await

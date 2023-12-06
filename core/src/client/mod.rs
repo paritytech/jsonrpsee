@@ -227,24 +227,24 @@ pub enum SubscriptionKind {
 /// ## Lagging
 /// 
 /// All messages from the server must be kept in a buffer in the client
-/// until they are read by polling the [`Subscription`]. If you don't 
-/// poll the client subscription quickly enough, the buffer may fill 
+/// until they are read by polling the [`Subscription`]. If you don't
+/// poll the client subscription quickly enough, the buffer may fill
 /// up, which will result in messages being lost.
-/// 
+///
 /// If that occurs, an error [`SubscriptionError::Lagged`] is emitted.
 /// to indicate the n messages were lost. It still possibe to use
 /// the subscription after it has lagged and the subsequent read operation 
 /// will return the oldest message in the buffer but without some lost messages.
-/// 
+///
 /// Thus, it's application dependent and if loosing message is not acceptable
 /// just drop the subscription and create a new subscription.
-/// 
+///
 /// To avoid `Lagging` from happening you may increase the buffer capacity
-/// or ensure that [`Subscription::next`] is polled often enough such as 
-/// in a separate tokio task.
-/// 
+/// by [`ClientBuilder::with_buf_capacity_per_subscription`] or ensure that [`Subscription::next`] 
+/// is polled often enough such as in a separate tokio task.
+///
 /// ## Connection closed
-/// 
+///
 /// When the connection is closed the underlying stream will eventually
 /// return `None` to indicate that.
 /// 
