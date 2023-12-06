@@ -58,7 +58,7 @@ const LOG_TARGET: &str = "jsonrpsee-client";
 /// terminating the connection.
 #[derive(Debug, Copy, Clone)]
 pub struct PingConfig {
-	/// Period which the server pings the connected client.
+	/// Interval that the pings are sent.
 	pub(crate) ping_interval: Duration,
 	/// Max allowed time for a connection to stay idle.
 	pub(crate) inactive_limit: Duration,
@@ -89,16 +89,16 @@ impl PingConfig {
 	}
 
 	/// Configure how long to wait for the WebSocket pong.
-	/// When this limit is expired it's regarded as the client is unresponsive.
+	/// When this limit is expired it's regarded as inresponsive.
 	///
-	/// You may configure how many times the client is allowed to be "inactive" by
-	/// [`PingConfig::max_failures`].
+	/// You may configure how many times the connection is allowed to
+	/// be inactive by [`PingConfig::max_failures`].
 	pub fn inactive_limit(mut self, inactivity_limit: Duration) -> Self {
 		self.inactive_limit = inactivity_limit;
 		self
 	}
 
-	/// Configure how many times the remote peer is allowed be
+	/// Configure how many times the connection is allowed be
 	/// inactive until the connection is closed.
 	pub fn max_failures(mut self, max: NonZeroUsize) -> Self {
 		self.max_failures = max;
@@ -983,7 +983,7 @@ where
 						missed += 1;
 
 						if missed >= p.max_failures.get() {
-							break Ok(());
+							break Err(Error::Custom("WebSocket ping/pong inactive".into()));
 						}
 					}
 				}
