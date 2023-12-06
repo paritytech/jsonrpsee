@@ -244,7 +244,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			subscription_buf_cap: self.subscription_buf_cap,
+			subscription_buf_cap,
 		}));
 
 		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, err_to_front));
@@ -269,7 +269,7 @@ impl ClientBuilder {
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
-		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
+		let subscription_buf_cap = self.subscription_buf_cap;
 		let ping_interval = self.ping_interval;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
@@ -280,7 +280,7 @@ impl ClientBuilder {
 			from_frontend: from_front,
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
-			max_buffer_capacity_per_subscription,
+			subscription_buf_cap,
 			ping_interval,
 		}));
 
@@ -289,7 +289,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+			subscription_buf_cap,
 		}));
 
 		wasm_bindgen_futures::spawn_local(wait_for_shutdown(
