@@ -43,7 +43,7 @@ use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT, SubscriptionError};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::{Error, JsonValue};
+use jsonrpsee::core::{JsonValue, ClientError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -265,7 +265,7 @@ async fn http_concurrent_method_call_limits_works() {
 	);
 
 	assert!(first.is_ok());
-	assert!(matches!(second, Err(Error::MaxSlotsExceeded)));
+	assert!(matches!(second, Err(ClientError::MaxSlotsExceeded)));
 }
 
 #[tokio::test]
@@ -839,10 +839,10 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let data = "\"Exceeded max limit of 10\"";
 
 	assert!(
-		matches!(err1, Err(Error::Call(err)) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
+		matches!(err1, Err(ClientError::Call(err)) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
 	);
 	assert!(
-		matches!(err2, Err(Error::Call(err)) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
+		matches!(err2, Err(ClientError::Call(err)) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
 	);
 }
 
@@ -1051,7 +1051,7 @@ async fn ws_subscribe_with_bad_params() {
 		.subscribe::<serde_json::Value, ArrayParams>("subscribe_add_one", rpc_params!["0x0"], "unsubscribe_add_one")
 		.await
 		.unwrap_err();
-	assert!(matches!(err, Error::Call(_)));
+	assert!(matches!(err, ClientError::Call(_)));
 }
 
 #[tokio::test]
@@ -1146,7 +1146,7 @@ async fn deny_invalid_host() {
 		let server_url = format!("ws://{}", addr);
 		let err = WsClientBuilder::default().build(&server_url).await.unwrap_err();
 		assert!(
-			matches!(err, Error::Transport(e) if e.to_string().contains("Connection rejected with status code: 403"))
+			matches!(err, ClientError::Transport(e) if e.to_string().contains("Connection rejected with status code: 403"))
 		)
 	}
 }

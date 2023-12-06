@@ -26,9 +26,8 @@
 
 use std::net::SocketAddr;
 
-use crate::server::BatchRequestConfig;
-use crate::{RpcModule, ServerBuilder, ServerHandle};
-use jsonrpsee_core::{Error, RpcResult};
+use crate::{BatchRequestConfig, RegisterMethodError, RpcModule, ServerBuilder, ServerHandle};
+use jsonrpsee_core::RpcResult;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -447,7 +446,7 @@ async fn can_register_modules() {
 
 	let err = mod1.merge(mod2).unwrap_err();
 
-	let expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
+	let expected_err = RegisterMethodError::AlreadyRegistered(String::from("bla"));
 	assert_eq!(err.to_string(), expected_err.to_string());
 	assert_eq!(mod1.method_names().count(), 2);
 }

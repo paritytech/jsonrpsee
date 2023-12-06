@@ -38,18 +38,17 @@
 #[cfg(test)]
 mod tests;
 
+pub use http::{HeaderMap, HeaderValue};
 pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
 
-pub use http::{HeaderMap, HeaderValue};
-use std::time::Duration;
-use url::Url;
-
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
 use jsonrpsee_core::client::{
-	CertificateStore, ClientBuilder, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
+	CertificateStore, ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
 };
-use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::TEN_MB_SIZE_BYTES;
+use std::time::Duration;
+use url::Url;
 
 /// Builder for [`WsClient`].
 ///
@@ -224,7 +223,7 @@ impl WsClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build_with_transport<S, R>(self, sender: S, receiver: R) -> Result<WsClient, Error>
+	pub fn build_with_transport<S, R>(self, sender: S, receiver: R) -> WsClient
 	where
 		S: TransportSenderT + Send,
 		R: TransportReceiverT + Send,
@@ -250,7 +249,7 @@ impl WsClientBuilder {
 			client = client.ping_interval(interval);
 		}
 
-		Ok(client.build_with_tokio(sender, receiver))
+		client.build_with_tokio(sender, receiver)
 	}
 
 	/// Build the [`WsClient`] with specified data stream, using [`WsTransportClientBuilder::build_with_stream`].
@@ -275,7 +274,7 @@ impl WsClientBuilder {
 		let (sender, receiver) =
 			transport_builder.build_with_stream(uri, data_stream).await.map_err(|e| Error::Transport(e.into()))?;
 
-		let ws_client = self.build_with_transport(sender, receiver).await?;
+		let ws_client = self.build_with_transport(sender, receiver);
 		Ok(ws_client)
 	}
 
@@ -298,7 +297,7 @@ impl WsClientBuilder {
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
 		let (sender, receiver) = transport_builder.build(uri).await.map_err(|e| Error::Transport(e.into()))?;
 
-		let ws_client = self.build_with_transport(sender, receiver).await?;
+		let ws_client = self.build_with_transport(sender, receiver);
 		Ok(ws_client)
 	}
 }

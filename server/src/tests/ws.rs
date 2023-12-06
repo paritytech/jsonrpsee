@@ -27,12 +27,12 @@
 use std::num::NonZeroUsize;
 use std::time::Duration;
 
-use crate::server::BatchRequestConfig;
 use crate::tests::helpers::{deser_call, init_logger, server_with_context};
 use crate::types::SubscriptionId;
+use crate::{BatchRequestConfig, RegisterMethodError};
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
-use jsonrpsee_core::{traits::IdProvider, Error};
+use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -439,7 +439,7 @@ async fn register_same_subscribe_unsubscribe_is_err() {
 	assert!(matches!(
 		module
 			.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| async { Ok(()) }),
-		Err(Error::SubscriptionNameConflict(_))
+		Err(RegisterMethodError::SubscriptionNameConflict(_))
 	));
 }
 
@@ -509,7 +509,7 @@ async fn can_register_modules() {
 
 	assert_eq!(mod1.method_names().count(), 2);
 	let err = mod1.merge(mod2).unwrap_err();
-	assert!(matches!(err, Error::MethodAlreadyRegistered(err) if err == "bla"));
+	assert!(matches!(err, RegisterMethodError::AlreadyRegistered(err) if err == "bla"));
 	assert_eq!(mod1.method_names().count(), 2);
 }
 

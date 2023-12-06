@@ -93,9 +93,10 @@ impl RpcDescription {
 				return quote_spanned!(args.span() => compile_error!("Result must be have two arguments"));
 			}
 
-			// Force the last argument to be `jsonrpsee::core::Error`:
+			// Force the last argument to be `jsonrpsee::core::ClientError`:
 			let error_arg = args.last_mut().unwrap();
-			*error_arg = syn::GenericArgument::Type(syn::Type::Verbatim(self.jrps_client_item(quote! { core::Error })));
+			*error_arg =
+				syn::GenericArgument::Type(syn::Type::Verbatim(self.jrps_client_item(quote! { core::client::Error })));
 
 			quote!(#ty)
 		} else if type_name.ident == "RpcResult" {
@@ -106,7 +107,7 @@ impl RpcDescription {
 
 			// The type alias `RpcResult<T>` is modified to `Result<T, Error>`.
 			let ret_ty = args.last_mut().unwrap();
-			let err_ty = self.jrps_client_item(quote! { core::Error });
+			let err_ty = self.jrps_client_item(quote! { core::client::Error });
 
 			quote! { core::result::Result<#ret_ty, #err_ty> }
 		} else {
@@ -117,7 +118,7 @@ impl RpcDescription {
 
 	fn render_method(&self, method: &RpcMethod) -> Result<TokenStream2, syn::Error> {
 		// `jsonrpsee::Error`
-		let jrps_error = self.jrps_client_item(quote! { core::Error });
+		let jrps_error = self.jrps_client_item(quote! { core::client::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &method.signature.sig.ident;
 		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).
@@ -127,7 +128,7 @@ impl RpcDescription {
 		let rpc_method_name = self.rpc_identifier(&method.name);
 
 		// Called method is either `request` or `notification`.
-		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::core::Error`).
+		// `returns` represent the return type of the *rust method* (`Result<T, jsonrpsee::core::ClientError>`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
 			let returns = self.return_result_type(returns.clone());
@@ -160,8 +161,8 @@ impl RpcDescription {
 	}
 
 	fn render_sub(&self, sub: &RpcSubscription) -> Result<TokenStream2, syn::Error> {
-		// `jsonrpsee::core::Error`
-		let jrps_error = self.jrps_client_item(quote! { core::Error });
+		// `jsonrpsee::core::ClientError`
+		let jrps_error = self.jrps_client_item(quote! { core::client::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &sub.signature.sig.ident;
 		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).

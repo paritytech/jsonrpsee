@@ -5,11 +5,11 @@ mod manager;
 
 use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
 use crate::client::{
-	BatchMessage, BatchResponse, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage, Subscription,
-	SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
+	BatchMessage, BatchResponse, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
+	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT, Error
 };
-use crate::error::Error;
-use crate::params::BatchRequestBuilder;
+use crate::error::RegisterMethodError;
+use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::tracing::client::{rx_log_from_json, tx_log_from_str};
 use crate::traits::ToRpcParams;
 use crate::JsonRawValue;
@@ -513,7 +513,9 @@ impl SubscriptionClientT for Client {
 		Notif: DeserializeOwned,
 	{
 		if subscribe_method == unsubscribe_method {
-			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
+			return Err(RegisterMethodError::SubscriptionNameConflict(
+				unsubscribe_method.to_owned(),
+			).into());
 		}
 
 		let guard = self.id_manager.next_request_two_ids()?;
@@ -661,7 +663,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 						range.end += 1;
 						process_batch_response(&mut manager.lock(), batch, range)?;
 					} else {
-						return Err(Error::EmptyBatchRequest);
+						return Err(EmptyBatchRequest.into());
 					}
 				} else {
 					return Err(unparse_error(raw));
@@ -769,12 +771,13 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
 			} else {
-				let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
+				let _ =
+					reg.send_back.send(Err(RegisterMethodError::AlreadyRegistered(reg.method).into()));
 			}
 		}
 		// User dropped the NotificationHandler for this method
 		FrontToBack::UnregisterNotification(method) => {
-			let _ = manager.lock().remove_notification_handler(method);
+			let _ = manager.lock().remove_notification_handler(&method);
 		}
 	};
 

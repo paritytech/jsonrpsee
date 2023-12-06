@@ -27,7 +27,6 @@
 //! RPC parameters.
 
 use crate::traits::ToRpcParams;
-use crate::Error;
 use serde::Serialize;
 use serde_json::value::RawValue;
 
@@ -164,9 +163,9 @@ impl Default for ObjectParams {
 }
 
 impl ToRpcParams for ObjectParams {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 		if let Some(json) = self.0.build() {
-			RawValue::from_string(json).map(Some).map_err(Error::ParseError)
+			RawValue::from_string(json).map(Some)
 		} else {
 			Ok(None)
 		}
@@ -210,9 +209,9 @@ impl Default for ArrayParams {
 }
 
 impl ToRpcParams for ArrayParams {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 		if let Some(json) = self.0.build() {
-			RawValue::from_string(json).map(Some).map_err(Error::ParseError)
+			RawValue::from_string(json).map(Some)
 		} else {
 			Ok(None)
 		}
@@ -221,6 +220,11 @@ impl ToRpcParams for ArrayParams {
 
 /// Initial number of parameters in a batch request.
 const BATCH_PARAMS_NUM_CAPACITY: usize = 4;
+
+/// Error representing an empty batch request.
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("Empty batch request is not allowed")]
+pub struct EmptyBatchRequest;
 
 /// Request builder that serializes RPC parameters to construct a valid batch parameter.
 /// This is the equivalent of chaining multiple RPC requests.
@@ -234,16 +238,16 @@ impl<'a> BatchRequestBuilder<'a> {
 	}
 
 	/// Inserts the RPC method with provided parameters into the builder.
-	pub fn insert<Params: ToRpcParams>(&mut self, method: &'a str, value: Params) -> Result<(), Error> {
+	pub fn insert<Params: ToRpcParams>(&mut self, method: &'a str, value: Params) -> Result<(), serde_json::Error> {
 		self.0.push((method, value.to_rpc_params()?));
 		Ok(())
 	}
 
 	/// Finish the building process and return a valid batch parameter.
 	#[allow(clippy::type_complexity)]
-	pub fn build(self) -> Result<Vec<(&'a str, Option<Box<RawValue>>)>, Error> {
+	pub fn build(self) -> Result<Vec<(&'a str, Option<Box<RawValue>>)>, EmptyBatchRequest> {
 		if self.0.is_empty() {
-			Err(Error::EmptyBatchRequest)
+			Err(EmptyBatchRequest)
 		} else {
 			Ok(self.0)
 		}

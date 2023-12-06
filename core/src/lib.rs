@@ -54,12 +54,13 @@ cfg_server! {
 
 cfg_client! {
 	pub mod client;
+	pub use client::Error as ClientError;
 }
 
 /// Shared tracing helpers to trace RPC calls.
 pub mod tracing;
 pub use async_trait::async_trait;
-pub use error::{Error, GenericTransportError, StringError};
+pub use error::{GenericTransportError, RegisterMethodError, StringError};
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, jsonrpsee_types::ErrorObjectOwned>;

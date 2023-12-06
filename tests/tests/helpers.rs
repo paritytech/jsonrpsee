@@ -33,7 +33,6 @@ use std::time::Duration;
 use fast_socks5::client::Socks5Stream;
 use fast_socks5::server;
 use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{
 	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
@@ -94,7 +93,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
 			let _sink = pending.accept().await?;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			Err(Error::Custom("Server closed the stream because it was lazy".to_string()).into())
+			Err("Server closed the stream because it was lazy".to_string().into())
 		})
 		.unwrap();
 

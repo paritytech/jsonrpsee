@@ -26,10 +26,9 @@
 
 use crate::client::async_client::LOG_TARGET;
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
-use crate::client::{RequestMessage, TransportSenderT};
+use crate::client::{RequestMessage, TransportSenderT, Error};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
-use crate::Error;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
@@ -56,7 +55,7 @@ pub(crate) fn process_batch_response(
 	manager: &mut RequestManager,
 	rps: Vec<InnerBatchResponse>,
 	range: Range<u64>,
-) -> Result<(), Error> {
+) -> Result<(), InvalidRequestId> {
 	let mut responses = Vec::with_capacity(rps.len());
 
 	let start_idx = range.start;
@@ -65,7 +64,7 @@ pub(crate) fn process_batch_response(
 		Some(state) => state,
 		None => {
 			tracing::warn!(target: LOG_TARGET, "Received unknown batch response");
-			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)).into());
+			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)));
 		}
 	};
 
@@ -81,7 +80,7 @@ pub(crate) fn process_batch_response(
 		if let Some(elem) = maybe_elem {
 			*elem = rp.result;
 		} else {
-			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into());
+			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()));
 		}
 	}
 
@@ -153,8 +152,8 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
 		Some(send_back_sink) => if send_back_sink.send(notif.params).is_err() {
 			tracing::warn!(target: LOG_TARGET, "Connection is closed, dropping notification handler for {:?}", notif.method);
-			let _ = manager.remove_notification_handler(notif.method.into_owned());
-		},
+			let _ = manager.remove_notification_handler(&notif.method);
+		}
 		None => {
 			tracing::debug!(target: LOG_TARGET, "Notification: {:?} not a registered method", notif.method);
 		}
@@ -170,7 +169,7 @@ pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
 	response: Response<JsonValue>,
 	max_capacity_per_subscription: usize,
-) -> Result<Option<RequestMessage>, Error> {
+) -> Result<Option<RequestMessage>, InvalidRequestId> {
 	let response_id = response.id.clone().into_owned();
 	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(Error::Call);
 
@@ -179,7 +178,7 @@ pub(crate) fn process_single_response(
 			let send_back_oneshot = match manager.complete_pending_call(response_id.clone()) {
 				Some(Some(send)) => send,
 				Some(None) => return Ok(None),
-				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into()),
+				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string())),
 			};
 
 			let _ = send_back_oneshot.send(result);
@@ -220,7 +219,7 @@ pub(crate) fn process_single_response(
 		}
 
 		RequestStatus::Subscription | RequestStatus::Invalid => {
-			Err(InvalidRequestId::NotPendingRequest(response_id.to_string()).into())
+			Err(InvalidRequestId::NotPendingRequest(response_id.to_string()))
 		}
 	}
 }
