@@ -224,9 +224,10 @@ pub enum SubscriptionKind {
 /// 
 /// ## Lagging
 /// 
-/// As all sent messages must be kept in a buffer until the underlying
-/// stream is polled, it's possible that the server is producing
-/// subscription notifications faster than the client can handle.
+/// All messages from the server must be kept in a buffer in the client
+/// until they are read by polling the [`Subscription`]. If you don't 
+/// poll the client subscription quickly enough, the buffer may fill 
+/// up, which will result in messages being lost.
 /// 
 /// If that occurs, an error [`SubscriptionError::Lagged`] is emitted.
 /// to indicate the n messages were lost. It still possibe to use
