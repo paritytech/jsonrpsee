@@ -247,7 +247,7 @@ pub enum SubscriptionKind {
 /// 
 /// Because the subscription is implemented on top of a bounded channel
 /// it will not instantly return `None` when the connection is closed 
-/// because all messages buffered must be read before it to return `None`.
+/// because all messages buffered must be read before it returns `None`.
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
