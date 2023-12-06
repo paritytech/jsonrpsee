@@ -43,7 +43,7 @@ use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT, SubscriptionError};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::{JsonValue, ClientError};
+use jsonrpsee::core::{ClientError, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
