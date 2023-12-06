@@ -31,6 +31,9 @@ cfg_async_client! {
 	pub use async_client::{Client, ClientBuilder};
 }
 
+pub mod error;
+pub use error::Error;
+
 use std::fmt;
 use std::ops::Range;
 use std::pin::Pin;
@@ -38,13 +41,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
-use crate::error::RegisterMethodError;
-use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
+use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{ErrorObject, Id, SubscriptionId, InvalidRequestId, ErrorObjectOwned};
+use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 use tokio::sync::{mpsc, oneshot};
@@ -56,47 +58,6 @@ pub mod __reexports {
 	pub use crate::traits::ToRpcParams;
 	// Main builder object for constructing the rpc parameters.
 	pub use crate::params::ArrayParams;
-}
-
-/// Error type.
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-	/// JSON-RPC error which can occur when a JSON-RPC call fails.
-	#[error("{0}")]
-	Call(#[from] ErrorObjectOwned),
-	/// Networking error or error on the low-level protocol layer.
-	#[error("Networking or low-level protocol error: {0}")]
-	Transport(#[source] anyhow::Error),
-	/// The background task has been terminated.
-	#[error("The background task been terminated because: {0}; restart required")]
-	RestartNeeded(Arc<Error>),
-	/// Failed to parse the data.
-	#[error("Parse error: {0}")]
-	ParseError(#[from] serde_json::Error),
-	/// Invalid subscription ID.
-	#[error("Invalid subscription ID")]
-	InvalidSubscriptionId,
-	/// Invalid request ID.
-	#[error("{0}")]
-	InvalidRequestId(#[from] InvalidRequestId),
-	/// Request timeout
-	#[error("Request timeout")]
-	RequestTimeout,
-	/// Max number of request slots exceeded.
-	#[error("Configured max number of request slots exceeded")]
-	MaxSlotsExceeded,
-	/// Custom error.
-	#[error("Custom error: {0}")]
-	Custom(String),
-	/// Not implemented for HTTP clients.
-	#[error("Not implemented")]
-	HttpNotImplemented,
-	/// Empty batch request.
-	#[error("{0}")]
-	EmptyBatchRequest(#[from] EmptyBatchRequest),
-	/// The error returned w hen registering a method or subscription failed.
-	#[error("{0}")]
-	RegisterMethod(#[from] RegisterMethodError),
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
