@@ -26,6 +26,14 @@
 
 //! Shared utilities for `jsonrpsee` clients.
 
+cfg_async_client! {
+	pub mod async_client;
+	pub use async_client::{Client, ClientBuilder};
+}
+
+pub mod error;
+pub use error::Error;
+
 use std::fmt;
 use std::ops::Range;
 use std::pin::Pin;
@@ -33,7 +41,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
-use crate::error::Error;
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
@@ -51,11 +58,6 @@ pub mod __reexports {
 	pub use crate::traits::ToRpcParams;
 	// Main builder object for constructing the rpc parameters.
 	pub use crate::params::ArrayParams;
-}
-
-cfg_async_client! {
-	pub mod async_client;
-	pub use async_client::{Client, ClientBuilder};
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.

@@ -26,11 +26,12 @@
 
 //! Subscription related types and traits for server implementations.
 
+use super::MethodsError;
 use super::helpers::{MethodResponse, MethodSink};
 use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{traits::IdProvider, Error, StringError};
+use crate::{traits::IdProvider, error::StringError};
 use jsonrpsee_types::SubscriptionPayload;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorObjectOwned, Id, ResponsePayload, SubscriptionId, SubscriptionResponse,
@@ -434,8 +435,8 @@ impl Subscription {
 		&self.sub_id
 	}
 
-	/// Receives the next value on the subscription if value could be decoded as T.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), Error>> {
+	/// Receives the next value on the subscription if the value could be decoded as T.
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), MethodsError>> {
 		let raw = self.rx.recv().await?;
 
 		tracing::debug!(target: LOG_TARGET, "[Subscription::next]: rx {}", raw);

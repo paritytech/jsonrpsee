@@ -31,7 +31,6 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures_util::{Stream, StreamExt};
-use jsonrpsee_core::Error;
 use pin_project::pin_project;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::Interval;
@@ -61,6 +60,10 @@ impl StopHandle {
 	}
 }
 
+#[derive(Debug, Copy, Clone, thiserror::Error)]
+#[error("The server is already stopped")]
+pub struct AlreadyStoppedError;
+
 /// Server handle.
 ///
 /// When all [`StopHandle`]'s have been `dropped` or `stop` has been called
@@ -75,8 +78,8 @@ impl ServerHandle {
 	}
 
 	/// Tell the server to stop without waiting for the server to stop.
-	pub fn stop(&self) -> Result<(), Error> {
-		self.0.send(()).map_err(|_| Error::AlreadyStopped)
+	pub fn stop(&self) -> Result<(), AlreadyStoppedError> {
+		self.0.send(()).map_err(|_| AlreadyStoppedError)
 	}
 
 	/// Wait for the server to stop.

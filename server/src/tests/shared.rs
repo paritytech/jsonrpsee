@@ -1,6 +1,5 @@
 use crate::tests::helpers::{init_logger, server_with_handles};
 use hyper::StatusCode;
-use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::{http_request, ok_response, to_http_uri};
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -19,7 +18,7 @@ async fn stop_works() {
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
 
 	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(server_handle.stop(), Err(Error::AlreadyStopped)));
+	assert!(matches!(server_handle.stop(), Err(_)));
 }
 
 #[tokio::test]

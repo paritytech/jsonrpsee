@@ -49,7 +49,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponseResult};
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	reject_too_big_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
@@ -91,8 +91,8 @@ impl<RpcMiddleware, HttpMiddleware> std::fmt::Debug for Server<RpcMiddleware, Ht
 
 impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 	/// Returns socket address to which the server is bound.
-	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
-		self.listener.local_addr().map_err(Into::into)
+	pub fn local_addr(&self) -> std::io::Result<SocketAddr> {
+		self.listener.local_addr()
 	}
 }
 
@@ -857,7 +857,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<HttpMiddleware, RpcMiddleware>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> std::io::Result<Server<HttpMiddleware, RpcMiddleware>> {
 		let listener = TcpListener::bind(addrs).await?;
 
 		Ok(Server {
@@ -894,7 +894,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	pub fn build_from_tcp(
 		self,
 		listener: impl Into<StdTcpListener>,
-	) -> Result<Server<HttpMiddleware, RpcMiddleware>, Error> {
+	) -> std::io::Result<Server<HttpMiddleware, RpcMiddleware>> {
 		let listener = TcpListener::from_std(listener.into())?;
 
 		Ok(Server {

@@ -29,6 +29,7 @@
 mod helpers;
 
 use std::collections::HashMap;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -36,7 +37,7 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use helpers::init_logger;
-use jsonrpsee::core::{async_trait, client::ClientT, Error};
+use jsonrpsee::core::{async_trait, client::ClientT, ClientError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
@@ -122,7 +123,7 @@ fn test_module() -> RpcModule<()> {
 async fn websocket_server(
 	module: RpcModule<()>,
 	counter: Arc<Mutex<Counter>>,
-) -> Result<(SocketAddr, ServerHandle), Error> {
+) -> io::Result<(SocketAddr, ServerHandle)> {
 	let rpc_middleware =
 		RpcServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
@@ -133,7 +134,7 @@ async fn websocket_server(
 	Ok((addr, handle))
 }
 
-async fn http_server(module: RpcModule<()>, counter: Arc<Mutex<Counter>>) -> Result<(SocketAddr, ServerHandle), Error> {
+async fn http_server(module: RpcModule<()>, counter: Arc<Mutex<Counter>>) -> io::Result<(SocketAddr, ServerHandle)> {
 	let rpc_middleware =
 		RpcServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
@@ -157,7 +158,7 @@ async fn ws_server_logger() {
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(res, "hello");
 
-	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
@@ -165,10 +166,10 @@ async fn ws_server_logger() {
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(res, "hello");
 
-	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
-	let res: Result<String, Error> = client.request("err", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("err", rpc_params![]).await;
 	assert!(res.is_err());
 
 	{
@@ -197,7 +198,7 @@ async fn http_server_logger() {
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(res, "hello");
 
-	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
@@ -205,10 +206,10 @@ async fn http_server_logger() {
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(res, "hello");
 
-	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
-	let res: Result<String, Error> = client.request("err", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("err", rpc_params![]).await;
 	assert!(res.is_err());
 
 	{

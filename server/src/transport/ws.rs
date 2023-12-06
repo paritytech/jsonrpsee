@@ -12,7 +12,6 @@ use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::MethodSink;
 use jsonrpsee_core::server::{BoundedSubscriptions, Methods};
-use jsonrpsee_core::Error;
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
 use soketto::connection::Error as SokettoError;
@@ -33,12 +32,12 @@ enum Incoming {
 	Pong,
 }
 
-pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), Error> {
+pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), SokettoError> {
 	sender.send_text_owned(response).await?;
 	sender.flush().await.map_err(Into::into)
 }
 
-pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
+pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), SokettoError> {
 	tracing::debug!(target: LOG_TARGET, "Send ping");
 	// Submit empty slice as "optional" parameter.
 	let slice: &[u8] = &[];

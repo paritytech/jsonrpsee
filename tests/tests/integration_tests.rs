@@ -40,10 +40,10 @@ use helpers::{
 	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
-use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::{Error, JsonValue};
+use jsonrpsee::core::JsonValue;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
