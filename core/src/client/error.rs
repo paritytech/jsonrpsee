@@ -66,7 +66,7 @@ pub enum Error {
 	/// Empty batch request.
 	#[error("{0}")]
 	EmptyBatchRequest(#[from] EmptyBatchRequest),
-	/// The error returned w hen registering a method or subscription failed.
+	/// The error returned when registering a method or subscription failed.
 	#[error("{0}")]
 	RegisterMethod(#[from] RegisterMethodError),
 }
