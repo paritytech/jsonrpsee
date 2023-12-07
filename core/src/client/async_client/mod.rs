@@ -1079,4 +1079,3 @@ impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
 	}
 }
 
-
