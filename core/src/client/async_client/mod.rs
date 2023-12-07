@@ -17,7 +17,6 @@ use std::borrow::Cow as StdCow;
 
 use core::time::Duration;
 use std::num::NonZeroUsize;
-use std::time::Instant;
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
@@ -933,7 +932,7 @@ where
 {
 	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription, ping_config } = params;
 
-	let mut last_active = Instant::now();
+	let mut last_active = instant::Instant::now();
 	let mut inactivity_check = match ping_config {
 		Some(p) => IntervalStream::new(interval_at(tokio::time::Instant::now() + p.ping_interval, p.ping_interval)),
 		None => IntervalStream::pending(),
@@ -964,7 +963,7 @@ where
 			_ = pending_unsubscribes.next() => (),
 			// New message received.
 			maybe_msg = backend_event.next() => {
-				last_active = Instant::now();
+				last_active = instant::Instant::now();
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
 				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
