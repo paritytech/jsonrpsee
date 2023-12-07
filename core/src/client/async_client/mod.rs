@@ -31,6 +31,7 @@ mod manager;
 mod utils;
 
 use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
+use crate::client::async_client::utils::MaybePendingFutures;
 use crate::client::{
 	BatchMessage, BatchResponse, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
 	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT, Error
@@ -49,16 +50,14 @@ use helpers::{
 };
 use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
 
 use async_lock::RwLock as AsyncRwLock;
 use async_trait::async_trait;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
-use futures_util::stream::{FuturesUnordered, StreamExt};
-use futures_util::{Future, Stream};
+use futures_util::stream::StreamExt;
+use futures_util::Stream;
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
@@ -126,7 +125,9 @@ impl PingConfig {
 	/// Configure how many times the connection is allowed be
 	/// inactive until the connection is closed.
 	/// 
-	/// Panic: if max == 0.
+	/// # Panics
+	/// 
+	/// This method panics if `max` == 0.
 	pub fn max_failures(mut self, max: usize) -> Self {
 		assert!(max > 0);
 		self.max_failures = max;
@@ -1045,37 +1046,3 @@ async fn wait_for_shutdown(
 		let _ = err_to_front.send(err);
 	}
 }
-
-/// A wrapper around `FuturesUnordered` that doesn't return `None` when it's empty.
-struct MaybePendingFutures<Fut> {
-	futs: FuturesUnordered<Fut>,
-	waker: Option<Waker>,
-}
-
-impl<Fut> MaybePendingFutures<Fut> {
-	fn new() -> Self {
-		Self { futs: FuturesUnordered::new(), waker: None }
-	}
-
-	fn push(&mut self, fut: Fut) {
-		self.futs.push(fut);
-
-		if let Some(w) = self.waker.take() {
-			w.wake();
-		}
-	}
-}
-
-impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
-	type Item = Fut::Output;
-
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-		if self.futs.is_empty() {
-			self.waker = Some(cx.waker().clone());
-			return Poll::Pending;
-		}
-
-		self.futs.poll_next_unpin(cx)
-	}
-}
-

@@ -27,7 +27,6 @@
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
-use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -294,16 +293,12 @@ pub struct PingConfig {
 	/// Max allowed time for a connection to stay idle.
 	pub(crate) inactive_limit: Duration,
 	/// Max failures.
-	pub(crate) max_failures: NonZeroUsize,
+	pub(crate) max_failures: usize,
 }
 
 impl Default for PingConfig {
 	fn default() -> Self {
-		Self {
-			ping_interval: Duration::from_secs(30),
-			max_failures: NonZeroUsize::new(1).expect("1 > 0; qed"),
-			inactive_limit: Duration::from_secs(40),
-		}
+		Self { ping_interval: Duration::from_secs(30), max_failures: 1, inactive_limit: Duration::from_secs(40) }
 	}
 }
 
@@ -331,7 +326,12 @@ impl PingConfig {
 
 	/// Configure how many times the remote peer is allowed be
 	/// inactive until the connection is closed.
-	pub fn max_failures(mut self, max: NonZeroUsize) -> Self {
+	///
+	/// # Panics
+	///
+	/// This method panics if `max` == 0.
+	pub fn max_failures(mut self, max: usize) -> Self {
+		assert!(max > 0);
 		self.max_failures = max;
 		self
 	}
