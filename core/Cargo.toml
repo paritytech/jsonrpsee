@@ -62,7 +62,6 @@ async-client = [
 	"futures-timer",
 	"tokio-stream",
 	"pin-project",
-	"instant",
 ]
 async-wasm-client = [
 	"async-lock",
@@ -73,9 +72,7 @@ async-wasm-client = [
 	"futures-timer/wasm-bindgen",
 	"tokio/macros",
 	"tokio/time",
-	"tokio-stream",
 	"pin-project",
-	"instant/wasm-bindgen",
 ]
 
 [dev-dependencies]

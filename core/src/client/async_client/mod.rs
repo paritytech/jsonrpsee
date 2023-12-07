@@ -1,7 +1,34 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 //! Abstract async client.
 
 mod helpers;
 mod manager;
+mod utils;
 
 use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
 use crate::client::{
@@ -16,15 +43,12 @@ use crate::JsonRawValue;
 use std::borrow::Cow as StdCow;
 
 use core::time::Duration;
-use std::num::NonZeroUsize;
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
 use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
-use pin_project::pin_project;
-use tokio::time::{interval, Interval, interval_at};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
@@ -40,6 +64,8 @@ use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, Subsc
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
+
+use self::utils::{IntervalStream, InactivityCheck};
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
@@ -62,14 +88,14 @@ pub struct PingConfig {
 	/// Max allowed time for a connection to stay idle.
 	pub(crate) inactive_limit: Duration,
 	/// Max failures.
-	pub(crate) max_failures: NonZeroUsize,
+	pub(crate) max_failures: usize,
 }
 
 impl Default for PingConfig {
 	fn default() -> Self {
 		Self {
 			ping_interval: Duration::from_secs(30),
-			max_failures: NonZeroUsize::new(1).expect("1 > 0; qed"),
+			max_failures: 1,
 			inactive_limit: Duration::from_secs(40),
 		}
 	}
@@ -99,7 +125,10 @@ impl PingConfig {
 
 	/// Configure how many times the connection is allowed be
 	/// inactive until the connection is closed.
-	pub fn max_failures(mut self, max: NonZeroUsize) -> Self {
+	/// 
+	/// Panic: if max == 0.
+	pub fn max_failures(mut self, max: usize) -> Self {
+		assert!(max > 0);
 		self.max_failures = max;
 		self
 	}
@@ -279,10 +308,27 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
-		let ping_config = self.ping_config;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
+
+		let (ping_interval, inactivity_stream, inactivity_check) = match self.ping_config {
+			None => (IntervalStream::pending(), IntervalStream::pending(), InactivityCheck::Disabled),
+			Some(p) => {
+				// NOTE: This emitts a tick immediately to sync how the `inactive_interval` works
+				// because it starts measuring when the client start-ups.
+				let ping_interval = IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(p.ping_interval)));
+
+				let inactive_interval = { 
+					let start = tokio::time::Instant::now() + p.inactive_limit;
+					IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(tokio::time::interval_at(start, p.inactive_limit)))
+				};
+
+				let inactivity_check = InactivityCheck::new(p.inactive_limit, p.max_failures);
+
+				(ping_interval, inactive_interval, inactivity_check)
+			}
+		};
 
 		tokio::spawn(send_task(SendTaskParams {
 			sender,
@@ -290,7 +336,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
 			max_buffer_capacity_per_subscription,
-			ping_config,
+			ping_interval,
 		}));
 
 		tokio::spawn(read_task(ReadTaskParams {
@@ -299,7 +345,8 @@ impl ClientBuilder {
 			to_send_task: to_back.clone(),
 			manager,
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
-			ping_config,
+			inactivity_check,
+			inactivity_stream,
 		}));
 
 		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, err_to_front));
@@ -322,13 +369,20 @@ impl ClientBuilder {
 		S: TransportSenderT,
 		R: TransportReceiverT,
 	{
+		use futures_util::stream::Pending;
+
+		pub(crate) type PendingIntervalStream = IntervalStream<Pending<()>>;		
+		
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
-		let ping_config = self.ping_config;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
+
+		let ping_interval = PendingIntervalStream::pending();
+		let inactivity_stream = PendingIntervalStream::pending();
+		let inactivity_check = InactivityCheck::Disabled;
 
 		wasm_bindgen_futures::spawn_local(send_task(SendTaskParams {
 			sender,
@@ -336,7 +390,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
 			max_buffer_capacity_per_subscription,
-			ping_config,
+			ping_interval,
 		}));
 
 		wasm_bindgen_futures::spawn_local(read_task(ReadTaskParams {
@@ -345,7 +399,8 @@ impl ClientBuilder {
 			to_send_task: to_back.clone(),
 			manager,
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
-			ping_config,
+			inactivity_check,
+			inactivity_stream,
 		}));
 
 		wasm_bindgen_futures::spawn_local(wait_for_shutdown(
@@ -855,18 +910,19 @@ fn unparse_error(raw: &[u8]) -> Error {
 	Error::Custom(format!("Unparseable message: {json_str}"))
 }
 
-struct SendTaskParams<S: TransportSenderT> {
-	sender: S,
+struct SendTaskParams<T: TransportSenderT, S> {
+	sender: T,
 	from_frontend: mpsc::Receiver<FrontToBack>,
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	manager: ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
-	ping_config: Option<PingConfig>,
+	ping_interval: IntervalStream<S>,
 }
 
-async fn send_task<S>(params: SendTaskParams<S>)
+async fn send_task<T, S>(params: SendTaskParams<T, S>)
 where
-	S: TransportSenderT,
+	T: TransportSenderT,
+	S: Stream + Unpin,
 {
 	let SendTaskParams {
 		mut sender,
@@ -874,16 +930,8 @@ where
 		close_tx,
 		manager,
 		max_buffer_capacity_per_subscription,
-		ping_config,
+		mut ping_interval,
 	} = params;
-
-	let mut ping_interval = match ping_config {
-		None => IntervalStream::pending(),
-		// NOTE: we are emitted a tick here immediately to sync
-		// with how the receive task work because it starts measuring the pong
-		// when it starts up.
-		Some(p) => IntervalStream::new(interval(p.ping_interval)),
-	};
 
 	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
 	// are cancel-safe.
@@ -917,27 +965,22 @@ where
 	let _ = close_tx.send(res).await;
 }
 
-struct ReadTaskParams<R: TransportReceiverT> {
+struct ReadTaskParams<R: TransportReceiverT, S> {
 	receiver: R,
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	to_send_task: mpsc::Sender<FrontToBack>,
 	manager: ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
-	ping_config: Option<PingConfig>,
+	inactivity_check: InactivityCheck,
+	inactivity_stream: IntervalStream<S>,
 }
 
-async fn read_task<R>(params: ReadTaskParams<R>)
+async fn read_task<R, S>(params: ReadTaskParams<R, S>)
 where
 	R: TransportReceiverT,
+	S: Stream + Unpin,
 {
-	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription, ping_config } = params;
-
-	let mut last_active = instant::Instant::now();
-	let mut inactivity_check = match ping_config {
-		Some(p) => IntervalStream::new(interval_at(tokio::time::Instant::now() + p.ping_interval, p.ping_interval)),
-		None => IntervalStream::pending(),
-	};
-	let mut missed = 0;
+	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription, mut inactivity_check, mut inactivity_stream } = params;
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
@@ -963,7 +1006,7 @@ where
 			_ = pending_unsubscribes.next() => (),
 			// New message received.
 			maybe_msg = backend_event.next() => {
-				last_active = instant::Instant::now();
+				inactivity_check.mark_as_active();
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
 				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
@@ -977,15 +1020,9 @@ where
 					Ok(None) => (),
 				}
 			}
-			_ = inactivity_check.next() => {
-				if let Some(p) = ping_config {
-					if last_active.elapsed() > p.inactive_limit {
-						missed += 1;
-
-						if missed >= p.max_failures.get() {
-							break Err(Error::Custom("WebSocket ping/pong inactive".into()));
-						}
-					}
+			_ = inactivity_stream.next() => {
+				if inactivity_check.is_inactive() {
+					break Ok(());
 				}
 			}
 		}
@@ -1043,31 +1080,3 @@ impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
 }
 
 
-#[pin_project]
-pub(crate) struct IntervalStream(#[pin] Option<tokio_stream::wrappers::IntervalStream>);
-
-impl IntervalStream {
-	/// Creates a stream which never returns any elements.
-	pub(crate) fn pending() -> Self {
-		Self(None)
-	}
-
-	/// Creates a stream which produces elements with interval of `period`.
-	pub(crate) fn new(interval: Interval) -> Self {
-		Self(Some(tokio_stream::wrappers::IntervalStream::new(interval)))
-	}
-}
-
-impl Stream for IntervalStream {
-	type Item = tokio::time::Instant;
-
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-		if let Some(mut stream) = self.project().0.as_pin_mut() {
-			stream.poll_next_unpin(cx)
-		} else {
-			// NOTE: this will not be woken up again and it's by design
-			// to be a pending stream that never returns.
-			Poll::Pending
-		}
-	}
-}
