@@ -315,7 +315,7 @@ impl ClientBuilder {
 		let (ping_interval, inactivity_stream, inactivity_check) = match self.ping_config {
 			None => (IntervalStream::pending(), IntervalStream::pending(), InactivityCheck::Disabled),
 			Some(p) => {
-				// NOTE: This emitts a tick immediately to sync how the `inactive_interval` works
+				// NOTE: This emits a tick immediately to sync how the `inactive_interval` works
 				// because it starts measuring when the client start-ups.
 				let ping_interval = IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(p.ping_interval)));
 
