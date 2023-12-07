@@ -35,7 +35,6 @@ wasm-bindgen-futures = { version = "0.4.19", optional = true }
 futures-timer = { version = "3", optional = true }
 tokio-stream = { version = "0.1", optional = true }
 pin-project = { version = "1", optional = true }
-instant = { version = "0.1", optional = true }
 
 [features]
 default = []
