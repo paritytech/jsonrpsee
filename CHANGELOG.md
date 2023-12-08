@@ -54,7 +54,6 @@ async fn run_server() {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo").unwrap();
 	module.register_method("say_goodbye", |_, _| "goodbye").unwrap();
-	let addr = server.local_addr()?;
 
 	let handle = server.start(module);
 	tokio::spawn(handle.stopped());
