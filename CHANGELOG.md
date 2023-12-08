@@ -48,8 +48,8 @@ where
 
 ### jsonrpsee server as a tower service
 
-For users who wants to get full control of the HTTP request
-it's now possible to utilize jsonrpsee as a tower service [example here](./examples/examples/jsonrpsee_as_service.rs)
+For users who want to get full control of the HTTP request, it's now possible to utilize jsonrpsee as a tower service, 
+[example here](./examples/examples/jsonrpsee_as_service.rs)
 
 ### jsonrpsee server low-level API
 
@@ -58,15 +58,15 @@ misbehaving peers that is now possible as well [example here](./examples/example
 
 ### Logging in the server
 
-Logging of RPC calls have been disabled by default, but it's possible
-to enable that by RpcLogging middleware.
+Logging of RPC calls has been disabled by default, 
+but it's possible to enable that with the RPC middleware.
 
 ```rust
 	let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 ```
 
-### WebSocket ping/pong API 
+### WebSocket ping/pong API
 
 The WebSocket ping/pong APIs have been refactored to be able 
 to disconnect inactive connections both by from the server and client-side.
