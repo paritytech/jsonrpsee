@@ -62,8 +62,8 @@ Logging of RPC calls has been disabled by default,
 but it's possible to enable that with the RPC middleware.
 
 ```rust
-	let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
-	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
+let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
+let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 ```
 
 ### WebSocket ping/pong API
