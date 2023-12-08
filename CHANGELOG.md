@@ -97,7 +97,7 @@ and [@venugopv](https://github.com/venugopv) who contributed to this release.
 - refactor: split client and server errors ([#1122](https://github.com/paritytech/jsonrpsee/pull/1122))
 - refactor(ws client): impl tokio:{AsyncRead, AsyncWrite} for EitherStream ([#1249](https://github.com/paritytech/jsonrpsee/pull/1249))
 - refactor(http client): enable all http versions ([#1252](https://github.com/paritytech/jsonrpsee/pull/1252))
-- server: change ws ping API  ([#1248](https://github.com/paritytech/jsonrpsee/pull/1248))
+- refactor(server): change ws ping API  ([#1248](https://github.com/paritytech/jsonrpsee/pull/1248))
 - refactor(ws client): generic over data stream ([#1168](https://github.com/paritytech/jsonrpsee/pull/1168))
 - refactor(client): unify ws ping/pong API with the server ([#1258](https://github.com/paritytech/jsonrpsee/pull/1258)
 
