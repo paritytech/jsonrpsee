@@ -59,7 +59,7 @@ misbehaving peers that is now possible as well [example here](./examples/example
 ### Logging in the server
 
 Logging of RPC calls has been disabled by default, 
-but it's possible to enable that with the RPC middleware.
+but it's possible to enable that with the RPC logger middleware.
 
 ```rust
 let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
