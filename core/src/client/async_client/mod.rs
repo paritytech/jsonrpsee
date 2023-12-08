@@ -374,7 +374,7 @@ impl ClientBuilder {
 	{
 		use futures_util::stream::Pending;
 
-		pub(crate) type PendingIntervalStream = IntervalStream<Pending<()>>;		
+		type PendingIntervalStream = IntervalStream<Pending<()>>;		
 		
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
