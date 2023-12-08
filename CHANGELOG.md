@@ -10,7 +10,7 @@ This release contains big changes and let's go over the main ones:
 
 ### JSON-RPC specific middleware
 
-After getting plenty of feedback from regarding a JSON-RPC specific middleware,
+After getting plenty of feedback regarding a JSON-RPC specific middleware,
 this release introduces a composable "tower-like" middleware that applies per JSON-RPC method call.
 The new middleware also replaces the old `RpcLogger` which may break some use-cases, such as if
 JSON-RPC was made on a WebSocket or HTTP transport, but it's possible to implement that by
