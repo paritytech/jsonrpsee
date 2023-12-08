@@ -950,14 +950,14 @@ where
 					if let Err(e) =
 						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
 					{
-						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
+						tracing::error!(target: LOG_TARGET, "ws send failed: {e}");
 						break Err(Error::Transport(e.into()));
 					}
 				}
 				_ = ping_interval.next() => {
 					if let Err(err) = sender.send_ping().await {
-						tracing::error!(target: LOG_TARGET, "Could not send ping frame: {err}");
-						break Err(Error::Custom("Could not send ping frame".into()));
+						tracing::error!(target: LOG_TARGET, "Send ws ping failed: {err}");
+						break Err(Error::Transport(err.into()));
 					}
 				}
 			}
@@ -1025,7 +1025,7 @@ where
 			}
 			_ = inactivity_stream.next() => {
 				if inactivity_check.is_inactive() {
-					break Ok(());
+					break Err(Error::Transport(anyhow::anyhow!("WebSocket ping/pong inactive")));
 				}
 			}
 		}
