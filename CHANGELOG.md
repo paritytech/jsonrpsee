@@ -10,10 +10,10 @@ This is release contains big changes and let's go over the main ones:
 
 ### JSON-RPC specific middleware
 
-After getting plenty of feedback from regarding a JSON-RPC specific middleware, 
+After getting plenty of feedback from regarding a JSON-RPC specific middleware,
 this release introduces a composable "tower-like" middleware that applies per JSON-RPC method call.
-The new middleware also replaces to old `RpcLogger` which may break some use-cases such is if 
-JSON-RPC was made on a WebSocket or HTTP transport but it's possible to implement that by
+The new middleware also replaces the old `RpcLogger` which may break some use-cases, such as if
+JSON-RPC was made on a WebSocket or HTTP transport, but it's possible to implement that by
 using `jsonrpsee as a tower service` or `the low-level server API`.
 
 An example how write such middleware:
@@ -48,17 +48,17 @@ where
 
 ### jsonrpsee server as a tower service
 
-For users that wants to get full control of the HTTP request
-it's now possible to utilize jsonrpsee as a tower service, [example here](./examples/examples/jsonrpsee_as_service.rs)
+For users who wants to get full control of the HTTP request
+it's now possible to utilize jsonrpsee as a tower service [example here](./examples/examples/jsonrpsee_as_service.rs)
 
 ### jsonrpsee server low-level API
 
-For users that wants to get low-level access and for example disconnect
-misbehaving peers that is now possible as well, [example here](./examples/examples/jsonrpsee_server_low_level_api.rs)
+For users who wants to get low-level access and for example disconnect
+misbehaving peers that is now possible as well [example here](./examples/examples/jsonrpsee_server_low_level_api.rs)
 
 ### Logging in the server
 
-Logging of RPC calls have been disabled by default but it's possible
+Logging of RPC calls have been disabled by default, but it's possible
 to enable that by RpcLogging middleware.
 
 ```rust
@@ -68,10 +68,11 @@ to enable that by RpcLogging middleware.
 
 ### WebSocket ping/pong API 
 
-The WebSocket ping/pong APIs have been refactored to able 
-to disconnect inactive connections both by the server/client.
+The WebSocket ping/pong APIs have been refactored to be able 
+to disconnect inactive connections both by from the server and client-side.
 
-Thanks to the external contributors [@oleonardolima](https://github.com/oleonardolima) and [@venugopv](https://github.com/venugopv) that contributed to this release.
+Thanks to the external contributors [@oleonardolima](https://github.com/oleonardolima) 
+and [@venugopv](https://github.com/venugopv) who contributed to this release.
 
 ### [Changed]
 - chore(deps): update tokio-rustls requirement from 0.24 to 0.25 ([#1256](https://github.com/paritytech/jsonrpsee/pull/1256))
@@ -84,6 +85,7 @@ Thanks to the external contributors [@oleonardolima](https://github.com/oleonard
 - http client: enable all http versions ([#1252](https://github.com/paritytech/jsonrpsee/pull/1252))
 - server: change ws ping API  ([#1248](https://github.com/paritytech/jsonrpsee/pull/1248))
 - refactor: update and turn `WsTransportClientBuilder` generic ([#1168](https://github.com/paritytech/jsonrpsee/pull/1168))
+- refactor(client): unify ws ping/pong API with the server ([#1258](https://github.com/paritytech/jsonrpsee/pull/1258)
 
 ### [Added]
 - feat(client): add `disconnect_reason` API ([#1246](https://github.com/paritytech/jsonrpsee/pull/1246))
