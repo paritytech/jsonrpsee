@@ -74,12 +74,14 @@ const LOG_TARGET: &str = "jsonrpsee-client";
 /// an inactive connection.
 ///
 /// jsonrpsee doesn't associate the ping/pong frames just that if
-/// pong frame isn't received within `inactive_limit` then it's regarded
+/// a pong frame isn't received within the `inactive_limit` then it's regarded
 /// as missed.
 ///
 /// Such that the `inactive_limit` should be configured to longer than a single
 /// WebSocket ping takes or it might be missed and may end up
 /// terminating the connection.
+///
+/// Default: ping_interval: 30 seconds, max failures: 1 and inactive limit: 40 seconds.
 #[derive(Debug, Copy, Clone)]
 pub struct PingConfig {
 	/// Interval that the pings are sent.

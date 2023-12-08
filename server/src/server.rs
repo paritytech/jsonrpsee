@@ -273,19 +273,18 @@ impl ConnectionState {
 	}
 }
 
-/// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect inactive
-/// clients.
-///
-/// It's possible to configure how often pings are sent out and how long the server will
-/// wait until a client is determined as "inactive".
+/// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect
+/// an inactive connection.
 ///
 /// jsonrpsee doesn't associate the ping/pong frames just that if
-/// pong frame isn't received within `inactive_limit` then it's regarded
+/// a pong frame isn't received within the `inactive_limit` then it's regarded
 /// as missed.
 ///
 /// Such that the `inactive_limit` should be configured to longer than a single
 /// WebSocket ping takes or it might be missed and may end up
 /// terminating the connection.
+///
+/// Default: ping_interval: 30 seconds, max failures: 1 and inactive limit: 40 seconds.
 #[derive(Debug, Copy, Clone)]
 pub struct PingConfig {
 	/// Period which the server pings the connected client.
