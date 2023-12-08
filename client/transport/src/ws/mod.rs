@@ -600,7 +600,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 		}
 		#[cfg(feature = "webpki-tls")]
 		CertificateStore::WebPki => {
-			roots.extend(webpki_roots::TLS_SERVER_ROOTS.into_iter().cloned());
+			roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 		}
 		_ => {
 			let err = io::Error::new(io::ErrorKind::NotFound, "Invalid certificate store");
