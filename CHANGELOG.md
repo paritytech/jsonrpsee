@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.21.0] - 2023-12-11
 
-This is release contains big changes and let's go over the main ones:
+This release contains big changes and let's go over the main ones:
 
 ### JSON-RPC specific middleware
 
