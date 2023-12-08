@@ -39,6 +39,7 @@
 mod tests;
 
 pub use http::{HeaderMap, HeaderValue};
+pub use jsonrpsee_core::client::async_client::PingConfig;
 pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
 
@@ -82,7 +83,7 @@ pub struct WsClientBuilder {
 	max_response_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	ping_interval: Option<Duration>,
+	ping_config: Option<PingConfig>,
 	headers: http::HeaderMap,
 	max_concurrent_requests: usize,
 	max_buffer_capacity_per_subscription: usize,
@@ -99,7 +100,7 @@ impl Default for WsClientBuilder {
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
-			ping_interval: None,
+			ping_config: None,
 			headers: HeaderMap::new(),
 			max_concurrent_requests: 256,
 			max_buffer_capacity_per_subscription: 1024,
@@ -170,9 +171,15 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// See documentation [`ClientBuilder::ping_interval`] (disabled by default).
-	pub fn ping_interval(mut self, interval: Duration) -> Self {
-		self.ping_interval = Some(interval);
+	/// See documentation [`ClientBuilder::enable_ws_ping`] (disabled by default).
+	pub fn enable_ws_ping(mut self, cfg: PingConfig) -> Self {
+		self.ping_config = Some(cfg);
+		self
+	}
+
+	/// See documentation [`ClientBuilder::disable_ws_ping`]
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.ping_config = None;
 		self
 	}
 
@@ -227,7 +234,7 @@ impl WsClientBuilder {
 		let Self {
 			max_concurrent_requests,
 			request_timeout,
-			ping_interval,
+			ping_config,
 			max_buffer_capacity_per_subscription,
 			id_kind,
 			max_log_length,
@@ -241,8 +248,8 @@ impl WsClientBuilder {
 			.id_format(id_kind)
 			.set_max_logging_length(max_log_length);
 
-		if let Some(interval) = ping_interval {
-			client = client.ping_interval(interval);
+		if let Some(cfg) = ping_config {
+			client = client.enable_ws_ping(cfg);
 		}
 
 		client.build_with_tokio(sender, receiver)

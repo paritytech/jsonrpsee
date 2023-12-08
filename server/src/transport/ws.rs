@@ -282,7 +282,7 @@ where
 					if last_active.elapsed() > p.inactive_limit {
 						missed += 1;
 
-						if missed >= p.max_failures.get() {
+						if missed >= p.max_failures {
 							break Receive::ConnectionClosed;
 						}
 					}
