@@ -44,7 +44,7 @@ impl<S> IntervalStream<S> {
 	/// Creates a stream which produces elements with interval of `period`.
 	#[cfg(feature = "async-client")]
 	pub(crate) fn new(s: S) -> Self {
-    	Self(Some(s))
+		Self(Some(s))
 	}
 }
 
