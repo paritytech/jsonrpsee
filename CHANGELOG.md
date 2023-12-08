@@ -62,7 +62,7 @@ async fn run_server() {
 
 ### jsonrpsee server as a tower service
 
-For users who want to get full control of the HTTP request, it's now possible to utilize jsonrpsee as a tower service, 
+For users who want to get full control of the HTTP request, it's now possible to utilize jsonrpsee as a tower service
 [example here](./examples/examples/jsonrpsee_as_service.rs)
 
 ### jsonrpsee server low-level API
