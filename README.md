@@ -6,7 +6,7 @@
 ![MIT](https://img.shields.io/crates/l/jsonrpsee.svg)
 [![CI](https://github.com/paritytech/jsonrpsee/actions/workflows/ci.yml/badge.svg)](https://github.com/paritytech/jsonrpsee/actions/workflows/ci.yml)
 [![Benchmarks](https://github.com/paritytech/jsonrpsee/actions/workflows/benchmarks_gitlab.yml/badge.svg)](https://github.com/paritytech/jsonrpsee/actions/workflows/benchmarks_gitlab.yml)
-[![dependency status](https://deps.rs/crate/jsonrpsee/0.18.1/status.svg)](https://deps.rs/crate/jsonrpsee/0.20.0)
+[![dependency status](https://deps.rs/crate/jsonrpsee/0.21.0/status.svg)](https://deps.rs/crate/jsonrpsee/0.21.0)
 
 JSON-RPC library designed for async/await in Rust.
 
@@ -18,7 +18,6 @@ Designed to be the successor to [ParityTech's JSONRPC crate](https://github.com/
 - Client WASM support via web-sys
 - Client transport abstraction to provide custom transports
 - Middleware
-- Logger
 
 ## Documentation
 - [API Documentation](https://docs.rs/jsonrpsee)
@@ -29,10 +28,11 @@ Designed to be the successor to [ParityTech's JSONRPC crate](https://github.com/
 - [WebSocket](./examples/examples/ws.rs)
 - [WebSocket pubsub](./examples/examples/ws_pubsub_broadcast.rs)
 - [API generation with proc macro](./examples/examples/proc_macro.rs)
-- [Logger](./examples/examples/multi_logger.rs)
 - [CORS server](./examples/examples/cors_server.rs)
 - [Core client](./examples/examples/core_client.rs)
 - [HTTP proxy middleware](./examples/examples/http_proxy_middleware.rs)
+- [jsonrpsee as service](./examples/examples/jsonrpsee_as_service.rs)
+- [low level API](./examples/examples/jsonrpsee_server_low_level_api.rs)
 
 See [this directory](./examples/examples) for more examples
 
