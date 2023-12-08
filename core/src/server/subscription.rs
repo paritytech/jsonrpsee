@@ -283,7 +283,7 @@ impl PendingSubscriptionSink {
 		// Ideally the message should be sent only once.
 		//
 		// The same message is sent twice here because one is sent directly to the transport layer and
-		// the other one is sent internally to accept the subscription and register it in the RPC logger.
+		// the other one is sent internally to accept the subscription.
 		self.inner.send(response.result.clone()).await.map_err(|_| PendingSubscriptionAcceptError)?;
 		self.subscribe.send(response).map_err(|_| PendingSubscriptionAcceptError)?;
 
