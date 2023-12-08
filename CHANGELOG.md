@@ -44,6 +44,21 @@ where
 		self.0.call(req)
 	}
 }
+
+async fn run_server() {
+	// Construct our middleware and build the server.
+	let rpc_middleware = RpcServiceBuilder::new().layer_fn(|service| ModifyRequestIf(service));
+	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await.unwrap();
+
+	// Start the server.
+	let mut module = RpcModule::new(());
+	module.register_method("say_hello", |_, _| "lo").unwrap();
+	module.register_method("say_goodbye", |_, _| "goodbye").unwrap();
+	let addr = server.local_addr()?;
+
+	let handle = server.start(module);
+	tokio::spawn(handle.stopped());
+}
 ```
 
 ### jsonrpsee server as a tower service
