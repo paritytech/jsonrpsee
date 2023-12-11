@@ -4,7 +4,7 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
-## [v0.21.0] - 2023-12-11
+## [v0.21.0] - 2023-12-13
 
 This release contains big changes and let's go over the main ones:
 
@@ -100,6 +100,7 @@ and [@venugopv](https://github.com/venugopv) who contributed to this release.
 - refactor(server): change ws ping API  ([#1248](https://github.com/paritytech/jsonrpsee/pull/1248))
 - refactor(ws client): generic over data stream ([#1168](https://github.com/paritytech/jsonrpsee/pull/1168))
 - refactor(client): unify ws ping/pong API with the server ([#1258](https://github.com/paritytech/jsonrpsee/pull/1258)
+- refactor: set `tcp_nodelay == true` by default ([#1263])(https://github.com/paritytech/jsonrpsee/pull/1263)
 
 ### [Added]
 - feat(client): add `disconnect_reason` API ([#1246](https://github.com/paritytech/jsonrpsee/pull/1246))
