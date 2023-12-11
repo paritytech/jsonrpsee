@@ -202,6 +202,8 @@ pub struct ServerConfig {
 	pub(crate) ping_config: Option<PingConfig>,
 	/// ID provider.
 	pub(crate) id_provider: Arc<dyn IdProvider>,
+	/// `TCP_NODELAY` settings.
+	pub(crate) tcp_no_delay: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -350,6 +352,7 @@ impl Default for ServerConfig {
 			message_buffer_capacity: 1024,
 			ping_config: None,
 			id_provider: Arc::new(RandomIntegerIdProvider),
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -723,6 +726,14 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// ```
 	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
 		Builder { server_cfg: self.server_cfg, http_middleware, rpc_middleware: self.rpc_middleware }
+	}
+
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	///
+	/// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.server_cfg.tcp_no_delay = no_delay;
+		self
 	}
 
 	/// Configure the server to only serve JSON-RPC HTTP requests.
@@ -1151,7 +1162,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 		..
 	} = params;
 
-	if let Err(e) = socket.set_nodelay(true) {
+	if let Err(e) = socket.set_nodelay(server_cfg.tcp_no_delay) {
 		tracing::warn!(target: LOG_TARGET, "Could not set NODELAY on socket: {:?}", e);
 		return;
 	}
