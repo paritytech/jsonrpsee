@@ -107,6 +107,7 @@ where
 		max_log_length: u32,
 		headers: HeaderMap,
 		service_builder: tower::ServiceBuilder<L>,
+		tcp_no_delay: bool,
 	) -> Result<Self, Error> {
 		let mut url = Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
 		if url.host_str().is_none() {
@@ -115,25 +116,32 @@ where
 		url.set_fragment(None);
 
 		let client = match url.scheme() {
-			"http" => HttpBackend::Http(Client::new()),
+			"http" => {
+				let mut connector = HttpConnector::new();
+				connector.set_nodelay(tcp_no_delay);
+				HttpBackend::Http(Client::builder().build(connector))
+			}
 			#[cfg(feature = "__tls")]
 			"https" => {
-				let connector = match cert_store {
+				let builder = match cert_store {
 					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
 						.https_or_http()
-						.enable_all_versions()
-						.build(),
+						.enable_all_versions(),
 					#[cfg(feature = "webpki-tls")]
 					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_webpki_roots()
 						.https_or_http()
-						.enable_all_versions()
-						.build(),
+						.enable_all_versions(),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
-				HttpBackend::Https(Client::builder().build::<_, hyper::Body>(connector))
+
+				let mut connector = HttpConnector::new();
+				connector.set_nodelay(tcp_no_delay);
+				connector.enforce_http(false);
+
+				HttpBackend::Https(Client::builder().build::<_, hyper::Body>(builder.wrap_connector(connector)))
 			}
 			_ => {
 				#[cfg(feature = "__tls")]
@@ -268,6 +276,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
@@ -284,6 +293,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap();
 		assert_eq!(&client.target, "https://localhost/");
@@ -315,6 +325,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
@@ -326,6 +337,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
@@ -341,6 +353,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap();
 		assert_eq!(&client.target, "http://localhost/my-special-path");
@@ -356,6 +369,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap();
 		assert_eq!(&client.target, "http://127.0.0.1/my?name1=value1&name2=value2");
@@ -371,6 +385,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap();
 		assert_eq!(&client.target, "http://127.0.0.1/my.htm");
@@ -386,6 +401,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap();
 		assert_eq!(&client.target, "http://127.0.0.1/");
@@ -402,6 +418,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap();
 		assert_eq!(&client.target, "https://localhost:9999/");
@@ -417,6 +434,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap();
 		assert_eq!(&client.target, "http://localhost:9999/");
@@ -435,6 +453,7 @@ mod tests {
 			99,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap();
 		assert_eq!(client.max_request_size, eighty_bytes_limit);

@@ -78,6 +78,8 @@ pub struct WsTransportClientBuilder {
 	pub max_response_size: u32,
 	/// Max number of redirections.
 	pub max_redirections: usize,
+	/// TCP no delay.
+	pub tcp_no_delay: bool,
 }
 
 impl Default for WsTransportClientBuilder {
@@ -89,6 +91,7 @@ impl Default for WsTransportClientBuilder {
 			connection_timeout: Duration::from_secs(10),
 			headers: http::HeaderMap::new(),
 			max_redirections: 5,
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -338,7 +341,9 @@ impl WsTransportClientBuilder {
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
 				#[cfg(feature = "__tls")]
-				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref()).await {
+				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref(), self.tcp_no_delay)
+					.await
+				{
 					Ok(stream) => stream,
 					Err(e) => {
 						tracing::debug!(target: LOG_TARGET, "Failed to connect to sockaddr: {:?}", sockaddr);
@@ -469,13 +474,14 @@ async fn connect(
 	timeout_dur: Duration,
 	host: &str,
 	tls_connector: Option<&tokio_rustls::TlsConnector>,
+	tcp_no_delay: bool,
 ) -> Result<EitherStream, WsHandshakeError> {
 	let socket = TcpStream::connect(sockaddr);
 	let timeout = tokio::time::sleep(timeout_dur);
 	tokio::select! {
 		socket = socket => {
 			let socket = socket?;
-			if let Err(err) = socket.set_nodelay(true) {
+			if let Err(err) = socket.set_nodelay(tcp_no_delay) {
 				tracing::warn!(target: LOG_TARGET, "set nodelay failed: {:?}", err);
 			}
 			match tls_connector {

@@ -49,7 +49,7 @@ use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::instrument;
 
-/// Http Client Builder.
+/// HttpClient Builder.
 ///
 /// # Examples
 ///
@@ -83,6 +83,7 @@ pub struct HttpClientBuilder<L = Identity> {
 	max_log_length: u32,
 	headers: HeaderMap,
 	service_builder: tower::ServiceBuilder<L>,
+	tcp_no_delay: bool,
 }
 
 impl<L> HttpClientBuilder<L> {
@@ -160,6 +161,14 @@ impl<L> HttpClientBuilder<L> {
 		self
 	}
 
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	///
+	/// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.tcp_no_delay = no_delay;
+		self
+	}
+
 	/// Set custom tower middleware.
 	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
 		HttpClientBuilder {
@@ -172,6 +181,7 @@ impl<L> HttpClientBuilder<L> {
 			max_response_size: self.max_response_size,
 			service_builder,
 			request_timeout: self.request_timeout,
+			tcp_no_delay: self.tcp_no_delay,
 		}
 	}
 }
@@ -196,6 +206,7 @@ where
 			headers,
 			max_log_length,
 			service_builder,
+			tcp_no_delay,
 			..
 		} = self;
 
@@ -207,6 +218,7 @@ where
 			max_log_length,
 			headers,
 			service_builder,
+			tcp_no_delay,
 		)
 		.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
@@ -229,6 +241,7 @@ impl Default for HttpClientBuilder<Identity> {
 			max_log_length: 4096,
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
+			tcp_no_delay: true,
 		}
 	}
 }

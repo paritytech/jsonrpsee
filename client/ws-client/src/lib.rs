@@ -90,6 +90,7 @@ pub struct WsClientBuilder {
 	max_redirections: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
+	tcp_no_delay: bool,
 }
 
 impl Default for WsClientBuilder {
@@ -107,6 +108,7 @@ impl Default for WsClientBuilder {
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -221,6 +223,12 @@ impl WsClientBuilder {
 		self
 	}
 
+	/// See documentation [`ClientBuilder::set_tcp_no_delay`] (default is true).
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.tcp_no_delay = no_delay;
+		self
+	}
+
 	/// Build the [`WsClient`] with specified [`TransportSenderT`] [`TransportReceiverT`] parameters
 	///
 	/// ## Panics
@@ -238,6 +246,7 @@ impl WsClientBuilder {
 			max_buffer_capacity_per_subscription,
 			id_kind,
 			max_log_length,
+			tcp_no_delay,
 			..
 		} = self;
 
@@ -246,7 +255,8 @@ impl WsClientBuilder {
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)
-			.set_max_logging_length(max_log_length);
+			.set_max_logging_length(max_log_length)
+			.set_tcp_no_delay(tcp_no_delay);
 
 		if let Some(cfg) = ping_config {
 			client = client.enable_ws_ping(cfg);
@@ -271,6 +281,7 @@ impl WsClientBuilder {
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			max_redirections: self.max_redirections,
+			tcp_no_delay: self.tcp_no_delay,
 		};
 
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
@@ -295,6 +306,7 @@ impl WsClientBuilder {
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			max_redirections: self.max_redirections,
+			tcp_no_delay: self.tcp_no_delay,
 		};
 
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;

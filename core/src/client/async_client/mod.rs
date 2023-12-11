@@ -215,6 +215,7 @@ pub struct ClientBuilder {
 	id_kind: IdKind,
 	max_log_length: u32,
 	ping_config: Option<PingConfig>,
+	tcp_no_delay: bool,
 }
 
 impl Default for ClientBuilder {
@@ -226,6 +227,7 @@ impl Default for ClientBuilder {
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			ping_config: None,
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -293,6 +295,16 @@ impl ClientBuilder {
 	/// Default: pings are disabled.
 	pub fn disable_ws_ping(mut self) -> Self {
 		self.ping_config = None;
+		self
+	}
+
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	/// 
+	/// On some transports this may have no effect.
+    ///
+    /// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.tcp_no_delay = no_delay;
 		self
 	}
 
