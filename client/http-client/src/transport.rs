@@ -396,7 +396,7 @@ mod tests {
 
 	#[test]
 	fn faulty_port() {
-		let err = HttpTransportClientBuilder::new().build("ws://localhost:-43").unwrap_err();
+		let err = HttpTransportClientBuilder::new().build("http://localhost:-43").unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 
 		let err = HttpTransportClientBuilder::new().build("http://localhost:-99999").unwrap_err();
