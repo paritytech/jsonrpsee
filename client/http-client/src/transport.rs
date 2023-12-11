@@ -123,25 +123,27 @@ where
 			}
 			#[cfg(feature = "__tls")]
 			"https" => {
-				let builder = match cert_store {
+				let mut http_conn = HttpConnector::new();
+				http_conn.set_nodelay(tcp_no_delay);
+				http_conn.enforce_http(false);
+
+				let https_conn = match cert_store {
 					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
 						.https_or_http()
-						.enable_all_versions(),
+						.enable_all_versions()
+						.wrap_connector(http_conn),
 					#[cfg(feature = "webpki-tls")]
 					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_webpki_roots()
 						.https_or_http()
-						.enable_all_versions(),
+						.enable_all_versions()
+						.wrap_connector(http_conn),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
 
-				let mut connector = HttpConnector::new();
-				connector.set_nodelay(tcp_no_delay);
-				connector.enforce_http(false);
-
-				HttpBackend::Https(Client::builder().build::<_, hyper::Body>(builder.wrap_connector(connector)))
+				HttpBackend::Https(Client::builder().build::<_, hyper::Body>(https_conn))
 			}
 			_ => {
 				#[cfg(feature = "__tls")]
@@ -310,6 +312,7 @@ mod tests {
 			80,
 			HeaderMap::new(),
 			tower::ServiceBuilder::new(),
+			true,
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
