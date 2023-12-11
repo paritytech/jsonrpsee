@@ -30,7 +30,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient};
+use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient, HttpTransportClientBuilder};
 use crate::types::{NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::body::HttpBody;
@@ -49,7 +49,7 @@ use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::instrument;
 
-/// HttpClient Builder.
+/// HTTP client builder.
 ///
 /// # Examples
 ///
@@ -207,20 +207,19 @@ where
 			max_log_length,
 			service_builder,
 			tcp_no_delay,
-			..
 		} = self;
 
-		let transport = HttpTransportClient::new(
-			max_request_size,
-			target,
-			max_response_size,
-			certificate_store,
-			max_log_length,
-			headers,
-			service_builder,
-			tcp_no_delay,
-		)
-		.map_err(|e| Error::Transport(e.into()))?;
+		let transport = HttpTransportClientBuilder::new()
+			.max_request_size(max_request_size)
+			.max_response_size(max_response_size)
+			.set_headers(headers)
+			.set_tcp_no_delay(tcp_no_delay)
+			.set_max_logging_length(max_log_length)
+			.set_service(service_builder)
+			.set_certification_store(certificate_store)
+			.build(target)
+			.map_err(|e| Error::Transport(e.into()))?;
+
 		Ok(HttpClient {
 			transport,
 			id_manager: Arc::new(RequestIdManager::new(max_concurrent_requests, id_kind)),

@@ -11,12 +11,13 @@ use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
-use jsonrpsee_core::{http_helpers, GenericTransportError};
+use jsonrpsee_core::{http_helpers, GenericTransportError, TEN_MB_SIZE_BYTES};
 use std::error::Error as StdError;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use thiserror::Error;
+use tower::layer::util::Identity;
 use tower::{Layer, Service, ServiceExt};
 use url::Url;
 
@@ -72,13 +73,11 @@ where
 	}
 }
 
-/// HTTP Transport Client.
-#[derive(Debug, Clone)]
-pub struct HttpTransportClient<S> {
-	/// Target to connect to.
-	target: String,
-	/// HTTP client
-	client: S,
+/// Builder for [`HttpTransportClient`].
+#[derive(Debug)]
+pub struct HttpTransportClientBuilder<L> {
+	/// Certificate store.
+	certificate_store: CertificateStore,
 	/// Configurable max request body size
 	max_request_size: u32,
 	/// Configurable max response body size
@@ -89,26 +88,107 @@ pub struct HttpTransportClient<S> {
 	max_log_length: u32,
 	/// Custom headers to pass with every request.
 	headers: HeaderMap,
+	/// Service builder
+	service_builder: tower::ServiceBuilder<L>,
+	/// TCP_NODELAY
+	tcp_no_delay: bool,
 }
 
-impl<B, S> HttpTransportClient<S>
-where
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error> + Clone,
-	B: HttpBody + Send + 'static,
-	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
-{
-	/// Initializes a new HTTP client.
-	pub(crate) fn new<L: Layer<HttpBackend<Body>, Service = S>>(
-		max_request_size: u32,
-		target: impl AsRef<str>,
-		max_response_size: u32,
-		cert_store: CertificateStore,
-		max_log_length: u32,
-		headers: HeaderMap,
-		service_builder: tower::ServiceBuilder<L>,
-		tcp_no_delay: bool,
-	) -> Result<Self, Error> {
+impl Default for HttpTransportClientBuilder<Identity> {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+impl HttpTransportClientBuilder<Identity> {
+	/// Create a new [`HttpTransportClientBuilder`].
+	pub fn new() -> Self {
+		Self {
+			certificate_store: CertificateStore::Native,
+			max_request_size: TEN_MB_SIZE_BYTES,
+			max_response_size: TEN_MB_SIZE_BYTES,
+			max_log_length: 1024,
+			headers: HeaderMap::new(),
+			service_builder: tower::ServiceBuilder::new(),
+			tcp_no_delay: true,
+		}
+	}
+}
+
+impl<L> HttpTransportClientBuilder<L> {
+	/// Set the certificate store.
+	pub fn set_certification_store(mut self, cert_store: CertificateStore) -> Self {
+		self.certificate_store = cert_store;
+		self
+	}
+
+	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
+	pub fn max_request_size(mut self, size: u32) -> Self {
+		self.max_request_size = size;
+		self
+	}
+
+	/// Set the maximum size of a response in bytes. Default is 10 MiB.
+	pub fn max_response_size(mut self, size: u32) -> Self {
+		self.max_response_size = size;
+		self
+	}
+
+	/// Set a custom header passed to the server with every request (default is none).
+	///
+	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
+	pub fn set_headers(mut self, headers: HeaderMap) -> Self {
+		self.headers = headers;
+		self
+	}
+
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	///
+	/// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.tcp_no_delay = no_delay;
+		self
+	}
+
+	/// Max length for logging for requests and responses in number characters.
+	///
+	/// Logs bigger than this limit will be truncated.
+	pub fn set_max_logging_length(mut self, max: u32) -> Self {
+		self.max_log_length = max;
+		self
+	}
+
+	/// Configure a tower service.
+	pub fn set_service<T>(self, service: tower::ServiceBuilder<T>) -> HttpTransportClientBuilder<T> {
+		HttpTransportClientBuilder {
+			certificate_store: self.certificate_store,
+			headers: self.headers,
+			max_log_length: self.max_log_length,
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
+			service_builder: service,
+			tcp_no_delay: self.tcp_no_delay,
+		}
+	}
+
+	/// Build a [`HttpTransportClient`].
+	pub fn build<S, B>(self, target: impl AsRef<str>) -> Result<HttpTransportClient<S>, Error>
+	where
+		L: Layer<HttpBackend<Body>, Service = S>,
+		S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error> + Clone,
+		B: HttpBody + Send + 'static,
+		B::Data: Send,
+		B::Error: Into<Box<dyn StdError + Send + Sync>>,
+	{
+		let Self {
+			certificate_store,
+			max_request_size,
+			max_response_size,
+			max_log_length,
+			headers,
+			service_builder,
+			tcp_no_delay,
+		} = self;
 		let mut url = Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
 		if url.host_str().is_none() {
 			return Err(Error::Url("Invalid host".into()));
@@ -127,7 +207,7 @@ where
 				http_conn.set_nodelay(tcp_no_delay);
 				http_conn.enforce_http(false);
 
-				let https_conn = match cert_store {
+				let https_conn = match certificate_store {
 					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
@@ -166,7 +246,7 @@ where
 			}
 		}
 
-		Ok(Self {
+		Ok(HttpTransportClient {
 			target: url.as_str().to_owned(),
 			client: service_builder.service(client),
 			max_request_size,
@@ -175,7 +255,34 @@ where
 			headers: cached_headers,
 		})
 	}
+}
 
+/// HTTP Transport Client.
+#[derive(Debug, Clone)]
+pub struct HttpTransportClient<S> {
+	/// Target to connect to.
+	target: String,
+	/// HTTP client
+	client: S,
+	/// Configurable max request body size
+	max_request_size: u32,
+	/// Configurable max response body size
+	max_response_size: u32,
+	/// Max length for logging for requests and responses
+	///
+	/// Logs bigger than this limit will be truncated.
+	max_log_length: u32,
+	/// Custom headers to pass with every request.
+	headers: HeaderMap,
+}
+
+impl<B, S> HttpTransportClient<S>
+where
+	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error> + Clone,
+	B: HttpBody + Send + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+{
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
 		if body.len() > self.max_request_size as usize {
 			return Err(Error::RequestTooLarge);
@@ -266,180 +373,70 @@ impl From<hyper::Error> for Error {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use jsonrpsee_core::client::CertificateStore;
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err = HttpTransportClient::new(
-			80,
-			"ws://localhost:9933",
-			80,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap_err();
+		let err = HttpTransportClientBuilder::new().build("ws://localhost:9933").unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[cfg(feature = "__tls")]
 	#[test]
 	fn https_works() {
-		let client = HttpTransportClient::new(
-			80,
-			"https://localhost",
-			80,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap();
+		let client = HttpTransportClientBuilder::new().build("https://localhost").unwrap();
 		assert_eq!(&client.target, "https://localhost/");
 	}
 
 	#[cfg(not(feature = "__tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
-		let err = HttpTransportClient::new(
-			80,
-			"https://localhost:9933",
-			80,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap_err();
+		let err = HttpTransportClientBuilder::new().build("https://localhost").unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[test]
 	fn faulty_port() {
-		let err = HttpTransportClient::new(
-			80,
-			"http://localhost:-43",
-			80,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap_err();
+		let err = HttpTransportClientBuilder::new().build("ws://localhost:-43").unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
-		let err = HttpTransportClient::new(
-			80,
-			"http://localhost:-99999",
-			80,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap_err();
+
+		let err = HttpTransportClientBuilder::new().build("http://localhost:-99999").unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[test]
 	fn url_with_path_works() {
-		let client = HttpTransportClient::new(
-			1337,
-			"http://localhost/my-special-path",
-			1337,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap();
+		let client = HttpTransportClientBuilder::new().build("http://localhost/my-special-path").unwrap();
 		assert_eq!(&client.target, "http://localhost/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
-		let client = HttpTransportClient::new(
-			u32::MAX,
-			"http://127.0.0.1/my?name1=value1&name2=value2",
-			u32::MAX,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap();
+		let client = HttpTransportClientBuilder::new().build("http://127.0.0.1/my?name1=value1&name2=value2").unwrap();
 		assert_eq!(&client.target, "http://127.0.0.1/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
-		let client = HttpTransportClient::new(
-			999,
-			"http://127.0.0.1/my.htm#ignore",
-			999,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap();
+		let client = HttpTransportClientBuilder::new().build("http://127.0.0.1/my.htm#ignore").unwrap();
 		assert_eq!(&client.target, "http://127.0.0.1/my.htm");
 	}
 
 	#[test]
 	fn url_default_port_is_omitted() {
-		let client = HttpTransportClient::new(
-			999,
-			"http://127.0.0.1:80",
-			999,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap();
+		let client = HttpTransportClientBuilder::new().build("http://127.0.0.1:80").unwrap();
 		assert_eq!(&client.target, "http://127.0.0.1/");
 	}
 
 	#[cfg(feature = "__tls")]
 	#[test]
 	fn https_custom_port_works() {
-		let client = HttpTransportClient::new(
-			80,
-			"https://localhost:9999",
-			80,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap();
+		let client = HttpTransportClientBuilder::new().build("https://localhost:9999").unwrap();
 		assert_eq!(&client.target, "https://localhost:9999/");
 	}
 
 	#[test]
 	fn http_custom_port_works() {
-		let client = HttpTransportClient::new(
-			80,
-			"http://localhost:9999",
-			80,
-			CertificateStore::Native,
-			80,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap();
+		let client = HttpTransportClientBuilder::new().build("http://localhost:9999").unwrap();
 		assert_eq!(&client.target, "http://localhost:9999/");
 	}
 
@@ -448,17 +445,12 @@ mod tests {
 		let eighty_bytes_limit = 80;
 		let fifty_bytes_limit = 50;
 
-		let client = HttpTransportClient::new(
-			eighty_bytes_limit,
-			"http://localhost:9933",
-			fifty_bytes_limit,
-			CertificateStore::Native,
-			99,
-			HeaderMap::new(),
-			tower::ServiceBuilder::new(),
-			true,
-		)
-		.unwrap();
+		let client = HttpTransportClientBuilder::new()
+			.max_request_size(eighty_bytes_limit)
+			.max_response_size(fifty_bytes_limit)
+			.build("http://localhost:9933")
+			.unwrap();
+
 		assert_eq!(client.max_request_size, eighty_bytes_limit);
 		assert_eq!(client.max_response_size, fifty_bytes_limit);
 
