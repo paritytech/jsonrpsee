@@ -299,10 +299,10 @@ impl ClientBuilder {
 	}
 
 	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
-	/// 
+	///
 	/// On some transports this may have no effect.
-    ///
-    /// Default is `true`.
+	///
+	/// Default is `true`.
 	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
 		self.tcp_no_delay = no_delay;
 		self
