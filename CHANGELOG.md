@@ -56,7 +56,7 @@ async fn run_server() {
 	module.register_method("say_goodbye", |_, _| "goodbye").unwrap();
 
 	let handle = server.start(module);
-	tokio::spawn(handle.stopped());
+	handle.stopped().await;
 }
 ```
 
@@ -67,13 +67,14 @@ For users who want to get full control of the HTTP request, it's now possible to
 
 ### jsonrpsee server low-level API
 
-For users who wants to get low-level access and for example disconnect
+For users who want to get low-level access and for example to disconnect
 misbehaving peers that is now possible as well [example here](./examples/examples/jsonrpsee_server_low_level_api.rs)
 
 ### Logging in the server
 
 Logging of RPC calls has been disabled by default, 
-but it's possible to enable that with the RPC logger middleware.
+but it's possible to enable that with the RPC logger middleware or provide
+your own middleware for that.
 
 ```rust
 let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
