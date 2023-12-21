@@ -51,7 +51,8 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 - [subway](https://github.com/AcalaNetwork/subway)
 - [subxt](https://github.com/paritytech/subxt)
 - [Trin](https://github.com/ethereum/trin)   
-- [Uptest](https://github.com/uptest-sc/uptest)   
+- [Uptest](https://github.com/uptest-sc/uptest)
+- [zkSync Era](https://github.com/matter-labs/zksync-era)
 
 ## Benchmarks
 
