@@ -26,13 +26,14 @@
 
 //! Example of using proc macro to generate working client and server.
 
+#![cfg(test)]
+
 mod helpers;
 
 use std::net::SocketAddr;
 
 use helpers::init_logger;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::{client::SubscriptionClientT, Error};
+use jsonrpsee::core::client::{ClientT, Error, SubscriptionClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::ServerBuilder;

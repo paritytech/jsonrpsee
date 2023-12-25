@@ -38,16 +38,18 @@
 #[cfg(test)]
 mod tests;
 
+pub use http::{HeaderMap, HeaderValue};
+pub use jsonrpsee_core::client::async_client::PingConfig;
 pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
 
-pub use http::{HeaderMap, HeaderValue};
+use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
+use jsonrpsee_core::client::{
+	CertificateStore, ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
+};
+use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use std::time::Duration;
 use url::Url;
-
-use jsonrpsee_client_transport::ws::WsTransportClientBuilder;
-use jsonrpsee_core::client::{CertificateStore, ClientBuilder, IdKind};
-use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
 /// Builder for [`WsClient`].
 ///
@@ -81,13 +83,14 @@ pub struct WsClientBuilder {
 	max_response_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	ping_interval: Option<Duration>,
+	ping_config: Option<PingConfig>,
 	headers: http::HeaderMap,
 	max_concurrent_requests: usize,
 	max_buffer_capacity_per_subscription: usize,
 	max_redirections: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
+	tcp_no_delay: bool,
 }
 
 impl Default for WsClientBuilder {
@@ -98,13 +101,14 @@ impl Default for WsClientBuilder {
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
-			ping_interval: None,
+			ping_config: None,
 			headers: HeaderMap::new(),
 			max_concurrent_requests: 256,
 			max_buffer_capacity_per_subscription: 1024,
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -169,9 +173,15 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// See documentation [`ClientBuilder::ping_interval`] (disabled by default).
-	pub fn ping_interval(mut self, interval: Duration) -> Self {
-		self.ping_interval = Some(interval);
+	/// See documentation [`ClientBuilder::enable_ws_ping`] (disabled by default).
+	pub fn enable_ws_ping(mut self, cfg: PingConfig) -> Self {
+		self.ping_config = Some(cfg);
+		self
+	}
+
+	/// See documentation [`ClientBuilder::disable_ws_ping`]
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.ping_config = None;
 		self
 	}
 
@@ -213,51 +223,96 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// Build the client with specified URL to connect to.
-	/// You must provide the port number in the URL.
+	/// See documentation [`ClientBuilder::set_tcp_no_delay`] (default is true).
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.tcp_no_delay = no_delay;
+		self
+	}
+
+	/// Build the [`WsClient`] with specified [`TransportSenderT`] [`TransportReceiverT`] parameters
 	///
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
+	pub fn build_with_transport<S, R>(self, sender: S, receiver: R) -> WsClient
+	where
+		S: TransportSenderT + Send,
+		R: TransportReceiverT + Send,
+	{
 		let Self {
-			certificate_store,
 			max_concurrent_requests,
-			max_request_size,
-			max_response_size,
 			request_timeout,
-			connection_timeout,
-			ping_interval,
-			headers,
-			max_redirections,
+			ping_config,
 			max_buffer_capacity_per_subscription,
 			id_kind,
 			max_log_length,
+			tcp_no_delay,
+			..
 		} = self;
-
-		let transport_builder = WsTransportClientBuilder {
-			certificate_store,
-			connection_timeout,
-			headers,
-			max_request_size,
-			max_response_size,
-			max_redirections,
-		};
-
-		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
-		let (sender, receiver) = transport_builder.build(uri).await.map_err(|e| Error::Transport(e.into()))?;
 
 		let mut client = ClientBuilder::default()
 			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription)
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)
-			.set_max_logging_length(max_log_length);
+			.set_max_logging_length(max_log_length)
+			.set_tcp_no_delay(tcp_no_delay);
 
-		if let Some(interval) = ping_interval {
-			client = client.ping_interval(interval);
+		if let Some(cfg) = ping_config {
+			client = client.enable_ws_ping(cfg);
 		}
 
-		Ok(client.build_with_tokio(sender, receiver))
+		client.build_with_tokio(sender, receiver)
+	}
+
+	/// Build the [`WsClient`] with specified data stream, using [`WsTransportClientBuilder::build_with_stream`].
+	///
+	/// ## Panics
+	///
+	/// Panics if being called outside of `tokio` runtime context.
+	pub async fn build_with_stream<T>(self, url: impl AsRef<str>, data_stream: T) -> Result<WsClient, Error>
+	where
+		T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+	{
+		let transport_builder = WsTransportClientBuilder {
+			certificate_store: self.certificate_store,
+			connection_timeout: self.connection_timeout,
+			headers: self.headers.clone(),
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
+			max_redirections: self.max_redirections,
+			tcp_no_delay: self.tcp_no_delay,
+		};
+
+		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
+		let (sender, receiver) =
+			transport_builder.build_with_stream(uri, data_stream).await.map_err(|e| Error::Transport(e.into()))?;
+
+		let ws_client = self.build_with_transport(sender, receiver);
+		Ok(ws_client)
+	}
+
+	/// Build the [`WsClient`] with specified URL to connect to, using the default
+	/// [`WsTransportClientBuilder::build_with_stream`], therefore with the default TCP as transport layer.
+	///
+	/// ## Panics
+	///
+	/// Panics if being called outside of `tokio` runtime context.
+	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
+		let transport_builder = WsTransportClientBuilder {
+			certificate_store: self.certificate_store,
+			connection_timeout: self.connection_timeout,
+			headers: self.headers.clone(),
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
+			max_redirections: self.max_redirections,
+			tcp_no_delay: self.tcp_no_delay,
+		};
+
+		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
+		let (sender, receiver) = transport_builder.build(uri).await.map_err(|e| Error::Transport(e.into()))?;
+
+		let ws_client = self.build_with_transport(sender, receiver);
+		Ok(ws_client)
 	}
 }

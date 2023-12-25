@@ -4,6 +4,153 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.21.0] - 2023-12-13
+
+This release contains big changes and let's go over the main ones:
+
+### JSON-RPC specific middleware
+
+After getting plenty of feedback regarding a JSON-RPC specific middleware,
+this release introduces a composable "tower-like" middleware that applies per JSON-RPC method call.
+The new middleware also replaces the old `RpcLogger` which may break some use-cases, such as if
+JSON-RPC was made on a WebSocket or HTTP transport, but it's possible to implement that by
+using `jsonrpsee as a tower service` or `the low-level server API`.
+
+An example how write such middleware:
+
+```rust
+#[derive(Clone)]
+pub struct ModifyRequestIf<S>(S);
+
+impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
+where
+	S: Send + Sync + RpcServiceT<'a>,
+{
+	type Future = S::Future;
+
+	fn call(&self, mut req: Request<'a>) -> Self::Future {
+		// Example how to modify the params in the call.
+		if req.method == "say_hello" {
+			// It's a bit awkward to create new params in the request
+			// but this shows how to do it.
+			let raw_value = serde_json::value::to_raw_value("myparams").unwrap();
+			req.params = Some(StdCow::Owned(raw_value));
+		}
+		// Re-direct all calls that isn't `say_hello` to `say_goodbye`
+		else if req.method != "say_hello" {
+			req.method = "say_goodbye".into();
+		}
+
+		self.0.call(req)
+	}
+}
+
+async fn run_server() {
+	// Construct our middleware and build the server.
+	let rpc_middleware = RpcServiceBuilder::new().layer_fn(|service| ModifyRequestIf(service));
+	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await.unwrap();
+
+	// Start the server.
+	let mut module = RpcModule::new(());
+	module.register_method("say_hello", |_, _| "lo").unwrap();
+	module.register_method("say_goodbye", |_, _| "goodbye").unwrap();
+
+	let handle = server.start(module);
+	handle.stopped().await;
+}
+```
+
+### jsonrpsee server as a tower service
+
+For users who want to get full control of the HTTP request, it's now possible to utilize jsonrpsee as a tower service
+[example here](./examples/examples/jsonrpsee_as_service.rs)
+
+### jsonrpsee server low-level API
+
+For users who want to get low-level access and for example to disconnect
+misbehaving peers that is now possible as well [example here](./examples/examples/jsonrpsee_server_low_level_api.rs)
+
+### Logging in the server
+
+Logging of RPC calls has been disabled by default, 
+but it's possible to enable that with the RPC logger middleware or provide
+your own middleware for that.
+
+```rust
+let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
+let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
+```
+
+### WebSocket ping/pong API
+
+The WebSocket ping/pong APIs have been refactored to be able 
+to disconnect inactive connections both by from the server and client-side.
+
+Thanks to the external contributors [@oleonardolima](https://github.com/oleonardolima) 
+and [@venugopv](https://github.com/venugopv) who contributed to this release.
+
+### [Changed]
+- chore(deps): update tokio-rustls requirement from 0.24 to 0.25 ([#1256](https://github.com/paritytech/jsonrpsee/pull/1256))
+- chore(deps): update gloo-net requirement from 0.4.0 to 0.5.0 ([#1260](https://github.com/paritytech/jsonrpsee/pull/1260))
+- chore(deps): update async-lock requirement from 2.4 to 3.0  ([#1226](https://github.com/paritytech/jsonrpsee/pull/1226))
+- chore(deps): update proc-macro-crate requirement from 1 to 2  ([#1211](https://github.com/paritytech/jsonrpsee/pull/1211))
+- chore(deps): update console-subscriber requirement from 0.1.8 to 0.2.0  ([#1210](https://github.com/paritytech/jsonrpsee/pull/1210))
+- refactor: split client and server errors ([#1122](https://github.com/paritytech/jsonrpsee/pull/1122))
+- refactor(ws client): impl tokio:{AsyncRead, AsyncWrite} for EitherStream ([#1249](https://github.com/paritytech/jsonrpsee/pull/1249))
+- refactor(http client): enable all http versions ([#1252](https://github.com/paritytech/jsonrpsee/pull/1252))
+- refactor(server): change ws ping API  ([#1248](https://github.com/paritytech/jsonrpsee/pull/1248))
+- refactor(ws client): generic over data stream ([#1168](https://github.com/paritytech/jsonrpsee/pull/1168))
+- refactor(client): unify ws ping/pong API with the server ([#1258](https://github.com/paritytech/jsonrpsee/pull/1258)
+- refactor: set `tcp_nodelay == true` by default ([#1263])(https://github.com/paritytech/jsonrpsee/pull/1263)
+
+### [Added]
+- feat(client): add `disconnect_reason` API ([#1246](https://github.com/paritytech/jsonrpsee/pull/1246))
+- feat(server): jsonrpsee as `service` and `low-level API for more fine-grained API to disconnect peers etc` ([#1224](https://github.com/paritytech/jsonrpsee/pull/1224))
+- feat(server): JSON-RPC specific middleware ([#1215](https://github.com/paritytech/jsonrpsee/pull/1215))
+- feat(middleware): add `HostFilterLayer::disable` ([#1213](https://github.com/paritytech/jsonrpsee/pull/1213))
+
+### [Fixed]
+- fix(host filtering): support hosts with multiple ports ([#1227](https://github.com/paritytech/jsonrpsee/pull/1227))
+
+## [v0.20.3] - 2023-10-24
+
+This release fixes a cancel-safety issue in the server's graceful shutdown which could lead to high CPU usage.
+
+### [Fixed]
+- server: graceful shutdown distinguish between stopped and conn closed ([#1220](https://github.com/paritytech/jsonrpsee/pull/1220))
+- server: graceful shutdown fix cancel-safety issue ([#1218](https://github.com/paritytech/jsonrpsee/pull/1218))
+- server: graceful shutdown check `Incoming::Closed` ([#1216](https://github.com/paritytech/jsonrpsee/pull/1216))
+
+## [v0.20.2] - 2023-10-13
+
+This release removes the bounded buffer check which was intended to provide
+backpressure all the way down to the TCP layer but it didn't work well.
+
+For subscriptions the backpressure will be handled by implementation itself 
+and just rely on that.
+
+### [Changed]
+- server: remove bounded channel check ([#1209](https://github.com/paritytech/jsonrpsee/pull/1209))
+
+## [v0.20.1] - 2023-09-15
+
+This release adds support for `synchronous subscriptions` and fixes a leak in WebSocket server
+where FuturesUnordered was not getting polled until shutdown, so it was accumulating tasks forever.
+
+### [Changed]
+- client: downgrade log for unknown subscription to DEBUG  ([#1185](https://github.com/paritytech/jsonrpsee/pull/1185))
+- refactor(http client): use HTTP connector on http URLs  ([#1187](https://github.com/paritytech/jsonrpsee/pull/1187))
+- refactor(server): less alloc per method call  ([#1188](https://github.com/paritytech/jsonrpsee/pull/1188))
+
+### [Fixed]
+- fix: remove needless clone in ws background task  ([#1203](https://github.com/paritytech/jsonrpsee/pull/1203))
+- async client: save latest Waker  ([#1198](https://github.com/paritytech/jsonrpsee/pull/1198))
+- chore(deps): bump actions/checkout from 3.6.0 to 4.0.0  ([#1197](https://github.com/paritytech/jsonrpsee/pull/1197))
+- fix(server): fix leak in FuturesUnordered ([#1204](https://github.com/paritytech/jsonrpsee/pull/1204))
+
+### [Added]
+- feat(server): add sync subscription API `register_subscription_raw`  ([#1182](https://github.com/paritytech/jsonrpsee/pull/1182))
+
 ## [v0.20.0] - 2023-08-11
 
 Another breaking release where the major changes are:

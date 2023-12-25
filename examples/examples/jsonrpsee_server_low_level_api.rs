@@ -40,11 +40,12 @@
 
 use std::collections::HashSet;
 use std::convert::Infallible;
+use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::future::Future;
 
+use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::server::conn::AddrStream;
 use jsonrpsee::core::async_trait;
@@ -54,7 +55,7 @@ use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
 	http, stop_channel, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle,
 };
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
+use jsonrpsee::types::{ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{MethodResponse, Methods};
 use tokio::sync::mpsc;
@@ -76,13 +77,18 @@ impl<'a, S> RpcServiceT<'a> for CallLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
 {
-	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
+	fn call(&self, _req: Request<'a>) -> impl Future<Output = MethodResponse> + Send {
+		// Doesn't work: https://github.com/rust-lang/rust/issues/100013
+		//
+
 		/*let req = req.into_owned();
 		let count = self.count.clone();
 		let service = self.service.clone();
 
+		let mut lock = count.lock().await;
+
 		async move {
-			let mut lock = count.lock().await;
+
 
 			if *lock >= 10 {
 				let _ = self.state.try_send(());

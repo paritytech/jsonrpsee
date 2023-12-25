@@ -30,8 +30,9 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use crate::error::Error;
+use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
+use crate::server::LOG_TARGET;
 use crate::server::helpers::{MethodResponse, MethodSink};
 use crate::server::subscription::{
 	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
@@ -42,7 +43,7 @@ use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
-	Id, Params, Request, Response, ResponsePayload, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
+	Id, Params, Request, Response, ResponsePayload, ResponseSuccess, SubscriptionId as RpcSubscriptionId, ErrorObjectOwned,
 };
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
@@ -76,6 +77,21 @@ pub type MaxResponseSize = usize;
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>);
+
+
+/// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
+#[derive(thiserror::Error, Debug)]
+pub enum MethodsError {
+	/// Failed to parse the call as valid JSON-RPC.
+	#[error("{0}")]
+	Parse(#[from] serde_json::Error),
+	/// Specific JSON-RPC error.
+	#[error("{0}")]
+	JsonRpc(#[from] ErrorObjectOwned),
+	#[error("Invalid subscription ID: `{0}`")]
+	/// Invalid subscription ID.
+	InvalidSubscriptionId(String),
+}
 
 /// This represent a response to a RPC call
 /// and `Subscribe` calls are handled differently
@@ -189,9 +205,9 @@ impl Methods {
 	}
 
 	/// Verifies that the method name is not already taken, and returns an error if it is.
-	pub fn verify_method_name(&self, name: &'static str) -> Result<(), Error> {
+	pub fn verify_method_name(&mut self, name: &'static str) -> Result<(), RegisterMethodError> {
 		if self.callbacks.contains_key(name) {
-			return Err(Error::MethodAlreadyRegistered(name.into()));
+			return Err(RegisterMethodError::AlreadyRegistered(name.into()));
 		}
 
 		Ok(())
@@ -203,9 +219,9 @@ impl Methods {
 		&mut self,
 		name: &'static str,
 		callback: MethodCallback,
-	) -> Result<&mut MethodCallback, Error> {
+	) -> Result<&mut MethodCallback, RegisterMethodError> {
 		match self.mut_callbacks().entry(name) {
-			Entry::Occupied(_) => Err(Error::MethodAlreadyRegistered(name.into())),
+			Entry::Occupied(_) => Err(RegisterMethodError::AlreadyRegistered(name.into())),
 			Entry::Vacant(vacant) => Ok(vacant.insert(callback)),
 		}
 	}
@@ -217,7 +233,7 @@ impl Methods {
 
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
-	pub fn merge(&mut self, other: impl Into<Methods>) -> Result<(), Error> {
+	pub fn merge(&mut self, other: impl Into<Methods>) -> Result<(), RegisterMethodError> {
 		let mut other = other.into();
 
 		for name in other.callbacks.keys() {
@@ -271,13 +287,13 @@ impl Methods {
 		&self,
 		method: &str,
 		params: Params,
-	) -> Result<T, Error> {
+	) -> Result<T, MethodsError> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
-		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
+		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
-		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(Error::Call)
+		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| MethodsError::JsonRpc(e.into_owned()))
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
@@ -315,7 +331,7 @@ impl Methods {
 		&self,
 		request: &str,
 		buf_size: usize,
-	) -> Result<(MethodResponse, mpsc::Receiver<String>), Error> {
+	) -> Result<(MethodResponse, mpsc::Receiver<String>), serde_json::Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
@@ -354,7 +370,7 @@ impl Methods {
 			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
 
-		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
+		tracing::trace!(target: LOG_TARGET, "[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
 
 		(response, rx)
 	}
@@ -371,7 +387,7 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::core::{Error, EmptyServerParams, RpcResult};
+	///     use jsonrpsee::core::{EmptyServerParams, RpcResult};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
@@ -386,22 +402,27 @@ impl Methods {
 	///     assert_eq!(&sub_resp, "one answer");
 	/// }
 	/// ```
-	pub async fn subscribe_unbounded(&self, sub_method: &str, params: impl ToRpcParams) -> Result<Subscription, Error> {
+	pub async fn subscribe_unbounded(
+		&self,
+		sub_method: &str,
+		params: impl ToRpcParams,
+	) -> Result<Subscription, MethodsError> {
 		self.subscribe(sub_method, params, u32::MAX as usize).await
 	}
 
 	/// Similar to [`Methods::subscribe_unbounded`] but it's using a bounded channel and the buffer capacity must be
 	/// provided.
+	///
 	pub async fn subscribe(
 		&self,
 		sub_method: &str,
 		params: impl ToRpcParams,
 		buf_size: usize,
-	) -> Result<Subscription, Error> {
+	) -> Result<Subscription, MethodsError> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 
-		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
+		tracing::trace!(target: LOG_TARGET, "[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
@@ -409,7 +430,7 @@ impl Methods {
 		let as_success: ResponseSuccess<serde_json::Value> =
 			serde_json::from_str::<Response<_>>(&resp.result)?.try_into()?;
 
-		let sub_id = as_success.result.try_into().map_err(|_| Error::InvalidSubscriptionId)?;
+		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.result.clone()))?;
 
 		Ok(Subscription { sub_id, rx })
 	}
@@ -469,7 +490,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		&mut self,
 		method_name: &'static str,
 		callback: F,
-	) -> Result<&mut MethodCallback, Error>
+	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
@@ -490,7 +511,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		&mut self,
 		method_name: &'static str,
 		callback: Fun,
-	) -> Result<&mut MethodCallback, Error>
+	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
 		R: IntoResponse + 'static,
 		Fut: Future<Output = R> + Send,
@@ -519,7 +540,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		&mut self,
 		method_name: &'static str,
 		callback: F,
-	) -> Result<&mut MethodCallback, Error>
+	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
@@ -539,7 +560,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				.map(|result| match result {
 					Ok(r) => r,
 					Err(err) => {
-						tracing::error!("Join error for blocking RPC method: {:?}", err);
+						tracing::error!(target: LOG_TARGET, "Join error for blocking RPC method: {:?}", err);
 						MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
 					}
 				})
@@ -650,7 +671,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		notif_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 		callback: F,
-	) -> Result<&mut MethodCallback, Error>
+	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
 		Context: Send + Sync + 'static,
 		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>) -> Fut) + Send + Sync + Clone + 'static,
@@ -784,7 +805,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		notif_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 		callback: F,
-	) -> Result<&mut MethodCallback, Error>
+	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
 		Context: Send + Sync + 'static,
 		F: (Fn(Params, PendingSubscriptionSink, Arc<Context>) -> R) + Send + Sync + Clone + 'static,
@@ -836,9 +857,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<Subscribers, Error> {
+	) -> Result<Subscribers, RegisterMethodError> {
 		if subscribe_method_name == unsubscribe_method_name {
-			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
+			return Err(RegisterMethodError::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
 
 		self.methods.verify_method_name(subscribe_method_name)?;
@@ -856,6 +877,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
 							tracing::warn!(
+								target: LOG_TARGET,
 								"Unsubscribe call `{}` failed: couldn't parse subscription id={:?} request id={:?}",
 								unsubscribe_method_name,
 								params,
@@ -871,6 +893,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					if !result {
 						tracing::debug!(
+							target: LOG_TARGET,
 							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
 							unsubscribe_method_name,
 							key,
@@ -886,12 +909,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 
 	/// Register an alias for an existing_method. Alias uniqueness is enforced.
-	pub fn register_alias(&mut self, alias: &'static str, existing_method: &'static str) -> Result<(), Error> {
+	pub fn register_alias(
+		&mut self,
+		alias: &'static str,
+		existing_method: &'static str,
+	) -> Result<(), RegisterMethodError> {
 		self.methods.verify_method_name(alias)?;
 
 		let callback = match self.methods.callbacks.get(existing_method) {
 			Some(callback) => callback.clone(),
-			None => return Err(Error::MethodNotFound(existing_method.into())),
+			None => return Err(RegisterMethodError::MethodNotFound(existing_method.into())),
 		};
 
 		self.methods.mut_callbacks().insert(alias, callback);

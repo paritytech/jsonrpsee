@@ -24,25 +24,23 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::core::{async_trait, client::ClientT};
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
 use std::borrow::Cow as StdCow;
-use std::net::SocketAddr;
 use std::future::Future;
+use std::net::SocketAddr;
 
 #[derive(Clone)]
 pub struct ModifyRequestIf<S>(S);
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
 where
 	S: Send + Sync + RpcServiceT<'a>,
 {
-
 	fn call(&self, mut req: Request<'a>) -> impl Future<Output = jsonrpsee::MethodResponse> + Send {
 		// Example how to modify the params in the call.
 		if req.method == "say_hello" {

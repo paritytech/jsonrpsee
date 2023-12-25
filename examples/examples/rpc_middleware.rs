@@ -37,14 +37,13 @@
 //! may be handy in some scenarios such CORS but if you want to access
 //! to the actual JSON-RPC details this is the middleware to use.
 
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::future::Future;
 
-use futures::future::BoxFuture;
 use futures::FutureExt;
-use jsonrpsee::core::{async_trait, client::ClientT};
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{MethodResponse, RpcModule, Server};
@@ -63,17 +62,13 @@ impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
-		let count = self.count.clone();
-		let service = self.service.clone();
-
-		async move {
-			let rp = service.call(req).await;
-			count.fetch_add(1, Ordering::SeqCst);
-			let count = count.load(Ordering::SeqCst);
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> + Send {
+		self.service.call(req).then(|rp| {
+			self.count.fetch_add(1, Ordering::SeqCst);
+			let count = self.count.load(Ordering::SeqCst);
 			println!("the server has processed calls={count} on the connection");
-			rp
-		}
+			async { rp }
+		})
 	}
 }
 
@@ -83,22 +78,17 @@ pub struct GlobalCalls<S> {
 	count: Arc<AtomicUsize>,
 }
 
-
 impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
-		let count = self.count.clone();
-		let service = self.service.clone();
-
-		async move {
-			let rp = service.call(req).await;
-			count.fetch_add(1, Ordering::SeqCst);
-			let count = count.load(Ordering::SeqCst);
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> + Send {
+		self.service.call(req).then(|rp| {
+			self.count.fetch_add(1, Ordering::SeqCst);
+			let count = self.count.load(Ordering::SeqCst);
 			println!("the server has processed calls={count} in total");
-			rp
-		}
+			async { rp }
+		})
 	}
 }
 

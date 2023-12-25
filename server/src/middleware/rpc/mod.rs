@@ -39,7 +39,8 @@ use tower::layer::LayerFn;
 
 /// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
-pub trait RpcServiceT<'a> {
+pub trait RpcServiceT<'a>: Send {
+	/// ..
 	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> + Send;
 }
 

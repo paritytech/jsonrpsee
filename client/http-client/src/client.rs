@@ -30,26 +30,26 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient};
+use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient, HttpTransportClientBuilder};
 use crate::types::{NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::body::HttpBody;
 use hyper::http::HeaderMap;
 use hyper::Body;
 use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, IdKind, RequestIdManager, Subscription,
+	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, Error, IdKind, RequestIdManager, Subscription,
 	SubscriptionClientT,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
-use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::instrument;
 
-/// Http Client Builder.
+/// HTTP client builder.
 ///
 /// # Examples
 ///
@@ -83,6 +83,7 @@ pub struct HttpClientBuilder<L = Identity> {
 	max_log_length: u32,
 	headers: HeaderMap,
 	service_builder: tower::ServiceBuilder<L>,
+	tcp_no_delay: bool,
 }
 
 impl<L> HttpClientBuilder<L> {
@@ -160,6 +161,14 @@ impl<L> HttpClientBuilder<L> {
 		self
 	}
 
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	///
+	/// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.tcp_no_delay = no_delay;
+		self
+	}
+
 	/// Set custom tower middleware.
 	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
 		HttpClientBuilder {
@@ -172,6 +181,7 @@ impl<L> HttpClientBuilder<L> {
 			max_response_size: self.max_response_size,
 			service_builder,
 			request_timeout: self.request_timeout,
+			tcp_no_delay: self.tcp_no_delay,
 		}
 	}
 }
@@ -196,19 +206,20 @@ where
 			headers,
 			max_log_length,
 			service_builder,
-			..
+			tcp_no_delay,
 		} = self;
 
-		let transport = HttpTransportClient::new(
-			max_request_size,
-			target,
-			max_response_size,
-			certificate_store,
-			max_log_length,
-			headers,
-			service_builder,
-		)
-		.map_err(|e| Error::Transport(e.into()))?;
+		let transport = HttpTransportClientBuilder::new()
+			.max_request_size(max_request_size)
+			.max_response_size(max_response_size)
+			.set_headers(headers)
+			.set_tcp_no_delay(tcp_no_delay)
+			.set_max_logging_length(max_log_length)
+			.set_service(service_builder)
+			.set_certification_store(certificate_store)
+			.build(target)
+			.map_err(|e| Error::Transport(e.into()))?;
+
 		Ok(HttpClient {
 			transport,
 			id_manager: Arc::new(RequestIdManager::new(max_concurrent_requests, id_kind)),
@@ -229,6 +240,7 @@ impl Default for HttpClientBuilder<Identity> {
 			max_log_length: 4096,
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -284,8 +296,6 @@ where
 			Ok(Err(e)) => Err(Error::Transport(e.into())),
 		}
 	}
-
-	/// Perform a request towards the server.
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
 	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>

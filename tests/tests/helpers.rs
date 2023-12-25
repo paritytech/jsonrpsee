@@ -25,12 +25,14 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
+#![allow(dead_code)]
 
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use fast_socks5::client::Socks5Stream;
+use fast_socks5::server;
 use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::core::Error;
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{
 	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
@@ -38,11 +40,11 @@ use jsonrpsee::server::{
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::SubscriptionCloseResponse;
 use serde::Serialize;
+use tokio::net::TcpStream;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
-#[allow(dead_code)]
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
@@ -91,7 +93,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
 			let _sink = pending.accept().await?;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			Err(Error::Custom("Server closed the stream because it was lazy".to_string()).into())
+			Err("Server closed the stream because it was lazy".to_string().into())
 		})
 		.unwrap();
 
@@ -124,16 +126,12 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 	(addr, server_handle)
 }
 
-#[allow(dead_code)]
 pub async fn server_with_subscription() -> SocketAddr {
 	let (addr, handle) = server_with_subscription_and_handle().await;
-
 	tokio::spawn(handle.stopped());
-
 	addr
 }
 
-#[allow(dead_code)]
 pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -166,7 +164,6 @@ pub async fn server() -> SocketAddr {
 }
 
 /// Yields one item then sleeps for an hour.
-#[allow(dead_code)]
 pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
@@ -193,7 +190,6 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 	addr
 }
 
-#[allow(dead_code)]
 pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
 	server_with_cors(CorsLayer::new()).await
 }
@@ -248,4 +244,46 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 			}
 		}
 	}
+}
+
+pub async fn socks_server_no_auth() -> SocketAddr {
+	let mut config = server::Config::default();
+	config.set_dns_resolve(false);
+	let config = std::sync::Arc::new(config);
+
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let proxy_addr = listener.local_addr().unwrap();
+
+	spawn_socks_server(listener, config).await;
+
+	proxy_addr
+}
+
+pub async fn spawn_socks_server(listener: tokio::net::TcpListener, config: std::sync::Arc<server::Config>) {
+	let addr = listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		loop {
+			let (stream, _) = listener.accept().await.unwrap();
+			let mut socks5_socket = server::Socks5Socket::new(stream, config.clone());
+			socks5_socket.set_reply_ip(addr.ip());
+
+			socks5_socket.upgrade_to_socks5().await.unwrap();
+		}
+	});
+}
+
+pub async fn connect_over_socks_stream(server_addr: SocketAddr) -> Socks5Stream<TcpStream> {
+	let target_addr = server_addr.ip().to_string();
+	let target_port = server_addr.port();
+
+	let socks_server = socks_server_no_auth().await;
+
+	fast_socks5::client::Socks5Stream::connect(
+		socks_server,
+		target_addr,
+		target_port,
+		fast_socks5::client::Config::default(),
+	)
+	.await
+	.unwrap()
 }

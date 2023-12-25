@@ -26,10 +26,12 @@
 
 //! Subscription related types and traits for server implementations.
 
+use super::MethodsError;
 use super::helpers::{MethodResponse, MethodSink};
+use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{traits::IdProvider, Error, StringError};
+use crate::{traits::IdProvider, error::StringError};
 use jsonrpsee_types::SubscriptionPayload;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorObjectOwned, Id, ResponsePayload, SubscriptionId, SubscriptionResponse,
@@ -232,7 +234,7 @@ impl IsUnsubscribed {
 #[must_use = "PendingSubscriptionSink does nothing unless `accept` or `reject` is called"]
 pub struct PendingSubscriptionSink {
 	/// Sink.
-	pub inner: MethodSink,
+	pub(crate) inner: MethodSink,
 	/// MethodCallback.
 	pub(crate) method: &'static str,
 	/// Shared Mutex of subscriptions for this method.
@@ -281,7 +283,7 @@ impl PendingSubscriptionSink {
 		// Ideally the message should be sent only once.
 		//
 		// The same message is sent twice here because one is sent directly to the transport layer and
-		// the other one is sent internally to accept the subscription and register it in the RPC logger.
+		// the other one is sent internally to accept the subscription.
 		self.inner.send(response.result.clone()).await.map_err(|_| PendingSubscriptionAcceptError)?;
 		self.subscribe.send(response).map_err(|_| PendingSubscriptionAcceptError)?;
 
@@ -424,7 +426,7 @@ pub struct Subscription {
 impl Subscription {
 	/// Close the subscription channel.
 	pub fn close(&mut self) {
-		tracing::trace!("[Subscription::close] Notifying");
+		tracing::trace!(target: LOG_TARGET, "[Subscription::close] Notifying");
 		self.rx.close();
 	}
 
@@ -433,11 +435,11 @@ impl Subscription {
 		&self.sub_id
 	}
 
-	/// Receives the next value on the subscription if value could be decoded as T.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), Error>> {
+	/// Receives the next value on the subscription if the value could be decoded as T.
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, SubscriptionId<'static>), MethodsError>> {
 		let raw = self.rx.recv().await?;
 
-		tracing::debug!("[Subscription::next]: rx {}", raw);
+		tracing::debug!(target: LOG_TARGET, "[Subscription::next]: rx {}", raw);
 
 		// clippy complains about this but it doesn't compile without the extra res binding.
 		#[allow(clippy::let_and_return)]

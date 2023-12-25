@@ -31,7 +31,6 @@ use std::sync::Arc;
 
 use crate::middleware::rpc::RpcServiceT;
 use futures_util::Future;
-use futures_util::future::BoxFuture;
 use jsonrpsee_core::server::{
 	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
@@ -63,17 +62,14 @@ pub(crate) enum RpcServiceCfg {
 }
 
 impl RpcService {
-	/// Create a new service with doesn't support subscriptions.
+	/// Create a new service.
 	pub(crate) fn new(methods: Methods, max_response_body_size: usize, conn_id: usize, cfg: RpcServiceCfg) -> Self {
 		Self { methods, max_response_body_size, conn_id, cfg }
 	}
 }
 
 impl<'a> RpcServiceT<'a> for RpcService {
-	// The rpc module is already boxing the futures and
-	// it's used to under the hood by the RpcService.
-
-	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> {
+	fn call(&self, req: Request<'a>) -> impl Future<Output = MethodResponse> + Send {
 		let conn_id = self.conn_id;
 		let max_response_body_size = self.max_response_body_size;
 

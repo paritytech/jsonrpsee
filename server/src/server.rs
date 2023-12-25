@@ -37,6 +37,7 @@ use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
+use crate::LOG_TARGET;
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
@@ -47,7 +48,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponseResult};
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	reject_too_big_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
@@ -89,8 +90,8 @@ impl<RpcMiddleware, HttpMiddleware> std::fmt::Debug for Server<RpcMiddleware, Ht
 
 impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 	/// Returns socket address to which the server is bound.
-	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
-		self.listener.local_addr().map_err(Into::into)
+	pub fn local_addr(&self) -> std::io::Result<SocketAddr> {
+		self.listener.local_addr()
 	}
 }
 
@@ -142,7 +143,6 @@ where
 			match try_accept_conn(&listener, stopped).await {
 				AcceptConnection::Established { socket, remote_addr, stop } => {
 
-
 					process_connection(ProcessConnection {
 						http_middleware: &self.http_middleware,
 						rpc_middleware: self.rpc_middleware.clone(),
@@ -159,7 +159,7 @@ where
 					stopped = stop;
 				}
 				AcceptConnection::Err((e, stop)) => {
-					tracing::debug!("Error while awaiting a new connection: {:?}", e);
+					tracing::debug!(target: LOG_TARGET, "Error while awaiting a new connection: {:?}", e);
 					stopped = stop;
 				}
 				AcceptConnection::Shutdown => break,
@@ -199,9 +199,11 @@ pub struct ServerConfig {
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
 	pub(crate) message_buffer_capacity: u32,
 	/// Ping settings.
-	pub(crate) ping_config: PingConfig,
+	pub(crate) ping_config: Option<PingConfig>,
 	/// ID provider.
 	pub(crate) id_provider: Arc<dyn IdProvider>,
+	/// `TCP_NODELAY` settings.
+	pub(crate) tcp_no_delay: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -223,7 +225,7 @@ pub struct ServerConfigBuilder {
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
 	message_buffer_capacity: u32,
 	/// Ping settings.
-	ping_config: PingConfig,
+	ping_config: Option<PingConfig>,
 	/// ID provider.
 	id_provider: Arc<dyn IdProvider>,
 }
@@ -273,51 +275,66 @@ impl ConnectionState {
 	}
 }
 
-/// Configuration for WebSocket ping's.
+/// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect
+/// an inactive connection.
 ///
-/// If the server sends out a ping then remote peer must reply with a corresponding pong message.
+/// jsonrpsee doesn't associate the ping/pong frames just that if
+/// a pong frame isn't received within the `inactive_limit` then it's regarded
+/// as missed.
 ///
-/// It's possible to just send out pings then don't care about response
-/// or terminate the connection if the ping isn't replied to the configured `max_inactivity` limit.
+/// Such that the `inactive_limit` should be configured to longer than a single
+/// WebSocket ping takes or it might be missed and may end up
+/// terminating the connection.
 ///
-/// NOTE: It's possible that a `ping` may be backpressured and if you expect a connection
-/// to be reassumed after interruption it's not recommended to enable the activity check.
+/// Default: ping_interval: 30 seconds, max failures: 1 and inactive limit: 40 seconds.
 #[derive(Debug, Copy, Clone)]
-pub enum PingConfig {
-	/// The server pings the connected clients continuously at the configured interval but
-	/// doesn't disconnect them if no pongs are received from the client.
-	WithoutInactivityCheck(Duration),
-	/// The server pings the connected clients continuously at the configured interval
-	/// and terminates the connection if no websocket messages received from client
-	/// after the max limit is exceeded.
-	WithInactivityCheck {
-		/// Time interval between consequent pings from server
-		ping_interval: Duration,
-		/// Max allowed time for connection to stay idle
-		inactive_limit: Duration,
-	},
-}
-
-impl PingConfig {
-	pub(crate) fn ping_interval(&self) -> Duration {
-		match self {
-			Self::WithoutInactivityCheck(ping_interval) => *ping_interval,
-			Self::WithInactivityCheck { ping_interval, .. } => *ping_interval,
-		}
-	}
-
-	pub(crate) fn inactive_limit(&self) -> Option<Duration> {
-		if let Self::WithInactivityCheck { inactive_limit, .. } = self {
-			Some(*inactive_limit)
-		} else {
-			None
-		}
-	}
+pub struct PingConfig {
+	/// Period which the server pings the connected client.
+	pub(crate) ping_interval: Duration,
+	/// Max allowed time for a connection to stay idle.
+	pub(crate) inactive_limit: Duration,
+	/// Max failures.
+	pub(crate) max_failures: usize,
 }
 
 impl Default for PingConfig {
 	fn default() -> Self {
-		Self::WithoutInactivityCheck(Duration::from_secs(60))
+		Self { ping_interval: Duration::from_secs(30), max_failures: 1, inactive_limit: Duration::from_secs(40) }
+	}
+}
+
+impl PingConfig {
+	/// Create a new PingConfig.
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	/// Configure the interval when the WebSocket pings are sent out.
+	pub fn ping_interval(mut self, ping_interval: Duration) -> Self {
+		self.ping_interval = ping_interval;
+		self
+	}
+
+	/// Configure how long to wait for the WebSocket pong.
+	/// When this limit is expired it's regarded as the client is unresponsive.
+	///
+	/// You may configure how many times the client is allowed to be "inactive" by
+	/// [`PingConfig::max_failures`].
+	pub fn inactive_limit(mut self, inactivity_limit: Duration) -> Self {
+		self.inactive_limit = inactivity_limit;
+		self
+	}
+
+	/// Configure how many times the remote peer is allowed be
+	/// inactive until the connection is closed.
+	///
+	/// # Panics
+	///
+	/// This method panics if `max` == 0.
+	pub fn max_failures(mut self, max: usize) -> Self {
+		assert!(max > 0);
+		self.max_failures = max;
+		self
 	}
 }
 
@@ -333,8 +350,9 @@ impl Default for ServerConfig {
 			enable_http: true,
 			enable_ws: true,
 			message_buffer_capacity: 1024,
-			ping_config: PingConfig::WithoutInactivityCheck(Duration::from_secs(60)),
+			ping_config: None,
 			id_provider: Arc::new(RandomIntegerIdProvider),
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -421,16 +439,16 @@ impl ServerConfigBuilder {
 		self
 	}
 
-	/// See [`Builder::ping_interval`] for documentation.
-	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
-		if let PingConfig::WithInactivityCheck { ping_interval, inactive_limit } = config {
-			if ping_interval >= inactive_limit {
-				return Err(Error::Custom("`inactive_limit` must be bigger than `ping_interval` to work".into()));
-			}
-		}
+	/// See [`Builder::enable_ws_ping`] for documentation.
+	pub fn enable_ws_ping(mut self, config: PingConfig) -> Self {
+		self.ping_config = Some(config);
+		self
+	}
 
-		self.ping_config = config;
-		Ok(self)
+	/// See [`Builder::disable_ws_ping`] for documentation.
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.ping_config = None;
+		self
 	}
 
 	/// See [`Builder::set_id_provider`] for documentation.
@@ -632,31 +650,31 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
-	/// Configure the interval at which pings are submitted,
-	/// and optionally enable connection inactivity check
+	/// Enable WebSocket ping/pong on the server.
 	///
-	/// This option is used to keep the connection alive, and can be configured to just submit `Ping` frames or with extra parameter, configuring max interval when a `Pong` frame should be received
-	///
-	/// Default: ping interval is set to 60 seconds and the inactivity check is disabled
+	/// Default: pings are disabled.
 	///
 	/// # Examples
 	///
 	/// ```rust
-	/// use std::time::Duration;
+	/// use std::{time::Duration, num::NonZeroUsize};
 	/// use jsonrpsee_server::{ServerBuilder, PingConfig};
 	///
-	/// // Set the ping interval to 10 seconds but terminate the connection if a client is inactive for more than 2 minutes
-	/// let builder = ServerBuilder::default().ping_interval(PingConfig::WithInactivityCheck { ping_interval: Duration::from_secs(10), inactive_limit: Duration::from_secs(2 * 60) }).unwrap();
+	/// // Set the ping interval to 10 seconds but terminates the connection if a client is inactive for more than 2 minutes
+	/// let ping_cfg = PingConfig::new().ping_interval(Duration::from_secs(10)).inactive_limit(Duration::from_secs(60 * 2));
+	/// let builder = ServerBuilder::default().enable_ws_ping(ping_cfg);
 	/// ```
-	pub fn ping_interval(mut self, config: PingConfig) -> Result<Self, Error> {
-		if let PingConfig::WithInactivityCheck { ping_interval, inactive_limit } = config {
-			if ping_interval >= inactive_limit {
-				return Err(Error::Custom("`inactive_limit` must be bigger than `ping_interval` to work".into()));
-			}
-		}
+	pub fn enable_ws_ping(mut self, config: PingConfig) -> Self {
+		self.server_cfg.ping_config = Some(config);
+		self
+	}
 
-		self.server_cfg.ping_config = config;
-		Ok(self)
+	/// Disable WebSocket ping/pong on the server.
+	///
+	/// Default: pings are disabled.
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.server_cfg.ping_config = None;
+		self
 	}
 
 	/// Configure custom `subscription ID` provider for the server to use
@@ -708,6 +726,14 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// ```
 	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
 		Builder { server_cfg: self.server_cfg, http_middleware, rpc_middleware: self.rpc_middleware }
+	}
+
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	///
+	/// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.server_cfg.tcp_no_delay = no_delay;
+		self
 	}
 
 	/// Configure the server to only serve JSON-RPC HTTP requests.
@@ -841,7 +867,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<HttpMiddleware, RpcMiddleware>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> std::io::Result<Server<HttpMiddleware, RpcMiddleware>> {
 		let listener = TcpListener::bind(addrs).await?;
 
 		Ok(Server {
@@ -878,7 +904,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	pub fn build_from_tcp(
 		self,
 		listener: impl Into<StdTcpListener>,
-	) -> Result<Server<HttpMiddleware, RpcMiddleware>, Error> {
+	) -> std::io::Result<Server<HttpMiddleware, RpcMiddleware>> {
 		let listener = TcpListener::from_std(listener.into())?;
 
 		Ok(Server {
@@ -959,7 +985,7 @@ impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for Tow
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a> + Send,
 {
 	type Response = hyper::Response<hyper::Body>;
 
@@ -979,7 +1005,7 @@ where
 		let stop_handle = self.inner.stop_handle.clone();
 		let conn_id = self.inner.conn_id;
 
-		tracing::trace!("{:?}", request);
+		tracing::trace!(target: LOG_TARGET, "{:?}", request);
 
 		let Some(conn_permit) = conn_guard.try_acquire() else {
 			return async move { Ok(http::response::too_many_requests()) }.boxed();
@@ -989,7 +1015,7 @@ where
 
 		let max_conns = conn_guard.max_connections();
 		let curr_conns = max_conns - conn_guard.available_connections();
-		tracing::debug!("Accepting new connection {}/{}", curr_conns, max_conns);
+		tracing::debug!(target: LOG_TARGET, "Accepting new connection {}/{}", curr_conns, max_conns);
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
@@ -1031,7 +1057,7 @@ where
 							let upgraded = match hyper::upgrade::on(request).await {
 								Ok(u) => u,
 								Err(e) => {
-									tracing::debug!("Could not upgrade connection: {}", e);
+									tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
 									return;
 								}
 							};
@@ -1060,7 +1086,7 @@ where
 					response.map(|()| hyper::Body::empty())
 				}
 				Err(e) => {
-					tracing::debug!("Could not upgrade connection: {}", e);
+					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
 					hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}")))
 				}
 			};
@@ -1080,11 +1106,12 @@ where
 				RpcServiceCfg::OnlyCalls,
 			));
 
-			todo!();
+			// TODO: doesn't work: https://github.com/rust-lang/rust/issues/100013.
 			/*Box::pin(
 				http::call_with_service(request, batch_config, max_request_size, rpc_service, max_response_size)
 					.map(Ok),
 			)*/
+			todo!();
 		} else {
 			Box::pin(async { http::response::denied() }.map(Ok))
 		}
@@ -1137,8 +1164,8 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 		..
 	} = params;
 
-	if let Err(e) = socket.set_nodelay(true) {
-		tracing::warn!("Could not set NODELAY on socket: {:?}", e);
+	if let Err(e) = socket.set_nodelay(server_cfg.tcp_no_delay) {
+		tracing::warn!(target: LOG_TARGET, "Could not set NODELAY on socket: {:?}", e);
 		return;
 	}
 
@@ -1187,7 +1214,7 @@ where
 	};
 
 	if let Err(e) = res {
-		tracing::debug!("HTTP serve connection failed {:?}", e);
+		tracing::debug!(target: LOG_TARGET, "HTTP serve connection failed {:?}", e);
 	}
 }
 

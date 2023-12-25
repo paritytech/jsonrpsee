@@ -24,18 +24,20 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#![cfg(test)]
+
 mod helpers;
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::future::Future;
 
-use futures::future::BoxFuture;
 use futures::FutureExt;
 use helpers::init_logger;
-use jsonrpsee::core::{async_trait, client::ClientT, Error};
+use jsonrpsee::core::{client::ClientT, ClientError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
@@ -64,34 +66,27 @@ impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-
-	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> {
-		let counter = self.counter.clone();
-		let service = self.service.clone();
-
-		let name = request.method.to_string();
+	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> + Send {
+		let name = request.method_name().to_string();
 		let id = request.id.clone();
 
-		async move {
-			{
-				let mut n = counter.lock().unwrap();
-				n.requests.0 += 1;
-				let entry = n.calls.entry(name.clone()).or_insert((0, Vec::new()));
-				entry.0 += 1;
-			}
+		{
+			let mut n = self.counter.lock().unwrap();
+			n.requests.0 += 1;
+			let entry = n.calls.entry(name.clone()).or_insert((0, Vec::new()));
+			entry.0 += 1;
+		}
 
-			let rp = service.call(request).await;
-
+		self.service.call(request).then(move |rp| {
 			{
-				let mut n = counter.lock().unwrap();
+				let mut n = self.counter.lock().unwrap();
 				n.requests.1 += 1;
 				if rp.is_success() {
 					n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
 				}
 			}
-
-			rp
-		}
+			async { rp }
+		})
 	}
 }
 
@@ -118,7 +113,7 @@ fn test_module() -> RpcModule<()> {
 async fn websocket_server(
 	module: RpcModule<()>,
 	counter: Arc<Mutex<Counter>>,
-) -> Result<(SocketAddr, ServerHandle), Error> {
+) -> io::Result<(SocketAddr, ServerHandle)> {
 	let rpc_middleware =
 		RpcServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
@@ -129,7 +124,7 @@ async fn websocket_server(
 	Ok((addr, handle))
 }
 
-async fn http_server(module: RpcModule<()>, counter: Arc<Mutex<Counter>>) -> Result<(SocketAddr, ServerHandle), Error> {
+async fn http_server(module: RpcModule<()>, counter: Arc<Mutex<Counter>>) -> io::Result<(SocketAddr, ServerHandle)> {
 	let rpc_middleware =
 		RpcServiceBuilder::new().layer_fn(move |service| CounterMiddleware { service, counter: counter.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
@@ -153,7 +148,7 @@ async fn ws_server_logger() {
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(res, "hello");
 
-	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
@@ -161,10 +156,10 @@ async fn ws_server_logger() {
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(res, "hello");
 
-	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
-	let res: Result<String, Error> = client.request("err", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("err", rpc_params![]).await;
 	assert!(res.is_err());
 
 	{
@@ -193,7 +188,7 @@ async fn http_server_logger() {
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(res, "hello");
 
-	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
@@ -201,10 +196,10 @@ async fn http_server_logger() {
 	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(res, "hello");
 
-	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("unknown_method", rpc_params![]).await;
 	assert!(res.is_err());
 
-	let res: Result<String, Error> = client.request("err", rpc_params![]).await;
+	let res: Result<String, ClientError> = client.request("err", rpc_params![]).await;
 	assert!(res.is_err());
 
 	{

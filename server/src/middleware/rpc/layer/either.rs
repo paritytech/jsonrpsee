@@ -31,16 +31,10 @@
 //! work to implement tower::Layer for
 //! external types such as future::Either.
 
-use std::{
-	pin::Pin,
-	task::{Context, Poll},
-};
-
 use crate::middleware::rpc::RpcServiceT;
 use futures_util::Future;
 use jsonrpsee_core::server::MethodResponse;
 use jsonrpsee_types::Request;
-use pin_project::pin_project;
 
 /// [`tower::util::Either`] but
 /// adjusted to satisfy the trait bound [`RpcServiceT].
@@ -72,44 +66,10 @@ where
 	A: RpcServiceT<'a> + Send + 'a,
 	B: RpcServiceT<'a> + Send + 'a,
 {
-	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> {
+	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> + Send {
 		match self {
-			Either::Left(service) => ResponseFuture::Left(service.call(request)),
-			Either::Right(service) => ResponseFuture::Right(service.call(request)),
-		}
-	}
-}
-
-/// Response future for the either layer.
-#[pin_project(project = Fut)]
-pub enum ResponseFuture<A, B> {
-	/// Left future
-	Left(#[pin] A),
-	/// Right future.
-	Right(#[pin] B),
-}
-
-impl<A, B> std::fmt::Debug for ResponseFuture<A, B> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let s = match self {
-			Self::Left { .. } => "ResponseFuture::left",
-			Self::Right { .. } => "ResponseFuture::right",
-		};
-		f.write_str(s)
-	}
-}
-
-impl<A, B> Future for ResponseFuture<A, B>
-where
-	A: Future,
-	B: Future<Output = A::Output>,
-{
-	type Output = A::Output;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		match self.project() {
-			Fut::Left(inner) => inner.poll(cx),
-			Fut::Right(inner) => inner.poll(cx),
+			Either::Left(service) => futures_util::future::Either::Left(service.call(request)),
+			Either::Right(service) => futures_util::future::Either::Right(service.call(request)),
 		}
 	}
 }

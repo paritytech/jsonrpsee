@@ -34,10 +34,11 @@ use std::{
 use futures_util::Future;
 use jsonrpsee_core::{
 	server::MethodResponse,
-	tracing::{rx_log_from_json, tx_log_from_str},
+	tracing::server::{rx_log_from_json, tx_log_from_str},
 };
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
+use tracing::Instrument;
 
 use crate::middleware::rpc::RpcServiceT;
 
@@ -75,7 +76,7 @@ where
 	fn call(&self, request: Request<'a>) -> impl Future<Output = MethodResponse> {
 		rx_log_from_json(&request, self.max);
 
-		ResponseFuture { fut: self.service.call(request), max: self.max }
+		ResponseFuture { fut: self.service.call(request), max: self.max }.in_current_span()
 	}
 }
 

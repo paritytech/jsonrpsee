@@ -27,7 +27,6 @@
 use std::io;
 use std::time::Duration;
 
-use crate::tracing::tx_log_from_str;
 use jsonrpsee_types::error::{
 	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
 };
@@ -35,6 +34,8 @@ use jsonrpsee_types::{Id, InvalidRequest, Response, ResponsePayload};
 use serde::Serialize;
 use serde_json::value::to_raw_value;
 use tokio::sync::mpsc;
+
+use crate::server::LOG_TARGET;
 
 use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 
@@ -90,19 +91,17 @@ pub struct MethodSink {
 	tx: mpsc::Sender<String>,
 	/// Max response size in bytes for a executed call.
 	max_response_size: u32,
-	/// Max log length.
-	max_log_length: u32,
 }
 
 impl MethodSink {
 	/// Create a new `MethodSink` with unlimited response size.
 	pub fn new(tx: mpsc::Sender<String>) -> Self {
-		MethodSink { tx, max_response_size: u32::MAX, max_log_length: u32::MAX }
+		MethodSink { tx, max_response_size: u32::MAX }
 	}
 
 	/// Create a new `MethodSink` with a limited response size.
-	pub fn new_with_limit(tx: mpsc::Sender<String>, max_response_size: u32, max_log_length: u32) -> Self {
-		MethodSink { tx, max_response_size, max_log_length }
+	pub fn new_with_limit(tx: mpsc::Sender<String>, max_response_size: u32 ) -> Self {
+		MethodSink { tx, max_response_size }
 	}
 
 	/// Returns whether this channel is closed without needing a context.
@@ -129,13 +128,11 @@ impl MethodSink {
 	///
 	/// Returns the message if the send fails such that either can be thrown away or re-sent later.
 	pub fn try_send(&mut self, msg: String) -> Result<(), TrySendError> {
-		tx_log_from_str(&msg, self.max_log_length);
 		self.tx.try_send(msg).map_err(Into::into)
 	}
 
 	/// Async send which will wait until there is space in channel buffer or that the subscription is disconnected.
 	pub async fn send(&self, msg: String) -> Result<(), DisconnectError> {
-		tx_log_from_str(&msg, self.max_log_length);
 		self.tx.send(msg).await.map_err(Into::into)
 	}
 
@@ -149,7 +146,6 @@ impl MethodSink {
 
 	/// Similar to to `MethodSink::send` but only waits for a limited time.
 	pub async fn send_timeout(&self, msg: String, timeout: Duration) -> Result<(), SendTimeoutError> {
-		tx_log_from_str(&msg, self.max_log_length);
 		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
 	}
 
@@ -273,7 +269,7 @@ impl MethodResponse {
 				Self { result, success_or_error, is_subscription: false }
 			}
 			Err(err) => {
-				tracing::error!("Error serializing response: {:?}", err);
+				tracing::error!(target: LOG_TARGET, "Error serializing response: {:?}", err);
 
 				if err.is_io() {
 					let data = to_raw_value(&format!("Exceeded max limit of {max_response_size}")).ok();
