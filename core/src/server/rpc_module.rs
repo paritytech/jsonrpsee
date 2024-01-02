@@ -32,18 +32,19 @@ use std::sync::Arc;
 
 use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
-use crate::server::LOG_TARGET;
 use crate::server::helpers::{MethodResponse, MethodSink};
 use crate::server::subscription::{
 	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
+use crate::server::LOG_TARGET;
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
-	Id, Params, Request, Response, ResponsePayload, ResponseSuccess, SubscriptionId as RpcSubscriptionId, ErrorObjectOwned,
+	ErrorObjectOwned, Id, Params, Request, Response, ResponsePayload, ResponseSuccess,
+	SubscriptionId as RpcSubscriptionId,
 };
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
@@ -77,7 +78,6 @@ pub type MaxResponseSize = usize;
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>);
-
 
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
@@ -430,7 +430,8 @@ impl Methods {
 		let as_success: ResponseSuccess<serde_json::Value> =
 			serde_json::from_str::<Response<_>>(&resp.result)?.try_into()?;
 
-		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.result.clone()))?;
+		let sub_id =
+			as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.result.clone()))?;
 
 		Ok(Subscription { sub_id, rx })
 	}

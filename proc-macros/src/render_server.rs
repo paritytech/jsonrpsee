@@ -32,7 +32,8 @@ use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::{token, AttrStyle, Attribute, Path, PathSegment};
+use syn::token::RArrow;
+use syn::{parse_quote, token, AttrStyle, Attribute, Path, PathSegment, ReturnType};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -42,13 +43,11 @@ impl RpcDescription {
 
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
-		let async_trait = self.jrps_server_item(quote! { core::__reexports::async_trait });
 
 		// Doc-comment to be associated with the server.
 		let doc_comment = format!("Server trait implementation for the `{}` RPC API.", &self.trait_def.ident);
 
 		let trait_impl = quote! {
-			#[#async_trait]
 			#[doc = #doc_comment]
 			pub trait #trait_name #impl_generics: Sized + Send + Sync + 'static #where_clause {
 				#method_impls
@@ -62,7 +61,32 @@ impl RpcDescription {
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
 		let methods = self.methods.iter().map(|method| {
 			let docs = &method.docs;
-			let method_sig = &method.signature;
+			let mut method_sig = method.signature.clone();
+
+			// If the method is async i.e has the format
+			//
+			// `async fn foo() -> T`
+			//
+			// Then it's modified to:
+			//
+			// `fn foo() -> impl Future<Output = T> + Send`
+			if method_sig.sig.asyncness.is_some() {
+				method_sig.sig.asyncness = None;
+
+				let ret_ty = match method_sig.sig.output {
+					ReturnType::Default => {
+						let ty: syn::Type = parse_quote!(impl std::future::Future<Output = ()> + Send);
+						ReturnType::Type(RArrow::default(), Box::new(ty))
+					}
+					ReturnType::Type(arrow, ty) => {
+						let ty: syn::Type = parse_quote!( impl std::future::Future<Output = #ty> + Send);
+						ReturnType::Type(arrow, Box::new(ty))
+					}
+				};
+
+				method_sig.sig.output = ret_ty;
+			}
+
 			quote! {
 				#docs
 				#method_sig
@@ -70,6 +94,32 @@ impl RpcDescription {
 		});
 
 		let subscriptions = self.subscriptions.iter().map(|sub| {
+			let mut sub = sub.clone();
+
+			// If the method is async i.e has the format
+			//
+			// `async fn foo() -> T`
+			//
+			// Then it's modified to:
+			//
+			// `fn foo() -> impl Future<Output = T> + Send`
+			if sub.signature.sig.asyncness.is_some() {
+				sub.signature.sig.asyncness = None;
+
+				let ret_ty = match sub.signature.sig.output {
+					ReturnType::Default => {
+						let ty: syn::Type = parse_quote!(impl std::future::Future<Output = ()> + Send);
+						ReturnType::Type(RArrow::default(), Box::new(ty))
+					}
+					ReturnType::Type(arrow, ty) => {
+						let ty: syn::Type = parse_quote!( impl std::future::Future<Output = #ty> + Send);
+						ReturnType::Type(arrow, Box::new(ty))
+					}
+				};
+
+				sub.signature.sig.output = ret_ty;
+			}
+
 			let docs = &sub.docs;
 			let subscription_sink_ty = self.jrps_server_item(quote! { PendingSubscriptionSink });
 			// Add `SubscriptionSink` as the second input parameter to the signature.

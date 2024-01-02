@@ -26,7 +26,6 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::async_trait;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::Server;
 use jsonrpsee::types::ErrorObjectOwned;
@@ -59,7 +58,6 @@ pub trait Rpc<T: Config> {
 
 pub struct RpcServerImpl;
 
-#[async_trait]
 impl RpcServer<ExampleHash> for RpcServerImpl {
 	fn method(&self) -> Result<<ExampleHash as Config>::Hash, ErrorObjectOwned> {
 		Ok([0u8; 32])

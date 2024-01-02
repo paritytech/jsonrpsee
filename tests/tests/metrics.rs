@@ -37,7 +37,7 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use helpers::init_logger;
-use jsonrpsee::core::{async_trait, client::ClientT, ClientError};
+use jsonrpsee::core::{client::ClientT, ClientError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
@@ -62,7 +62,6 @@ pub struct CounterMiddleware<S> {
 	counter: Arc<Mutex<Counter>>,
 }
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
@@ -105,13 +104,15 @@ fn test_module() -> RpcModule<()> {
 	pub trait Rpc {
 		#[method(name = "say_hello")]
 		async fn hello(&self) -> String {
-			sleep(Duration::from_millis(50)).await;
-			"hello".to_string()
+			async {
+				sleep(Duration::from_millis(50)).await;
+				"hello".to_string()
+			}
 		}
 
 		#[method(name = "err")]
 		async fn err(&self) -> Result<String, ErrorObjectOwned> {
-			Err(ErrorObject::owned(1, "err", None::<()>))
+			async { Err(ErrorObject::owned(1, "err", None::<()>)) }
 		}
 	}
 

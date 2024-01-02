@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
+use jsonrpsee::core::{RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, SubscriptionMessage};
 use jsonrpsee::ws_client::*;
@@ -41,7 +41,6 @@ pub trait Rpc {
 
 pub struct RpcServerImpl;
 
-#[async_trait]
 impl RpcServer for RpcServerImpl {
 	async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
 		Ok(42u16)

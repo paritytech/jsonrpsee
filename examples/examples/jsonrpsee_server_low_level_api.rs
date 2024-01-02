@@ -40,6 +40,7 @@
 
 use std::collections::HashSet;
 use std::convert::Infallible;
+use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -47,7 +48,6 @@ use std::sync::{Arc, Mutex};
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::server::conn::AddrStream;
-use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
@@ -105,10 +105,9 @@ pub trait Rpc {
 	async fn say_hello(&self) -> Result<String, ErrorObjectOwned>;
 }
 
-#[async_trait]
 impl RpcServer for () {
-	async fn say_hello(&self) -> Result<String, ErrorObjectOwned> {
-		Ok("lo".to_string())
+	fn say_hello(&self) -> impl Future<Output = Result<String, ErrorObjectOwned>> {
+		async { Ok("lo".to_string()) }
 	}
 }
 

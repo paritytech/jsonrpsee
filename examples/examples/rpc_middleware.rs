@@ -43,7 +43,7 @@ use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use jsonrpsee::core::{async_trait, client::ClientT};
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{MethodResponse, RpcModule, Server};
@@ -85,7 +85,6 @@ pub struct GlobalCalls<S> {
 	count: Arc<AtomicUsize>,
 }
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,

@@ -3,8 +3,8 @@ use core::fmt;
 use futures_channel::mpsc;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{SplitSink, SplitStream, StreamExt};
+use futures_util::Future;
 use gloo_net::websocket::{futures::WebSocket, Message, WebSocketError};
-use jsonrpsee_core::async_trait;
 use jsonrpsee_core::client::{ReceivedMessage, TransportReceiverT, TransportSenderT};
 
 /// Web-sys transport error that can occur.
@@ -45,28 +45,30 @@ impl fmt::Debug for Receiver {
 	}
 }
 
-#[async_trait(?Send)]
 impl TransportSenderT for Sender {
 	type Error = Error;
 
-	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
-		self.0.send(Message::Text(msg)).await.map_err(|e| Error::WebSocket(e))?;
-		Ok(())
+	fn send(&mut self, msg: String) -> impl Future<Output = Result<(), Self::Error>> {
+		async {
+			self.0.send(Message::Text(msg)).await.map_err(|e| Error::WebSocket(e))?;
+			Ok(())
+		}
 	}
 }
 
-#[async_trait(?Send)]
 impl TransportReceiverT for Receiver {
 	type Error = Error;
 
-	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
-		match self.0.next().await {
-			Some(Ok(msg)) => match msg {
-				Message::Bytes(bytes) => Ok(ReceivedMessage::Bytes(bytes)),
-				Message::Text(txt) => Ok(ReceivedMessage::Text(txt)),
-			},
-			Some(Err(err)) => Err(Error::WebSocket(err)),
-			None => Err(Error::SenderDisconnected),
+	fn receive(&mut self) -> impl Future<Output = Result<ReceivedMessage, Self::Error>> {
+		async {
+			match self.0.next().await {
+				Some(Ok(msg)) => match msg {
+					Message::Bytes(bytes) => Ok(ReceivedMessage::Bytes(bytes)),
+					Message::Text(txt) => Ok(ReceivedMessage::Text(txt)),
+				},
+				Some(Err(err)) => Err(Error::WebSocket(err)),
+				None => Err(Error::SenderDisconnected),
+			}
 		}
 	}
 }

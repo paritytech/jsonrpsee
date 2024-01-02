@@ -93,7 +93,6 @@ pub(crate) mod visitor;
 /// Server code that will be generated:
 ///
 /// ```ignore
-/// #[async_trait]
 /// pub trait RpcServer {
 ///     // RPC methods are normal methods and can be either sync or async.
 ///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
@@ -112,19 +111,18 @@ pub(crate) mod visitor;
 /// Client code that will be generated:
 ///
 /// ```ignore
-/// #[async_trait]
 /// pub trait RpcClient: SubscriptionClient {
 ///     // In client implementation all the methods are (obviously) async.
-///     async fn async_method(&self, param_a: u8, param_b: String) -> Result<u16, Error> {
+///     fn async_method(&self, param_a: u8, param_b: String) -> impl Future<Output = Result<u16, Error>> + Send {
 ///         // Actual implementations are stripped, but inside a corresponding `Client` or
 ///         // `SubscriptionClient` method is called.
 ///     }
-///     async fn sync_method(&self) -> Result<String, Error> {
+///     fn sync_method(&self) -> impl Future<Output = Result<String, Error>> + Send {
 ///         // ...
 ///     }
 ///
 ///     // Subscription method returns `Subscription` object in case of success.
-///     async fn sub(&self) -> Result<Subscription<String>, Error> {
+///     fn sub(&self) -> impl Future<Output = Result<Subscription<String>, Error>> + Send {
 ///         // ...
 ///     }
 /// }
@@ -221,7 +219,7 @@ pub(crate) mod visitor;
 /// mod rpc_impl {
 ///     use jsonrpsee::{proc_macros::rpc};
 ///     use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage, IntoSubscriptionCloseResponse, SubscriptionCloseResponse};
-///     use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
+///     use jsonrpsee::core::{RpcResult, SubscriptionResult};
 ///
 ///     enum CloseResponse {
 ///         None,
@@ -295,7 +293,6 @@ pub(crate) mod visitor;
 ///     pub struct RpcServerImpl;
 ///
 ///     // Note that the trait name we use is `MyRpcServer`, not `MyRpc`!
-///     #[async_trait]
 ///     impl MyRpcServer for RpcServerImpl {
 ///         async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
 ///             Ok(42)
@@ -315,9 +312,19 @@ pub(crate) mod visitor;
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
-///             let mut sink = pending.accept().await?;
-///             sink.send("Response_A".into()).await?;
-///             Ok(())
+///             // Because jsonrpsee modifies the async method to:
+///             //
+///             //   fn sub_override_notif_method(
+///             //        &self,
+///             //        pending: PendingSubscriptionSink
+///             //   ) -> impl Future<Output = SubscriptionResult> + Send
+///             //
+///             // An additional async block is required.
+///             async {
+///                 let mut sink = pending.accept().await?;
+///                 sink.send("Response_A".into()).await?;
+///                 Ok(())
+///             }
 ///         }
 ///
 ///         // Send out two values on the subscription.

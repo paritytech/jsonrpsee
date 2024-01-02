@@ -33,8 +33,8 @@ mod utils;
 use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
 use crate::client::async_client::utils::MaybePendingFutures;
 use crate::client::{
-	BatchMessage, BatchResponse, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
-	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT, Error
+	BatchMessage, BatchResponse, ClientT, Error, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
+	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
 };
 use crate::error::RegisterMethodError;
 use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
@@ -50,21 +50,21 @@ use helpers::{
 };
 use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
+use std::fmt;
 use std::sync::Arc;
 
 use async_lock::RwLock as AsyncRwLock;
-use async_trait::async_trait;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
 use futures_util::stream::StreamExt;
-use futures_util::Stream;
+use futures_util::{Future, Stream};
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
-use self::utils::{IntervalStream, InactivityCheck};
+use self::utils::{InactivityCheck, IntervalStream};
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
@@ -94,11 +94,7 @@ pub struct PingConfig {
 
 impl Default for PingConfig {
 	fn default() -> Self {
-		Self {
-			ping_interval: Duration::from_secs(30),
-			max_failures: 1,
-			inactive_limit: Duration::from_secs(40),
-		}
+		Self { ping_interval: Duration::from_secs(30), max_failures: 1, inactive_limit: Duration::from_secs(40) }
 	}
 }
 
@@ -126,9 +122,9 @@ impl PingConfig {
 
 	/// Configure how many times the connection is allowed be
 	/// inactive until the connection is closed.
-	/// 
+	///
 	/// # Panics
-	/// 
+	///
 	/// This method panics if `max` == 0.
 	pub fn max_failures(mut self, max: usize) -> Self {
 		assert!(max > 0);
@@ -136,7 +132,6 @@ impl PingConfig {
 		self
 	}
 }
-
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ThreadSafeRequestManager(Arc<std::sync::Mutex<RequestManager>>);
@@ -179,7 +174,9 @@ impl ErrorFromBack {
 					// This should never happen because the receiving end is still alive.
 					// Before shutting down the background task a error message should
 					// be emitted.
-					Err(_) => Error::Custom("Error reason could not be found. This is a bug. Please open an issue.".to_string()),
+					Err(_) => Error::Custom(
+						"Error reason could not be found. This is a bug. Please open an issue.".to_string(),
+					),
 				});
 				*write = Some(ReadErrorOnce::Read(arc_err.clone()));
 				arc_err
@@ -281,7 +278,7 @@ impl ClientBuilder {
 	}
 
 	/// Enable WebSocket ping/pong on the client.
-	/// 
+	///
 	/// This only works if the transport supports WebSocket pings.
 	///
 	/// Default: pings are disabled.
@@ -332,11 +329,16 @@ impl ClientBuilder {
 			Some(p) => {
 				// NOTE: This emits a tick immediately to sync how the `inactive_interval` works
 				// because it starts measuring when the client start-ups.
-				let ping_interval = IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(p.ping_interval)));
+				let ping_interval = IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(
+					tokio::time::interval(p.ping_interval),
+				));
 
-				let inactive_interval = { 
+				let inactive_interval = {
 					let start = tokio::time::Instant::now() + p.inactive_limit;
-					IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(tokio::time::interval_at(start, p.inactive_limit)))
+					IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(tokio::time::interval_at(
+						start,
+						p.inactive_limit,
+					)))
 				};
 
 				let inactivity_check = InactivityCheck::new(p.inactive_limit, p.max_failures);
@@ -386,8 +388,8 @@ impl ClientBuilder {
 	{
 		use futures_util::stream::Pending;
 
-		type PendingIntervalStream = IntervalStream<Pending<()>>;		
-		
+		type PendingIntervalStream = IntervalStream<Pending<()>>;
+
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
@@ -466,12 +468,12 @@ impl Client {
 
 	/// This is similar to [`Client::on_disconnect`] but it can be used to get
 	/// the reason why the client was disconnected but it's not cancel-safe.
-	/// 
+	///
 	/// The typical use-case is that this method will be called after
 	/// [`Client::on_disconnect`] has returned in a "select loop".
-	/// 
+	///
 	/// # Cancel-safety
-	/// 
+	///
 	/// This method is not cancel-safe
 	pub async fn disconnect_reason(&self) -> Error {
 		self.error.read_error().await
@@ -496,224 +498,244 @@ impl Drop for Client {
 	}
 }
 
-#[async_trait]
 impl ClientT for Client {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
-	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>>
 	where
 		Params: ToRpcParams + Send,
 	{
-		// NOTE: we use this to guard against max number of concurrent requests.
-		let _req_id = self.id_manager.next_request_id()?;
-		let params = params.to_rpc_params()?;
-		let notif = NotificationSer::borrowed(&method, params.as_deref());
+		let parse_fut = async move {
+			let req_id = self.id_manager.next_request_id()?;
+			let params = params.to_rpc_params()?;
+			let notif = NotificationSer::borrowed(&method, params.as_deref());
+			let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
 
-		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
-		tx_log_from_str(&raw, self.max_log_length);
+			Ok::<_, Error>((req_id, raw))
+		};
 
-		let sender = self.to_back.clone();
-		let fut = sender.send(FrontToBack::Notification(raw));
+		async {
+			// NOTE: we use this to guard against max number of concurrent requests.
+			let (_req_id, raw) = parse_fut.await?;
+			tx_log_from_str(&raw, self.max_log_length);
 
-		tokio::pin!(fut);
+			let sender = self.to_back.clone();
+			let fut = sender.send(FrontToBack::Notification(raw));
 
-		match future::select(fut, Delay::new(self.request_timeout)).await {
-			Either::Left((Ok(()), _)) => Ok(()),
-			Either::Left((Err(_), _)) => Err(self.disconnect_reason().await),
-			Either::Right((_, _)) => Err(Error::RequestTimeout),
+			tokio::pin!(fut);
+
+			match future::select(fut, Delay::new(self.request_timeout)).await {
+				Either::Left((Ok(()), _)) => Ok(()),
+				Either::Left((Err(_), _)) => Err(self.disconnect_reason().await),
+				Either::Right((_, _)) => Err(Error::RequestTimeout),
+			}
 		}
 	}
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>>
 	where
 		R: DeserializeOwned,
 		Params: ToRpcParams + Send,
 	{
-		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let guard = self.id_manager.next_request_id()?;
-		let id = guard.inner();
+		let parse_fut = async move {
+			let req_id = self.id_manager.next_request_id()?;
+			let params = params.to_rpc_params()?;
+			let raw = serde_json::to_string(&RequestSer::borrowed(&req_id.inner(), &method, params.as_deref()))
+				.map_err(Error::ParseError)?;
 
-		let params = params.to_rpc_params()?;
-		let raw =
-			serde_json::to_string(&RequestSer::borrowed(&id, &method, params.as_deref())).map_err(Error::ParseError)?;
-		tx_log_from_str(&raw, self.max_log_length);
-
-		if self
-			.to_back
-			.clone()
-			.send(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) }))
-			.await
-			.is_err()
-		{
-			return Err(self.disconnect_reason().await);
-		}
-
-		let json_value = match call_with_timeout(self.request_timeout, send_back_rx).await {
-			Ok(Ok(v)) => v,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.disconnect_reason().await),
+			Ok::<_, Error>((req_id, raw))
 		};
 
-		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&json_value), id), self.max_log_length);
+		async {
+			// NOTE: we use this to guard against max number of concurrent requests.
+			let (req_id, raw) = parse_fut.await?;
+			let id = req_id.inner();
+			let (send_back_tx, send_back_rx) = oneshot::channel();
+			tx_log_from_str(&raw, self.max_log_length);
 
-		serde_json::from_value(json_value).map_err(Error::ParseError)
+			if self
+				.to_back
+				.clone()
+				.send(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) }))
+				.await
+				.is_err()
+			{
+				return Err(self.disconnect_reason().await);
+			}
+
+			let json_value = match call_with_timeout(self.request_timeout, send_back_rx).await {
+				Ok(Ok(v)) => v,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => return Err(self.disconnect_reason().await),
+			};
+
+			rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&json_value), id), self.max_log_length);
+
+			serde_json::from_value(json_value).map_err(Error::ParseError)
+		}
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>>
 	where
-		R: DeserializeOwned,
+		R: DeserializeOwned + fmt::Debug + 'a,
 	{
-		let batch = batch.build()?;
-		let guard = self.id_manager.next_request_id()?;
-		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
+		async {
+			let batch = batch.build()?;
+			let guard = self.id_manager.next_request_id()?;
+			let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
 
-		let mut batches = Vec::with_capacity(batch.len());
-		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.as_id_kind().into_id(id);
-			batches.push(RequestSer {
-				jsonrpc: TwoPointZero,
-				id,
-				method: method.into(),
-				params: params.map(StdCow::Owned),
-			});
-		}
+			let mut batches = Vec::with_capacity(batch.len());
+			for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+				let id = self.id_manager.as_id_kind().into_id(id);
+				batches.push(RequestSer {
+					jsonrpc: TwoPointZero,
+					id,
+					method: method.into(),
+					params: params.map(StdCow::Owned),
+				});
+			}
 
-		let (send_back_tx, send_back_rx) = oneshot::channel();
+			let (send_back_tx, send_back_rx) = oneshot::channel();
 
-		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
+			let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
 
-		tx_log_from_str(&raw, self.max_log_length);
+			tx_log_from_str(&raw, self.max_log_length);
 
-		if self
-			.to_back
-			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx }))
-			.await
-			.is_err()
-		{
-			return Err(self.disconnect_reason().await);
-		}
+			if self
+				.to_back
+				.clone()
+				.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx }))
+				.await
+				.is_err()
+			{
+				return Err(self.disconnect_reason().await);
+			}
 
-		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-		let json_values = match res {
-			Ok(Ok(v)) => v,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.disconnect_reason().await),
-		};
+			let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+			let json_values = match res {
+				Ok(Ok(v)) => v,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => return Err(self.disconnect_reason().await),
+			};
 
-		rx_log_from_json(&json_values, self.max_log_length);
+			rx_log_from_json(&json_values, self.max_log_length);
 
-		let mut responses = Vec::with_capacity(json_values.len());
-		let mut successful_calls = 0;
-		let mut failed_calls = 0;
+			let mut responses = Vec::with_capacity(json_values.len());
+			let mut successful_calls = 0;
+			let mut failed_calls = 0;
 
-		for json_val in json_values {
-			match json_val {
-				Ok(val) => {
-					let result: R = serde_json::from_value(val).map_err(Error::ParseError)?;
-					responses.push(Ok(result));
-					successful_calls += 1;
-				}
-				Err(err) => {
-					responses.push(Err(err));
-					failed_calls += 1;
+			for json_val in json_values {
+				match json_val {
+					Ok(val) => {
+						let result: R = serde_json::from_value(val).map_err(Error::ParseError)?;
+						responses.push(Ok(result));
+						successful_calls += 1;
+					}
+					Err(err) => {
+						responses.push(Err(err));
+						failed_calls += 1;
+					}
 				}
 			}
+			Ok(BatchResponse { successful_calls, failed_calls, responses })
 		}
-		Ok(BatchResponse { successful_calls, failed_calls, responses })
 	}
 }
 
-#[async_trait]
 impl SubscriptionClientT for Client {
 	/// Send a subscription request to the server.
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
 	#[instrument(name = "subscription", fields(method = subscribe_method), skip(self, params, subscribe_method, unsubscribe_method), level = "trace")]
-	async fn subscribe<'a, Notif, Params>(
+	fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<Notif>, Error>
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>>
 	where
 		Params: ToRpcParams + Send,
 		Notif: DeserializeOwned,
 	{
-		if subscribe_method == unsubscribe_method {
-			return Err(RegisterMethodError::SubscriptionNameConflict(
-				unsubscribe_method.to_owned(),
-			).into());
+		async {
+			if subscribe_method == unsubscribe_method {
+				return Err(RegisterMethodError::SubscriptionNameConflict(unsubscribe_method.to_owned()).into());
+			}
+
+			let guard = self.id_manager.next_request_two_ids()?;
+			let (id_sub, id_unsub) = guard.inner();
+			let params = params.to_rpc_params()?;
+
+			let raw = serde_json::to_string(&RequestSer::borrowed(&id_sub, &subscribe_method, params.as_deref()))
+				.map_err(Error::ParseError)?;
+
+			tx_log_from_str(&raw, self.max_log_length);
+
+			let (send_back_tx, send_back_rx) = tokio::sync::oneshot::channel();
+			if self
+				.to_back
+				.clone()
+				.send(FrontToBack::Subscribe(SubscriptionMessage {
+					raw,
+					subscribe_id: id_sub,
+					unsubscribe_id: id_unsub.clone(),
+					unsubscribe_method: unsubscribe_method.to_owned(),
+					send_back: send_back_tx,
+				}))
+				.await
+				.is_err()
+			{
+				return Err(self.disconnect_reason().await);
+			}
+
+			let (notifs_rx, sub_id) = match call_with_timeout(self.request_timeout, send_back_rx).await {
+				Ok(Ok(val)) => val,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => return Err(self.disconnect_reason().await),
+			};
+
+			rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&sub_id), id_unsub), self.max_log_length);
+
+			Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 		}
-
-		let guard = self.id_manager.next_request_two_ids()?;
-		let (id_sub, id_unsub) = guard.inner();
-		let params = params.to_rpc_params()?;
-
-		let raw = serde_json::to_string(&RequestSer::borrowed(&id_sub, &subscribe_method, params.as_deref()))
-			.map_err(Error::ParseError)?;
-
-		tx_log_from_str(&raw, self.max_log_length);
-
-		let (send_back_tx, send_back_rx) = tokio::sync::oneshot::channel();
-		if self
-			.to_back
-			.clone()
-			.send(FrontToBack::Subscribe(SubscriptionMessage {
-				raw,
-				subscribe_id: id_sub,
-				unsubscribe_id: id_unsub.clone(),
-				unsubscribe_method: unsubscribe_method.to_owned(),
-				send_back: send_back_tx,
-			}))
-			.await
-			.is_err()
-		{
-			return Err(self.disconnect_reason().await);
-		}
-
-		let (notifs_rx, sub_id) = match call_with_timeout(self.request_timeout, send_back_rx).await {
-			Ok(Ok(val)) => val,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.disconnect_reason().await),
-		};
-
-		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&sub_id), id_unsub), self.max_log_length);
-
-		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
 
 	/// Subscribe to a specific method.
 	#[instrument(name = "subscribe_method", skip(self), level = "trace")]
-	async fn subscribe_to_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
+	fn subscribe_to_method<'a, N>(&self, method: &'a str) -> impl Future<Output = Result<Subscription<N>, Error>>
 	where
 		N: DeserializeOwned,
 	{
-		let (send_back_tx, send_back_rx) = oneshot::channel();
-		if self
-			.to_back
-			.clone()
-			.send(FrontToBack::RegisterNotification(RegisterNotificationMessage {
-				send_back: send_back_tx,
-				method: method.to_owned(),
-			}))
-			.await
-			.is_err()
-		{
-			return Err(self.disconnect_reason().await);
+		async {
+			let (send_back_tx, send_back_rx) = oneshot::channel();
+			if self
+				.to_back
+				.clone()
+				.send(FrontToBack::RegisterNotification(RegisterNotificationMessage {
+					send_back: send_back_tx,
+					method: method.to_owned(),
+				}))
+				.await
+				.is_err()
+			{
+				return Err(self.disconnect_reason().await);
+			}
+
+			let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+
+			let (notifs_rx, method) = match res {
+				Ok(Ok(val)) => val,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => return Err(self.disconnect_reason().await),
+			};
+
+			Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Method(method)))
 		}
-
-		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-
-		let (notifs_rx, method) = match res {
-			Ok(Ok(val)) => val,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.disconnect_reason().await),
-		};
-
-		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Method(method)))
 	}
 }
 
@@ -901,8 +923,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
 			} else {
-				let _ =
-					reg.send_back.send(Err(RegisterMethodError::AlreadyRegistered(reg.method).into()));
+				let _ = reg.send_back.send(Err(RegisterMethodError::AlreadyRegistered(reg.method).into()));
 			}
 		}
 		// User dropped the NotificationHandler for this method
@@ -950,30 +971,30 @@ where
 
 	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
 	// are cancel-safe.
-		let res = loop {
-			tokio::select! {
-				biased;
-				_ = close_tx.closed() => break Ok(()),
-				maybe_msg = from_frontend.recv() => {
-					let Some(msg) = maybe_msg else {
-						break Ok(());
-					};
+	let res = loop {
+		tokio::select! {
+			biased;
+			_ = close_tx.closed() => break Ok(()),
+			maybe_msg = from_frontend.recv() => {
+				let Some(msg) = maybe_msg else {
+					break Ok(());
+				};
 
-					if let Err(e) =
-						handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
-					{
-						tracing::error!(target: LOG_TARGET, "ws send failed: {e}");
-						break Err(Error::Transport(e.into()));
-					}
-				}
-				_ = ping_interval.next() => {
-					if let Err(err) = sender.send_ping().await {
-						tracing::error!(target: LOG_TARGET, "Send ws ping failed: {err}");
-						break Err(Error::Transport(err.into()));
-					}
+				if let Err(e) =
+					handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+				{
+					tracing::error!(target: LOG_TARGET, "ws send failed: {e}");
+					break Err(Error::Transport(e.into()));
 				}
 			}
-		};
+			_ = ping_interval.next() => {
+				if let Err(err) = sender.send_ping().await {
+					tracing::error!(target: LOG_TARGET, "Send ws ping failed: {err}");
+					break Err(Error::Transport(err.into()));
+				}
+			}
+		}
+	};
 
 	from_frontend.close();
 	let _ = sender.close().await;
@@ -995,7 +1016,15 @@ where
 	R: TransportReceiverT,
 	S: Stream + Unpin,
 {
-	let ReadTaskParams { receiver, close_tx, to_send_task, manager, max_buffer_capacity_per_subscription, mut inactivity_check, mut inactivity_stream } = params;
+	let ReadTaskParams {
+		receiver,
+		close_tx,
+		to_send_task,
+		manager,
+		max_buffer_capacity_per_subscription,
+		mut inactivity_check,
+		mut inactivity_stream,
+	} = params;
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;

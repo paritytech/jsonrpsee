@@ -24,9 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::future::Future;
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, client::Subscription, SubscriptionResult};
+use jsonrpsee::core::{client::Subscription, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
 use jsonrpsee::types::ErrorObjectOwned;
@@ -58,26 +59,26 @@ where
 
 pub struct RpcServerImpl;
 
-#[async_trait]
 impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		storage_key: ExampleStorageKey,
 		_hash: Option<ExampleHash>,
-	) -> Result<Vec<ExampleStorageKey>, ErrorObjectOwned> {
-		Ok(vec![storage_key])
+	) -> impl Future<Output = Result<Vec<ExampleStorageKey>, ErrorObjectOwned>> {
+		async { Ok(vec![storage_key]) }
 	}
 
-	async fn subscribe_storage(
+	fn subscribe_storage(
 		&self,
 		pending: PendingSubscriptionSink,
 		_keys: Option<Vec<ExampleStorageKey>>,
-	) -> SubscriptionResult {
-		let sink = pending.accept().await?;
-		let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
-		sink.send(msg).await?;
-
-		Ok(())
+	) -> impl Future<Output = SubscriptionResult> {
+		async {
+			let sink = pending.accept().await?;
+			let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
+			sink.send(msg).await?;
+			Ok(())
+		}
 	}
 
 	fn s(&self, pending: PendingSubscriptionSink, _keys: Option<Vec<ExampleStorageKey>>) {

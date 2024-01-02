@@ -604,7 +604,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///
 	/// use jsonrpsee_server::middleware::rpc::{RpcServiceT, RpcService, RpcServiceBuilder};
 	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
-	/// use jsonrpsee_core::async_trait;
 	/// use jsonrpsee_types::Request;
 	/// use futures_util::future::BoxFuture;
 	///

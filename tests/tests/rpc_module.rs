@@ -139,7 +139,7 @@ async fn calling_method_without_server() {
 
 #[tokio::test]
 async fn calling_method_without_server_using_proc_macro() {
-	use jsonrpsee::{core::async_trait, proc_macros::rpc};
+	use jsonrpsee::proc_macros::rpc;
 	// Setup
 	#[derive(Debug, Deserialize, Serialize)]
 	#[allow(unreachable_pub)]
@@ -174,7 +174,6 @@ async fn calling_method_without_server_using_proc_macro() {
 
 	struct CoolServerImpl;
 
-	#[async_trait]
 	impl CoolServer for CoolServerImpl {
 		fn rebel_without_cause(&self) -> RpcResult<bool> {
 			Ok(false)

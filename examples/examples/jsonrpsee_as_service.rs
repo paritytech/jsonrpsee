@@ -36,10 +36,10 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use futures::Future;
 use hyper::header::AUTHORIZATION;
 use hyper::server::conn::AddrStream;
 use hyper::HeaderMap;
-use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
@@ -94,10 +94,9 @@ pub trait Rpc {
 	async fn trusted_call(&self) -> Result<String, ErrorObjectOwned>;
 }
 
-#[async_trait]
 impl RpcServer for () {
-	async fn trusted_call(&self) -> Result<String, ErrorObjectOwned> {
-		Ok("mysecret".to_string())
+	fn trusted_call(&self) -> impl Future<Output = Result<String, ErrorObjectOwned>> + Send {
+		async { Ok("mysecret".to_string()) }
 	}
 }
 

@@ -46,7 +46,7 @@ mod rpc_impl {
 	use jsonrpsee::core::server::{
 		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubscriptionCloseResponse, SubscriptionMessage,
 	};
-	use jsonrpsee::core::{async_trait, SubscriptionResult};
+	use jsonrpsee::core::SubscriptionResult;
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 
@@ -152,7 +152,6 @@ mod rpc_impl {
 
 	pub struct RpcServerImpl;
 
-	#[async_trait]
 	impl RpcServer for RpcServerImpl {
 		async fn async_method(&self, _param_a: u8, _param_b: String) -> Result<u16, ErrorObjectOwned> {
 			Ok(42)

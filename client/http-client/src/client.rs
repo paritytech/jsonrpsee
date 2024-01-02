@@ -27,12 +27,12 @@
 use std::borrow::Cow as StdCow;
 use std::error::Error as StdError;
 use std::fmt;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient, HttpTransportClientBuilder};
 use crate::types::{NotificationSer, RequestSer, Response};
-use async_trait::async_trait;
 use hyper::body::HttpBody;
 use hyper::http::HeaderMap;
 use hyper::Body;
@@ -270,7 +270,6 @@ impl<S> HttpClient<S> {
 	}
 }
 
-#[async_trait]
 impl<B, S> ClientT for HttpClient<S>
 where
 	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
@@ -280,130 +279,139 @@ where
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
-	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>>
 	where
 		Params: ToRpcParams + Send,
 	{
-		let params = params.to_rpc_params()?;
-		let notif =
-			serde_json::to_string(&NotificationSer::borrowed(&method, params.as_deref())).map_err(Error::ParseError)?;
+		async {
+			let params = params.to_rpc_params()?;
+			let notif = serde_json::to_string(&NotificationSer::borrowed(&method, params.as_deref()))
+				.map_err(Error::ParseError)?;
 
-		let fut = self.transport.send(notif);
+			let fut = self.transport.send(notif);
 
-		match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(ok)) => Ok(ok),
-			Err(_) => Err(Error::RequestTimeout),
-			Ok(Err(e)) => Err(Error::Transport(e.into())),
+			match tokio::time::timeout(self.request_timeout, fut).await {
+				Ok(Ok(ok)) => Ok(ok),
+				Err(_) => Err(Error::RequestTimeout),
+				Ok(Err(e)) => Err(Error::Transport(e.into())),
+			}
 		}
 	}
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>>
 	where
 		R: DeserializeOwned,
 		Params: ToRpcParams + Send,
 	{
-		let guard = self.id_manager.next_request_id()?;
-		let id = guard.inner();
-		let params = params.to_rpc_params()?;
+		async {
+			let guard = self.id_manager.next_request_id()?;
+			let id = guard.inner();
+			let params = params.to_rpc_params()?;
 
-		let request = RequestSer::borrowed(&id, &method, params.as_deref());
-		let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
+			let request = RequestSer::borrowed(&id, &method, params.as_deref());
+			let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
 
-		let fut = self.transport.send_and_read_body(raw);
-		let body = match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(body)) => body,
-			Err(_e) => {
-				return Err(Error::RequestTimeout);
+			let fut = self.transport.send_and_read_body(raw);
+			let body = match tokio::time::timeout(self.request_timeout, fut).await {
+				Ok(Ok(body)) => body,
+				Err(_e) => {
+					return Err(Error::RequestTimeout);
+				}
+				Ok(Err(e)) => {
+					return Err(Error::Transport(e.into()));
+				}
+			};
+
+			// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
+			// a better error message if `R` couldn't be decoded.
+			let response = ResponseSuccess::try_from(serde_json::from_slice::<Response<&JsonRawValue>>(&body)?)?;
+
+			let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
+
+			if response.id == id {
+				Ok(result)
+			} else {
+				Err(InvalidRequestId::NotPendingRequest(response.id.to_string()).into())
 			}
-			Ok(Err(e)) => {
-				return Err(Error::Transport(e.into()));
-			}
-		};
-
-		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
-		// a better error message if `R` couldn't be decoded.
-		let response = ResponseSuccess::try_from(serde_json::from_slice::<Response<&JsonRawValue>>(&body)?)?;
-
-		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
-
-		if response.id == id {
-			Ok(result)
-		} else {
-			Err(InvalidRequestId::NotPendingRequest(response.id.to_string()).into())
 		}
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>>
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
-		let batch = batch.build()?;
-		let guard = self.id_manager.next_request_id()?;
-		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
+		async {
+			let batch = batch.build()?;
+			let guard = self.id_manager.next_request_id()?;
+			let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
 
-		let mut batch_request = Vec::with_capacity(batch.len());
-		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.as_id_kind().into_id(id);
-			batch_request.push(RequestSer {
-				jsonrpc: TwoPointZero,
-				id,
-				method: method.into(),
-				params: params.map(StdCow::Owned),
-			});
-		}
+			let mut batch_request = Vec::with_capacity(batch.len());
+			for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+				let id = self.id_manager.as_id_kind().into_id(id);
+				batch_request.push(RequestSer {
+					jsonrpc: TwoPointZero,
+					id,
+					method: method.into(),
+					params: params.map(StdCow::Owned),
+				});
+			}
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+			let fut =
+				self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
 
-		let body = match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(body)) => body,
-			Err(_e) => return Err(Error::RequestTimeout),
-			Ok(Err(e)) => return Err(Error::Transport(e.into())),
-		};
-
-		let json_rps: Vec<Response<&JsonRawValue>> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-
-		let mut responses = Vec::with_capacity(json_rps.len());
-		let mut successful_calls = 0;
-		let mut failed_calls = 0;
-
-		for _ in 0..json_rps.len() {
-			responses.push(Err(ErrorObject::borrowed(0, "", None)));
-		}
-
-		for rp in json_rps {
-			let id = rp.id.try_parse_inner_as_number()?;
-
-			let res = match ResponseSuccess::try_from(rp) {
-				Ok(r) => {
-					let result = serde_json::from_str(r.result.get())?;
-					successful_calls += 1;
-					Ok(result)
-				}
-				Err(err) => {
-					failed_calls += 1;
-					Err(err)
-				}
+			let body = match tokio::time::timeout(self.request_timeout, fut).await {
+				Ok(Ok(body)) => body,
+				Err(_e) => return Err(Error::RequestTimeout),
+				Ok(Err(e)) => return Err(Error::Transport(e.into())),
 			};
 
-			let maybe_elem = id
-				.checked_sub(id_range.start)
-				.and_then(|p| p.try_into().ok())
-				.and_then(|p: usize| responses.get_mut(p));
+			let json_rps: Vec<Response<&JsonRawValue>> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
-			if let Some(elem) = maybe_elem {
-				*elem = res;
-			} else {
-				return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
+			let mut responses = Vec::with_capacity(json_rps.len());
+			let mut successful_calls = 0;
+			let mut failed_calls = 0;
+
+			for _ in 0..json_rps.len() {
+				responses.push(Err(ErrorObject::borrowed(0, "", None)));
 			}
-		}
 
-		Ok(BatchResponse::new(successful_calls, responses, failed_calls))
+			for rp in json_rps {
+				let id = rp.id.try_parse_inner_as_number()?;
+
+				let res = match ResponseSuccess::try_from(rp) {
+					Ok(r) => {
+						let result = serde_json::from_str(r.result.get())?;
+						successful_calls += 1;
+						Ok(result)
+					}
+					Err(err) => {
+						failed_calls += 1;
+						Err(err)
+					}
+				};
+
+				let maybe_elem = id
+					.checked_sub(id_range.start)
+					.and_then(|p| p.try_into().ok())
+					.and_then(|p: usize| responses.get_mut(p));
+
+				if let Some(elem) = maybe_elem {
+					*elem = res;
+				} else {
+					return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
+				}
+			}
+
+			Ok(BatchResponse::new(successful_calls, responses, failed_calls))
+		}
 	}
 }
 
-#[async_trait]
 impl<B, S> SubscriptionClientT for HttpClient<S>
 where
 	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
@@ -415,25 +423,25 @@ where
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscription", fields(method = _subscribe_method), skip(self, _params, _subscribe_method, _unsubscribe_method), level = "trace")]
-	async fn subscribe<'a, N, Params>(
+	fn subscribe<'a, N, Params>(
 		&self,
 		_subscribe_method: &'a str,
 		_params: Params,
 		_unsubscribe_method: &'a str,
-	) -> Result<Subscription<N>, Error>
+	) -> impl Future<Output = Result<Subscription<N>, Error>>
 	where
 		Params: ToRpcParams + Send,
 		N: DeserializeOwned,
 	{
-		Err(Error::HttpNotImplemented)
+		async { Err(Error::HttpNotImplemented) }
 	}
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscribe_method", fields(method = _method), skip(self, _method), level = "trace")]
-	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
+	fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> impl Future<Output = Result<Subscription<N>, Error>>
 	where
 		N: DeserializeOwned,
 	{
-		Err(Error::HttpNotImplemented)
+		async { Err(Error::HttpNotImplemented) }
 	}
 }

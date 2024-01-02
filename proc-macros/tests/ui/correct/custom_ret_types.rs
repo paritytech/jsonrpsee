@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, ClientError, Serialize};
+use jsonrpsee::core::{ClientError, Serialize};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{IntoResponse, ServerBuilder};
 use jsonrpsee::types::ResponsePayload;
@@ -58,7 +58,6 @@ pub trait Rpc {
 
 pub struct RpcServerImpl;
 
-#[async_trait]
 impl RpcServer for RpcServerImpl {
 	async fn async_method1(&self) -> CustomError {
 		CustomError::One

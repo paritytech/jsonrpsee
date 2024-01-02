@@ -59,7 +59,6 @@ cfg_client! {
 
 /// Shared tracing helpers to trace RPC calls.
 pub mod tracing;
-pub use async_trait::async_trait;
 pub use error::{GenericTransportError, RegisterMethodError, StringError};
 
 /// JSON-RPC result.
@@ -72,7 +71,6 @@ pub type EmptyServerParams = Vec<()>;
 /// dependencies to be explicitly added on the client side.
 #[doc(hidden)]
 pub mod __reexports {
-	pub use async_trait::async_trait;
 	pub use serde;
 	pub use serde_json;
 }

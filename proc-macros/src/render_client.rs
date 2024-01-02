@@ -51,12 +51,9 @@ impl RpcDescription {
 			self.methods.iter().map(|method| self.render_method(method)).collect::<Result<Vec<_>, _>>()?;
 		let sub_impls = self.subscriptions.iter().map(|sub| self.render_sub(sub)).collect::<Result<Vec<_>, _>>()?;
 
-		let async_trait = self.jrps_client_item(quote! { core::__reexports::async_trait });
-
 		// Doc-comment to be associated with the client.
 		let doc_comment = format!("Client implementation for the `{}` RPC API.", &self.trait_def.ident);
 		let trait_impl = quote! {
-			#[#async_trait]
 			#[doc = #doc_comment]
 			pub trait #trait_name #impl_generics: #super_trait where #(#where_clause,)* {
 				#(#method_impls)*
@@ -71,48 +68,52 @@ impl RpcDescription {
 
 	/// Verify and rewrite the return type (for methods).
 	fn return_result_type(&self, mut ty: syn::Type) -> TokenStream2 {
-		// We expect a valid type path.
-		let syn::Type::Path(ref mut type_path) = ty else {
-			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here. (1)"));
-		};
+		match ty {
+			syn::Type::Path(ref mut type_path) => {
+				// The path (eg std::result::Result) should have a final segment like 'Result'.
+				let Some(type_name) = type_path.path.segments.last_mut() else {
+					return quote_spanned!(ty.span() => compile_error!("Expecting this path to end in something like 'Result<Foo, Err>'"));
+				};
 
-		// The path (eg std::result::Result) should have a final segment like 'Result'.
-		let Some(type_name) = type_path.path.segments.last_mut() else {
-			return quote_spanned!(ty.span() => compile_error!("Expecting this path to end in something like 'Result<Foo, Err>'"));
-		};
+				// Get the generic args eg the <T, E> in Result<T, E>.
+				let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+					&mut type_name.arguments
+				else {
+					return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here, but got no generic args (eg no '<Foo,Err>')."));
+				};
 
-		// Get the generic args eg the <T, E> in Result<T, E>.
-		let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &mut type_name.arguments
-		else {
-			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here, but got no generic args (eg no '<Foo,Err>')."));
-		};
+				if type_name.ident == "Result" {
+					// Result<T, E> should have 2 generic args.
+					if args.len() != 2 {
+						return quote_spanned!(args.span() => compile_error!("Result must be have two arguments"));
+					}
 
-		if type_name.ident == "Result" {
-			// Result<T, E> should have 2 generic args.
-			if args.len() != 2 {
-				return quote_spanned!(args.span() => compile_error!("Result must be have two arguments"));
+					// Force the last argument to be `jsonrpsee::core::ClientError`:
+					let error_arg = args.last_mut().unwrap();
+					*error_arg = syn::GenericArgument::Type(syn::Type::Verbatim(
+						self.jrps_client_item(quote! { core::client::Error }),
+					));
+
+					quote!(#ty)
+				} else if type_name.ident == "RpcResult" {
+					// RpcResult<T> (an alias we export) should have 1 generic arg.
+					if args.len() != 1 {
+						return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"));
+					}
+
+					// The type alias `RpcResult<T>` is modified to `Result<T, Error>`.
+					let ret_ty = args.last_mut().unwrap();
+					let err_ty = self.jrps_client_item(quote! { core::client::Error });
+
+					quote! { core::result::Result<#ret_ty, #err_ty> }
+				} else {
+					// Any other type name isn't allowed.
+					quote_spanned!(type_name.span() => compile_error!("The return type must be Result or RpcResult"))
+				}
 			}
-
-			// Force the last argument to be `jsonrpsee::core::ClientError`:
-			let error_arg = args.last_mut().unwrap();
-			*error_arg =
-				syn::GenericArgument::Type(syn::Type::Verbatim(self.jrps_client_item(quote! { core::client::Error })));
-
-			quote!(#ty)
-		} else if type_name.ident == "RpcResult" {
-			// RpcResult<T> (an alias we export) should have 1 generic arg.
-			if args.len() != 1 {
-				return quote_spanned!(args.span() => compile_error!("RpcResult must have one argument"));
+			_ => {
+				return quote_spanned!(ty.span() => compile_error!("Expecting this path to end in something like 'Result<Foo, Err>'"));
 			}
-
-			// The type alias `RpcResult<T>` is modified to `Result<T, Error>`.
-			let ret_ty = args.last_mut().unwrap();
-			let err_ty = self.jrps_client_item(quote! { core::client::Error });
-
-			quote! { core::result::Result<#ret_ty, #err_ty> }
-		} else {
-			// Any other type name isn't allowed.
-			quote_spanned!(type_name.span() => compile_error!("The return type must be Result or RpcResult"))
 		}
 	}
 
@@ -132,12 +133,12 @@ impl RpcDescription {
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
 			let returns = self.return_result_type(returns.clone());
-			let returns = quote! { #returns };
+			let returns = quote! { impl std::future::Future<Output = #returns> + Send };
 
 			(called_method, returns)
 		} else {
 			let called_method = quote::format_ident!("notification");
-			let returns = quote! { Result<(), #jrps_error> };
+			let returns = quote! { impl std::future::Future<Output = Result<(), #jrps_error>> + Send };
 
 			(called_method, returns)
 		};
@@ -152,9 +153,9 @@ impl RpcDescription {
 		let method = quote! {
 			#docs
 			#deprecated
-			async fn #rust_method_name(#rust_method_params) -> #returns {
+			fn #rust_method_name(#rust_method_params) -> #returns {
 				let params = { #parameter_builder };
-				self.#called_method(#rpc_method_name, params).await
+				self.#called_method(#rpc_method_name, params)
 			}
 		};
 		Ok(method)
@@ -176,7 +177,7 @@ impl RpcDescription {
 		// into the `Subscription` object.
 		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
 		let item = &sub.item;
-		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
+		let returns = quote! { impl std::future::Future<Output = Result<#sub_type<#item>, #jrps_error>> + Send };
 
 		// Encoded parameters for the request.
 		let parameter_builder = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
@@ -185,9 +186,9 @@ impl RpcDescription {
 
 		let method = quote! {
 			#docs
-			async fn #rust_method_name(#rust_method_params) -> #returns {
+			fn #rust_method_name(#rust_method_params) -> #returns {
 				let params = #parameter_builder;
-				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name).await
+				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name)
 			}
 		};
 		Ok(method)
