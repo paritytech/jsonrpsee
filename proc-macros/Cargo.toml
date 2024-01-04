@@ -20,7 +20,7 @@ proc-macro = true
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "1.0", default-features = false, features = ["extra-traits", "full", "visit", "parsing", "printing", "clone-impls", "proc-macro"] }
-proc-macro-crate = "2"
+proc-macro-crate = "3"
 heck = "0.4.0"
 
 [dev-dependencies]
