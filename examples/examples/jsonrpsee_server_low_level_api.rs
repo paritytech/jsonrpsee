@@ -91,7 +91,7 @@ where
 				MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
 			} else {
 				let rp = service.call(req).await;
-				*lock = *lock + 1;
+				*lock += 1;
 				rp
 			}
 		}
@@ -144,7 +144,7 @@ async fn main() -> anyhow::Result<()> {
 		let handle = run_server();
 
 		let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
-		while let Ok(_) = client.say_hello().await {
+		while client.say_hello().await.is_ok() {
 			i += 1;
 		}
 		tracing::info!("HTTP client made {i} successful calls before getting blacklisted");

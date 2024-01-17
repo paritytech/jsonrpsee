@@ -56,7 +56,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 	use jsonrpc_ws_server::jsonrpc_core::*;
 	use jsonrpc_ws_server::*;
 
-	const ID: AtomicU64 = AtomicU64::new(0);
+	static ID: AtomicU64 = AtomicU64::new(0);
 
 	let handle2 = handle.clone();
 

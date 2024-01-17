@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
-#![allow(clippy::blacklisted_name)]
+#![allow(clippy::disallowed_names)]
 
 mod helpers;
 
@@ -480,7 +480,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 		c1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await;
 
 	// no new request should be accepted.
-	assert!(matches!(sub2, Err(_)));
+	assert!(sub2.is_err());
 
 	// consume final message
 	for _ in 0..2 {
@@ -758,7 +758,7 @@ async fn ws_batch_works() {
 		})
 		.collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"err", None)]);
+	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
 }
 
 #[tokio::test]
@@ -798,7 +798,7 @@ async fn http_batch_works() {
 		})
 		.collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"err", None)]);
+	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
 }
 
 #[tokio::test]
@@ -942,7 +942,6 @@ async fn http_correct_content_type_required() {
 	init_logger();
 
 	let server_addr = server().await;
-
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
 
@@ -1336,11 +1335,11 @@ async fn run_shutdown_test(transport: &str) {
 
 	match transport {
 		"ws" => {
-			let ws = Arc::new(WsClientBuilder::default().build(&format!("ws://{addr}")).await.unwrap());
+			let ws = Arc::new(WsClientBuilder::default().build(format!("ws://{addr}")).await.unwrap());
 			run_shutdown_test_inner(ws, handle, call_answered, call_ack).await
 		}
 		"http" => {
-			let http = Arc::new(HttpClientBuilder::default().build(&format!("http://{addr}")).unwrap());
+			let http = Arc::new(HttpClientBuilder::default().build(format!("http://{addr}")).unwrap());
 			run_shutdown_test_inner(http, handle, call_answered, call_ack).await
 		}
 		_ => unreachable!("Only `http` and `ws` supported"),
