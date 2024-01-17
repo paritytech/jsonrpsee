@@ -263,7 +263,7 @@ async fn subscribing_without_server() {
 		assert_eq!(&id, my_sub.subscription_id());
 	}
 
-	assert!(matches!(my_sub.next::<char>().await, None));
+	assert!(my_sub.next::<char>().await.is_none());
 }
 
 #[tokio::test]
@@ -298,7 +298,7 @@ async fn close_test_subscribing_without_server() {
 
 	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
-	assert!(matches!(my_sub.next::<String>().await, None));
+	assert!(my_sub.next::<String>().await.is_none());
 
 	// The second subscription still works
 	let (val, _) = my_sub2.next::<String>().await.unwrap().unwrap();
@@ -308,7 +308,7 @@ async fn close_test_subscribing_without_server() {
 		std::mem::ManuallyDrop::drop(&mut my_sub2);
 	}
 
-	assert!(matches!(my_sub.next::<String>().await, None));
+	assert!(my_sub.next::<String>().await.is_none());
 }
 
 #[tokio::test]
@@ -404,7 +404,7 @@ async fn rejected_subscription_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, "rejected", None);
 			pending.reject(err.into_owned()).await;
 			Ok(())
 		})

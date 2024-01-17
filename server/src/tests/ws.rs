@@ -211,7 +211,7 @@ async fn batch_method_call_where_some_calls_fail() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-	let batch = vec![
+	let batch = [
 		r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#,
 		r#"{"jsonrpc":"2.0","method":"call_fail","id":2}"#,
 		r#"{"jsonrpc":"2.0","method":"add","params":[34, 45],"id":3}"#,

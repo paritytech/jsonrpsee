@@ -18,7 +18,7 @@ async fn stop_works() {
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
 
 	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(server_handle.stop(), Err(_)));
+	assert!(server_handle.stop().is_err());
 }
 
 #[tokio::test]

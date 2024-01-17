@@ -185,7 +185,7 @@ mod tests {
 	}
 
 	fn unwrap_filter(list: &[&str]) -> WhitelistedHosts {
-		let l: Vec<_> = list.into_iter().map(|&a| a.try_into().unwrap()).collect();
+		let l: Vec<_> = list.iter().map(|&a| a.try_into().unwrap()).collect();
 		WhitelistedHosts::from(l)
 	}
 
