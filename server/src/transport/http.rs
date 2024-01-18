@@ -18,6 +18,9 @@ pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 		content.eq_ignore_ascii_case("application/json")
 			|| content.eq_ignore_ascii_case("application/json; charset=utf-8")
 			|| content.eq_ignore_ascii_case("application/json;charset=utf-8")
+			|| content.eq_ignore_ascii_case("application/json-rpc")
+			|| content.eq_ignore_ascii_case("application/json-rpc;charset=utf-8")
+			|| content.eq_ignore_ascii_case("application/json-rpc; charset=utf-8")
 	})
 }
 
