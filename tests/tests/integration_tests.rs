@@ -43,7 +43,7 @@ use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::JsonValue;
+use jsonrpsee::core::{JsonValue, StringError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -1300,6 +1300,80 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 
 	// The server should be closed now.
 	assert!(client.request::<String, _>("sleep_20s", rpc_params!()).await.is_err());
+}
+
+#[tokio::test]
+async fn raw_method_api_works() {
+	use futures_util::FutureExt;
+	use jsonrpsee::server::{MethodResponse, Server, SubscriptionSink};
+	use jsonrpsee::types::ResponsePayload;
+	use std::sync::Arc;
+	use tokio::sync::Mutex as AsyncMutex;
+
+	init_logger();
+
+	let server_addr = {
+		let state: Arc<AsyncMutex<Option<(SubscriptionSink, tokio::sync::oneshot::Sender<()>)>>> = Arc::default();
+
+		let mut module = RpcModule::new(state);
+		module
+			.register_raw_method("get", |id, _params, ctx, max_response_size| {
+				let ctx = ctx.clone();
+				let fut = async move {
+					if let Some((sink, close)) = ctx.lock().await.take() {
+						for idx in 0..3 {
+							let msg = SubscriptionMessage::from_json(&idx).unwrap();
+							_ = sink.send(msg).await;
+						}
+						drop(sink);
+						drop(close);
+					}
+				}
+				.boxed();
+
+				MethodResponse::response_and_run_task(id, ResponsePayload::result(1), max_response_size, fut)
+			})
+			.unwrap();
+
+		module
+			.register_subscription::<Result<(), StringError>, _, _>("sub", "s", "unsub", |_, pending, ctx| async move {
+				let sink = pending.accept().await?;
+				let (tx, rx) = tokio::sync::oneshot::channel();
+				*ctx.lock().await = Some((sink, tx));
+				let _ = rx.await;
+				Err("Dropped".into())
+			})
+			.unwrap();
+
+		let server = Server::builder().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+		let addr = server.local_addr().unwrap();
+
+		let handle = server.start(module);
+
+		tokio::spawn(handle.stopped());
+
+		format!("ws://{addr}")
+	};
+
+	let client = jsonrpsee::ws_client::WsClientBuilder::default()
+		.build(&server_addr)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	// Make a subscription which is stored as state in the sequent rpc call "get".
+	let sub =
+		client.subscribe::<usize, _>("sub", rpc_params!(), "unsub").with_default_timeout().await.unwrap().unwrap();
+
+	// assert that method call was answered
+	// and a few notification were sent by
+	// the spawned the task.
+	//
+	// ideally, that ordering should also be tested here
+	// but not possible to test properly.
+	assert!(client.request::<usize, _>("get", rpc_params!()).await.is_ok());
+	assert_eq!(sub.count().await, 3);
 }
 
 /// Run shutdown test and it does:

@@ -27,6 +27,7 @@
 use std::io;
 use std::time::Duration;
 
+use futures_util::future::BoxFuture;
 use jsonrpsee_types::error::{
 	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
 };
@@ -100,7 +101,7 @@ impl MethodSink {
 	}
 
 	/// Create a new `MethodSink` with a limited response size.
-	pub fn new_with_limit(tx: mpsc::Sender<String>, max_response_size: u32 ) -> Self {
+	pub fn new_with_limit(tx: mpsc::Sender<String>, max_response_size: u32) -> Self {
 		MethodSink { tx, max_response_size }
 	}
 
@@ -169,20 +170,39 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum ResponseKind {
+	MethodCall,
+	Subscription,
+	Batch,
+}
+
 /// Represents a response to a method call.
 ///
 /// NOTE: A subscription is also a method call but it's
 /// possible determine whether a method response
 /// is "subscription" or "ordinary method call"
 /// by calling [`MethodResponse::is_subscription`]
-#[derive(Debug, Clone)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
-	pub result: String,
+	pub(crate) result: String,
 	/// Indicates whether the call was successful or not.
-	pub success_or_error: MethodResponseResult,
+	pub(crate) success_or_error: MethodResponseResult,
 	/// Indicates whether the call was a subscription response.
-	pub is_subscription: bool,
+	pub(crate) kind: ResponseKind,
+	/// Additional task that runs
+	/// after the method call has finished
+	pub(crate) task: Option<BoxFuture<'static, ()>>,
+}
+
+impl std::fmt::Debug for MethodResponse {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("MethodReponse")
+			.field("result", &self.result)
+			.field("success_or_error", &self.success_or_error)
+			.field("kind", &self.kind)
+			.finish()
+	}
 }
 
 impl MethodResponse {
@@ -196,9 +216,19 @@ impl MethodResponse {
 		self.success_or_error.is_success()
 	}
 
-	/// Returns whether the call is a subscription.
+	/// Returns whether the response is a subscription response.
 	pub fn is_subscription(&self) -> bool {
-		self.is_subscription
+		matches!(self.kind, ResponseKind::Subscription)
+	}
+
+	/// Returns whether the response is a method response.
+	pub fn is_method_call(&self) -> bool {
+		matches!(self.kind, ResponseKind::MethodCall)
+	}
+
+	/// Returns whether the response is a batch response.
+	pub fn is_batch(&self) -> bool {
+		matches!(self.kind, ResponseKind::Batch)
 	}
 }
 
@@ -234,6 +264,26 @@ impl MethodResponseResult {
 }
 
 impl MethodResponse {
+	/// Consume the method response and extract the serialized response.
+	pub fn into_result(self) -> String {
+		self.result
+	}
+
+	/// Consume the method reponse and
+	pub fn into_parts(self) -> (String, Option<BoxFuture<'static, ()>>) {
+		(self.result, self.task)
+	}
+
+	/// Get a reference to the serialized response.
+	pub fn as_result(&self) -> &str {
+		&self.result
+	}
+
+	/// Create a method response from [`BatchResponse`].
+	pub fn from_batch(batch: BatchResponse) -> Self {
+		Self { result: batch.0, success_or_error: MethodResponseResult::Success, kind: ResponseKind::Batch, task: None }
+	}
+
 	/// This is similar to [`MethodResponse::response`] but sets a flag to indicate
 	/// that response is a subscription.
 	pub fn subscription_response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
@@ -241,7 +291,22 @@ impl MethodResponse {
 		T: Serialize + Clone,
 	{
 		let mut rp = Self::response(id, result, max_response_size);
-		rp.is_subscription = true;
+		rp.kind = ResponseKind::Subscription;
+		rp
+	}
+
+	/// Run a task after the response has been dispatched.
+	pub fn response_and_run_task<T>(
+		id: Id,
+		result: ResponsePayload<T>,
+		max_response_size: usize,
+		task: BoxFuture<'static, ()>,
+	) -> MethodResponse
+	where
+		T: Serialize + Clone,
+	{
+		let mut rp = Self::response(id, result, max_response_size);
+		rp.task = Some(task);
 		rp
 	}
 
@@ -261,12 +326,14 @@ impl MethodResponse {
 			MethodResponseResult::Success
 		};
 
+		let kind = ResponseKind::MethodCall;
+
 		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
 			Ok(_) => {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
 
-				Self { result, success_or_error, is_subscription: false }
+				Self { result, success_or_error, kind, task: None }
 			}
 			Err(err) => {
 				tracing::error!(target: LOG_TARGET, "Error serializing response: {:?}", err);
@@ -283,16 +350,12 @@ impl MethodResponse {
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self { result, success_or_error: MethodResponseResult::Failed(err_code), is_subscription: false }
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code), kind, task: None }
 				} else {
 					let err_code = ErrorCode::InternalError;
 					let result = serde_json::to_string(&Response::new(err_code.into(), id))
 						.expect("JSON serialization infallible; qed");
-					Self {
-						result,
-						success_or_error: MethodResponseResult::Failed(err_code.code()),
-						is_subscription: false,
-					}
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code.code()), kind, task: None }
 				}
 			}
 		}
@@ -302,7 +365,7 @@ impl MethodResponse {
 	/// that error is a subscription.
 	pub fn subscription_error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
 		let mut rp = Self::error(id, err);
-		rp.is_subscription = true;
+		rp.kind = ResponseKind::Subscription;
 		rp
 	}
 
@@ -312,7 +375,12 @@ impl MethodResponse {
 		let err_code = err.code();
 		let err = ResponsePayload::error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
-		Self { result, success_or_error: MethodResponseResult::Failed(err_code), is_subscription: false }
+		Self {
+			result,
+			success_or_error: MethodResponseResult::Failed(err_code),
+			kind: ResponseKind::MethodCall,
+			task: None,
+		}
 	}
 }
 
@@ -358,16 +426,20 @@ impl BatchResponseBuilder {
 	}
 
 	/// Finish the batch response
-	pub fn finish(mut self) -> String {
+	pub fn finish(mut self) -> BatchResponse {
 		if self.result.len() == 1 {
-			batch_response_error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
+			BatchResponse(batch_response_error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest)))
 		} else {
 			self.result.pop();
 			self.result.push(']');
-			self.result
+			BatchResponse(self.result)
 		}
 	}
 }
+
+/// Serialized batch response.
+#[derive(Debug, Clone)]
+pub struct BatchResponse(String);
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
@@ -407,7 +479,7 @@ mod tests {
 		builder.append(&method).unwrap();
 		let batch = builder.finish();
 
-		assert_eq!(batch, r#"[{"jsonrpc":"2.0","result":"a","id":1}]"#)
+		assert_eq!(batch.0, r#"[{"jsonrpc":"2.0","result":"a","id":1}]"#)
 	}
 
 	#[test]
@@ -423,7 +495,7 @@ mod tests {
 		builder.append(&m1).unwrap();
 		let batch = builder.finish();
 
-		assert_eq!(batch, r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#)
+		assert_eq!(batch.0, r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#)
 	}
 
 	#[test]
@@ -431,7 +503,7 @@ mod tests {
 		let batch = BatchResponseBuilder::new_with_limit(1024).finish();
 
 		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
-		assert_eq!(batch, exp_err);
+		assert_eq!(batch.0, exp_err);
 	}
 
 	#[test]

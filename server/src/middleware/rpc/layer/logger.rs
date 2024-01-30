@@ -105,7 +105,7 @@ impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
 
 		let res = fut.poll(cx);
 		if let Poll::Ready(rp) = &res {
-			tx_log_from_str(&rp.result, max);
+			tx_log_from_str(rp.as_result(), max);
 		}
 		res
 	}

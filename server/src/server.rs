@@ -45,7 +45,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::server::helpers::{prepare_error, MethodResponseResult};
+use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
@@ -617,18 +617,18 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
 	/// where S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 	/// {
-	///    type Future = BoxFuture<'a, MethodResponse>;  
-	///  
+	///    type Future = BoxFuture<'a, MethodResponse>;
+	///
 	///    fn call(&self, req: Request<'a>) -> Self::Future {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         let count = self.count.clone();
-	///         let service = self.service.clone();  
+	///         let service = self.service.clone();
 	///
 	///         Box::pin(async move {
 	///             let rp = service.call(req).await;
 	///             // Modify the state.
 	///             count.fetch_add(1, Ordering::Relaxed);
-	///             rp         
+	///             rp
 	///         })
 	///    }
 	/// }
@@ -1309,8 +1309,8 @@ where
 			if got_notif && batch_response.is_empty() {
 				None
 			} else {
-				let result = batch_response.finish();
-				Some(MethodResponse { result, success_or_error: MethodResponseResult::Success, is_subscription: false })
+				let batch_rp = batch_response.finish();
+				Some(MethodResponse::from_batch(batch_rp))
 			}
 		} else {
 			Some(MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError)))

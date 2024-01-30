@@ -155,8 +155,15 @@ where
 				handle_rpc_call(&data[idx..], is_single, batch_requests_config, max_response_body_size, &*rpc_service)
 					.await
 			{
-				if !rp.is_subscription {
-					_ = sink.send(rp.result).await;
+				let is_sub = rp.is_subscription();
+				let (serialized_rp, run_task_after) = rp.into_parts();
+
+				if !is_sub {
+					_ = sink.send(serialized_rp).await;
+				}
+
+				if let Some(task) = run_task_after {
+					tokio::spawn(task);
 				}
 			}
 		});

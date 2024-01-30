@@ -384,13 +384,13 @@ async fn subscribe_unsubscribe_without_server() {
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
 		let (resp, _) = module.raw_json_request(&unsub_req, 1).await.unwrap();
 
-		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
+		assert_eq!(resp.into_result(), r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 
 		// Unsubscribe already performed; should be error.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
 		let (resp, _) = module.raw_json_request(&unsub_req, 2).await.unwrap();
 
-		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
+		assert_eq!(resp.into_result(), r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
 	}
 
 	let sub1 = subscribe_and_assert(&module);
@@ -430,7 +430,7 @@ async fn reject_works() {
 		.unwrap();
 
 	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
-	assert_eq!(rp.result, r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"rejected"},"id":0}"#);
+	assert_eq!(rp.into_result(), r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"rejected"},"id":0}"#);
 	assert!(stream.recv().await.is_none());
 }
 
@@ -521,7 +521,7 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 		.unwrap();
 
 	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
-	let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
+	let resp = serde_json::from_str::<Response<u64>>(rp.as_result()).unwrap();
 	let sub_resp = stream.recv().await.unwrap();
 
 	let resp = match resp.payload {
@@ -566,7 +566,7 @@ async fn subscription_close_response_works() {
 	{
 		let (rp, mut stream) =
 			module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","params":[1],"id":0}"#, 1).await.unwrap();
-		let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
+		let resp = serde_json::from_str::<Response<u64>>(rp.as_result()).unwrap();
 
 		let sub_id = match resp.payload {
 			ResponsePayload::Result(val) => val,
