@@ -1331,7 +1331,7 @@ async fn raw_method_api_works() {
 				}
 				.boxed();
 
-				MethodResponse::response_and_run_task(id, ResponsePayload::result(1), max_response_size, fut)
+				MethodResponse::response_then_run_task(id, ResponsePayload::result(1), max_response_size, fut)
 			})
 			.unwrap();
 

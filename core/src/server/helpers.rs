@@ -296,7 +296,7 @@ impl MethodResponse {
 	}
 
 	/// Run a task after the response has been dispatched.
-	pub fn response_and_run_task<T>(
+	pub fn response_then_run_task<T>(
 		id: Id,
 		result: ResponsePayload<T>,
 		max_response_size: usize,

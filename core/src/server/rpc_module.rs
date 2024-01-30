@@ -509,7 +509,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///       }
 	///    }.boxed();
 	///
-	///    MethodResponse::response_and_run_task(id, ResponsePayload::result("foo"), max_response_size, fut)
+	///    MethodResponse::response_then_run_task(id, ResponsePayload::result("foo"), max_response_size, fut)
 	/// }).unwrap();
 	///```
 	pub fn register_raw_method<F>(
