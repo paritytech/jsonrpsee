@@ -140,6 +140,12 @@ impl RpcDescription {
 							#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
 						})
 					})
+				} else if method.raw {
+					handle_register_result(quote! {
+						rpc.register_raw_method(#rpc_method_name, |id, params, context, max_response_size| {
+							context.#rust_method_name(id, params, max_response_size)
+						})
+					})
 				} else {
 					let register_kind =
 						if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };

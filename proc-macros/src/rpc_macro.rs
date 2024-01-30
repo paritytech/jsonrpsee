@@ -41,6 +41,7 @@ use syn::{punctuated::Punctuated, Attribute, Token};
 pub struct RpcMethod {
 	pub name: String,
 	pub blocking: bool,
+	pub raw: bool,
 	pub docs: TokenStream2,
 	pub deprecated: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
@@ -52,11 +53,12 @@ pub struct RpcMethod {
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, blocking, name, param_kind] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
+		let [aliases, blocking, name, param_kind, raw] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "raw"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
+		let raw = optional(raw, Argument::flag)?.is_some();
 		let name = name?.string()?;
 		let param_kind = parse_param_kind(param_kind)?;
 
@@ -69,6 +71,17 @@ impl RpcMethod {
 
 		if blocking && sig.asyncness.is_some() {
 			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
+		}
+
+		if raw && sig.asyncness.is_some() {
+			return Err(syn::Error::new(sig.span(), "Raw method must be synchronous"));
+		}
+
+		if raw && sig.inputs.len() != 4 {
+			return Err(syn::Error::new(
+				sig.span(),
+				"Raw methods must have arity 4, such as `fn foo(&self, id: Id, params: Params, max_response: usize)`",
+			));
 		}
 
 		let params: Vec<_> = sig
@@ -98,7 +111,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated })
+		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated, raw })
 	}
 }
 
