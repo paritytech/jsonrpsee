@@ -499,17 +499,26 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///
 	/// let mut module = RpcModule::new(());
 	/// module.register_raw_method("say_hello", |id, _params, _ctx, max_response_size| {
+	///    let (tx, rx) = tokio::sync::oneshot::channel();
+	///
 	///    // This future will be spawned after the method call has been
 	///    // sent out on the socket message buffer.
 	///    // This may useful if one needs to order operations in some manner.
-	///    let fut = async {
+	///    tokio::spawn(async move {
+	///         // Wait for response to sent to the internal WebSocket message buffer
+	///        // and if that fails just quit because it means that the connection
+	//         // was already closed.
+	///        if rx.await.is_err() {
+	///           return;
+	///        }
+	///
 	///        loop {
 	///           tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 	///           println!("after method response");
 	///       }
-	///    }.boxed();
+	///    });
 	///
-	///    MethodResponse::response_then_run_task(id, ResponsePayload::result("foo"), max_response_size, fut)
+	///    MethodResponse::response(id, ResponsePayload::result("foo"), max_response_size).notify_when_sent(tx)
 	/// }).unwrap();
 	///```
 	pub fn register_raw_method<F>(

@@ -27,7 +27,6 @@
 use std::io;
 use std::time::Duration;
 
-use futures_util::future::BoxFuture;
 use jsonrpsee_types::error::{
 	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
 };
@@ -190,9 +189,9 @@ pub struct MethodResponse {
 	pub(crate) success_or_error: MethodResponseResult,
 	/// Indicates whether the call was a subscription response.
 	pub(crate) kind: ResponseKind,
-	/// Additional task that runs
-	/// after the method call has finished
-	pub(crate) task: Option<BoxFuture<'static, ()>>,
+	/// Optional callback that may be utilized to notif
+	/// that the method response has been processed
+	pub(crate) on_close: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl std::fmt::Debug for MethodResponse {
@@ -269,9 +268,9 @@ impl MethodResponse {
 		self.result
 	}
 
-	/// Consume the method reponse and
-	pub fn into_parts(self) -> (String, Option<BoxFuture<'static, ()>>) {
-		(self.result, self.task)
+	/// Consume the method response and extract the serialized response.
+	pub fn to_parts(self) -> (String, Option<tokio::sync::oneshot::Sender<()>>) {
+		(self.result, self.on_close)
 	}
 
 	/// Get a reference to the serialized response.
@@ -281,7 +280,12 @@ impl MethodResponse {
 
 	/// Create a method response from [`BatchResponse`].
 	pub fn from_batch(batch: BatchResponse) -> Self {
-		Self { result: batch.0, success_or_error: MethodResponseResult::Success, kind: ResponseKind::Batch, task: None }
+		Self {
+			result: batch.0,
+			success_or_error: MethodResponseResult::Success,
+			kind: ResponseKind::Batch,
+			on_close: None,
+		}
 	}
 
 	/// This is similar to [`MethodResponse::response`] but sets a flag to indicate
@@ -295,19 +299,10 @@ impl MethodResponse {
 		rp
 	}
 
-	/// Run a task after the response has been dispatched.
-	pub fn response_then_run_task<T>(
-		id: Id,
-		result: ResponsePayload<T>,
-		max_response_size: usize,
-		task: BoxFuture<'static, ()>,
-	) -> MethodResponse
-	where
-		T: Serialize + Clone,
-	{
-		let mut rp = Self::response(id, result, max_response_size);
-		rp.task = Some(task);
-		rp
+	/// Optional callback that may be utilized to notif that the method response has been processed
+	pub fn notify_when_sent(mut self, tx: tokio::sync::oneshot::Sender<()>) -> Self {
+		self.on_close = Some(tx);
+		self
 	}
 
 	/// Create a new method response.
@@ -333,7 +328,7 @@ impl MethodResponse {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
 
-				Self { result, success_or_error, kind, task: None }
+				Self { result, success_or_error, kind, on_close: None }
 			}
 			Err(err) => {
 				tracing::error!(target: LOG_TARGET, "Error serializing response: {:?}", err);
@@ -350,12 +345,17 @@ impl MethodResponse {
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self { result, success_or_error: MethodResponseResult::Failed(err_code), kind, task: None }
+					Self { result, success_or_error: MethodResponseResult::Failed(err_code), kind, on_close: None }
 				} else {
 					let err_code = ErrorCode::InternalError;
 					let result = serde_json::to_string(&Response::new(err_code.into(), id))
 						.expect("JSON serialization infallible; qed");
-					Self { result, success_or_error: MethodResponseResult::Failed(err_code.code()), kind, task: None }
+					Self {
+						result,
+						success_or_error: MethodResponseResult::Failed(err_code.code()),
+						kind,
+						on_close: None,
+					}
 				}
 			}
 		}
@@ -379,7 +379,7 @@ impl MethodResponse {
 			result,
 			success_or_error: MethodResponseResult::Failed(err_code),
 			kind: ResponseKind::MethodCall,
-			task: None,
+			on_close: None,
 		}
 	}
 }

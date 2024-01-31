@@ -155,15 +155,18 @@ where
 				handle_rpc_call(&data[idx..], is_single, batch_requests_config, max_response_body_size, &*rpc_service)
 					.await
 			{
-				let is_sub = rp.is_subscription();
-				let (serialized_rp, run_task_after) = rp.into_parts();
+				if !rp.is_subscription() {
+					let (serialized_rp, mut on_close) = rp.to_parts();
 
-				if !is_sub {
-					_ = sink.send(serialized_rp).await;
-				}
+					if sink.send(serialized_rp).await.is_err() {
+						return;
+					}
 
-				if let Some(task) = run_task_after {
-					tokio::spawn(task);
+					// Notify that the message has been sent out to the internal
+					// WebSocket buffer.
+					if let Some(c) = on_close.take() {
+						let _ = c.send(());
+					}
 				}
 			}
 		});

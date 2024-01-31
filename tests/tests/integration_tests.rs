@@ -1304,7 +1304,6 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 
 #[tokio::test]
 async fn raw_method_api_works() {
-	use futures_util::FutureExt;
 	use jsonrpsee::server::{MethodResponse, Server, SubscriptionSink};
 	use jsonrpsee::types::ResponsePayload;
 	use std::sync::Arc;
@@ -1318,8 +1317,17 @@ async fn raw_method_api_works() {
 		let mut module = RpcModule::new(state);
 		module
 			.register_raw_method("get", |id, _params, ctx, max_response_size| {
+				let (tx, rx) = tokio::sync::oneshot::channel();
+
 				let ctx = ctx.clone();
-				let fut = async move {
+				tokio::spawn(async move {
+					// Wait for response to sent to the internal WebSocket message buffer
+					// and if that fails just quit because it means that the connection
+					// was already closed.
+					if rx.await.is_err() {
+						return;
+					}
+
 					if let Some((sink, close)) = ctx.lock().await.take() {
 						for idx in 0..3 {
 							let msg = SubscriptionMessage::from_json(&idx).unwrap();
@@ -1328,10 +1336,9 @@ async fn raw_method_api_works() {
 						drop(sink);
 						drop(close);
 					}
-				}
-				.boxed();
+				});
 
-				MethodResponse::response_then_run_task(id, ResponsePayload::result(1), max_response_size, fut)
+				MethodResponse::response(id, ResponsePayload::result(1), max_response_size).notify_when_sent(tx)
 			})
 			.unwrap();
 
