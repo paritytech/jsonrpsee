@@ -26,16 +26,14 @@
 
 //! Subscription related types and traits for server implementations.
 
-use super::MethodsError;
 use super::helpers::{MethodResponse, MethodSink};
-use crate::server::LOG_TARGET;
+use super::{MethodsError, ResponsePayloadV2};
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{traits::IdProvider, error::StringError};
+use crate::server::LOG_TARGET;
+use crate::{error::StringError, traits::IdProvider};
 use jsonrpsee_types::SubscriptionPayload;
-use jsonrpsee_types::{
-	response::SubscriptionError, ErrorObjectOwned, Id, ResponsePayload, SubscriptionId, SubscriptionResponse,
-};
+use jsonrpsee_types::{response::SubscriptionError, ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
@@ -273,7 +271,7 @@ impl PendingSubscriptionSink {
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
 		let response = MethodResponse::subscription_response(
 			self.id,
-			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
+			ResponsePayloadV2::result_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
 		);
 		let success = response.is_success();

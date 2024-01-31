@@ -50,7 +50,7 @@ use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, RpcModule};
+use jsonrpsee::{rpc_params, ResponsePayloadV2, RpcModule};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -1306,7 +1306,6 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 #[tokio::test]
 async fn raw_method_api_works() {
 	use jsonrpsee::server::{MethodResponse, Server, SubscriptionSink};
-	use jsonrpsee::types::ResponsePayload;
 	use std::sync::Arc;
 	use tokio::sync::Mutex as AsyncMutex;
 
@@ -1341,7 +1340,7 @@ async fn raw_method_api_works() {
 					}
 				});
 
-				MethodResponse::response(id, ResponsePayload::result(1), max_response_size).notify_on_success(tx)
+				MethodResponse::response(id, ResponsePayloadV2::result(1), max_response_size).notify_on_success(tx)
 			})
 			.unwrap();
 

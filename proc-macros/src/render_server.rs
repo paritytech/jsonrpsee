@@ -305,6 +305,7 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
+		let response_payload_v2 = self.jrps_server_item(quote! { ResponsePayloadV2 });
 		let response_payload = self.jrps_server_item(quote! { types::ResponsePayload });
 		let tokio = self.jrps_server_item(quote! { tokio });
 
@@ -329,7 +330,7 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								return #response_payload::Error(e);
+								return #response_payload_v2::new(#response_payload::Error(e));
 							}
 						};
 					}
@@ -352,7 +353,7 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::debug!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								return #response_payload::Error(e);
+								return #response_payload_v2::new(#response_payload::Error(e));
 							}
 						};
 					}
@@ -437,7 +438,7 @@ impl RpcDescription {
 						Ok(p) => p,
 						Err(e) => {
 							#tracing::debug!("Failed to parse JSON-RPC params as object: {}", e);
-							return #response_payload::Error(e);
+							return #response_payload_v2::new(#response_payload::Error(e));
 						}
 					};
 

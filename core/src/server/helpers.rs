@@ -24,13 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::borrow::Cow as StdCow;
 use std::io;
 use std::time::Duration;
 
 use jsonrpsee_types::error::{
 	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
 };
-use jsonrpsee_types::{Id, InvalidRequest, Response, ResponsePayload};
+use jsonrpsee_types::{ErrorObjectOwned, Id, InvalidRequest, Response, ResponsePayload};
 use serde::Serialize;
 use serde_json::value::to_raw_value;
 use tokio::sync::mpsc;
@@ -338,7 +339,7 @@ impl MethodResponse {
 
 	/// This is similar to [`MethodResponse::response`] but sets a flag to indicate
 	/// that response is a subscription.
-	pub fn subscription_response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
+	pub fn subscription_response<T>(id: Id, result: ResponsePayloadV2<T>, max_response_size: usize) -> Self
 	where
 		T: Serialize + Clone,
 	{
@@ -371,13 +372,13 @@ impl MethodResponse {
 	///
 	/// If the serialization of `result` exceeds `max_response_size` then
 	/// the response is changed to an JSON-RPC error object.
-	pub fn response<T>(id: Id, result: ResponsePayload<T>, max_response_size: usize) -> Self
+	pub fn response<T>(id: Id, rp: ResponsePayloadV2<T>, max_response_size: usize) -> Self
 	where
 		T: Serialize + Clone,
 	{
 		let mut writer = BoundedWriter::new(max_response_size);
 
-		let success_or_error = if let ResponsePayload::Error(ref e) = result {
+		let success_or_error = if let ResponsePayload::Error(ref e) = rp.inner {
 			MethodResponseResult::Failed(e.code())
 		} else {
 			MethodResponseResult::Success
@@ -385,12 +386,12 @@ impl MethodResponse {
 
 		let kind = ResponseKind::MethodCall;
 
-		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
+		match serde_json::to_writer(&mut writer, &Response::new(rp.inner, id.clone())) {
 			Ok(_) => {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
 
-				Self { result, success_or_error, kind, on_close: None }
+				Self { result, success_or_error, kind, on_close: rp.on_exit }
 			}
 			Err(err) => {
 				tracing::error!(target: LOG_TARGET, "Error serializing response: {:?}", err);
@@ -407,7 +408,12 @@ impl MethodResponse {
 					let result =
 						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self { result, success_or_error: MethodResponseResult::Failed(err_code), kind, on_close: None }
+					Self {
+						result,
+						success_or_error: MethodResponseResult::Failed(err_code),
+						kind,
+						on_close: rp.on_exit,
+					}
 				} else {
 					let err_code = ErrorCode::InternalError;
 					let result = serde_json::to_string(&Response::new(err_code.into(), id))
@@ -416,7 +422,7 @@ impl MethodResponse {
 						result,
 						success_or_error: MethodResponseResult::Failed(err_code.code()),
 						kind,
-						on_close: None,
+						on_close: rp.on_exit,
 					}
 				}
 			}
@@ -509,8 +515,80 @@ pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> Str
 	serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed")
 }
 
+/// Similar to [`ResponsePayload`] but possible to with an async-like
+/// API to detect when a method response has been sent.
+#[derive(Debug)]
+pub struct ResponsePayloadV2<'a, T>
+where
+	T: Clone,
+{
+	inner: ResponsePayload<'a, T>,
+	on_exit: Option<NotifyKind>,
+}
+
+impl<'a, T> ResponsePayloadV2<'a, T>
+where
+	T: Clone,
+{
+	/// Create a new [`ResponsePayloadNotify`].
+	pub fn new(inner: ResponsePayload<'a, T>) -> ResponsePayloadV2<'a, T> {
+		ResponsePayloadV2 { inner, on_exit: None }
+	}
+
+	/// Create successful an owned response payload.
+	pub fn result(t: T) -> Self {
+		ResponsePayloadV2::new(ResponsePayload::Result(StdCow::Owned(t)))
+	}
+
+	/// Create successful borrowed response payload.
+	pub fn result_borrowed(t: &'a T) -> Self {
+		ResponsePayloadV2::new(ResponsePayload::Result(StdCow::Borrowed(t)))
+	}
+
+	/// ..
+	pub fn notify_on_success(mut self, tx: MethodResponseNotifyTx) -> Self {
+		self.on_exit = Some(NotifyKind::Success(tx));
+		self
+	}
+
+	/// ..
+	pub fn notify_on_response(mut self, tx: MethodResponseNotifyTx) -> Self {
+		self.on_exit = Some(NotifyKind::All(tx));
+		self
+	}
+}
+
+impl<'a> ResponsePayloadV2<'a, ()> {
+	/// Create successful partial response i.e, the `result field`
+	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
+		let inner = ResponsePayload::Error(e.into());
+		Self::new(inner)
+	}
+
+	/// Create successful partial response i.e, the `result field`
+	pub fn error_borrowed(e: impl Into<ErrorObject<'a>>) -> Self {
+		let inner = ResponsePayload::Error(e.into());
+		Self::new(inner)
+	}
+
+	/// ..
+	pub fn notify_on_error(mut self, tx: MethodResponseNotifyTx) -> Self {
+		self.on_exit = Some(NotifyKind::Error(tx));
+		self
+	}
+}
+
+impl<'a> From<ErrorCode> for ResponsePayloadV2<'a, ()> {
+	fn from(code: ErrorCode) -> Self {
+		let inner = ResponsePayload::Error(code.into());
+		Self::new(inner)
+	}
+}
+
 #[cfg(test)]
 mod tests {
+	use crate::server::ResponsePayloadV2;
+
 	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, Response};
 	use jsonrpsee_types::ResponsePayload;
 
@@ -533,7 +611,7 @@ mod tests {
 
 	#[test]
 	fn batch_with_single_works() {
-		let method = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a"), usize::MAX);
+		let method = MethodResponse::response(Id::Number(1), ResponsePayloadV2::result_borrowed(&"a"), usize::MAX);
 		assert_eq!(method.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]`.
@@ -546,7 +624,7 @@ mod tests {
 
 	#[test]
 	fn batch_with_multiple_works() {
-		let m1 = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a"), usize::MAX);
+		let m1 = MethodResponse::response(Id::Number(1), ResponsePayloadV2::result_borrowed(&"a"), usize::MAX);
 		assert_eq!(m1.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]` and one byte for `,` to append a method call.
@@ -570,7 +648,7 @@ mod tests {
 
 	#[test]
 	fn batch_too_big() {
-		let method = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a".repeat(28)), 128);
+		let method = MethodResponse::response(Id::Number(1), ResponsePayloadV2::result_borrowed(&"a".repeat(28)), 128);
 		assert_eq!(method.result.len(), 64);
 
 		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();

@@ -38,13 +38,12 @@ use crate::server::subscription::{
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
-use crate::server::LOG_TARGET;
+use crate::server::{ResponsePayloadV2, LOG_TARGET};
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
-	ErrorObjectOwned, Id, Params, Request, Response, ResponsePayload, ResponseSuccess,
-	SubscriptionId as RpcSubscriptionId,
+	ErrorObjectOwned, Id, Params, Request, Response, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
 };
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
@@ -518,7 +517,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///       }
 	///    });
 	///
-	///    MethodResponse::response(id, ResponsePayload::result("foo"), max_response_size).notify_on_success(tx)
+	///    MethodResponse::response(id, ResponsePayloadV2::result("foo"), max_response_size).notify_on_success(tx)
 	/// }).unwrap();
 	///```
 	pub fn register_raw_method<F>(
@@ -959,7 +958,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
+							return MethodResponse::response(id, ResponsePayloadV2::result(false), max_response_size);
 						}
 					};
 
@@ -975,7 +974,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
+					MethodResponse::response(id, ResponsePayloadV2::result(result), max_response_size)
 				})),
 			);
 		}

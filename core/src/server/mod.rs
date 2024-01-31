@@ -53,7 +53,7 @@ pub trait IntoResponse {
 	type Output: serde::Serialize + Clone;
 
 	/// Something that can be converted into a JSON-RPC method call response.
-	fn into_response(self) -> ResponsePayload<'static, Self::Output>;
+	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output>;
 }
 
 impl<T, E: Into<ErrorObjectOwned>> IntoResponse for Result<T, E>
@@ -62,10 +62,10 @@ where
 {
 	type Output = T;
 
-	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
 		match self {
-			Ok(val) => ResponsePayload::result(val),
-			Err(e) => ResponsePayload::Error(e.into()),
+			Ok(val) => ResponsePayloadV2::result(val),
+			Err(e) => ResponsePayloadV2::new(ResponsePayload::Error(e.into())),
 		}
 	}
 }
@@ -76,8 +76,8 @@ where
 {
 	type Output = Option<T>;
 
-	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
+		ResponsePayloadV2::result(self)
 	}
 }
 
@@ -87,8 +87,8 @@ where
 {
 	type Output = Vec<T>;
 
-	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
+		ResponsePayloadV2::result(self)
 	}
 }
 
@@ -98,8 +98,8 @@ where
 {
 	type Output = [T; N];
 
-	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
+		ResponsePayloadV2::result(self)
 	}
 }
 
@@ -109,16 +109,27 @@ where
 {
 	type Output = T;
 
-	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
+		ResponsePayloadV2::new(self)
+	}
+}
+
+impl<T> IntoResponse for ResponsePayloadV2<'static, T>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = T;
+
+	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
 		self
 	}
 }
 
 impl IntoResponse for ErrorObjectOwned {
-	type Output = ErrorObjectOwned;
+	type Output = ();
 
-	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::Error(self)
+	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
+		ResponsePayloadV2::error(self)
 	}
 }
 
@@ -128,8 +139,8 @@ macro_rules! impl_into_response {
 			impl IntoResponse for $n {
 				type Output = $n;
 
-				fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-					ResponsePayload::result(self)
+				fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
+					ResponsePayloadV2::result(self)
 				}
 			}
 		)+
