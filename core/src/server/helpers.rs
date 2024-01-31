@@ -35,9 +35,55 @@ use serde::Serialize;
 use serde_json::value::to_raw_value;
 use tokio::sync::mpsc;
 
+use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
 use crate::server::LOG_TARGET;
 
-use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
+/// Wrapper over [`tokio::mpsc::oneshot::channel`]..
+pub fn response_channel() -> (MethodResponseNotifyTx, MethodResponseNotifyRx) {
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	(tx, MethodResponseNotifyRx(rx))
+}
+
+/// ..
+pub type MethodResponseNotifyTx = tokio::sync::oneshot::Sender<NotifyMsg>;
+
+/// ..
+#[derive(Debug)]
+pub struct MethodResponseNotifyRx(tokio::sync::oneshot::Receiver<NotifyMsg>);
+
+/// A message that that tells whether notification
+/// was succesful or not.
+#[derive(Debug, Copy, Clone)]
+pub enum NotifyMsg {
+	/// The response was succesfully processed.
+	Ok,
+	/// The response was the wrong kind
+	/// such an error response when
+	/// one expected a succesful response.
+	WrongKind,
+}
+
+/// ...
+#[derive(Debug, Copy, Clone)]
+pub enum MethodResponseError {
+	/// The connection was closed.
+	Closed,
+	/// The response was the wrong kind
+	/// such an error response when
+	/// one expected a succesful response.
+	WrongKind,
+}
+
+impl MethodResponseNotifyRx {
+	/// Whether the message was sent or not.
+	pub async fn is_sent(self) -> Result<(), MethodResponseError> {
+		match self.0.await {
+			Ok(NotifyMsg::Ok) => Ok(()),
+			Ok(NotifyMsg::WrongKind) => Err(MethodResponseError::WrongKind),
+			Err(_) => Err(MethodResponseError::Closed),
+		}
+	}
+}
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -176,12 +222,24 @@ pub(crate) enum ResponseKind {
 	Batch,
 }
 
+/// Notification kind.
+#[derive(Debug)]
+pub enum NotifyKind {
+	/// Just notify on success.
+	Success(MethodResponseNotifyTx),
+	/// Just notify on error.
+	Error(MethodResponseNotifyTx),
+	/// Notify on both success or error.
+	All(MethodResponseNotifyTx),
+}
+
 /// Represents a response to a method call.
 ///
 /// NOTE: A subscription is also a method call but it's
 /// possible determine whether a method response
 /// is "subscription" or "ordinary method call"
 /// by calling [`MethodResponse::is_subscription`]
+#[derive(Debug)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
 	pub(crate) result: String,
@@ -191,17 +249,7 @@ pub struct MethodResponse {
 	pub(crate) kind: ResponseKind,
 	/// Optional callback that may be utilized to notif
 	/// that the method response has been processed
-	pub(crate) on_close: Option<tokio::sync::oneshot::Sender<()>>,
-}
-
-impl std::fmt::Debug for MethodResponse {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("MethodReponse")
-			.field("result", &self.result)
-			.field("success_or_error", &self.success_or_error)
-			.field("kind", &self.kind)
-			.finish()
-	}
+	pub(crate) on_close: Option<NotifyKind>,
 }
 
 impl MethodResponse {
@@ -269,7 +317,7 @@ impl MethodResponse {
 	}
 
 	/// Consume the method response and extract the serialized response.
-	pub fn to_parts(self) -> (String, Option<tokio::sync::oneshot::Sender<()>>) {
+	pub fn to_parts(self) -> (String, Option<NotifyKind>) {
 		(self.result, self.on_close)
 	}
 
@@ -299,9 +347,23 @@ impl MethodResponse {
 		rp
 	}
 
-	/// Optional callback that may be utilized to notif that the method response has been processed
-	pub fn notify_when_sent(mut self, tx: tokio::sync::oneshot::Sender<()>) -> Self {
-		self.on_close = Some(tx);
+	/// Optional callback that may be utilized to notify that the method response was
+	/// a succesfully JSON-RPC object and processed.
+	pub fn notify_on_success(mut self, tx: MethodResponseNotifyTx) -> Self {
+		self.on_close = Some(NotifyKind::Success(tx));
+		self
+	}
+
+	/// Optional callback that may be utilized to notify that the method response was a
+	/// an JSON-RPC error object and processed.
+	pub fn notify_on_error(mut self, tx: MethodResponseNotifyTx) -> Self {
+		self.on_close = Some(NotifyKind::Error(tx));
+		self
+	}
+
+	/// Optional callback that may be utilized to notify that the method response was processed.
+	pub fn notify_on_response(mut self, tx: MethodResponseNotifyTx) -> Self {
+		self.on_close = Some(NotifyKind::All(tx));
 		self
 	}
 

@@ -10,7 +10,7 @@ use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::server::helpers::MethodSink;
+use jsonrpsee_core::server::helpers::{MethodSink, NotifyKind, NotifyMsg};
 use jsonrpsee_core::server::{BoundedSubscriptions, Methods};
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
@@ -156,16 +156,30 @@ where
 					.await
 			{
 				if !rp.is_subscription() {
+					let is_success = rp.is_success();
 					let (serialized_rp, mut on_close) = rp.to_parts();
 
+					// The connection is closed, just quit.
 					if sink.send(serialized_rp).await.is_err() {
 						return;
 					}
 
 					// Notify that the message has been sent out to the internal
 					// WebSocket buffer.
-					if let Some(c) = on_close.take() {
-						let _ = c.send(());
+					if let Some(kind) = on_close.take() {
+						match kind {
+							NotifyKind::All(c) => {
+								_ = c.send(NotifyMsg::Ok);
+							}
+							NotifyKind::Success(c) => {
+								let msg = if is_success { NotifyMsg::Ok } else { NotifyMsg::WrongKind };
+								let _ = c.send(msg);
+							}
+							NotifyKind::Error(c) => {
+								let msg = if !is_success { NotifyMsg::Ok } else { NotifyMsg::WrongKind };
+								let _ = c.send(msg);
+							}
+						}
 					}
 				}
 			}

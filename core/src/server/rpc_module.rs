@@ -493,13 +493,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// ## Examples
 	///
 	/// ```
-	/// use jsonrpsee_core::server::{RpcModule, MethodResponse};
+	/// use jsonrpsee_core::server::{RpcModule, MethodResponse, response_channel};
 	/// use jsonrpsee_types::ResponsePayload;
 	/// use futures_util::FutureExt;
 	///
 	/// let mut module = RpcModule::new(());
 	/// module.register_raw_method("say_hello", |id, _params, _ctx, max_response_size| {
-	///    let (tx, rx) = tokio::sync::oneshot::channel();
+	///    let (tx, rx) = response_channel();
 	///
 	///    // This future will be spawned after the method call has been
 	///    // sent out on the socket message buffer.
@@ -508,7 +508,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         // Wait for response to sent to the internal WebSocket message buffer
 	///        // and if that fails just quit because it means that the connection
 	//         // was already closed.
-	///        if rx.await.is_err() {
+	///        if rx.is_sent().await.is_err() {
 	///           return;
 	///        }
 	///
@@ -518,7 +518,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///       }
 	///    });
 	///
-	///    MethodResponse::response(id, ResponsePayload::result("foo"), max_response_size).notify_when_sent(tx)
+	///    MethodResponse::response(id, ResponsePayload::result("foo"), max_response_size).notify_on_success(tx)
 	/// }).unwrap();
 	///```
 	pub fn register_raw_method<F>(

@@ -44,6 +44,7 @@ use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, Subscription
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{JsonValue, StringError};
+use jsonrpsee::helpers::response_channel;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -1317,14 +1318,16 @@ async fn raw_method_api_works() {
 		let mut module = RpcModule::new(state);
 		module
 			.register_raw_method("get", |id, _params, ctx, max_response_size| {
-				let (tx, rx) = tokio::sync::oneshot::channel();
+				let (tx, rx) = response_channel();
 
 				let ctx = ctx.clone();
 				tokio::spawn(async move {
 					// Wait for response to sent to the internal WebSocket message buffer
 					// and if that fails just quit because it means that the connection
-					// was already closed.
-					if rx.await.is_err() {
+					// was closed or that method response was an error.
+					//
+					// You can identify that by matching on the error.
+					if rx.is_sent().await.is_err() {
 						return;
 					}
 
@@ -1338,7 +1341,7 @@ async fn raw_method_api_works() {
 					}
 				});
 
-				MethodResponse::response(id, ResponsePayload::result(1), max_response_size).notify_when_sent(tx)
+				MethodResponse::response(id, ResponsePayload::result(1), max_response_size).notify_on_success(tx)
 			})
 			.unwrap();
 
