@@ -316,8 +316,8 @@ impl MethodResponse {
 		self.result
 	}
 
-	/// Consume the method response and extract the serialized response.
-	pub fn to_parts(self) -> (String, Option<NotifyKind>) {
+	/// Consume the method response and extract the parts.
+	pub fn into_parts(self) -> (String, Option<NotifyKind>) {
 		(self.result, self.on_close)
 	}
 
