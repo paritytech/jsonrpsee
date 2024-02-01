@@ -318,7 +318,7 @@ impl Methods {
 	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
-	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.result).unwrap().try_into().unwrap();
+	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.as_result()).unwrap().try_into().unwrap();
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
@@ -493,8 +493,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// ## Examples
 	///
 	/// ```
-	/// use jsonrpsee_core::server::{RpcModule, MethodResponse, response_channel};
-	/// use jsonrpsee_types::ResponsePayload;
+	/// use jsonrpsee_core::server::{RpcModule, MethodResponse, response_channel, ResponsePayload};
 	/// use futures_util::FutureExt;
 	///
 	/// let mut module = RpcModule::new(());
@@ -505,10 +504,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///    // sent out on the socket message buffer.
 	///    // This may useful if one needs to order operations in some manner.
 	///    tokio::spawn(async move {
-	///         // Wait for response to sent to the internal WebSocket message buffer
-	///        // and if that fails just quit because it means that the connection
-	//         // was already closed.
-	///        if rx.is_sent().await.is_err() {
+	///        // Wait for response to be sent and if that fails just quit
+	///        // because it means that the connection was already closed
+	///        // or that method response was not succesful.
+	///        //
+	///        // Because `notify_on_success` is used below
+	///        // there are other APIs to only succeed on
+	///        // for example on errors as well.
+	///        if rx.await.is_err() {
 	///           return;
 	///        }
 	///
@@ -518,7 +521,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///       }
 	///    });
 	///
-	///    MethodResponse::response(id, ResponsePayloadV2::result("foo"), max_response_size).notify_on_success(tx)
+	///    MethodResponse::response(id, ResponsePayload::result("foo"), max_response_size).notify_on_success(tx)
 	/// }).unwrap();
 	///```
 	pub fn register_raw_method<F>(

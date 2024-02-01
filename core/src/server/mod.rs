@@ -113,7 +113,7 @@ where
 	type Output = T;
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::new(self)
+		self.into()
 	}
 }
 

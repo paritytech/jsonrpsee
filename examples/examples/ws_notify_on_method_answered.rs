@@ -32,7 +32,7 @@ use jsonrpsee::server::Server;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{response_channel, rpc_params, ResponsePayload};
 
-#[rpc(server, namespace = "state")]
+#[rpc(client, server, namespace = "state")]
 pub trait Rpc {
 	/// Async method call example.
 	#[method(name = "getKeys")]

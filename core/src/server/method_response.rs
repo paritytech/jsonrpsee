@@ -346,32 +346,33 @@ where
 	on_exit: Option<NotifyKind>,
 }
 
+impl<'a, T: Clone> From<InnerResponsePayload<'a, T>> for ResponsePayload<'a, T> {
+	fn from(inner: InnerResponsePayload<'a, T>) -> Self {
+		Self { inner, on_exit: None }
+	}
+}
+
 impl<'a, T> ResponsePayload<'a, T>
 where
 	T: Clone,
 {
-	/// Create a new [`ResponsePayloadNotify`].
-	pub fn new(inner: InnerResponsePayload<'a, T>) -> Self {
-		Self { inner, on_exit: None }
-	}
-
 	/// Create successful an owned response payload.
 	pub fn result(t: T) -> Self {
-		Self::new(InnerResponsePayload::Result(StdCow::Owned(t)))
+		InnerResponsePayload::Result(StdCow::Owned(t)).into()
 	}
 
 	/// Create successful borrowed response payload.
 	pub fn result_borrowed(t: &'a T) -> Self {
-		Self::new(InnerResponsePayload::Result(StdCow::Borrowed(t)))
+		InnerResponsePayload::Result(StdCow::Borrowed(t)).into()
 	}
 
-	/// ..
+	/// Get a notification when the successful method response has been sent out.
 	pub fn notify_on_success(mut self, tx: MethodResponseNotifyTx) -> Self {
 		self.on_exit = Some(NotifyKind::Success(tx));
 		self
 	}
 
-	/// ..
+	/// Get a notification when the method response has been sent out.
 	pub fn notify_on_response(mut self, tx: MethodResponseNotifyTx) -> Self {
 		self.on_exit = Some(NotifyKind::All(tx));
 		self
@@ -379,17 +380,15 @@ where
 
 	/// Create successful partial response i.e, the `result field`
 	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
-		let inner = InnerResponsePayload::Error(e.into());
-		Self::new(inner)
+		InnerResponsePayload::Error(e.into()).into()
 	}
 
 	/// Create successful partial response i.e, the `result field`
 	pub fn error_borrowed(e: impl Into<ErrorObject<'a>>) -> Self {
-		let inner = InnerResponsePayload::Error(e.into());
-		Self::new(inner)
+		InnerResponsePayload::Error(e.into()).into()
 	}
 
-	/// ..
+	/// Get a notification when an error has been sent out as method response.
 	pub fn notify_on_error(mut self, tx: MethodResponseNotifyTx) -> Self {
 		self.on_exit = Some(NotifyKind::Error(tx));
 		self
@@ -401,8 +400,8 @@ where
 	T: Clone,
 {
 	fn from(code: ErrorCode) -> Self {
-		let inner = InnerResponsePayload::Error(code.into());
-		Self::new(inner)
+		let err: ErrorObject = code.into();
+		Self::error(err)
 	}
 }
 

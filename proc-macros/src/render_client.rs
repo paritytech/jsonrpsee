@@ -72,19 +72,15 @@ impl RpcDescription {
 	/// Verify and rewrite the return type (for methods).
 	fn return_result_type(&self, mut ty: syn::Type) -> TokenStream2 {
 		// We expect a valid type path.
-		let syn::Type::Path(ref mut type_path) = ty else {
-			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here. (1)"));
-		};
+		let syn::Type::Path(ref mut type_path) = ty else { return self.untyped_client() };
 
 		// The path (eg std::result::Result) should have a final segment like 'Result'.
-		let Some(type_name) = type_path.path.segments.last_mut() else {
-			return quote_spanned!(ty.span() => compile_error!("Expecting this path to end in something like 'Result<Foo, Err>'"));
-		};
+		let Some(type_name) = type_path.path.segments.last_mut() else { return self.untyped_client() };
 
 		// Get the generic args eg the <T, E> in Result<T, E>.
 		let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &mut type_name.arguments
 		else {
-			return quote_spanned!(ty.span() => compile_error!("Expecting something like 'Result<Foo, Err>' here, but got no generic args (eg no '<Foo,Err>')."));
+			return self.untyped_client();
 		};
 
 		if type_name.ident == "Result" {
@@ -110,9 +106,19 @@ impl RpcDescription {
 			let err_ty = self.jrps_client_item(quote! { core::client::Error });
 
 			quote! { core::result::Result<#ret_ty, #err_ty> }
+		} else if type_name.ident == "ResponsePayload" {
+			// ResponsePayload<'a, T>
+			if args.len() != 2 {
+				return quote_spanned!(args.span() => compile_error!("ResponsePayload must have exactly two arguments"));
+			}
+
+			// The type alias `RpcResult<T>` is modified to `Result<T, Error>`.
+			let ret_ty = args.last_mut().unwrap();
+			let err_ty = self.jrps_client_item(quote! { core::client::Error });
+
+			quote! { core::result::Result<#ret_ty, #err_ty> }
 		} else {
-			// Any other type name isn't allowed.
-			quote_spanned!(type_name.span() => compile_error!("The return type must be Result or RpcResult"))
+			self.untyped_client()
 		}
 	}
 
@@ -242,6 +248,13 @@ impl RpcDescription {
 				})
 			}
 		}
+	}
+
+	// Unknown return type => generate an untyped response `Result<serde_json::Value, Error>`.
+	fn untyped_client(&self) -> TokenStream2 {
+		let err_ty = self.jrps_client_item(quote! { core::client::Error });
+		let ret_ty = self.jrps_client_item(quote! { core::JsonValue });
+		quote! { core::result::Result<#ret_ty, #err_ty> }
 	}
 }
 

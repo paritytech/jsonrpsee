@@ -80,7 +80,7 @@ impl RpcMethod {
 		if raw && sig.inputs.len() != 4 {
 			return Err(syn::Error::new(
 				sig.span(),
-				"Raw methods must have arity 4, such as `fn foo(&self, id: Id, params: Params, max_response: usize)`",
+				"Raw methods must have exactly 4 params, such as `fn foo(&self, id: Id, params: Params, max_response: usize)`",
 			));
 		}
 
