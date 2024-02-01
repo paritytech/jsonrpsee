@@ -556,9 +556,7 @@ where
 		self.on_exit = Some(NotifyKind::All(tx));
 		self
 	}
-}
 
-impl<'a> ResponsePayloadV2<'a, ()> {
 	/// Create successful partial response i.e, the `result field`
 	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
 		let inner = ResponsePayload::Error(e.into());
@@ -578,7 +576,10 @@ impl<'a> ResponsePayloadV2<'a, ()> {
 	}
 }
 
-impl<'a> From<ErrorCode> for ResponsePayloadV2<'a, ()> {
+impl<'a, T> From<ErrorCode> for ResponsePayloadV2<'a, T>
+where
+    T: Clone
+{
 	fn from(code: ErrorCode) -> Self {
 		let inner = ResponsePayload::Error(code.into());
 		Self::new(inner)
