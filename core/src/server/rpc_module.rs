@@ -32,13 +32,14 @@ use std::sync::Arc;
 
 use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
-use crate::server::helpers::{MethodResponse, MethodSink};
+use crate::server::helpers::MethodSink;
+use crate::server::method_response::MethodResponse;
 use crate::server::subscription::{
 	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
-use crate::server::{ResponsePayloadV2, LOG_TARGET};
+use crate::server::{ResponsePayload, LOG_TARGET};
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
@@ -958,7 +959,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, ResponsePayloadV2::result(false), max_response_size);
+							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
 						}
 					};
 
@@ -974,7 +975,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, ResponsePayloadV2::result(result), max_response_size)
+					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
 				})),
 			);
 		}

@@ -30,6 +30,8 @@
 mod error;
 /// Helpers.
 pub mod helpers;
+/// Method response related types.
+mod method_response;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 mod rpc_module;
 /// Subscription related types.
@@ -37,10 +39,11 @@ mod subscription;
 
 pub use error::*;
 pub use helpers::*;
+pub use method_response::*;
 pub use rpc_module::*;
 pub use subscription::*;
 
-use jsonrpsee_types::{ErrorObjectOwned, ResponsePayload};
+use jsonrpsee_types::ErrorObjectOwned;
 
 const LOG_TARGET: &str = "jsonrpsee-server";
 
@@ -53,7 +56,7 @@ pub trait IntoResponse {
 	type Output: serde::Serialize + Clone;
 
 	/// Something that can be converted into a JSON-RPC method call response.
-	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output>;
+	fn into_response(self) -> ResponsePayload<'static, Self::Output>;
 }
 
 impl<T, E: Into<ErrorObjectOwned>> IntoResponse for Result<T, E>
@@ -62,10 +65,10 @@ where
 {
 	type Output = T;
 
-	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
 		match self {
-			Ok(val) => ResponsePayloadV2::result(val),
-			Err(e) => ResponsePayloadV2::new(ResponsePayload::Error(e.into())),
+			Ok(val) => ResponsePayload::result(val),
+			Err(e) => ResponsePayload::error(e),
 		}
 	}
 }
@@ -76,8 +79,8 @@ where
 {
 	type Output = Option<T>;
 
-	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
-		ResponsePayloadV2::result(self)
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
 	}
 }
 
@@ -87,8 +90,8 @@ where
 {
 	type Output = Vec<T>;
 
-	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
-		ResponsePayloadV2::result(self)
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
 	}
 }
 
@@ -98,8 +101,19 @@ where
 {
 	type Output = [T; N];
 
-	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
-		ResponsePayloadV2::result(self)
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::result(self)
+	}
+}
+
+impl<T> IntoResponse for jsonrpsee_types::ResponsePayload<'static, T>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = T;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::new(self)
 	}
 }
 
@@ -109,18 +123,7 @@ where
 {
 	type Output = T;
 
-	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
-		ResponsePayloadV2::new(self)
-	}
-}
-
-impl<T> IntoResponse for ResponsePayloadV2<'static, T>
-where
-	T: serde::Serialize + Clone,
-{
-	type Output = T;
-
-	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
 		self
 	}
 }
@@ -128,8 +131,8 @@ where
 impl IntoResponse for ErrorObjectOwned {
 	type Output = ();
 
-	fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
-		ResponsePayloadV2::error(self)
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		ResponsePayload::error(self)
 	}
 }
 
@@ -139,8 +142,8 @@ macro_rules! impl_into_response {
 			impl IntoResponse for $n {
 				type Output = $n;
 
-				fn into_response(self) -> ResponsePayloadV2<'static, Self::Output> {
-					ResponsePayloadV2::result(self)
+				fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+					ResponsePayload::result(self)
 				}
 			}
 		)+

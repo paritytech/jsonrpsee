@@ -42,15 +42,14 @@ use helpers::{
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
-use jsonrpsee::core::server::SubscriptionMessage;
+use jsonrpsee::core::server::{response_channel, SubscriptionMessage};
 use jsonrpsee::core::{JsonValue, StringError};
-use jsonrpsee::helpers::response_channel;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, ResponsePayloadV2, RpcModule};
+use jsonrpsee::{rpc_params, ResponsePayload, RpcModule};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -1326,7 +1325,7 @@ async fn raw_method_api_works() {
 					// was closed or that method response was an error.
 					//
 					// You can identify that by matching on the error.
-					if rx.is_sent().await.is_err() {
+					if rx.await.is_err() {
 						return;
 					}
 
@@ -1340,7 +1339,7 @@ async fn raw_method_api_works() {
 					}
 				});
 
-				MethodResponse::response(id, ResponsePayloadV2::result(1), max_response_size).notify_on_success(tx)
+				MethodResponse::response(id, ResponsePayload::result(1), max_response_size).notify_on_success(tx)
 			})
 			.unwrap();
 

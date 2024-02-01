@@ -26,8 +26,8 @@
 
 //! Subscription related types and traits for server implementations.
 
-use super::helpers::{MethodResponse, MethodSink};
-use super::{MethodsError, ResponsePayloadV2};
+use super::helpers::MethodSink;
+use super::{MethodResponse, MethodsError, ResponsePayload};
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
 use crate::server::LOG_TARGET;
@@ -271,7 +271,7 @@ impl PendingSubscriptionSink {
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
 		let response = MethodResponse::subscription_response(
 			self.id,
-			ResponsePayloadV2::result_borrowed(&self.uniq_sub.sub_id),
+			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
 		);
 		let success = response.is_success();
