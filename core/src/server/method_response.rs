@@ -375,30 +375,30 @@ where
 		InnerResponsePayload::Error(e.into()).into()
 	}
 
-	/// Consumes the `MethodResponse` and produces new [`MethodResponse`] and a future
-	/// [`MethodResponse`] that will be resolved once the response has been processed.
+	/// Consumes the [`ResponsePayload`] and produces new [`ResponsePayload`] and a future
+	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
 	///
-	/// The [`MethodFuture`] will only return Ok on succesful JSON-RPC response.
+	/// The [`MethodResponseFuture`] will only return Ok on a successful JSON-RPC response.
 	pub fn notify_on_success(mut self) -> (Self, MethodResponseFuture) {
 		let (tx, rx) = response_channel();
 		self.on_exit = Some(NotifyKind::Success(tx));
 		(self, rx)
 	}
 
-	/// Consumes the `MethodResponse` and produces new [`MethodResponse`] and a future
-	/// [`MethodResponse`] that will be resolved once the response has been processed.
+	/// Consumes the [`ResponsePayload`] and produces new [`ResponsePayload`] and a future
+	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
 	///
-	/// The [`MethodFuture`] will return Ok once a response is processed.
+	/// The [`MethodResponseFuture`] will return Ok once a response is processed.
 	pub fn notify_on_response(mut self) -> (Self, MethodResponseFuture) {
 		let (tx, rx) = response_channel();
 		self.on_exit = Some(NotifyKind::All(tx));
 		(self, rx)
 	}
 
-	/// Consumes the `MethodResponse` and produces new [`MethodResponse`] and a future
-	/// [`MethodResponse`] that will be resolved once the response has been processed.
+	/// Consumes the [`ResponsePayload`] and produces new [`ResponsePayload`] and a future
+	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
 	///
-	/// The [`MethodFuture`] will only return Ok on a JSON-RPC error response.
+	/// The [`MethodResponseFuture`] will only return Ok on a failed JSON-RPC response.
 	pub fn notify_on_error(mut self) -> (Self, MethodResponseFuture) {
 		let (tx, rx) = response_channel();
 		self.on_exit = Some(NotifyKind::Error(tx));
@@ -423,7 +423,7 @@ fn response_channel() -> (MethodResponseNotifyTx, MethodResponseFuture) {
 	(MethodResponseNotifyTx(tx), MethodResponseFuture(rx))
 }
 
-/// Sender created by [`response_channel`].
+/// Sends a message once the method response has been processed.
 #[derive(Debug)]
 pub struct MethodResponseNotifyTx(tokio::sync::oneshot::Sender<NotifyMsg>);
 
