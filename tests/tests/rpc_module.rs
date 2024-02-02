@@ -38,10 +38,13 @@ use jsonrpsee::core::{server::*, RpcResult};
 use jsonrpsee::types::error::{ErrorCode, ErrorObject, INVALID_PARAMS_MSG, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Params, Response, ResponsePayload};
 use jsonrpsee::SubscriptionMessage;
+use jsonrpsee_test_utils::mocks::Id;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
+
+use crate::helpers::{rpc_module_notify_on_response, run_test_notify_test, Notify};
 
 // Helper macro to assert that a binding is of a specific type.
 macro_rules! assert_type {
@@ -585,4 +588,55 @@ async fn subscription_close_response_works() {
 		let (rx, _id) = sub.next::<usize>().await.unwrap().unwrap();
 		assert_eq!(rx, 1);
 	}
+}
+
+#[tokio::test]
+async fn method_response_notify_on_success_works() {
+	init_logger();
+
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+	let module = rpc_module_notify_on_response(tx);
+
+	assert!(
+		run_test_notify_test(&module, &mut rx, Notify::Success, true).await.is_ok(),
+		"Successful response should be notified"
+	);
+	assert!(matches!(
+		run_test_notify_test(&module, &mut rx, Notify::Success, false).await,
+		Err(MethodResponseError::WrongKind),
+	));
+}
+
+#[tokio::test]
+async fn method_response_notify_on_all() {
+	init_logger();
+
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+	let module = rpc_module_notify_on_response(tx);
+
+	assert!(
+		run_test_notify_test(&module, &mut rx, Notify::All, true).await.is_ok(),
+		"Successful response should be notified"
+	);
+	assert!(
+		run_test_notify_test(&module, &mut rx, Notify::All, false).await.is_ok(),
+		"Error response should be notified"
+	);
+}
+
+#[tokio::test]
+async fn method_response_dropped() {
+	init_logger();
+
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+	let module = rpc_module_notify_on_response(tx);
+
+	let req = jsonrpsee_test_utils::helpers::call("hey", vec![Notify::Success], Id::Num(1));
+
+	// Make a call and drop the method response including its "notify sender"
+	// This could happen if the connection is closed.
+	let (rp, _) = module.raw_json_request(&req, 1).await.unwrap();
+	drop(rp);
+
+	assert!(matches!(rx.recv().await, Some(Err(MethodResponseError::Closed))));
 }

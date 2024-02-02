@@ -54,6 +54,25 @@ pub enum NotifyKind {
 	All(MethodResponseNotifyTx),
 }
 
+impl NotifyKind {
+	/// Sends out the notification.
+	pub fn notify(self, is_success: bool) {
+		match self {
+			NotifyKind::All(c) => {
+				_ = c.send(NotifyMsg::Ok);
+			}
+			NotifyKind::Success(c) => {
+				let msg = if is_success { NotifyMsg::Ok } else { NotifyMsg::WrongKind };
+				let _ = c.send(msg);
+			}
+			NotifyKind::Error(c) => {
+				let msg = if !is_success { NotifyMsg::Ok } else { NotifyMsg::WrongKind };
+				let _ = c.send(msg);
+			}
+		}
+	}
+}
+
 /// Represents a response to a method call.
 ///
 /// NOTE: A subscription is also a method call but it's

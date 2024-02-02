@@ -165,20 +165,8 @@ where
 
 					// Notify that the message has been sent out to the internal
 					// WebSocket buffer.
-					if let Some(kind) = on_close.take() {
-						match kind {
-							NotifyKind::All(c) => {
-								_ = c.send(NotifyMsg::Ok);
-							}
-							NotifyKind::Success(c) => {
-								let msg = if is_success { NotifyMsg::Ok } else { NotifyMsg::WrongKind };
-								let _ = c.send(msg);
-							}
-							NotifyKind::Error(c) => {
-								let msg = if !is_success { NotifyMsg::Ok } else { NotifyMsg::WrongKind };
-								let _ = c.send(msg);
-							}
-						}
+					if let Some(n) = on_close.take() {
+						n.notify(is_success);
 					}
 				}
 			}

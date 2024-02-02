@@ -1303,7 +1303,7 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 }
 
 #[tokio::test]
-async fn raw_method_api_works() {
+async fn response_payload_async_api_works() {
 	use jsonrpsee::server::{MethodResponse, Server, SubscriptionSink};
 	use std::sync::Arc;
 	use tokio::sync::Mutex as AsyncMutex;
@@ -1311,6 +1311,7 @@ async fn raw_method_api_works() {
 	init_logger();
 
 	let server_addr = {
+		#[allow(clippy::type_complexity)]
 		let state: Arc<AsyncMutex<Option<(SubscriptionSink, tokio::sync::oneshot::Sender<()>)>>> = Arc::default();
 
 		let mut module = RpcModule::new(state);
