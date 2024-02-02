@@ -187,7 +187,7 @@ pub enum WsHandshakeError {
 	Io(io::Error),
 
 	/// Error in the transport layer.
-	#[error("Error in the WebSocket handshake: {0}")]
+	#[error("{0}")]
 	Transport(#[source] soketto::handshake::Error),
 
 	/// Server rejected the handshake.
@@ -223,7 +223,7 @@ pub enum WsHandshakeError {
 #[derive(Debug, Error)]
 pub enum WsError {
 	/// Error in the WebSocket connection.
-	#[error("WebSocket connection error: {0}")]
+	#[error("{0}")]
 	Connection(#[source] soketto::connection::Error),
 	/// Message was too large.
 	#[error("The message was too large")]
