@@ -187,26 +187,6 @@ impl MethodResponse {
 		rp
 	}
 
-	/// Optional callback that may be utilized to notify that the method response was
-	/// a succesfully JSON-RPC object and processed.
-	pub fn notify_on_success(mut self, tx: MethodResponseNotifyTx) -> Self {
-		self.on_close = Some(NotifyKind::Success(tx));
-		self
-	}
-
-	/// Optional callback that may be utilized to notify that the method response was a
-	/// an JSON-RPC error object and processed.
-	pub fn notify_on_error(mut self, tx: MethodResponseNotifyTx) -> Self {
-		self.on_close = Some(NotifyKind::Error(tx));
-		self
-	}
-
-	/// Optional callback that may be utilized to notify that the method response was processed.
-	pub fn notify_on_response(mut self, tx: MethodResponseNotifyTx) -> Self {
-		self.on_close = Some(NotifyKind::All(tx));
-		self
-	}
-
 	/// Create a new method response.
 	///
 	/// If the serialization of `result` exceeds `max_response_size` then
@@ -385,18 +365,6 @@ where
 		InnerResponsePayload::Result(StdCow::Borrowed(t)).into()
 	}
 
-	/// Get a notification when the successful method response has been sent out.
-	pub fn notify_on_success(mut self, tx: MethodResponseNotifyTx) -> Self {
-		self.on_exit = Some(NotifyKind::Success(tx));
-		self
-	}
-
-	/// Get a notification when the method response has been sent out.
-	pub fn notify_on_response(mut self, tx: MethodResponseNotifyTx) -> Self {
-		self.on_exit = Some(NotifyKind::All(tx));
-		self
-	}
-
 	/// Create successful partial response i.e, the `result field`
 	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
 		InnerResponsePayload::Error(e.into()).into()
@@ -407,10 +375,34 @@ where
 		InnerResponsePayload::Error(e.into()).into()
 	}
 
-	/// Get a notification when an error has been sent out as method response.
-	pub fn notify_on_error(mut self, tx: MethodResponseNotifyTx) -> Self {
+	/// Consumes the `MethodResponse` and produces new [`MethodResponse`] and a future
+	/// [`MethodResponse`] that will be resolved once the response has been processed.
+	///
+	/// The [`MethodFuture`] will only return Ok on succesful JSON-RPC response.
+	pub fn notify_on_success(mut self) -> (Self, MethodResponseFuture) {
+		let (tx, rx) = response_channel();
+		self.on_exit = Some(NotifyKind::Success(tx));
+		(self, rx)
+	}
+
+	/// Consumes the `MethodResponse` and produces new [`MethodResponse`] and a future
+	/// [`MethodResponse`] that will be resolved once the response has been processed.
+	///
+	/// The [`MethodFuture`] will return Ok once a response is processed.
+	pub fn notify_on_response(mut self) -> (Self, MethodResponseFuture) {
+		let (tx, rx) = response_channel();
+		self.on_exit = Some(NotifyKind::All(tx));
+		(self, rx)
+	}
+
+	/// Consumes the `MethodResponse` and produces new [`MethodResponse`] and a future
+	/// [`MethodResponse`] that will be resolved once the response has been processed.
+	///
+	/// The [`MethodFuture`] will only return Ok on a JSON-RPC error response.
+	pub fn notify_on_error(mut self) -> (Self, MethodResponseFuture) {
+		let (tx, rx) = response_channel();
 		self.on_exit = Some(NotifyKind::Error(tx));
-		self
+		(self, rx)
 	}
 }
 
@@ -426,9 +418,9 @@ where
 
 /// Create a channel to be used in combination with [`ResponsePayload`] to
 /// notify when a method call has been processed.
-pub fn response_channel() -> (MethodResponseNotifyTx, MethodResponseNotifyRx) {
+fn response_channel() -> (MethodResponseNotifyTx, MethodResponseFuture) {
 	let (tx, rx) = tokio::sync::oneshot::channel();
-	(MethodResponseNotifyTx(tx), MethodResponseNotifyRx(rx))
+	(MethodResponseNotifyTx(tx), MethodResponseFuture(rx))
 }
 
 /// Sender created by [`response_channel`].
@@ -442,9 +434,9 @@ impl MethodResponseNotifyTx {
 	}
 }
 
-/// Receiver created by [`response_channel`].
+/// Future that resolves when the method response has been processed.
 #[derive(Debug)]
-pub struct MethodResponseNotifyRx(tokio::sync::oneshot::Receiver<NotifyMsg>);
+pub struct MethodResponseFuture(tokio::sync::oneshot::Receiver<NotifyMsg>);
 
 /// A message that that tells whether notification
 /// was succesful or not.
@@ -458,7 +450,7 @@ pub enum NotifyMsg {
 	WrongKind,
 }
 
-/// ...
+/// Method response error.
 #[derive(Debug, Copy, Clone)]
 pub enum MethodResponseError {
 	/// The connection was closed.
@@ -469,7 +461,7 @@ pub enum MethodResponseError {
 	WrongKind,
 }
 
-impl Future for MethodResponseNotifyRx {
+impl Future for MethodResponseFuture {
 	type Output = Result<(), MethodResponseError>;
 
 	fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
@@ -481,6 +473,11 @@ impl Future for MethodResponseNotifyRx {
 		}
 	}
 }
+
+/// An error that may occur if ResponsePayload::notify_on has been called more than once.
+#[derive(thiserror::Error, Clone, Copy, Debug)]
+#[error("ResponsePayload::notify_on can only be called once")]
+pub struct AlreadyNotifiedError;
 
 #[cfg(test)]
 mod tests {

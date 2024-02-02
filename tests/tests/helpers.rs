@@ -321,20 +321,21 @@ pub fn rpc_module_notify_on_response(tx: Sender) -> NotifyRpcModule {
 
 	module
 		.register_method("hey", |params, ctx| {
-			let (tx, rx) = jsonrpsee::response_channel();
 			let kind: Notify = params.one().unwrap();
 			let server_sender = ctx.clone();
 
+			let (rp, rp_future) = match kind {
+				Notify::All => ResponsePayload::result("lo").notify_on_response(),
+				Notify::Success => ResponsePayload::result("lo").notify_on_success(),
+				Notify::Error => ResponsePayload::error(ErrorCode::InvalidParams).notify_on_error(),
+			};
+
 			tokio::spawn(async move {
-				let rp = rx.await;
+				let rp = rp_future.await;
 				server_sender.send(rp).unwrap();
 			});
 
-			match kind {
-				Notify::All => ResponsePayload::result("lo").notify_on_response(tx),
-				Notify::Success => ResponsePayload::result("lo").notify_on_success(tx),
-				Notify::Error => ResponsePayload::error(ErrorCode::InvalidParams).notify_on_error(tx),
-			}
+			rp
 		})
 		.unwrap();
 

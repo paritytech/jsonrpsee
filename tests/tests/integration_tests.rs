@@ -42,7 +42,7 @@ use helpers::{
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
-use jsonrpsee::core::server::{response_channel, SubscriptionMessage};
+use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{JsonValue, StringError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
@@ -1304,7 +1304,7 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 
 #[tokio::test]
 async fn response_payload_async_api_works() {
-	use jsonrpsee::server::{MethodResponse, Server, SubscriptionSink};
+	use jsonrpsee::server::{Server, SubscriptionSink};
 	use std::sync::Arc;
 	use tokio::sync::Mutex as AsyncMutex;
 
@@ -1316,17 +1316,17 @@ async fn response_payload_async_api_works() {
 
 		let mut module = RpcModule::new(state);
 		module
-			.register_raw_method("get", |id, _params, ctx, max_response_size| {
-				let (tx, rx) = response_channel();
-
+			.register_method("get", |_params, ctx| {
 				let ctx = ctx.clone();
+				let (rp, rp_future) = ResponsePayload::result(1).notify_on_success();
+
 				tokio::spawn(async move {
 					// Wait for response to sent to the internal WebSocket message buffer
 					// and if that fails just quit because it means that the connection
 					// was closed or that method response was an error.
 					//
 					// You can identify that by matching on the error.
-					if rx.await.is_err() {
+					if rp_future.await.is_err() {
 						return;
 					}
 
@@ -1340,7 +1340,7 @@ async fn response_payload_async_api_works() {
 					}
 				});
 
-				MethodResponse::response(id, ResponsePayload::result(1), max_response_size).notify_on_success(tx)
+				rp
 			})
 			.unwrap();
 

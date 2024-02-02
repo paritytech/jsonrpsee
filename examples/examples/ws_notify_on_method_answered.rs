@@ -30,7 +30,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::Server;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{response_channel, rpc_params, ResponsePayload};
+use jsonrpsee::{rpc_params, ResponsePayload};
 
 #[rpc(client, server, namespace = "state")]
 pub trait Rpc {
@@ -43,14 +43,14 @@ pub struct RpcServerImpl;
 
 impl RpcServer for RpcServerImpl {
 	fn storage_keys(&self) -> ResponsePayload<'static, String> {
-		let (tx, rx) = response_channel();
+		let (rp, rp_future) = ResponsePayload::result("ehheeheh".to_string()).notify_on_success();
 
 		tokio::spawn(async move {
-			rx.await.unwrap();
+			rp_future.await.unwrap();
 			println!("Method response to `state_getKeys` finished");
 		});
 
-		ResponsePayload::result("ehheeheh".to_string()).notify_on_success(tx)
+		rp
 	}
 }
 

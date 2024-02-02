@@ -485,63 +485,6 @@ impl<Context> From<RpcModule<Context>> for Methods {
 }
 
 impl<Context: Send + Sync + 'static> RpcModule<Context> {
-	/// Register a low-level method call where
-	/// it's possible to get enforce order of things
-	/// on the connection such as ordering that response
-	/// is sent before a subscription notifcation or something similar.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use jsonrpsee_core::server::{RpcModule, MethodResponse, response_channel, ResponsePayload};
-	/// use futures_util::FutureExt;
-	///
-	/// let mut module = RpcModule::new(());
-	/// module.register_raw_method("say_hello", |id, _params, _ctx, max_response_size| {
-	///    let (tx, rx) = response_channel();
-	///
-	///    // This future will be spawned after the method call has been
-	///    // sent out on the socket message buffer.
-	///    // This may useful if one needs to order operations in some manner.
-	///    tokio::spawn(async move {
-	///        // Wait for response to be sent and if that fails just quit
-	///        // because it means that the connection was already closed
-	///        // or that method response was not succesful.
-	///        //
-	///        // Because `notify_on_success` is used below
-	///        // there are other APIs to only succeed on
-	///        // for example on errors as well.
-	///        if rx.await.is_err() {
-	///           return;
-	///        }
-	///
-	///        loop {
-	///           tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-	///           println!("after method response");
-	///       }
-	///    });
-	///
-	///    MethodResponse::response(id, ResponsePayload::result("foo"), max_response_size).notify_on_success(tx)
-	/// }).unwrap();
-	///```
-	pub fn register_raw_method<F>(
-		&mut self,
-		method_name: &'static str,
-		callback: F,
-	) -> Result<&mut MethodCallback, RegisterMethodError>
-	where
-		Context: Send + Sync + 'static,
-		F: Fn(Id, Params, &Context, MaxResponseSize) -> MethodResponse + Send + Sync + 'static,
-	{
-		let ctx = self.ctx.clone();
-		self.methods.verify_and_insert(
-			method_name,
-			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| {
-				callback(id, params, &*ctx, max_response_size)
-			})),
-		)
-	}
-
 	/// Register a new synchronous RPC method, which computes the response with the given callback.
 	///
 	/// ## Examples
@@ -552,7 +495,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// let mut module = RpcModule::new(());
 	/// module.register_method("say_hello", |_params, _ctx| "lo").unwrap();
 	/// ```
-
 	pub fn register_method<R, F>(
 		&mut self,
 		method_name: &'static str,
