@@ -379,7 +379,15 @@ where
 	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
 	///
 	/// The [`MethodResponseFuture`] will only return Ok on a successful JSON-RPC response.
+	///
+	/// # Panics
+	///
+	/// Panics if the "notify_on_<error,success,response>" has already by called on the [`ResponsePayload`]
 	pub fn notify_on_success(mut self) -> (Self, MethodResponseFuture) {
+		if self.on_exit.is_some() {
+			panic!("ResponsePayload::notify_on_<error,success,response> can only be called once");
+		}
+
 		let (tx, rx) = response_channel();
 		self.on_exit = Some(NotifyKind::Success(tx));
 		(self, rx)
@@ -389,7 +397,15 @@ where
 	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
 	///
 	/// The [`MethodResponseFuture`] will return Ok once a response is processed.
+	///
+	/// # Panics
+	///
+	/// Panics if the "notify_on_<error,success,response>" has already by called on the [`ResponsePayload`]
 	pub fn notify_on_response(mut self) -> (Self, MethodResponseFuture) {
+		if self.on_exit.is_some() {
+			panic!("ResponsePayload::notify_on_<error,success,response> can only be called once");
+		}
+
 		let (tx, rx) = response_channel();
 		self.on_exit = Some(NotifyKind::All(tx));
 		(self, rx)
@@ -399,7 +415,15 @@ where
 	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
 	///
 	/// The [`MethodResponseFuture`] will only return Ok on a failed JSON-RPC response.
+	///
+	/// # Panics
+	///
+	/// Panics if the "notify_on_<error,success,response>" has already by called on the [`ResponsePayload`]
 	pub fn notify_on_error(mut self) -> (Self, MethodResponseFuture) {
+		if self.on_exit.is_some() {
+			panic!("ResponsePayload::notify_on_<error,success,response> can only be called once");
+		}
+
 		let (tx, rx) = response_channel();
 		self.on_exit = Some(NotifyKind::Error(tx));
 		(self, rx)
