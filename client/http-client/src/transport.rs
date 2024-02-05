@@ -11,7 +11,10 @@ use hyper::client::{Client, HttpConnector};
 use hyper::http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
-use jsonrpsee_core::{http_helpers, GenericTransportError, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{
+	http_helpers::{self, HttpError},
+	TEN_MB_SIZE_BYTES,
+};
 use std::error::Error as StdError;
 use std::future::Future;
 use std::pin::Pin;
@@ -45,7 +48,7 @@ impl Clone for HttpBackend {
 
 impl<B> tower::Service<hyper::Request<B>> for HttpBackend<B>
 where
-	B: HttpBody + Send + 'static,
+	B: HttpBody<Error = hyper::Error> + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
@@ -59,7 +62,7 @@ where
 			#[cfg(feature = "__tls")]
 			Self::Https(inner) => inner.poll_ready(ctx),
 		}
-		.map_err(Into::into)
+		.map_err(|e| Error::Http(e.into()))
 	}
 
 	fn call(&mut self, req: hyper::Request<B>) -> Self::Future {
@@ -69,7 +72,7 @@ where
 			Self::Https(inner) => inner.call(req),
 		};
 
-		Box::pin(async move { resp.await.map_err(Into::into) })
+		Box::pin(async move { resp.await.map_err(|e| Error::Http(e.into())) })
 	}
 }
 
@@ -279,9 +282,8 @@ pub struct HttpTransportClient<S> {
 impl<B, S> HttpTransportClient<S>
 where
 	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error> + Clone,
-	B: HttpBody + Send + 'static,
+	B: HttpBody<Error = hyper::Error> + Send + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
 		if body.len() > self.max_request_size as usize {
@@ -298,7 +300,7 @@ where
 		if response.status().is_success() {
 			Ok(response)
 		} else {
-			Err(Error::RequestFailure { status_code: response.status().into() })
+			Err(Error::Rejected { status_code: response.status().into() })
 		}
 	}
 
@@ -331,13 +333,13 @@ pub enum Error {
 	Url(String),
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
-	#[error("HTTP error: {0}")]
-	Http(Box<dyn std::error::Error + Send + Sync>),
+	#[error("{0}")]
+	Http(#[from] HttpError),
 
 	/// Server returned a non-success status code.
-	#[error("Server returned an error status code: {:?}", status_code)]
-	RequestFailure {
-		/// Status code returned by the server.
+	#[error("Request rejected `{status_code}`")]
+	Rejected {
+		/// HTTP Status code returned by the server.
 		status_code: u16,
 	},
 
@@ -345,29 +347,9 @@ pub enum Error {
 	#[error("The request body was too large")]
 	RequestTooLarge,
 
-	/// Malformed request.
-	#[error("Malformed request")]
-	Malformed,
-
 	/// Invalid certificate store.
 	#[error("Invalid certificate store")]
 	InvalidCertficateStore,
-}
-
-impl From<GenericTransportError> for Error {
-	fn from(err: GenericTransportError) -> Self {
-		match err {
-			GenericTransportError::TooLarge => Self::RequestTooLarge,
-			GenericTransportError::Malformed => Self::Malformed,
-			GenericTransportError::Inner(e) => Self::Http(e.into()),
-		}
-	}
-}
-
-impl From<hyper::Error> for Error {
-	fn from(err: hyper::Error) -> Self {
-		Self::Http(Box::new(err))
-	}
 }
 
 #[cfg(test)]

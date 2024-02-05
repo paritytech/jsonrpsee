@@ -1,5 +1,8 @@
 use http::Method;
-use jsonrpsee_core::{http_helpers::read_body, server::Methods, GenericTransportError};
+use jsonrpsee_core::{
+	http_helpers::{read_body, HttpError},
+	server::Methods,
+};
 
 use crate::{
 	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
@@ -77,9 +80,9 @@ where
 
 			let (body, is_single) = match read_body(&parts.headers, body, max_request_size).await {
 				Ok(r) => r,
-				Err(GenericTransportError::TooLarge) => return response::too_large(max_request_size),
-				Err(GenericTransportError::Malformed) => return response::malformed(),
-				Err(GenericTransportError::Inner(e)) => {
+				Err(HttpError::TooLarge) => return response::too_large(max_request_size),
+				Err(HttpError::Malformed) => return response::malformed(),
+				Err(HttpError::Stream(e)) => {
 					tracing::warn!(target: LOG_TARGET, "Internal error reading request body: {}", e);
 					return response::internal_error();
 				}

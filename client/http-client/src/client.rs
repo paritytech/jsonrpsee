@@ -275,9 +275,8 @@ impl<B, S> ClientT for HttpClient<S>
 where
 	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
 	<S as Service<hyper::Request<Body>>>::Future: Send,
-	B: HttpBody + Send + 'static,
+	B: HttpBody<Error = hyper::Error> + Send + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
@@ -408,9 +407,8 @@ impl<B, S> SubscriptionClientT for HttpClient<S>
 where
 	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
 	<S as Service<hyper::Request<Body>>>::Future: Send,
-	B: HttpBody + Send + 'static,
+	B: HttpBody<Error = hyper::Error> + Send + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].

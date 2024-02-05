@@ -26,9 +26,9 @@
 
 //! Error type for client(s).
 
-use std::sync::Arc;
 use crate::{params::EmptyBatchRequest, RegisterMethodError};
 use jsonrpsee_types::{ErrorObjectOwned, InvalidRequestId};
+use std::sync::Arc;
 
 /// Error type.
 #[derive(Debug, thiserror::Error)]
@@ -37,10 +37,10 @@ pub enum Error {
 	#[error("{0}")]
 	Call(#[from] ErrorObjectOwned),
 	/// Networking error or error on the low-level protocol layer.
-	#[error("Networking or low-level protocol error: {0}")]
+	#[error("{0}")]
 	Transport(#[source] anyhow::Error),
 	/// The background task has been terminated.
-	#[error("The background task been terminated because: {0}; restart required")]
+	#[error("The background task closed {0}; restart required")]
 	RestartNeeded(Arc<Error>),
 	/// Failed to parse the data.
 	#[error("Parse error: {0}")]
@@ -55,7 +55,7 @@ pub enum Error {
 	#[error("Request timeout")]
 	RequestTimeout,
 	/// Max number of request slots exceeded.
-	#[error("Configured max number of request slots exceeded")]
+	#[error("Max concurrent requests exceeded")]
 	MaxSlotsExceeded,
 	/// Custom error.
 	#[error("Custom error: {0}")]
