@@ -291,7 +291,7 @@ impl Methods {
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
-		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
+		let rp = serde_json::from_str::<Response<T>>(resp.as_result())?;
 		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| MethodsError::JsonRpc(e.into_owned()))
 	}
 
@@ -427,10 +427,9 @@ impl Methods {
 
 		// TODO: hack around the lifetime on the `SubscriptionId` by deserialize first to serde_json::Value.
 		let as_success: ResponseSuccess<serde_json::Value> =
-			serde_json::from_str::<Response<_>>(&resp.result)?.try_into()?;
+			serde_json::from_str::<Response<_>>(resp.as_result())?.try_into()?;
 
-		let sub_id =
-			as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.result.clone()))?;
+		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.to_result()))?;
 
 		Ok(Subscription { sub_id, rx })
 	}
@@ -904,7 +903,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
+							return MethodResponse::response(id, ResponsePayload::success(false), max_response_size);
 						}
 					};
 
@@ -920,7 +919,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
+					MethodResponse::response(id, ResponsePayload::success(result), max_response_size)
 				})),
 			);
 		}

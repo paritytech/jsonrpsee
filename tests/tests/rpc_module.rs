@@ -528,7 +528,7 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 	let sub_resp = stream.recv().await.unwrap();
 
 	let resp = match resp.payload {
-		ResponsePayload::Result(val) => val,
+		ResponsePayload::Success(val) => val,
 		_ => panic!("Expected valid response"),
 	};
 
@@ -572,7 +572,7 @@ async fn subscription_close_response_works() {
 		let resp = serde_json::from_str::<Response<u64>>(rp.as_result()).unwrap();
 
 		let sub_id = match resp.payload {
-			ResponsePayload::Result(val) => val,
+			ResponsePayload::Success(val) => val,
 			_ => panic!("Expected valid response"),
 		};
 

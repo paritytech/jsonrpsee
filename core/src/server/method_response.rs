@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::{BoundedWriter, LOG_TARGET};
-use std::borrow::Cow as StdCow;
 use std::task::Poll;
 
 use futures_util::{Future, FutureExt};
@@ -82,14 +81,14 @@ impl NotifyKind {
 #[derive(Debug)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
-	pub(crate) result: String,
+	result: String,
 	/// Indicates whether the call was successful or not.
-	pub(crate) success_or_error: MethodResponseResult,
+	success_or_error: MethodResponseResult,
 	/// Indicates whether the call was a subscription response.
-	pub(crate) kind: ResponseKind,
+	kind: ResponseKind,
 	/// Optional callback that may be utilized to notif
 	/// that the method response has been processed
-	pub(crate) on_close: Option<NotifyKind>,
+	on_close: Option<NotifyKind>,
 }
 
 impl MethodResponse {
@@ -100,7 +99,7 @@ impl MethodResponse {
 
 	/// Returns whether the call failed.
 	pub fn is_error(&self) -> bool {
-		self.success_or_error.is_success()
+		self.success_or_error.is_error()
 	}
 
 	/// Returns whether the response is a subscription response.
@@ -117,48 +116,27 @@ impl MethodResponse {
 	pub fn is_batch(&self) -> bool {
 		matches!(self.kind, ResponseKind::Batch)
 	}
-}
 
-/// Represent the outcome of a method call success or failed.
-#[derive(Debug, Copy, Clone)]
-pub enum MethodResponseResult {
-	/// The method call was successful.
-	Success,
-	/// The method call failed with error code.
-	Failed(i32),
-}
-
-impl MethodResponseResult {
-	/// Returns whether the call was successful.
-	pub fn is_success(&self) -> bool {
-		matches!(self, MethodResponseResult::Success)
+	/// Consume the method response and extract the serialized response.
+	pub fn into_result(self) -> String {
+		self.result
 	}
 
-	/// Returns whether the call failed.
-	pub fn is_error(&self) -> bool {
-		matches!(self, MethodResponseResult::Failed(_))
+	/// Extract the serialized response as a String.
+	pub fn to_result(&self) -> String {
+		self.result.clone()
+	}
+
+	/// Consume the method response and extract the parts.
+	pub fn into_parts(self) -> (String, Option<NotifyKind>) {
+		(self.result, self.on_close)
 	}
 
 	/// Get the error code
 	///
 	/// Returns `Some(error code)` if the call failed.
 	pub fn as_error_code(&self) -> Option<i32> {
-		match self {
-			Self::Failed(e) => Some(*e),
-			_ => None,
-		}
-	}
-}
-
-impl MethodResponse {
-	/// Consume the method response and extract the serialized response.
-	pub fn into_result(self) -> String {
-		self.result
-	}
-
-	/// Consume the method response and extract the parts.
-	pub fn into_parts(self) -> (String, Option<NotifyKind>) {
-		(self.result, self.on_close)
+		self.success_or_error.as_error_code()
 	}
 
 	/// Get a reference to the serialized response.
@@ -219,7 +197,7 @@ impl MethodResponse {
 					let data = to_raw_value(&format!("Exceeded max limit of {max_response_size}")).ok();
 					let err_code = OVERSIZED_RESPONSE_CODE;
 
-					let err = InnerResponsePayload::error_borrowed(ErrorObject::borrowed(
+					let err = InnerResponsePayload::unit_error_borrowed(ErrorObject::borrowed(
 						err_code,
 						OVERSIZED_RESPONSE_MSG,
 						data.as_deref(),
@@ -234,12 +212,13 @@ impl MethodResponse {
 						on_close: rp.on_exit,
 					}
 				} else {
-					let err_code = ErrorCode::InternalError;
-					let result = serde_json::to_string(&Response::new(err_code.into(), id))
-						.expect("JSON serialization infallible; qed");
+					let err = ErrorCode::InternalError;
+					let result =
+						serde_json::to_string(&Response::new(jsonrpsee_types::ResponsePayload::unit_error(err), id))
+							.expect("JSON serialization infallible; qed");
 					Self {
 						result,
-						success_or_error: MethodResponseResult::Failed(err_code.code()),
+						success_or_error: MethodResponseResult::Failed(err.code()),
 						kind,
 						on_close: rp.on_exit,
 					}
@@ -260,13 +239,44 @@ impl MethodResponse {
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
 		let err: ErrorObject = err.into();
 		let err_code = err.code();
-		let err = InnerResponsePayload::error_borrowed(err);
+		let err = InnerResponsePayload::unit_error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 		Self {
 			result,
 			success_or_error: MethodResponseResult::Failed(err_code),
 			kind: ResponseKind::MethodCall,
 			on_close: None,
+		}
+	}
+}
+
+/// Represent the outcome of a method call success or failed.
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum MethodResponseResult {
+	/// The method call was successful.
+	Success,
+	/// The method call failed with error code.
+	Failed(i32),
+}
+
+impl MethodResponseResult {
+	/// Returns whether the call was successful.
+	fn is_success(&self) -> bool {
+		matches!(self, MethodResponseResult::Success)
+	}
+
+	/// Returns whether the call failed.
+	fn is_error(&self) -> bool {
+		matches!(self, MethodResponseResult::Failed(_))
+	}
+
+	/// Get the error code
+	///
+	/// Returns `Some(error code)` if the call failed.
+	fn as_error_code(&self) -> Option<i32> {
+		match self {
+			Self::Failed(e) => Some(*e),
+			_ => None,
 		}
 	}
 }
@@ -330,7 +340,7 @@ pub struct BatchResponse(String);
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
-	let err = InnerResponsePayload::error_borrowed(err);
+	let err = InnerResponsePayload::unit_error_borrowed(err);
 	serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed")
 }
 
@@ -355,24 +365,24 @@ impl<'a, T> ResponsePayload<'a, T>
 where
 	T: Clone,
 {
-	/// Create successful an owned response payload.
-	pub fn result(t: T) -> Self {
-		InnerResponsePayload::Result(StdCow::Owned(t)).into()
+	/// Create a successful owned response payload.
+	pub fn success(t: T) -> Self {
+		InnerResponsePayload::success(t).into()
 	}
 
-	/// Create successful borrowed response payload.
-	pub fn result_borrowed(t: &'a T) -> Self {
-		InnerResponsePayload::Result(StdCow::Borrowed(t)).into()
+	/// Create a successful borrowed response payload.
+	pub fn success_borrowed(t: &'a T) -> Self {
+		InnerResponsePayload::success_borrowed(t).into()
 	}
 
-	/// Create successful partial response i.e, the `result field`
+	/// Create an error response payload.
 	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
-		InnerResponsePayload::Error(e.into()).into()
+		InnerResponsePayload::error(e.into()).into()
 	}
 
-	/// Create successful partial response i.e, the `result field`
+	/// Create a borrowd error response payload.
 	pub fn error_borrowed(e: impl Into<ErrorObject<'a>>) -> Self {
-		InnerResponsePayload::Error(e.into()).into()
+		InnerResponsePayload::error_borrowed(e.into()).into()
 	}
 
 	/// Consumes the [`ResponsePayload`] and produces new [`ResponsePayload`] and a future
@@ -413,6 +423,11 @@ where
 		self.on_exit = Some(NotifyKind::Error(tx));
 		(self, rx)
 	}
+
+	/// Convert the response payload into owned.
+	pub fn into_owned(self) -> ResponsePayload<'static, T> {
+		ResponsePayload { inner: self.inner.into_owned(), on_exit: self.on_exit }
+	}
 }
 
 impl<'a, T> From<ErrorCode> for ResponsePayload<'a, T>
@@ -422,6 +437,24 @@ where
 	fn from(code: ErrorCode) -> Self {
 		let err: ErrorObject = code.into();
 		Self::error(err)
+	}
+}
+
+impl<'a> ResponsePayload<'a, ()> {
+	/// Similar to [`ResponsePayload::error`] but assigns `T = ()`.
+	///
+	/// This is useful when one only want to return the error and
+	/// `T` can't resolved by rustc to avoid type annonations.
+	pub fn unit_error(e: impl Into<ErrorObjectOwned>) -> Self {
+		InnerResponsePayload::unit_error(e.into()).into()
+	}
+
+	/// Similar to [`ResponsePayload::error_borrowed`] but assigns `T = ()`.
+	///
+	/// This is useful when one only want to return the error and
+	/// `T` can't resolved by rustc to avoid type annonations.
+	pub fn unit_error_borrowed(e: impl Into<ErrorObject<'a>>) -> Self {
+		InnerResponsePayload::unit_error_borrowed(e.into()).into()
 	}
 }
 
@@ -490,7 +523,7 @@ mod tests {
 
 	#[test]
 	fn batch_with_single_works() {
-		let method = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a"), usize::MAX);
+		let method = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a"), usize::MAX);
 		assert_eq!(method.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]`.
@@ -503,7 +536,7 @@ mod tests {
 
 	#[test]
 	fn batch_with_multiple_works() {
-		let m1 = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a"), usize::MAX);
+		let m1 = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a"), usize::MAX);
 		assert_eq!(m1.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]` and one byte for `,` to append a method call.
@@ -527,7 +560,7 @@ mod tests {
 
 	#[test]
 	fn batch_too_big() {
-		let method = MethodResponse::response(Id::Number(1), ResponsePayload::result_borrowed(&"a".repeat(28)), 128);
+		let method = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a".repeat(28)), 128);
 		assert_eq!(method.result.len(), 64);
 
 		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();

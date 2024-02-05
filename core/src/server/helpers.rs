@@ -131,8 +131,8 @@ impl MethodSink {
 
 	/// Send a JSON-RPC error to the client
 	pub async fn send_error<'a>(&self, id: Id<'a>, err: ErrorObject<'a>) -> Result<(), DisconnectError> {
-		let json =
-			serde_json::to_string(&Response::new(ResponsePayload::<()>::Error(err), id)).expect("valid JSON; qed");
+		let json = serde_json::to_string(&Response::new(ResponsePayload::unit_error_borrowed(err), id))
+			.expect("valid JSON; qed");
 
 		self.send(json).await
 	}
@@ -170,7 +170,7 @@ mod tests {
 	#[test]
 	fn bounded_serializer_work() {
 		let mut writer = BoundedWriter::new(100);
-		let result = ResponsePayload::result(&"success");
+		let result = ResponsePayload::success(&"success");
 		let rp = &Response::new(result, Id::Number(1));
 
 		assert!(serde_json::to_writer(&mut writer, rp).is_ok());

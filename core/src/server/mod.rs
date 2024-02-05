@@ -67,7 +67,7 @@ where
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
 		match self {
-			Ok(val) => ResponsePayload::result(val),
+			Ok(val) => ResponsePayload::success(val),
 			Err(e) => ResponsePayload::error(e),
 		}
 	}
@@ -80,7 +80,7 @@ where
 	type Output = Option<T>;
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+		ResponsePayload::success(self)
 	}
 }
 
@@ -91,7 +91,7 @@ where
 	type Output = Vec<T>;
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+		ResponsePayload::success(self)
 	}
 }
 
@@ -102,7 +102,7 @@ where
 	type Output = [T; N];
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+		ResponsePayload::success(self)
 	}
 }
 
@@ -143,7 +143,7 @@ macro_rules! impl_into_response {
 				type Output = $n;
 
 				fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-					ResponsePayload::result(self)
+					ResponsePayload::success(self)
 				}
 			}
 		)+

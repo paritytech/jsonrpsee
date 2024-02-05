@@ -259,7 +259,7 @@ impl PendingSubscriptionSink {
 	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
 		let err = MethodResponse::subscription_error(self.id, err.into());
-		_ = self.inner.send(err.result.clone()).await;
+		_ = self.inner.send(err.to_result()).await;
 		_ = self.subscribe.send(err);
 	}
 
@@ -271,7 +271,7 @@ impl PendingSubscriptionSink {
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
 		let response = MethodResponse::subscription_response(
 			self.id,
-			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
+			ResponsePayload::success_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
 		);
 		let success = response.is_success();
@@ -282,7 +282,7 @@ impl PendingSubscriptionSink {
 		//
 		// The same message is sent twice here because one is sent directly to the transport layer and
 		// the other one is sent internally to accept the subscription.
-		self.inner.send(response.result.clone()).await.map_err(|_| PendingSubscriptionAcceptError)?;
+		self.inner.send(response.to_result()).await.map_err(|_| PendingSubscriptionAcceptError)?;
 		self.subscribe.send(response).map_err(|_| PendingSubscriptionAcceptError)?;
 
 		if success {

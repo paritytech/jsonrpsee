@@ -43,7 +43,7 @@ pub struct RpcServerImpl;
 
 impl RpcServer for RpcServerImpl {
 	fn storage_keys(&self) -> ResponsePayload<'static, String> {
-		let (rp, rp_future) = ResponsePayload::result("ehheeheh".to_string()).notify_on_success();
+		let (rp, rp_future) = ResponsePayload::success("ehheeheh".to_string()).notify_on_success();
 
 		tokio::spawn(async move {
 			rp_future.await.unwrap();

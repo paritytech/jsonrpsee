@@ -95,7 +95,7 @@ impl<'a, T: Clone> TryFrom<Response<'a, T>> for Success<'a, T> {
 	fn try_from(rp: Response<'a, T>) -> Result<Self, Self::Error> {
 		match rp.payload {
 			ResponsePayload::Error(e) => Err(e.into_owned()),
-			ResponsePayload::Result(r) => Ok(Success { jsonrpc: rp.jsonrpc, result: r.into_owned(), id: rp.id }),
+			ResponsePayload::Success(r) => Ok(Success { jsonrpc: rp.jsonrpc, result: r.into_owned(), id: rp.id }),
 		}
 	}
 }
@@ -139,46 +139,62 @@ where
 	T: Clone,
 {
 	/// Corresponds to successful JSON-RPC response with the field `result`.
-	Result(StdCow<'a, T>),
+	Success(StdCow<'a, T>),
 	/// Corresponds to failed JSON-RPC response with a error object with the field `error.
 	Error(ErrorObject<'a>),
 }
 
 impl<'a, T: Clone> ResponsePayload<'a, T> {
-	/// Create successful an owned response payload.
-	pub fn result(t: T) -> Self {
-		Self::Result(StdCow::Owned(t))
+	/// Create a successful owned response payload.
+	pub fn success(t: T) -> Self {
+		Self::Success(StdCow::Owned(t))
 	}
 
-	/// Create successful borrowed response payload.
-	pub fn result_borrowed(t: &'a T) -> Self {
-		Self::Result(StdCow::Borrowed(t))
+	/// Create a successful borrowed response payload.
+	pub fn success_borrowed(t: &'a T) -> Self {
+		Self::Success(StdCow::Borrowed(t))
 	}
 
 	/// Convert the response payload into owned.
 	pub fn into_owned(self) -> ResponsePayload<'static, T> {
 		match self {
 			Self::Error(e) => ResponsePayload::Error(e.into_owned()),
-			Self::Result(r) => ResponsePayload::Result(StdCow::Owned(r.into_owned())),
+			Self::Success(r) => ResponsePayload::Success(StdCow::Owned(r.into_owned())),
 		}
 	}
-}
 
-impl<'a> ResponsePayload<'a, ()> {
-	/// Create successful partial response i.e, the `result field`
+	/// Create an error response payload.
 	pub fn error(e: impl Into<ErrorObjectOwned>) -> Self {
 		Self::Error(e.into())
 	}
 
-	/// Create successful partial response i.e, the `result field`
+	/// Create a borrowd error response payload.
 	pub fn error_borrowed(e: impl Into<ErrorObject<'a>>) -> Self {
 		Self::Error(e.into())
 	}
 }
 
-impl<'a> From<ErrorCode> for ResponsePayload<'a, ()> {
-	fn from(code: ErrorCode) -> Self {
+impl<'a, T: Clone> From<ErrorCode> for ResponsePayload<'a, T> {
+	fn from(code: ErrorCode) -> ResponsePayload<'a, T> {
 		Self::Error(code.into())
+	}
+}
+
+impl<'a> ResponsePayload<'a, ()> {
+	/// Similar to [`ResponsePayload::error`] but assigns `T = ()`.
+	///
+	/// This is useful when one only want to return the error and
+	/// `T` can't resolved by rustc to avoid type annonations.
+	pub fn unit_error(e: impl Into<ErrorObjectOwned>) -> Self {
+		Self::Error(e.into())
+	}
+
+	/// Similar to [`ResponsePayload::error_borrowed`] but assigns `T = ()`.
+	///
+	/// This is useful when one only want to return the error and
+	/// `T` can't resolved by rustc to avoid type annonations.
+	pub fn unit_error_borrowed(e: impl Into<ErrorObject<'a>>) -> Self {
+		Self::Error(e.into())
 	}
 }
 
@@ -291,10 +307,12 @@ where
 						return Err(serde::de::Error::duplicate_field("result and error are mutually exclusive"))
 					}
 					(Some(jsonrpc), Some(result), None) => {
-						Response { jsonrpc, payload: ResponsePayload::Result(result), id }
+						Response { jsonrpc, payload: ResponsePayload::Success(result), id }
 					}
 					(Some(jsonrpc), None, Some(err)) => Response { jsonrpc, payload: ResponsePayload::Error(err), id },
-					(None, Some(result), _) => Response { jsonrpc: None, payload: ResponsePayload::Result(result), id },
+					(None, Some(result), _) => {
+						Response { jsonrpc: None, payload: ResponsePayload::Success(result), id }
+					}
 					(None, _, Some(err)) => Response { jsonrpc: None, payload: ResponsePayload::Error(err), id },
 					(_, None, None) => return Err(serde::de::Error::missing_field("result/error")),
 				};
@@ -324,13 +342,16 @@ where
 
 		match &self.payload {
 			ResponsePayload::Error(err) => s.serialize_field("error", err)?,
-			ResponsePayload::Result(r) => s.serialize_field("result", r)?,
+			ResponsePayload::Success(r) => s.serialize_field("result", r)?,
 		};
 
 		s.serialize_field("id", &self.id)?;
 		s.end()
 	}
 }
+
+/// Type alias for ResponsePayload with unit type.
+pub type ResponsePayloadUnit<'a> = ResponsePayload<'a, ()>;
 
 #[cfg(test)]
 mod tests {
@@ -341,7 +362,7 @@ mod tests {
 	fn serialize_call_ok_response() {
 		let ser = serde_json::to_string(&Response {
 			jsonrpc: Some(TwoPointZero),
-			payload: ResponsePayload::result("ok"),
+			payload: ResponsePayload::success("ok"),
 			id: Id::Number(1),
 		})
 		.unwrap();
@@ -353,7 +374,7 @@ mod tests {
 	fn serialize_call_err_response() {
 		let ser = serde_json::to_string(&Response {
 			jsonrpc: Some(TwoPointZero),
-			payload: ResponsePayload::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
+			payload: ResponsePayload::<()>::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
 			id: Id::Number(1),
 		})
 		.unwrap();
@@ -365,7 +386,7 @@ mod tests {
 	fn serialize_call_response_missing_version_field() {
 		let ser = serde_json::to_string(&Response {
 			jsonrpc: None,
-			payload: ResponsePayload::result("ok"),
+			payload: ResponsePayload::success("ok"),
 			id: Id::Number(1),
 		})
 		.unwrap();
@@ -376,7 +397,7 @@ mod tests {
 	#[test]
 	fn deserialize_success_call() {
 		let exp =
-			Response { jsonrpc: Some(TwoPointZero), payload: ResponsePayload::result(99_u64), id: Id::Number(11) };
+			Response { jsonrpc: Some(TwoPointZero), payload: ResponsePayload::success(99_u64), id: Id::Number(11) };
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.payload, exp.payload);
@@ -399,7 +420,7 @@ mod tests {
 
 	#[test]
 	fn deserialize_call_missing_version_field() {
-		let exp = Response { jsonrpc: None, payload: ResponsePayload::result(99_u64), id: Id::Number(11) };
+		let exp = Response { jsonrpc: None, payload: ResponsePayload::success(99_u64), id: Id::Number(11) };
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":null, "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.payload, exp.payload);

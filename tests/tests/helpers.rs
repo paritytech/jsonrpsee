@@ -325,8 +325,8 @@ pub fn rpc_module_notify_on_response(tx: Sender) -> NotifyRpcModule {
 			let server_sender = ctx.clone();
 
 			let (rp, rp_future) = match kind {
-				Notify::All => ResponsePayload::result("lo").notify_on_response(),
-				Notify::Success => ResponsePayload::result("lo").notify_on_success(),
+				Notify::All => ResponsePayload::success("lo").notify_on_response(),
+				Notify::Success => ResponsePayload::success("lo").notify_on_success(),
 				Notify::Error => ResponsePayload::error(ErrorCode::InvalidParams).notify_on_error(),
 			};
 
