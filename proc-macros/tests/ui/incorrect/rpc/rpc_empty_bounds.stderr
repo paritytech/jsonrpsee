@@ -4,7 +4,7 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: Serialize` is not satisfi
 9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `<Conf as Config>::Hash`
   |
-  = note: required for `std::result::Result<<Conf as Config>::Hash, ErrorObject<'_>>` to implement `IntoResponse`
+  = note: required for `Result<<Conf as Config>::Hash, ErrorObject<'_>>` to implement `IntoResponse`
   = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `<Conf as Config>::Hash: Clone` is not satisfied
@@ -13,7 +13,7 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: Clone` is not satisfied
 9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `<Conf as Config>::Hash`
   |
-  = note: required for `std::result::Result<<Conf as Config>::Hash, ErrorObject<'_>>` to implement `IntoResponse`
+  = note: required for `Result<<Conf as Config>::Hash, ErrorObject<'_>>` to implement `IntoResponse`
   = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `for<'de> <Conf as Config>::Hash: Deserialize<'de>` is not satisfied
