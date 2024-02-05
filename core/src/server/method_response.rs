@@ -36,7 +36,7 @@ use serde::Serialize;
 use serde_json::value::to_raw_value;
 
 #[derive(Debug, Clone)]
-pub(crate) enum ResponseKind {
+enum ResponseKind {
 	MethodCall,
 	Subscription,
 	Batch,
@@ -252,7 +252,7 @@ impl MethodResponse {
 
 /// Represent the outcome of a method call success or failed.
 #[derive(Debug, Copy, Clone)]
-pub(crate) enum MethodResponseResult {
+enum MethodResponseResult {
 	/// The method call was successful.
 	Success,
 	/// The method call failed with error code.
