@@ -67,7 +67,7 @@ where
 	let mut is_single = None;
 
 	while let Some(d) = body.data().await {
-		let data = d.map_err(|e| HttpError::Stream(e))?;
+		let data = d.map_err(HttpError::Stream)?;
 
 		// If it's the first chunk, trim the whitespaces to determine whether it's valid JSON-RPC call.
 		if received_data.is_empty() {
