@@ -34,7 +34,7 @@ impl IntoResponse for CustomError {
 	}
 }
 
-#[rpc(client, server, namespace = "foo")]
+#[rpc(server, namespace = "foo")]
 pub trait Rpc {
 	#[method(name = "async_method1")]
 	async fn async_method1(&self) -> CustomError;
@@ -84,6 +84,30 @@ impl RpcServer for RpcServerImpl {
 	}
 }
 
+// TODO: https://github.com/paritytech/jsonrpsee/issues/1067
+//
+// The client accepts only return types that are `Result<T, ClientError>`.
+#[rpc(client, namespace = "foo")]
+pub trait RpcClient {
+	#[method(name = "async_method1")]
+	async fn async_method1(&self) -> RpcResult<serde_json::Value>;
+
+	#[method(name = "async_method2")]
+	async fn async_method2(&self, x: u32) -> Result<serde_json::Value, ()>;
+
+	#[method(name = "sync_method1")]
+	async fn sync_method1(&self) -> RpcResult<serde_json::Value>;
+
+	#[method(name = "sync_method2")]
+	async fn sync_method2(&self, x: u32) -> Result<serde_json::Value, ()>;
+
+	#[method(name = "blocking_method1")]
+	async fn blocking_method1(&self) -> RpcResult<serde_json::Value>;
+
+	#[method(name = "blocking_method2")]
+	async fn blocking_method2(&self, x: u32) -> Result<serde_json::Value, ()>;
+}
+
 pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
@@ -106,10 +130,10 @@ async fn main() {
 	let error = client.async_method2(123).await.unwrap_err();
 	assert_method2(error);
 
-	let error = client.method1().await.unwrap_err();
+	let error = client.sync_method1().await.unwrap_err();
 	assert_method1(error);
 
-	let error = client.method2(123).await.unwrap_err();
+	let error = client.sync_method2(123).await.unwrap_err();
 	assert_method2(error);
 
 	let error = client.blocking_method1().await.unwrap_err();
