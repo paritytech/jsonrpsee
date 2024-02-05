@@ -483,11 +483,6 @@ impl Future for MethodResponseFuture {
 	}
 }
 
-/// An error that may occur if ResponsePayload::notify_on has been called more than once.
-#[derive(thiserror::Error, Clone, Copy, Debug)]
-#[error("ResponsePayload::notify_on can only be called once")]
-pub struct AlreadyNotifiedError;
-
 #[cfg(test)]
 mod tests {
 	use super::{BatchResponseBuilder, MethodResponse, ResponsePayload};
