@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
+use crate::future::{on_session_close, ConnectionGuard, ServerHandle, SessionCloseFuture, SessionCloseTx, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -501,9 +501,40 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 				conn_guard: self.conn_guard,
 				server_cfg: self.server_cfg,
 			},
+			on_session_close: None,
 		};
 
 		TowerService { rpc_middleware, http_middleware: self.http_middleware }
+	}
+
+	/// Build a tower service that notifies when session is closed.
+	///
+	/// This may be useful if you want to know when a WebSocket session has been
+	/// closed.
+	///
+	/// It's possible to use for HTTP as well but not as useful because
+	/// the HTTP connection is closed once the call has been answered.
+	pub fn build_and_notify_on_session_close(
+		self,
+		methods: impl Into<Methods>,
+		stop_handle: StopHandle,
+	) -> (TowerService<RpcMiddleware, HttpMiddleware>, SessionCloseFuture) {
+		let conn_id = self.conn_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+		let (tx, rx) = on_session_close();
+
+		let rpc_middleware = TowerServiceNoHttp {
+			rpc_middleware: self.rpc_middleware,
+			inner: ServiceData {
+				methods: methods.into(),
+				stop_handle,
+				conn_id,
+				conn_guard: self.conn_guard,
+				server_cfg: self.server_cfg,
+			},
+			on_session_close: Some(tx),
+		};
+
+		(TowerService { rpc_middleware, http_middleware: self.http_middleware }, rx)
 	}
 
 	/// Configure the connection id.
@@ -617,18 +648,18 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
 	/// where S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 	/// {
-	///    type Future = BoxFuture<'a, MethodResponse>;  
-	///  
+	///    type Future = BoxFuture<'a, MethodResponse>;
+	///
 	///    fn call(&self, req: Request<'a>) -> Self::Future {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         let count = self.count.clone();
-	///         let service = self.service.clone();  
+	///         let service = self.service.clone();
 	///
 	///         Box::pin(async move {
 	///             let rp = service.call(req).await;
 	///             // Modify the state.
 	///             count.fetch_add(1, Ordering::Relaxed);
-	///             rp         
+	///             rp
 	///         })
 	///    }
 	/// }
@@ -979,6 +1010,7 @@ where
 pub struct TowerServiceNoHttp<L> {
 	inner: ServiceData,
 	rpc_middleware: RpcServiceBuilder<L>,
+	on_session_close: Option<SessionCloseTx>,
 }
 
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerServiceNoHttp<RpcMiddleware>
@@ -1004,6 +1036,7 @@ where
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
 		let conn_id = self.inner.conn_id;
+		let on_session_close = self.on_session_close.take();
 
 		tracing::trace!(target: LOG_TARGET, "{:?}", request);
 
@@ -1076,6 +1109,7 @@ where
 								sink,
 								rx,
 								pending_calls_completed,
+								on_session_close,
 							};
 
 							ws::background_task(params).await;
@@ -1176,6 +1210,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 			conn_guard: conn_guard.clone(),
 		},
 		rpc_middleware,
+		on_session_close: None,
 	};
 
 	let service = http_middleware.service(tower_service);

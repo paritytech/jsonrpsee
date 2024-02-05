@@ -30,7 +30,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_util::{Stream, StreamExt};
+use futures_util::{Future, Stream, StreamExt};
 use pin_project::pin_project;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::Interval;
@@ -156,4 +156,28 @@ impl Stream for IntervalStream {
 			Poll::Pending
 		}
 	}
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SessionCloseTx(tokio::sync::mpsc::Sender<()>);
+
+/// A future that resolves when the a connection
+/// has been closed.
+#[derive(Debug)]
+pub struct SessionCloseFuture(tokio::sync::mpsc::Receiver<()>);
+
+impl Future for SessionCloseFuture {
+	type Output = ();
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		match self.0.poll_recv(cx) {
+			Poll::Pending => Poll::Pending,
+			Poll::Ready(_) => Poll::Ready(()),
+		}
+	}
+}
+
+pub(crate) fn on_session_close() -> (SessionCloseTx, SessionCloseFuture) {
+	let (tx, rx) = tokio::sync::mpsc::channel(1);
+	(SessionCloseTx(tx), SessionCloseFuture(rx))
 }
