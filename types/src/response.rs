@@ -350,9 +350,6 @@ where
 	}
 }
 
-/// Type alias for ResponsePayload with unit type.
-pub type ResponsePayloadUnit<'a> = ResponsePayload<'a, ()>;
-
 #[cfg(test)]
 mod tests {
 	use super::{Id, Response, TwoPointZero};

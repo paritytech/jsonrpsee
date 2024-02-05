@@ -100,14 +100,14 @@ where
 /// HTTP response helpers.
 pub mod response {
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
-	use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayloadUnit};
+	use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload};
 
 	const JSON: &str = "application/json; charset=utf-8";
 	const TEXT: &str = "text/plain";
 
 	/// Create a response for json internal error.
 	pub fn internal_error() -> hyper::Response<hyper::Body> {
-		let err = ResponsePayloadUnit::error(ErrorObjectOwned::from(ErrorCode::InternalError));
+		let err = ResponsePayload::unit_error(ErrorObjectOwned::from(ErrorCode::InternalError));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
@@ -130,7 +130,7 @@ pub mod response {
 
 	/// Create a json response for oversized requests (413)
 	pub fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
-		let err = ResponsePayloadUnit::error(reject_too_big_request(limit));
+		let err = ResponsePayload::unit_error(reject_too_big_request(limit));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
@@ -139,8 +139,7 @@ pub mod response {
 
 	/// Create a json response for empty or malformed requests (400)
 	pub fn malformed() -> hyper::Response<hyper::Body> {
-		let err: ResponsePayloadUnit = ErrorCode::ParseError.into();
-		let rp = Response::new(err, Id::Null);
+		let rp = Response::new(ResponsePayload::unit_error(ErrorCode::ParseError), Id::Null);
 		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
 		from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
