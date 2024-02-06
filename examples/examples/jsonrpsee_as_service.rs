@@ -36,6 +36,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use futures::FutureExt;
 use hyper::header::AUTHORIZATION;
 use hyper::server::conn::AddrStream;
 use hyper::HeaderMap;
@@ -45,16 +46,18 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{stop_channel, ServerHandle, StopHandle, TowerServiceBuilder};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
-use jsonrpsee::ws_client::HeaderValue;
+use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};
 use jsonrpsee::{MethodResponse, Methods};
 use tower::Service;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 struct Metrics {
-	ws_connections: Arc<AtomicUsize>,
-	http_connections: Arc<AtomicUsize>,
+	opened_ws_connections: Arc<AtomicUsize>,
+	closed_ws_connections: Arc<AtomicUsize>,
+	http_calls: Arc<AtomicUsize>,
+	success_http_calls: Arc<AtomicUsize>,
 }
 
 #[derive(Clone)]
@@ -106,11 +109,21 @@ async fn main() -> anyhow::Result<()> {
 	let filter = tracing_subscriber::EnvFilter::try_from_default_env()?;
 	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
-	let handle = run_server();
+	let metrics = Metrics::default();
+
+	let handle = run_server(metrics.clone());
 	tokio::spawn(handle.stopped());
 
 	{
 		let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
+
+		// Fails because the authorization header is missing.
+		let x = client.trusted_call().await.unwrap_err();
+		tracing::info!("response: {x}");
+	}
+
+	{
+		let client = WsClientBuilder::default().build("ws://127.0.0.1:9944").await.unwrap();
 
 		// Fails because the authorization header is missing.
 		let x = client.trusted_call().await.unwrap_err();
@@ -127,10 +140,12 @@ async fn main() -> anyhow::Result<()> {
 		tracing::info!("response: {x}");
 	}
 
+	tracing::info!("{:?}", metrics);
+
 	Ok(())
 }
 
-fn run_server() -> ServerHandle {
+fn run_server(metrics: Metrics) -> ServerHandle {
 	use hyper::service::{make_service_fn, service_fn};
 
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9944));
@@ -159,7 +174,7 @@ fn run_server() -> ServerHandle {
 	let per_conn = PerConnection {
 		methods: ().into_rpc().into(),
 		stop_handle: stop_handle.clone(),
-		metrics: Metrics::default(),
+		metrics,
 		svc_builder: jsonrpsee::server::Server::builder()
 			.set_http_middleware(tower::ServiceBuilder::new().layer(CorsLayer::permissive()))
 			.max_connections(33)
@@ -185,15 +200,40 @@ fn run_server() -> ServerHandle {
 
 				let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
 
-				async move {
-					// You can't determine whether the websocket upgrade handshake failed or not here.
-					let rp = svc.call(req).await;
-					if is_websocket {
-						metrics.ws_connections.fetch_add(1, Ordering::Relaxed);
-					} else {
-						metrics.http_connections.fetch_add(1, Ordering::Relaxed);
+				if is_websocket {
+					// Utilize the session close future to know when the actual WebSocket
+					// session was closed.
+					let session_close = svc.on_session_closed();
+
+					// A little bit weird API but the response to HTTP request must be returned below
+					// and we spawn a task to register when the session is closed.
+					tokio::spawn(async move {
+						session_close.await;
+						tracing::info!("Closed WebSocket connection");
+						metrics.closed_ws_connections.fetch_add(1, Ordering::Relaxed);
+					});
+
+					async move {
+						tracing::info!("Opened WebSocket connection");
+						metrics.opened_ws_connections.fetch_add(1, Ordering::Relaxed);
+						svc.call(req).await
 					}
-					rp
+					.boxed()
+				} else {
+					// HTTP.
+					async move {
+						tracing::info!("Opened HTTP connection");
+						metrics.http_calls.fetch_add(1, Ordering::Relaxed);
+						let rp = svc.call(req).await;
+
+						if rp.is_ok() {
+							metrics.success_http_calls.fetch_add(1, Ordering::Relaxed);
+						}
+
+						tracing::info!("Closed HTTP connection");
+						rp
+					}
+					.boxed()
 				}
 			}))
 		}

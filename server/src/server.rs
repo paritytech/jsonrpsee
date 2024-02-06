@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
+use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, SessionClosedFuture, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -501,6 +501,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 				conn_guard: self.conn_guard,
 				server_cfg: self.server_cfg,
 			},
+			on_session_close: None,
 		};
 
 		TowerService { rpc_middleware, http_middleware: self.http_middleware }
@@ -941,6 +942,24 @@ pub struct TowerService<RpcMiddleware, HttpMiddleware> {
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
+impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> {
+	/// A future that returns when the connection has been closed.
+	///
+	/// This method must be called before every [`TowerService::call`]
+	/// because the `SessionClosedFuture` may already been consumed or
+	/// not used.
+	pub fn on_session_closed(&mut self) -> SessionClosedFuture {
+		if let Some(n) = self.rpc_middleware.on_session_close.as_mut() {
+			// If it's called more then once another listener is created.
+			n.closed()
+		} else {
+			let (session_close, fut) = session_close();
+			self.rpc_middleware.on_session_close = Some(session_close);
+			fut
+		}
+	}
+}
+
 impl<RpcMiddleware, HttpMiddleware> hyper::service::Service<hyper::Request<hyper::Body>>
 	for TowerService<RpcMiddleware, HttpMiddleware>
 where
@@ -979,6 +998,7 @@ where
 pub struct TowerServiceNoHttp<L> {
 	inner: ServiceData,
 	rpc_middleware: RpcServiceBuilder<L>,
+	on_session_close: Option<SessionClose>,
 }
 
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerServiceNoHttp<RpcMiddleware>
@@ -1004,6 +1024,7 @@ where
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
 		let conn_id = self.inner.conn_id;
+		let on_session_close = self.on_session_close.take();
 
 		tracing::trace!(target: LOG_TARGET, "{:?}", request);
 
@@ -1076,6 +1097,7 @@ where
 								sink,
 								rx,
 								pending_calls_completed,
+								on_session_close,
 							};
 
 							ws::background_task(params).await;
@@ -1176,6 +1198,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 			conn_guard: conn_guard.clone(),
 		},
 		rpc_middleware,
+		on_session_close: None,
 	};
 
 	let service = http_middleware.service(tower_service);
