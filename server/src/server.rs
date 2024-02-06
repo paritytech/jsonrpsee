@@ -945,10 +945,9 @@ pub struct TowerService<RpcMiddleware, HttpMiddleware> {
 impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> {
 	/// A future that returns when the connection has been closed.
 	///
-	/// It's possible to call this many times but internally it uses
-	/// a bounded buffer of 4 such that if one creates more than 4
-	/// SessionCloseFuture's. Then any of these 4 first futures
-	/// must be polled or dropped to make any progress.
+	/// This method must be called before every [`TowerService::call`]
+	/// because the `SessionClosedFuture` may already been consumed or
+	/// not used.
 	pub fn on_session_closed(&mut self) -> SessionClosedFuture {
 		if let Some(n) = self.rpc_middleware.on_session_close.as_mut() {
 			// If it's called more then once another listener is created.
