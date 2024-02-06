@@ -24,20 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-/// Generic transport error.
-#[derive(Debug, thiserror::Error)]
-pub enum GenericTransportError {
-	/// Request was too large.
-	#[error("The request was too big")]
-	TooLarge,
-	/// Malformed request
-	#[error("Malformed request")]
-	Malformed,
-	/// Concrete transport error.
-	#[error("Transport error: {0}")]
-	Inner(anyhow::Error),
-}
-
 /// A type that returns the error as a `String` from `SubscriptionCallback`.
 #[derive(Debug)]
 pub struct StringError(pub(crate) String);
