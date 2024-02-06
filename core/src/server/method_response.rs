@@ -197,7 +197,7 @@ impl MethodResponse {
 					let data = to_raw_value(&format!("Exceeded max limit of {max_response_size}")).ok();
 					let err_code = OVERSIZED_RESPONSE_CODE;
 
-					let err = InnerResponsePayload::unit_error_borrowed(ErrorObject::borrowed(
+					let err = InnerResponsePayload::<()>::error_borrowed(ErrorObject::borrowed(
 						err_code,
 						OVERSIZED_RESPONSE_MSG,
 						data.as_deref(),
@@ -213,9 +213,9 @@ impl MethodResponse {
 					}
 				} else {
 					let err = ErrorCode::InternalError;
+					let payload = jsonrpsee_types::ResponsePayload::<()>::error(err);
 					let result =
-						serde_json::to_string(&Response::new(jsonrpsee_types::ResponsePayload::unit_error(err), id))
-							.expect("JSON serialization infallible; qed");
+						serde_json::to_string(&Response::new(payload, id)).expect("JSON serialization infallible; qed");
 					Self {
 						result,
 						success_or_error: MethodResponseResult::Failed(err.code()),
@@ -239,7 +239,7 @@ impl MethodResponse {
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
 		let err: ErrorObject = err.into();
 		let err_code = err.code();
-		let err = InnerResponsePayload::unit_error_borrowed(err);
+		let err = InnerResponsePayload::<()>::error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 		Self {
 			result,
@@ -340,7 +340,7 @@ pub struct BatchResponse(String);
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
-	let err = InnerResponsePayload::unit_error_borrowed(err);
+	let err = InnerResponsePayload::<()>::error_borrowed(err);
 	serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed")
 }
 
@@ -437,24 +437,6 @@ where
 	fn from(code: ErrorCode) -> Self {
 		let err: ErrorObject = code.into();
 		Self::error(err)
-	}
-}
-
-impl<'a> ResponsePayload<'a, ()> {
-	/// Similar to [`ResponsePayload::error`] but assigns `T = ()`.
-	///
-	/// This is useful when one only want to return the error and
-	/// `T` can't resolved by rustc to avoid type annonations.
-	pub fn unit_error(e: impl Into<ErrorObjectOwned>) -> Self {
-		InnerResponsePayload::unit_error(e.into()).into()
-	}
-
-	/// Similar to [`ResponsePayload::error_borrowed`] but assigns `T = ()`.
-	///
-	/// This is useful when one only want to return the error and
-	/// `T` can't resolved by rustc to avoid type annonations.
-	pub fn unit_error_borrowed(e: impl Into<ErrorObject<'a>>) -> Self {
-		InnerResponsePayload::unit_error_borrowed(e.into()).into()
 	}
 }
 

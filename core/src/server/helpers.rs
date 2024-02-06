@@ -131,8 +131,8 @@ impl MethodSink {
 
 	/// Send a JSON-RPC error to the client
 	pub async fn send_error<'a>(&self, id: Id<'a>, err: ErrorObject<'a>) -> Result<(), DisconnectError> {
-		let json = serde_json::to_string(&Response::new(ResponsePayload::unit_error_borrowed(err), id))
-			.expect("valid JSON; qed");
+		let payload = ResponsePayload::<()>::error_borrowed(err);
+		let json = serde_json::to_string(&Response::new(payload, id)).expect("valid JSON; qed");
 
 		self.send(json).await
 	}

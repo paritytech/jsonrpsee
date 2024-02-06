@@ -180,24 +180,6 @@ impl<'a, T: Clone> From<ErrorCode> for ResponsePayload<'a, T> {
 	}
 }
 
-impl<'a> ResponsePayload<'a, ()> {
-	/// Similar to [`ResponsePayload::error`] but assigns `T = ()`.
-	///
-	/// This is useful when one only want to return the error and
-	/// `T` can't resolved by rustc to avoid type annonations.
-	pub fn unit_error(e: impl Into<ErrorObjectOwned>) -> Self {
-		Self::Error(e.into())
-	}
-
-	/// Similar to [`ResponsePayload::error_borrowed`] but assigns `T = ()`.
-	///
-	/// This is useful when one only want to return the error and
-	/// `T` can't resolved by rustc to avoid type annonations.
-	pub fn unit_error_borrowed(e: impl Into<ErrorObject<'a>>) -> Self {
-		Self::Error(e.into())
-	}
-}
-
 impl<'de, T> Deserialize<'de> for Response<'de, T>
 where
 	T: Deserialize<'de> + Clone,
