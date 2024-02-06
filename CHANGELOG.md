@@ -12,7 +12,7 @@ to make it possible to determine whether a response has been processed.
 Unfortunately the `IntoResponse trait` was modified to enable that
 and some minor changes were made as well.
 
-### Example of async `ResponsePayload API`
+### Example of the async `ResponsePayload API`
 
 ```rust
 #[rpc(server)]
