@@ -24,9 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::tests::helpers::{deser_call, init_logger, server_with_context};
+use crate::tests::helpers::{deser_call, init_logger, server_with_context, ws_server_with_stats, Metrics};
 use crate::types::SubscriptionId;
 use crate::{BatchRequestConfig, RegisterMethodError};
 use crate::{RpcModule, ServerBuilder};
@@ -872,6 +873,30 @@ async fn drop_client_with_pending_calls_works() {
 	// when the connection has already been closed.
 	handle.stop().unwrap();
 	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
+}
+
+#[tokio::test]
+async fn server_notify_on_conn_close() {
+	init_logger();
+
+	let metrics = Metrics::default();
+	let addr = ws_server_with_stats(metrics.clone());
+
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	// Wait for the server to process
+	tokio::time::sleep(Duration::from_millis(100)).await;
+
+	assert_eq!(metrics.ws_sessions_opened.load(Ordering::SeqCst), 1);
+	assert_eq!(metrics.ws_sessions_closed.load(Ordering::SeqCst), 0);
+
+	client.close().with_default_timeout().await.unwrap().unwrap();
+
+	// Wait for the server to process
+	tokio::time::sleep(Duration::from_millis(100)).await;
+
+	assert_eq!(metrics.ws_sessions_opened.load(Ordering::SeqCst), 1);
+	assert_eq!(metrics.ws_sessions_closed.load(Ordering::SeqCst), 1);
 }
 
 async fn server_with_infinite_call(

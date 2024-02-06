@@ -182,11 +182,9 @@ impl Future for SessionClosedFuture {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		match self.0.poll_next_unpin(cx) {
 			Poll::Pending => Poll::Pending,
-			// A message is only sent when
-			Poll::Ready(x) => {
-				tracing::info!("{:?}", x);
-				Poll::Ready(())
-			}
+			// Only message is only sent and
+			// ignore can't keep up errors.
+			Poll::Ready(_) => Poll::Ready(()),
 		}
 	}
 }
