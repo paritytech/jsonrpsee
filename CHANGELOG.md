@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog].
 Another breaking release where a new `ResponsePayload` type was introduced in order
 to make it possible to determine whether a response has been processed.
 
-Unforgently the `IntoResponse trait` was modified to enable that
+Unfortunately the `IntoResponse trait` was modified to enable that
 and some minor changes were made as well.
 
 ### Example of async `ResponsePayload API`
