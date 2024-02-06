@@ -4,8 +4,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, ClientError, Serialize};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{IntoResponse, ServerBuilder};
-use jsonrpsee::types::ResponsePayload;
+use jsonrpsee::server::{IntoResponse, ResponsePayload, ServerBuilder};
 use jsonrpsee::ws_client::*;
 
 // Serialize impl is not used as the responses are sent out as error.
@@ -31,7 +30,7 @@ impl IntoResponse for CustomError {
 		let data = data.map(|val| serde_json::value::to_raw_value(&val).unwrap());
 
 		let error_object = jsonrpsee::types::ErrorObjectOwned::owned(code, "custom_error", data);
-		ResponsePayload::Error(error_object)
+		ResponsePayload::error(error_object)
 	}
 }
 

@@ -92,7 +92,7 @@ where
 
 			// If the response is empty it means that it was a notification or empty batch.
 			// For HTTP these are just ACK:ed with a empty body.
-			response::ok_response(rp.map_or(String::new(), |r| r.result))
+			response::ok_response(rp.map_or(String::new(), |r| r.into_result()))
 		}
 		// Error scenarios:
 		Method::POST => response::unsupported_content_type(),
@@ -110,7 +110,7 @@ pub mod response {
 
 	/// Create a response for json internal error.
 	pub fn internal_error() -> hyper::Response<hyper::Body> {
-		let err = ResponsePayload::error(ErrorObjectOwned::from(ErrorCode::InternalError));
+		let err = ResponsePayload::<()>::error(ErrorObjectOwned::from(ErrorCode::InternalError));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
@@ -133,7 +133,7 @@ pub mod response {
 
 	/// Create a json response for oversized requests (413)
 	pub fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
-		let err = ResponsePayload::error(reject_too_big_request(limit));
+		let err = ResponsePayload::<()>::error(reject_too_big_request(limit));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
@@ -142,7 +142,7 @@ pub mod response {
 
 	/// Create a json response for empty or malformed requests (400)
 	pub fn malformed() -> hyper::Response<hyper::Body> {
-		let rp = Response::new(ErrorCode::ParseError.into(), Id::Null);
+		let rp = Response::new(ResponsePayload::<()>::error(ErrorCode::ParseError), Id::Null);
 		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
 		from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)

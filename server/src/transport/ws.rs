@@ -10,8 +10,7 @@ use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::server::helpers::MethodSink;
-use jsonrpsee_core::server::{BoundedSubscriptions, Methods};
+use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
 use soketto::connection::Error as SokettoError;
@@ -155,8 +154,20 @@ where
 				handle_rpc_call(&data[idx..], is_single, batch_requests_config, max_response_body_size, &*rpc_service)
 					.await
 			{
-				if !rp.is_subscription {
-					_ = sink.send(rp.result).await;
+				if !rp.is_subscription() {
+					let is_success = rp.is_success();
+					let (serialized_rp, mut on_close) = rp.into_parts();
+
+					// The connection is closed, just quit.
+					if sink.send(serialized_rp).await.is_err() {
+						return;
+					}
+
+					// Notify that the message has been sent out to the internal
+					// WebSocket buffer.
+					if let Some(n) = on_close.take() {
+						n.notify(is_success);
+					}
 				}
 			}
 		});

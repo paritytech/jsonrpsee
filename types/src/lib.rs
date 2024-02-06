@@ -43,7 +43,7 @@ pub mod response;
 /// JSON-RPC response error object related types.
 pub mod error;
 
-pub use error::{ErrorObject, ErrorObjectOwned};
+pub use error::{ErrorCode, ErrorObject, ErrorObjectOwned};
 pub use params::{Id, InvalidRequestId, Params, ParamsSequence, SubscriptionId, TwoPointZero};
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, ResponsePayload, SubscriptionPayload, SubscriptionResponse, Success as ResponseSuccess};

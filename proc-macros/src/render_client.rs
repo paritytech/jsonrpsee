@@ -110,9 +110,20 @@ impl RpcDescription {
 			let err_ty = self.jrps_client_item(quote! { core::client::Error });
 
 			quote! { core::result::Result<#ret_ty, #err_ty> }
+		} else if type_name.ident == "ResponsePayload" {
+			// ResponsePayload<'a, T>
+			if args.len() != 2 {
+				return quote_spanned!(args.span() => compile_error!("ResponsePayload must have exactly two arguments"));
+			}
+
+			// The type alias `RpcResult<T>` is modified to `Result<T, Error>`.
+			let ret_ty = args.last_mut().unwrap();
+			let err_ty = self.jrps_client_item(quote! { core::client::Error });
+
+			quote! { core::result::Result<#ret_ty, #err_ty> }
 		} else {
 			// Any other type name isn't allowed.
-			quote_spanned!(type_name.span() => compile_error!("The return type must be Result or RpcResult"))
+			quote_spanned!(type_name.span() => compile_error!("The return type must be Result<T, Error>, RpcResult<T> or ResponsePayload<'static, T>"))
 		}
 	}
 

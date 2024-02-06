@@ -37,10 +37,11 @@ use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{
 	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
 };
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
-use jsonrpsee::SubscriptionCloseResponse;
-use serde::Serialize;
+use jsonrpsee::types::{ErrorCode, ErrorObject, ErrorObjectOwned};
+use jsonrpsee::{MethodResponseError, ResponsePayload, SubscriptionCloseResponse};
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
@@ -286,4 +287,57 @@ pub async fn connect_over_socks_stream(server_addr: SocketAddr) -> Socks5Stream<
 	)
 	.await
 	.unwrap()
+}
+
+#[derive(Copy, Clone, Deserialize, Serialize)]
+pub enum Notify {
+	Success,
+	Error,
+	All,
+}
+
+pub type NotifyRpcModule = RpcModule<UnboundedSender<Result<(), MethodResponseError>>>;
+pub type Sender = tokio::sync::mpsc::UnboundedSender<Result<(), MethodResponseError>>;
+pub type Receiver = tokio::sync::mpsc::UnboundedReceiver<Result<(), MethodResponseError>>;
+
+pub async fn run_test_notify_test(
+	module: &NotifyRpcModule,
+	server_rx: &mut Receiver,
+	is_success: bool,
+	kind: Notify,
+) -> Result<(), MethodResponseError> {
+	use jsonrpsee_test_utils::mocks::Id;
+
+	let req = jsonrpsee_test_utils::helpers::call("hey", vec![kind], Id::Num(1));
+	let (rp, _) = module.raw_json_request(&req, 1).await.unwrap();
+	let (_, notify_rx) = rp.into_parts();
+	notify_rx.unwrap().notify(is_success);
+	server_rx.recv().await.expect("Channel is not dropped")
+}
+
+/// Helper module that will send the results on the channel passed in.
+pub fn rpc_module_notify_on_response(tx: Sender) -> NotifyRpcModule {
+	let mut module = RpcModule::new(tx);
+
+	module
+		.register_method("hey", |params, ctx| {
+			let kind: Notify = params.one().unwrap();
+			let server_sender = ctx.clone();
+
+			let (rp, rp_future) = match kind {
+				Notify::All => ResponsePayload::success("lo").notify_on_completion(),
+				Notify::Success => ResponsePayload::success("lo").notify_on_completion(),
+				Notify::Error => ResponsePayload::error(ErrorCode::InvalidParams).notify_on_completion(),
+			};
+
+			tokio::spawn(async move {
+				let rp = rp_future.await;
+				server_sender.send(rp).unwrap();
+			});
+
+			rp
+		})
+		.unwrap();
+
+	module
 }

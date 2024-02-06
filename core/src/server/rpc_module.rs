@@ -32,18 +32,19 @@ use std::sync::Arc;
 
 use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
-use crate::server::LOG_TARGET;
-use crate::server::helpers::{MethodResponse, MethodSink};
+use crate::server::helpers::MethodSink;
+use crate::server::method_response::MethodResponse;
 use crate::server::subscription::{
 	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
+use crate::server::{ResponsePayload, LOG_TARGET};
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
-	Id, Params, Request, Response, ResponsePayload, ResponseSuccess, SubscriptionId as RpcSubscriptionId, ErrorObjectOwned,
+	ErrorObjectOwned, Id, Params, Request, Response, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
 };
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
@@ -78,7 +79,6 @@ pub type MaxResponseSize = usize;
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>);
 
-
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
 pub enum MethodsError {
@@ -97,12 +97,11 @@ pub enum MethodsError {
 /// and `Subscribe` calls are handled differently
 /// because we want to prevent subscriptions to start
 /// before the actual subscription call has been answered.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum CallOrSubscription {
 	/// The subscription callback itself sends back the result
 	/// so it must not be sent back again.
 	Subscription(MethodResponse),
-
 	/// Treat it as ordinary call.
 	Call(MethodResponse),
 }
@@ -292,7 +291,7 @@ impl Methods {
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
-		let rp = serde_json::from_str::<Response<T>>(&resp.result)?;
+		let rp = serde_json::from_str::<Response<T>>(resp.as_result())?;
 		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| MethodsError::JsonRpc(e.into_owned()))
 	}
 
@@ -319,7 +318,7 @@ impl Methods {
 	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
-	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.result).unwrap().try_into().unwrap();
+	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.as_result()).unwrap().try_into().unwrap();
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
@@ -428,9 +427,9 @@ impl Methods {
 
 		// TODO: hack around the lifetime on the `SubscriptionId` by deserialize first to serde_json::Value.
 		let as_success: ResponseSuccess<serde_json::Value> =
-			serde_json::from_str::<Response<_>>(&resp.result)?.try_into()?;
+			serde_json::from_str::<Response<_>>(resp.as_result())?.try_into()?;
 
-		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.result.clone()))?;
+		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.to_result()))?;
 
 		Ok(Subscription { sub_id, rx })
 	}
@@ -486,6 +485,15 @@ impl<Context> From<RpcModule<Context>> for Methods {
 
 impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// Register a new synchronous RPC method, which computes the response with the given callback.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use jsonrpsee_core::server::RpcModule;
+	///
+	/// let mut module = RpcModule::new(());
+	/// module.register_method("say_hello", |_params, _ctx| "lo").unwrap();
+	/// ```
 	pub fn register_method<R, F>(
 		&mut self,
 		method_name: &'static str,
@@ -507,6 +515,17 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use jsonrpsee_core::server::RpcModule;
+	///
+	/// let mut module = RpcModule::new(());
+	/// module.register_async_method("say_hello", |_params, _ctx| async { "lo" }).unwrap();
+	///
+	/// ```
+	///
 	pub fn register_async_method<R, Fun, Fut>(
 		&mut self,
 		method_name: &'static str,
@@ -884,7 +903,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, ResponsePayload::result(false), max_response_size);
+							return MethodResponse::response(id, ResponsePayload::success(false), max_response_size);
 						}
 					};
 
@@ -900,7 +919,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, ResponsePayload::result(result), max_response_size)
+					MethodResponse::response(id, ResponsePayload::success(result), max_response_size)
 				})),
 			);
 		}
