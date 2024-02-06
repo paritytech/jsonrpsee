@@ -42,36 +42,6 @@ enum ResponseKind {
 	Batch,
 }
 
-/// Notification kind.
-#[derive(Debug)]
-pub enum NotifyKind {
-	/// Just notify on success.
-	Success(MethodResponseNotifyTx),
-	/// Just notify on error.
-	Error(MethodResponseNotifyTx),
-	/// Notify on both success or error.
-	All(MethodResponseNotifyTx),
-}
-
-impl NotifyKind {
-	/// Sends out the notification.
-	pub fn notify(self, is_success: bool) {
-		match self {
-			NotifyKind::All(c) => {
-				_ = c.send(NotifyMsg::Ok);
-			}
-			NotifyKind::Success(c) => {
-				let msg = if is_success { NotifyMsg::Ok } else { NotifyMsg::WrongKind };
-				let _ = c.send(msg);
-			}
-			NotifyKind::Error(c) => {
-				let msg = if !is_success { NotifyMsg::Ok } else { NotifyMsg::WrongKind };
-				let _ = c.send(msg);
-			}
-		}
-	}
-}
-
 /// Represents a response to a method call.
 ///
 /// NOTE: A subscription is also a method call but it's
@@ -88,7 +58,7 @@ pub struct MethodResponse {
 	kind: ResponseKind,
 	/// Optional callback that may be utilized to notif
 	/// that the method response has been processed
-	on_close: Option<NotifyKind>,
+	on_close: Option<MethodResponseNotifyTx>,
 }
 
 impl MethodResponse {
@@ -128,7 +98,7 @@ impl MethodResponse {
 	}
 
 	/// Consume the method response and extract the parts.
-	pub fn into_parts(self) -> (String, Option<NotifyKind>) {
+	pub fn into_parts(self) -> (String, Option<MethodResponseNotifyTx>) {
 		(self.result, self.on_close)
 	}
 
@@ -352,7 +322,7 @@ where
 	T: Clone,
 {
 	inner: InnerResponsePayload<'a, T>,
-	on_exit: Option<NotifyKind>,
+	on_exit: Option<MethodResponseNotifyTx>,
 }
 
 impl<'a, T: Clone> From<InnerResponsePayload<'a, T>> for ResponsePayload<'a, T> {
@@ -388,39 +358,11 @@ where
 	/// Consumes the [`ResponsePayload`] and produces new [`ResponsePayload`] and a future
 	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
 	///
-	/// If `notify_on_<on_success, response, error>` has been called previously it will replaced
-	/// and the previous future(s) will be resolved with error.
-	///
-	/// The [`MethodResponseFuture`] will only return Ok on a successful JSON-RPC response.
-	pub fn notify_on_success(mut self) -> (Self, MethodResponseFuture) {
+	/// If this has been called more than once then this will overwrite
+	/// the old result the previous future(s) will be resolved with error.
+	pub fn notify_on_completion(mut self) -> (Self, MethodResponseFuture) {
 		let (tx, rx) = response_channel();
-		self.on_exit = Some(NotifyKind::Success(tx));
-		(self, rx)
-	}
-
-	/// Consumes the [`ResponsePayload`] and produces new [`ResponsePayload`] and a future
-	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
-	///
-	/// If `notify_on_<on_success, response, error>` has been called previously it will replaced
-	/// and the previous future(s) will be resolved with error.
-	///
-	/// The [`MethodResponseFuture`] will return Ok once a response is processed.
-	pub fn notify_on_response(mut self) -> (Self, MethodResponseFuture) {
-		let (tx, rx) = response_channel();
-		self.on_exit = Some(NotifyKind::All(tx));
-		(self, rx)
-	}
-
-	/// Consumes the [`ResponsePayload`] and produces new [`ResponsePayload`] and a future
-	/// [`MethodResponseFuture`] that will be resolved once the response has been processed.
-	///
-	/// If `notify_on_<on_success, response, error>` has been called previously it will replaced
-	/// and the previous future(s) will be resolved with error.
-	///
-	/// The [`MethodResponseFuture`] will only return Ok on a failed JSON-RPC response.
-	pub fn notify_on_error(mut self) -> (Self, MethodResponseFuture) {
-		let (tx, rx) = response_channel();
-		self.on_exit = Some(NotifyKind::Error(tx));
+		self.on_exit = Some(tx);
 		(self, rx)
 	}
 
@@ -453,8 +395,9 @@ pub struct MethodResponseNotifyTx(tokio::sync::oneshot::Sender<NotifyMsg>);
 
 impl MethodResponseNotifyTx {
 	/// Send a notify message.
-	pub fn send(self, msg: NotifyMsg) -> Result<(), NotifyMsg> {
-		self.0.send(msg)
+	pub fn notify(self, is_success: bool) {
+		let msg = if is_success { NotifyMsg::Ok } else { NotifyMsg::Err };
+		_ = self.0.send(msg);
 	}
 }
 
@@ -471,7 +414,7 @@ pub enum NotifyMsg {
 	/// The response was the wrong kind
 	/// such an error response when
 	/// one expected a succesful response.
-	WrongKind,
+	Err,
 }
 
 /// Method response error.
@@ -479,10 +422,8 @@ pub enum NotifyMsg {
 pub enum MethodResponseError {
 	/// The connection was closed.
 	Closed,
-	/// The response was the wrong kind
-	/// such an error response when
-	/// one expected a succesful response.
-	WrongKind,
+	/// The response was a JSON-RPC error.
+	JsonRpcError,
 }
 
 impl Future for MethodResponseFuture {
@@ -491,7 +432,7 @@ impl Future for MethodResponseFuture {
 	fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
 		match self.0.poll_unpin(cx) {
 			Poll::Ready(Ok(NotifyMsg::Ok)) => Poll::Ready(Ok(())),
-			Poll::Ready(Ok(NotifyMsg::WrongKind)) => Poll::Ready(Err(MethodResponseError::WrongKind)),
+			Poll::Ready(Ok(NotifyMsg::Err)) => Poll::Ready(Err(MethodResponseError::JsonRpcError)),
 			Poll::Ready(Err(_)) => Poll::Ready(Err(MethodResponseError::Closed)),
 			Poll::Pending => Poll::Pending,
 		}

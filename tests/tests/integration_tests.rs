@@ -1318,7 +1318,7 @@ async fn response_payload_async_api_works() {
 		module
 			.register_method("get", |_params, ctx| {
 				let ctx = ctx.clone();
-				let (rp, rp_future) = ResponsePayload::success(1).notify_on_success();
+				let (rp, rp_future) = ResponsePayload::success(1).notify_on_completion();
 
 				tokio::spawn(async move {
 					// Wait for response to sent to the internal WebSocket message buffer

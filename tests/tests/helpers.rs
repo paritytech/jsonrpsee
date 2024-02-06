@@ -303,15 +303,15 @@ pub type Receiver = tokio::sync::mpsc::UnboundedReceiver<Result<(), MethodRespon
 pub async fn run_test_notify_test(
 	module: &NotifyRpcModule,
 	server_rx: &mut Receiver,
+	is_success: bool,
 	kind: Notify,
-	rp_success: bool,
 ) -> Result<(), MethodResponseError> {
 	use jsonrpsee_test_utils::mocks::Id;
 
 	let req = jsonrpsee_test_utils::helpers::call("hey", vec![kind], Id::Num(1));
 	let (rp, _) = module.raw_json_request(&req, 1).await.unwrap();
 	let (_, notify_rx) = rp.into_parts();
-	notify_rx.unwrap().notify(rp_success);
+	notify_rx.unwrap().notify(is_success);
 	server_rx.recv().await.expect("Channel is not dropped")
 }
 
@@ -325,9 +325,9 @@ pub fn rpc_module_notify_on_response(tx: Sender) -> NotifyRpcModule {
 			let server_sender = ctx.clone();
 
 			let (rp, rp_future) = match kind {
-				Notify::All => ResponsePayload::success("lo").notify_on_response(),
-				Notify::Success => ResponsePayload::success("lo").notify_on_success(),
-				Notify::Error => ResponsePayload::error(ErrorCode::InvalidParams).notify_on_error(),
+				Notify::All => ResponsePayload::success("lo").notify_on_completion(),
+				Notify::Success => ResponsePayload::success("lo").notify_on_completion(),
+				Notify::Error => ResponsePayload::error(ErrorCode::InvalidParams).notify_on_completion(),
 			};
 
 			tokio::spawn(async move {

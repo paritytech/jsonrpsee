@@ -591,37 +591,25 @@ async fn subscription_close_response_works() {
 }
 
 #[tokio::test]
-async fn method_response_notify_on_success_works() {
+async fn method_response_notify_on_completion() {
 	init_logger();
 
 	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 	let module = rpc_module_notify_on_response(tx);
 
 	assert!(
-		run_test_notify_test(&module, &mut rx, Notify::Success, true).await.is_ok(),
+		run_test_notify_test(&module, &mut rx, true, Notify::Success).await.is_ok(),
 		"Successful response should be notified"
 	);
 	assert!(matches!(
-		run_test_notify_test(&module, &mut rx, Notify::Success, false).await,
-		Err(MethodResponseError::WrongKind),
+		run_test_notify_test(&module, &mut rx, false, Notify::Success).await,
+		Err(MethodResponseError::JsonRpcError),
 	));
-}
 
-#[tokio::test]
-async fn method_response_notify_on_all() {
-	init_logger();
-
-	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-	let module = rpc_module_notify_on_response(tx);
-
-	assert!(
-		run_test_notify_test(&module, &mut rx, Notify::All, true).await.is_ok(),
-		"Successful response should be notified"
-	);
-	assert!(
-		run_test_notify_test(&module, &mut rx, Notify::All, false).await.is_ok(),
-		"Error response should be notified"
-	);
+	assert!(matches!(
+		run_test_notify_test(&module, &mut rx, false, Notify::Error).await,
+		Err(MethodResponseError::JsonRpcError),
+	));
 }
 
 #[tokio::test]
