@@ -166,7 +166,7 @@ where
 					// Notify that the message has been sent out to the internal
 					// WebSocket buffer.
 					if let Some(n) = on_close.take() {
-						_ = n.notify(is_success);
+						n.notify(is_success);
 					}
 				}
 			}
