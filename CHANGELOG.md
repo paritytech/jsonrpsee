@@ -39,7 +39,7 @@ impl RpcServer for () {
 ### Roadmap
 
 We are getting closer to releasing jsonrpsee v1.0 and
-the following is planned to fixed before that:
+the following is work planned:
 - Native async traits
 - Upgrade hyper to v1.0
 - Better subscription API for the client.
