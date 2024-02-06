@@ -34,6 +34,7 @@ use futures_util::{Future, Stream, StreamExt};
 use pin_project::pin_project;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::Interval;
+use tokio_stream::wrappers::BroadcastStream;
 
 /// Create channel to determine whether
 /// the server shall continue to run or not.
@@ -159,25 +160,40 @@ impl Stream for IntervalStream {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct SessionCloseTx(tokio::sync::mpsc::Sender<()>);
+pub(crate) struct SessionClose(tokio::sync::broadcast::Sender<()>);
 
-/// A future that resolves when the a connection
-/// has been closed.
+impl SessionClose {
+	pub(crate) fn close(self) {
+		let _ = self.0.send(());
+	}
+
+	pub(crate) fn closed(&self) -> SessionClosedFuture {
+		SessionClosedFuture(BroadcastStream::new(self.0.subscribe()))
+	}
+}
+
+/// A future that resolves when the connection has been closed.
 #[derive(Debug)]
-pub struct SessionCloseFuture(tokio::sync::mpsc::Receiver<()>);
+pub struct SessionClosedFuture(BroadcastStream<()>);
 
-impl Future for SessionCloseFuture {
+impl Future for SessionClosedFuture {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		match self.0.poll_recv(cx) {
+		match self.0.poll_next_unpin(cx) {
 			Poll::Pending => Poll::Pending,
-			Poll::Ready(_) => Poll::Ready(()),
+			// A message is only sent when
+			Poll::Ready(x) => {
+				tracing::info!("{:?}", x);
+				Poll::Ready(())
+			}
 		}
 	}
 }
 
-pub(crate) fn on_session_close() -> (SessionCloseTx, SessionCloseFuture) {
-	let (tx, rx) = tokio::sync::mpsc::channel(1);
-	(SessionCloseTx(tx), SessionCloseFuture(rx))
+pub(crate) fn session_close() -> (SessionClose, SessionClosedFuture) {
+	// SessionClosedFuture is closed after one message has been recevied
+	// and max one message is handled then it's closed.
+	let (tx, rx) = tokio::sync::broadcast::channel(1);
+	(SessionClose(tx), SessionClosedFuture(BroadcastStream::new(rx)))
 }

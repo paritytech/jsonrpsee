@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::future::{IntervalStream, SessionCloseTx};
+use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
 use crate::{PingConfig, LOG_TARGET};
@@ -56,7 +56,7 @@ pub(crate) struct BackgroundTaskParams<S> {
 	pub(crate) sink: MethodSink,
 	pub(crate) rx: mpsc::Receiver<String>,
 	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
-	pub(crate) on_session_close: Option<SessionCloseTx>,
+	pub(crate) on_session_close: Option<SessionClose>,
 }
 
 pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
@@ -72,7 +72,7 @@ where
 		sink,
 		rx,
 		pending_calls_completed,
-		on_session_close,
+		mut on_session_close,
 	} = params;
 	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
 		server_cfg;
@@ -171,7 +171,10 @@ where
 	graceful_shutdown(result, pending_calls_completed, ws_stream, conn_tx, send_task_handle).await;
 
 	drop(conn);
-	drop(on_session_close);
+
+	if let Some(c) = on_session_close.take() {
+		c.close();
+	}
 }
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.

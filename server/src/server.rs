@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
-use crate::future::{on_session_close, ConnectionGuard, ServerHandle, SessionCloseFuture, SessionCloseTx, StopHandle};
+use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, SessionClosedFuture, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -507,36 +507,6 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 		TowerService { rpc_middleware, http_middleware: self.http_middleware }
 	}
 
-	/// Build a tower service that notifies when session is closed.
-	///
-	/// This may be useful if you want to know when a WebSocket session has been
-	/// closed.
-	///
-	/// It's possible to use for HTTP as well but not as useful because
-	/// the HTTP connection is closed once the call has been answered.
-	pub fn build_and_notify_on_session_close(
-		self,
-		methods: impl Into<Methods>,
-		stop_handle: StopHandle,
-	) -> (TowerService<RpcMiddleware, HttpMiddleware>, SessionCloseFuture) {
-		let conn_id = self.conn_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-		let (tx, rx) = on_session_close();
-
-		let rpc_middleware = TowerServiceNoHttp {
-			rpc_middleware: self.rpc_middleware,
-			inner: ServiceData {
-				methods: methods.into(),
-				stop_handle,
-				conn_id,
-				conn_guard: self.conn_guard,
-				server_cfg: self.server_cfg,
-			},
-			on_session_close: Some(tx),
-		};
-
-		(TowerService { rpc_middleware, http_middleware: self.http_middleware }, rx)
-	}
-
 	/// Configure the connection id.
 	///
 	/// This is incremented every time `build` is called.
@@ -972,6 +942,25 @@ pub struct TowerService<RpcMiddleware, HttpMiddleware> {
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
+impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> {
+	/// A future that returns when the connection has been closed.
+	///
+	/// It's possible to call this many times but internally it uses
+	/// a bounded buffer of 4 such that if one creates more than 4
+	/// SessionCloseFuture's. Then any of these 4 first futures
+	/// must be polled or dropped to make any progress.
+	pub fn on_session_closed(&mut self) -> SessionClosedFuture {
+		if let Some(n) = self.rpc_middleware.on_session_close.as_mut() {
+			// If it's called more then once another listener is created.
+			n.closed()
+		} else {
+			let (session_close, fut) = session_close();
+			self.rpc_middleware.on_session_close = Some(session_close);
+			fut
+		}
+	}
+}
+
 impl<RpcMiddleware, HttpMiddleware> hyper::service::Service<hyper::Request<hyper::Body>>
 	for TowerService<RpcMiddleware, HttpMiddleware>
 where
@@ -1010,7 +999,7 @@ where
 pub struct TowerServiceNoHttp<L> {
 	inner: ServiceData,
 	rpc_middleware: RpcServiceBuilder<L>,
-	on_session_close: Option<SessionCloseTx>,
+	on_session_close: Option<SessionClose>,
 }
 
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerServiceNoHttp<RpcMiddleware>

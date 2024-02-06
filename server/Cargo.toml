@@ -23,7 +23,7 @@ serde_json = { version = "1", features = ["raw_value"] }
 soketto = { version = "0.7.1", features = ["http"] }
 tokio = { version = "1.16", features = ["net", "rt-multi-thread", "macros", "time"] }
 tokio-util = { version = "0.7", features = ["compat"] }
-tokio-stream = "0.1.7"
+tokio-stream = { version = "0.1.7", features = ["sync"] }
 hyper = { version = "0.14", features = ["server", "http1", "http2"] }
 tower = "0.4.13"
 thiserror = "1"

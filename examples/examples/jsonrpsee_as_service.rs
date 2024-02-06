@@ -198,30 +198,31 @@ fn run_server(metrics: Metrics) -> ServerHandle {
 					AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
 				});
 
+				let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
+
 				if is_websocket {
 					// Utilize the session close future to know when the actual WebSocket
 					// session was closed.
-					let (mut svc, session_close) = svc_builder
-						.set_rpc_middleware(rpc_middleware)
-						.build_and_notify_on_session_close(methods, stop_handle);
+					let session_close = svc.on_session_closed();
 
 					// A little bit weird API but the response to HTTP request must be returned below
 					// and we spawn a task to register when the session is closed.
 					tokio::spawn(async move {
 						session_close.await;
+						tracing::info!("Closed WebSocket connection");
 						metrics.closed_ws_connections.fetch_add(1, Ordering::Relaxed);
 					});
 
 					async move {
+						tracing::info!("Opened WebSocket connection");
 						metrics.opened_ws_connections.fetch_add(1, Ordering::Relaxed);
 						svc.call(req).await
 					}
 					.boxed()
 				} else {
 					// HTTP.
-					let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
-
 					async move {
+						tracing::info!("Opened HTTP connection");
 						metrics.http_calls.fetch_add(1, Ordering::Relaxed);
 						let rp = svc.call(req).await;
 
@@ -229,6 +230,7 @@ fn run_server(metrics: Metrics) -> ServerHandle {
 							metrics.success_http_calls.fetch_add(1, Ordering::Relaxed);
 						}
 
+						tracing::info!("Closed HTTP connection");
 						rp
 					}
 					.boxed()
