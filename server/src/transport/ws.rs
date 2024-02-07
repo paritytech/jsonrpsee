@@ -355,16 +355,16 @@ async fn graceful_shutdown<S>(
 	_ = send_task_handle.await;
 }
 
-/// Low-level API that attempts to establish WebSocket connection
+/// Low-level API that tries to upgrade the HTTP connection to a WebSocket connection.
 ///
-/// Returns Ok((http_response, fut)) if websocket connection was successfully established
-/// otherwise Err(http_response).
+/// Returns `Ok((http_response, conn_fut))` if the WebSocket connection was successfully established
+/// otherwise `Err(http_response)`.
 ///
-/// `fut` is a future that drives the WebSocket connection
+/// `conn_fut` is a future that drives the WebSocket connection
 /// and if it's dropped the connection will be closed.
 ///
-/// If you calling this from the `hyper::service_fn` the HTTP response
-/// must be sent back and the websocket connection will held in another task.
+/// Because this API depends on [`hyper`] the response needs to be sent
+/// to complete the HTTP request.
 ///
 /// ```no_run
 /// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState};

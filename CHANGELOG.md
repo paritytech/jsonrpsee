@@ -4,6 +4,58 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.22.0] - 2024-02-07
+
+Another breaking release where a new `ResponsePayload` type is introduced in order
+to make it possible to determine whether a response has been processed.
+
+Unfortunately, the `IntoResponse trait` was modified to enable that
+and some minor changes were made to make more fields private to avoid further
+breakage.
+
+### Example of the async `ResponsePayload API`
+
+```rust
+#[rpc(server)]
+pub trait Api {
+	#[method(name = "x")]
+	fn x(&self) -> ResponsePayload<'static, String>;
+}
+
+impl RpcServer for () {
+	fn x(&self) -> ResponsePayload<'static, String> {
+		let (rp, rp_done) = ResponsePayload::success("ehheeheh".to_string()).notify_on_completion();
+
+		tokio::spawn(async move {
+			if rp_done.await.is_ok() {
+				do_task_that_depend_x();
+			}
+		});
+
+		rp
+	}
+}
+```
+
+### Roadmap
+
+We are getting closer to releasing jsonrpsee v1.0 and
+the following work is planned:
+- Native async traits
+- Upgrade hyper to v1.0
+- Better subscription API for the client.
+
+Thanks to the external contributor [@dan-starkware](https://github.com/dan-starkware) who contributed to this release.
+
+### [Added]
+- feat(server): add `TowerService::on_session_close` ([#1284](https://github.com/paritytech/jsonrpsee/pull/1284))
+- feat(server): async API when `Response` has been processed. ([#1281](https://github.com/paritytech/jsonrpsee/pull/1281))
+
+### [Changed]
+- client(error): make display impl less verbose ([#1283](https://github.com/paritytech/jsonrpsee/pull/1283))
+- fix: allow application/json-rpc http content type ([#1277](https://github.com/paritytech/jsonrpsee/pull/1277))
+- refactor(rpc_module): RpcModule::raw_json_request -> String ([#1287](https://github.com/paritytech/jsonrpsee/pull/1287))
+
 ## [v0.21.0] - 2023-12-13
 
 This release contains big changes and let's go over the main ones:
@@ -72,7 +124,7 @@ misbehaving peers that is now possible as well [example here](./examples/example
 
 ### Logging in the server
 
-Logging of RPC calls has been disabled by default, 
+Logging of RPC calls has been disabled by default,
 but it's possible to enable that with the RPC logger middleware or provide
 your own middleware for that.
 
@@ -83,10 +135,10 @@ let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0
 
 ### WebSocket ping/pong API
 
-The WebSocket ping/pong APIs have been refactored to be able 
+The WebSocket ping/pong APIs have been refactored to be able
 to disconnect inactive connections both by from the server and client-side.
 
-Thanks to the external contributors [@oleonardolima](https://github.com/oleonardolima) 
+Thanks to the external contributors [@oleonardolima](https://github.com/oleonardolima)
 and [@venugopv](https://github.com/venugopv) who contributed to this release.
 
 ### [Changed]
@@ -126,7 +178,7 @@ This release fixes a cancel-safety issue in the server's graceful shutdown which
 This release removes the bounded buffer check which was intended to provide
 backpressure all the way down to the TCP layer but it didn't work well.
 
-For subscriptions the backpressure will be handled by implementation itself 
+For subscriptions the backpressure will be handled by implementation itself
 and just rely on that.
 
 ### [Changed]
