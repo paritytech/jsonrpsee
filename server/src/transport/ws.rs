@@ -415,6 +415,14 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
+			let upgraded = match hyper::upgrade::on(req).await {
+				Ok(u) => u,
+				Err(e) => {
+					tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
+					return Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed {e}"))));
+				}
+			};
+
 			let (tx, rx) = mpsc::channel::<String>(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
@@ -440,14 +448,6 @@ where
 			let rpc_service = rpc_middleware.service(rpc_service);
 
 			let fut = async move {
-				let upgraded = match hyper::upgrade::on(req).await {
-					Ok(u) => u,
-					Err(e) => {
-						tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-						return;
-					}
-				};
-
 				let stream = BufReader::new(BufWriter::new(upgraded.compat()));
 				let mut ws_builder = server.into_builder(stream);
 				ws_builder.set_max_message_size(server_cfg.max_response_body_size as usize);
@@ -472,7 +472,7 @@ where
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-			Err(hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}"))))
+			Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed: {e}"))))
 		}
 	}
 }
