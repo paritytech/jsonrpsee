@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog].
 Another breaking release where a new `ResponsePayload` type is introduced in order
 to make it possible to determine whether a response has been processed.
 
-Unfortunately the `IntoResponse trait` was modified to enable that
+Unfortunately, the `IntoResponse trait` was modified to enable that
 and some minor changes were made to make more fields private to avoid further
 breakage.
 
