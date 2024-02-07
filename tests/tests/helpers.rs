@@ -303,15 +303,12 @@ pub type Receiver = tokio::sync::mpsc::UnboundedReceiver<Result<(), MethodRespon
 pub async fn run_test_notify_test(
 	module: &NotifyRpcModule,
 	server_rx: &mut Receiver,
-	is_success: bool,
 	kind: Notify,
 ) -> Result<(), MethodResponseError> {
 	use jsonrpsee_test_utils::mocks::Id;
 
 	let req = jsonrpsee_test_utils::helpers::call("hey", vec![kind], Id::Num(1));
-	let (rp, _) = module.raw_json_request(&req, 1).await.unwrap();
-	let (_, notify_rx) = rp.into_parts();
-	notify_rx.unwrap().notify(is_success);
+	let _ = module.raw_json_request(&req, 1).await.unwrap();
 	server_rx.recv().await.expect("Channel is not dropped")
 }
 
