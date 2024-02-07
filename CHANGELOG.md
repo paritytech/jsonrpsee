@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.22.0] - 2024-02-07
 
-Another breaking release where a new `ResponsePayload` type was introduced in order
+Another breaking release where a new `ResponsePayload` type is introduced in order
 to make it possible to determine whether a response has been processed.
 
 Unfortunately the `IntoResponse trait` was modified to enable that
