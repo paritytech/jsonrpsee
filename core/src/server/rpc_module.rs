@@ -77,7 +77,7 @@ pub type MaxResponseSize = usize;
 /// A tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-pub type RawRpcResponse = (MethodResponse, mpsc::Receiver<String>);
+pub type RawRpcResponse = (String, mpsc::Receiver<String>);
 
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
@@ -290,8 +290,9 @@ impl Methods {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
-		let (resp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
-		let rp = serde_json::from_str::<Response<T>>(resp.as_result())?;
+		let (rp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
+
+		let rp = serde_json::from_str::<Response<T>>(&rp)?;
 		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| MethodsError::JsonRpc(e.into_owned()))
 	}
 
@@ -318,7 +319,8 @@ impl Methods {
 	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
-	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp.as_result()).unwrap().try_into().unwrap();
+	///     // If the response is an error converting it to `Success` will fail.
+	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp).unwrap().try_into().unwrap();
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
@@ -330,7 +332,7 @@ impl Methods {
 		&self,
 		request: &str,
 		buf_size: usize,
-	) -> Result<(MethodResponse, mpsc::Receiver<String>), serde_json::Error> {
+	) -> Result<(String, mpsc::Receiver<String>), serde_json::Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
@@ -369,9 +371,16 @@ impl Methods {
 			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
 
-		tracing::trace!(target: LOG_TARGET, "[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
+		let is_success = response.is_success();
+		let (rp, notif) = response.into_parts();
 
-		(response, rx)
+		if let Some(n) = notif {
+			n.notify(is_success);
+		}
+
+		tracing::trace!(target: LOG_TARGET, "[Methods::inner_call] Method: {}, response: {}", req.method, rp);
+
+		(rp, rx)
 	}
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
@@ -426,10 +435,9 @@ impl Methods {
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
 		// TODO: hack around the lifetime on the `SubscriptionId` by deserialize first to serde_json::Value.
-		let as_success: ResponseSuccess<serde_json::Value> =
-			serde_json::from_str::<Response<_>>(resp.as_result())?.try_into()?;
+		let as_success: ResponseSuccess<serde_json::Value> = serde_json::from_str::<Response<_>>(&resp)?.try_into()?;
 
-		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.to_result()))?;
+		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.clone()))?;
 
 		Ok(Subscription { sub_id, rx })
 	}
