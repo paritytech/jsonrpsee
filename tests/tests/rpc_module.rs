@@ -43,8 +43,6 @@ use tokio::sync::mpsc;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 
-use crate::helpers::{rpc_module_notify_on_response, run_test_notify_test, Notify};
-
 // Helper macro to assert that a binding is of a specific type.
 macro_rules! assert_type {
 	( $ty:ty, $expected:expr $(,)?) => {{
@@ -591,18 +589,51 @@ async fn subscription_close_response_works() {
 
 #[tokio::test]
 async fn method_response_notify_on_completion() {
+	use jsonrpsee::server::ResponsePayload;
+
 	init_logger();
 
+	// The outcome of the response future is sent out on this channel
+	// to test whether the call produced a valid response or not.
 	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-	let module = rpc_module_notify_on_response(tx);
 
-	assert!(
-		run_test_notify_test(&module, &mut rx, Notify::Success).await.is_ok(),
-		"Successful response should be notified"
-	);
+	let module = {
+		let mut module = RpcModule::new(tx);
 
-	assert!(matches!(
-		run_test_notify_test(&module, &mut rx, Notify::Error).await,
-		Err(MethodResponseError::JsonRpcError),
-	));
+		module
+			.register_method("hey", |params, ctx| {
+				let kind: String = params.one().unwrap();
+				let server_sender = ctx.clone();
+
+				let (rp, rp_future) = if kind == "success" {
+					ResponsePayload::success("lo").notify_on_completion()
+				} else {
+					ResponsePayload::error(ErrorCode::InvalidParams).notify_on_completion()
+				};
+
+				tokio::spawn(async move {
+					let rp = rp_future.await;
+					server_sender.send(rp).unwrap();
+				});
+
+				rp
+			})
+			.unwrap();
+
+		module
+	};
+
+	// Successful call should return a successful notification.
+	assert_eq!(module.call::<_, String>("hey", ["success"]).await.unwrap(), "lo");
+	assert!(matches!(rx.recv().await, Some(Ok(_))));
+
+	// Low level call should also work.
+	let (rp, _) =
+		module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hey","params":["success"],"id":0}"#, 1).await.unwrap();
+	assert_eq!(rp, r#"{"jsonrpc":"2.0","result":"lo","id":0}"#);
+	assert!(matches!(rx.recv().await, Some(Ok(_))));
+
+	// Error call should return a failed notification.
+	assert!(module.call::<_, String>("hey", ["not success"]).await.is_err());
+	assert!(matches!(rx.recv().await, Some(Err(MethodResponseError::JsonRpcError))));
 }
