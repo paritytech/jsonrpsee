@@ -10,7 +10,8 @@ Another breaking release where a new `ResponsePayload` type was introduced in or
 to make it possible to determine whether a response has been processed.
 
 Unfortunately the `IntoResponse trait` was modified to enable that
-and some minor changes were made as well.
+and some minor changes were made to make more fields private to avoid further
+breakage.
 
 ### Example of the async `ResponsePayload API`
 
@@ -44,6 +45,8 @@ the following work is planned:
 - Upgrade hyper to v1.0
 - Better subscription API for the client.
 
+Thanks to the external contributor [@dan-starkware](https://github.com/dan-starkware) who contributed to this release.
+
 ### [Added]
 - feat(server): add `TowerService::on_session_close` ([#1284](https://github.com/paritytech/jsonrpsee/pull/1284))
 - feat(server): async API when `Response` has been processed. ([#1281](https://github.com/paritytech/jsonrpsee/pull/1281))
@@ -51,6 +54,7 @@ the following work is planned:
 ### [Changed]
 - client(error): make display impl less verbose ([#1283](https://github.com/paritytech/jsonrpsee/pull/1283))
 - fix: allow application/json-rpc http content type ([#1277](https://github.com/paritytech/jsonrpsee/pull/1277))
+- refactor(rpc_module): RpcModule::raw_json_request -> String ([#1287](https://github.com/paritytech/jsonrpsee/pull/1287))
 
 ## [v0.21.0] - 2023-12-13
 
