@@ -4,7 +4,7 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
-## [v0.22.0] - 2024-02-06
+## [v0.22.0] - 2024-02-07
 
 Another breaking release where a new `ResponsePayload` type was introduced in order
 to make it possible to determine whether a response has been processed.
