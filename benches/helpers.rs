@@ -50,13 +50,13 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_htt
 /// Run jsonrpc WebSocket server for benchmarks.
 #[cfg(feature = "jsonrpc-crate")]
 pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_server::Server) {
-	use std::sync::atomic::{AtomicU64, Ordering};
+	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	use jsonrpc_pubsub::{PubSubHandler, Session, Subscriber, SubscriptionId};
 	use jsonrpc_ws_server::jsonrpc_core::*;
 	use jsonrpc_ws_server::*;
 
-	static ID: AtomicU64 = AtomicU64::new(0);
+	static ID: AtomicUsize = AtomicUsize::new(0);
 
 	let handle2 = handle.clone();
 
