@@ -499,7 +499,7 @@ impl CurrentId {
 		self.0
 			.fetch_add(1, Ordering::Relaxed)
 			.try_into()
-			.expect("usize -> u64 infallible, there are no 128-bit CPUs; qed")
+			.expect("usize -> u64 infallible, there are no CPUs > 64 bits; qed")
 	}
 }
 
