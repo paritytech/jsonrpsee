@@ -78,7 +78,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 		SUB_METHOD_NAME,
 		(SUB_METHOD_NAME, move |_params: Params, _, subscriber: Subscriber| {
 			handle2.spawn(async move {
-				let id = ID.fetch_add(1, Ordering::Relaxed);
+				let id = ID.fetch_add(1, Ordering::Relaxed).try_into().unwrap();
 				let sink = subscriber.assign_id(SubscriptionId::Number(id)).unwrap();
 				// NOTE(niklasad1): the way jsonrpc works this is the only way to get this working
 				// -> jsonrpc responds to the request in background so not possible to know when the request
