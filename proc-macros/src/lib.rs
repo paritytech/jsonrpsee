@@ -285,7 +285,6 @@ pub(crate) mod visitor;
 ///         #[subscription(name = "subscribe", item = String)]
 ///         async fn sub(&self) -> SubscriptionResult;
 ///
-
 ///         #[subscription(name = "sub_custom_close_msg", unsubscribe = "unsub_custom_close_msg", item = String)]
 ///         async fn sub_custom_close_msg(&self) -> CloseResponse;
 ///     }
