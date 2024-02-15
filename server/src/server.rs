@@ -958,6 +958,11 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 			fut
 		}
 	}
+
+	/// Returns the connection id.
+	pub fn connection_id(&self) -> u32 {
+		self.conn_id
+	}
 }
 
 impl<RpcMiddleware, HttpMiddleware> hyper::service::Service<hyper::Request<hyper::Body>>
