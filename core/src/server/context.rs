@@ -29,9 +29,9 @@
 /// The context of a JSON-RPC server that is passed to methods and subscriptions
 /// that enabled the `with_context` attribute.
 #[derive(Debug, Clone)]
-pub struct Context(ConnectionId);
+pub struct ConnectionContext(ConnectionId);
 
-impl Context {
+impl ConnectionContext {
 	/// Create a new context.
 	pub(crate) fn new(id: u64) -> Self {
 		Self(ConnectionId::new(id))

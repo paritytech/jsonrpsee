@@ -65,10 +65,10 @@ impl RpcDescription {
 			let mut method_sig = method.signature.clone();
 
 			if method.with_context {
-				let context_ty = self.jrps_server_item(quote! { Context });
-				// Add `Context` as the last input parameter to the signature.
-				let context: syn::FnArg = syn::parse_quote!(context: #context_ty);
-				method_sig.sig.inputs.push(context);
+				let context_ty = self.jrps_server_item(quote! { ConnectionContext });
+				// Add `ConnectionContext` as the second input parameter to the signature.
+				let context: syn::FnArg = syn::parse_quote!(connection_context: #context_ty);
+				method_sig.sig.inputs.insert(1, context);
 			}
 
 			quote! {
@@ -87,9 +87,9 @@ impl RpcDescription {
 			sub_sig.sig.inputs.insert(1, subscription_sink);
 
 			if sub.with_context {
-				let context_ty = self.jrps_server_item(quote! { Context });
-				// Add `Context` as the third input parameter to the signature.
-				let context: syn::FnArg = syn::parse_quote!(context: #context_ty);
+				let context_ty = self.jrps_server_item(quote! { ConnectionContext });
+				// Add `ConnectionContext` as the third input parameter to the signature.
+				let context: syn::FnArg = syn::parse_quote!(connection_context: #context_ty);
 
 				sub_sig.sig.inputs.insert(2, context);
 			}
