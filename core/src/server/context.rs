@@ -38,13 +38,13 @@ pub struct ConnectionContext {
 
 impl ConnectionContext {
 	/// Create a new context.
-	pub(crate) fn new(connection_id: usize, max_response_size: MaxResponseSize) -> Self {
-		Self { connection_id: ConnectionId::new(connection_id), max_response_size }
+	pub fn new(connection_id: ConnectionId, max_response_size: MaxResponseSize) -> Self {
+		Self { connection_id: connection_id, max_response_size }
 	}
 
 	/// Get the connection ID.
 	pub fn connection_id(&self) -> ConnectionId {
-		self.ConnectionId
+		self.connection_id
 	}
 
 	/// Get the maximum response size.
@@ -55,15 +55,7 @@ impl ConnectionContext {
 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
-#[derive(Debug, Clone, ParitialEq, Eq, Copy)]
-pub struct ConnectionId(usize);
-
-impl ConnectionId {
-	/// Create a new connection ID.
-	pub(crate) fn new(id: usize) -> Self {
-		Self(id)
-	}
-}
+type ConnectionId = usize;
 
 /// Max response size.
 pub type MaxResponseSize = usize;
