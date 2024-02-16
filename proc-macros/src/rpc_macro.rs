@@ -134,12 +134,21 @@ pub struct RpcSubscription {
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
 	pub unsubscribe_aliases: Vec<String>,
+	pub with_context: bool,
 }
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases] = AttributeMeta::parse(attr)?
-			.retain(["aliases", "item", "name", "param_kind", "unsubscribe", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases, with_context] =
+			AttributeMeta::parse(attr)?.retain([
+				"aliases",
+				"item",
+				"name",
+				"param_kind",
+				"unsubscribe",
+				"unsubscribe_aliases",
+				"with_context",
+			])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let map = name?.value::<NameMapping>()?;
@@ -170,6 +179,8 @@ impl RpcSubscription {
 			})
 			.collect();
 
+		let with_context = optional(with_context, Argument::flag)?.is_some();
+
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
@@ -184,6 +195,7 @@ impl RpcSubscription {
 			signature: sub,
 			aliases,
 			docs,
+			with_context,
 		})
 	}
 }
