@@ -29,17 +29,27 @@
 /// The context of a JSON-RPC server that is passed to methods and subscriptions
 /// that enabled the `with_context` attribute.
 #[derive(Debug, Clone)]
-pub struct ConnectionContext(ConnectionId);
+pub struct ConnectionContext {
+	/// The ID of the connection.
+	connection_id: ConnectionId,
+	/// The maximum response size.
+	max_response_size: MaxResponseSize,
+}
 
 impl ConnectionContext {
 	/// Create a new context.
-	pub(crate) fn new(id: u64) -> Self {
-		Self(ConnectionId::new(id))
+	pub(crate) fn new(connection_id: usize, max_response_size: MaxResponseSize) -> Self {
+		Self { connection_id: ConnectionId::new(connection_id), max_response_size }
 	}
 
 	/// Get the connection ID.
 	pub fn connection_id(&self) -> ConnectionId {
-		self.0
+		self.ConnectionId
+	}
+
+	/// Get the maximum response size.
+	pub fn max_response_size(&self) -> MaxResponseSize {
+		self.max_response_size
 	}
 }
 
@@ -53,3 +63,6 @@ impl ConnectionId {
 		Self(id)
 	}
 }
+
+/// Max response size.
+pub type MaxResponseSize = usize;
