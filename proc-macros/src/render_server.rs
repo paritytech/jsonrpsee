@@ -148,13 +148,19 @@ impl RpcDescription {
 
 				let into_response = self.jrps_server_item(quote! { IntoResponse });
 
+				let (context_name, maybe_context) = if method.with_context {
+					(quote!(connection_context), quote!(connection_context,))
+				} else {
+					(quote!(_), quote!())
+				};
+
 				check_name(&rpc_method_name, rust_method_name.span());
 
 				if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
-						rpc.register_async_method(#rpc_method_name, |params, context| async move {
+						rpc.register_async_method(#rpc_method_name, |params, #context_name, context| async move {
 							#parsing
-							#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
+							#into_response::into_response(context.as_ref().#rust_method_name(#maybe_context #params_seq).await)
 						})
 					})
 				} else {
@@ -162,9 +168,9 @@ impl RpcDescription {
 						if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
 
 					handle_register_result(quote! {
-						rpc.#register_kind(#rpc_method_name, |params, context| {
+						rpc.#register_kind(#rpc_method_name, |params, #context_name, context| {
 							#parsing
-							#into_response::into_response(context.#rust_method_name(#params_seq))
+							#into_response::into_response(context.#rust_method_name(#maybe_context #params_seq))
 						})
 					})
 				}
