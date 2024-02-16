@@ -53,7 +53,8 @@ impl ConnectionContext {
 	}
 }
 
-/// The connection ID from which the request originated.
+/// Connection ID, used for stateful protocol such as WebSockets.
+/// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 #[derive(Debug, Clone, ParitialEq, Eq, Copy)]
 pub struct ConnectionId(usize);
 

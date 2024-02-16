@@ -39,9 +39,11 @@ use crate::server::subscription::{
 	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
 	SubscriptionState,
 };
+use crate::server::ConnectionContext;
 use crate::server::{ResponsePayload, LOG_TARGET};
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
+use hyper::client::conn;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
 	ErrorObjectOwned, Id, Params, Request, Response, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
@@ -56,15 +58,15 @@ use super::IntoResponse;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> MethodResponse>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionContext) -> MethodResponse>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionContext) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
 // Method callback to unsubscribe.
-type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
+type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionContext) -> MethodResponse>;
 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -500,7 +502,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_core::server::RpcModule;
 	///
 	/// let mut module = RpcModule::new(());
-	/// module.register_method("say_hello", |_params, _ctx| "lo").unwrap();
+	/// module.register_method("say_hello", |_params, _connection_ctx, _ctx| "lo").unwrap();
 	/// ```
 	pub fn register_method<R, F>(
 		&mut self,
@@ -510,13 +512,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
-		F: Fn(Params, &Context) -> R + Send + Sync + 'static,
+		F: Fn(Params, ConnectionContext, &Context) -> R + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| {
-				let rp = callback(params, &*ctx).into_response();
+			MethodCallback::Sync(Arc::new(move |id, params, connection_context| {
+				let max_response_size = connection_context.max_response_size();
+				let rp = callback(params, connection_context, &*ctx).into_response();
 				MethodResponse::response(id, rp, max_response_size)
 			})),
 		)
@@ -542,17 +545,18 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		R: IntoResponse + 'static,
 		Fut: Future<Output = R> + Send,
-		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
+		Fun: (Fn(Params<'static>, ConnectionContext, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size| {
+			MethodCallback::Async(Arc::new(move |id, params, connection_context| {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
+				let max_response_size = connection_context.max_response_size();
 
 				let future = async move {
-					let rp = callback(params, ctx).await.into_response();
+					let rp = callback(params, connection_context, ctx).await.into_response();
 					MethodResponse::response(id, rp, max_response_size)
 				};
 				future.boxed()
@@ -571,17 +575,18 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
-		F: Fn(Params, Arc<Context>) -> R + Clone + Send + Sync + 'static,
+		F: Fn(Params, ConnectionContext, Arc<Context>) -> R + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size| {
+			MethodCallback::Async(Arc::new(move |id, params, connection_context| {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
+				let max_response_size = connection_context.max_response_size();
 
 				tokio::task::spawn_blocking(move || {
-					let rp = callback(params, ctx).into_response();
+					let rp = callback(params, connection_context, ctx).into_response();
 					MethodResponse::response(id, rp, max_response_size)
 				})
 				.map(|result| match result {
@@ -899,7 +904,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::Unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
+				MethodCallback::Unsubscription(Arc::new(move |id, params, connection_context| {
+					let conn_id = connection_context.connection_id();
+					let max_response_size = connection_context.max_response_size();
+
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {

@@ -26,6 +26,8 @@
 
 //! Shared modules for the JSON-RPC servers.
 
+/// Connection context types.
+mod context;
 /// Error types.
 mod error;
 /// Helpers.
@@ -37,6 +39,7 @@ mod rpc_module;
 /// Subscription related types.
 mod subscription;
 
+pub use context::*;
 pub use error::*;
 pub use helpers::*;
 pub use method_response::*;
