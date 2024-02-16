@@ -254,6 +254,13 @@ impl RpcDescription {
 					return Err(syn::Error::new_spanned(&method.sig, "First argument of the trait must be '&self'"));
 				}
 
+				if find_attr(&method.attrs, "with_context").is_some() && !needs_server {
+					return Err(syn::Error::new_spanned(
+						&item.ident,
+						"Attribute 'server' must be specified with 'with_context'",
+					));
+				}
+
 				let mut is_method = false;
 				let mut is_sub = false;
 				if let Some(attr) = find_attr(&method.attrs, "method") {
