@@ -62,7 +62,15 @@ impl RpcDescription {
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
 		let methods = self.methods.iter().map(|method| {
 			let docs = &method.docs;
-			let method_sig = &method.signature;
+			let mut method_sig = method.signature.clone();
+
+			if method.with_context {
+				let context_ty = self.jrps_server_item(quote! { Context });
+				// Add `Context` as the last input parameter to the signature.
+				let context: syn::FnArg = syn::parse_quote!(context: #context_ty);
+				method_sig.sig.inputs.push(context);
+			}
+
 			quote! {
 				#docs
 				#method_sig
@@ -83,7 +91,7 @@ impl RpcDescription {
 				// Add `Context` as the third input parameter to the signature.
 				let context: syn::FnArg = syn::parse_quote!(context: #context_ty);
 
-				sub_sig.sig.inputs.insert(1, context);
+				sub_sig.sig.inputs.insert(2, context);
 			}
 
 			quote! {
