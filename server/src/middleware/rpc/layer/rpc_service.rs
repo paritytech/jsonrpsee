@@ -32,7 +32,7 @@ use std::sync::Arc;
 use crate::middleware::rpc::RpcServiceT;
 use futures_util::future::BoxFuture;
 use jsonrpsee_core::server::{
-	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
+	BoundedSubscriptions, ConnectionContext, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
@@ -76,6 +76,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let conn_id = self.conn_id;
 		let max_response_body_size = self.max_response_body_size;
+		let connection_context = ConnectionContext::new(conn_id, max_response_body_size);
 
 		let params = req.params();
 		let name = req.method_name();
@@ -91,11 +92,11 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					let params = params.into_owned();
 					let id = id.into_owned();
 
-					let fut = (callback)(id, params, conn_id, max_response_body_size);
+					let fut = (callback)(id, params, connection_context);
 					ResponseFuture::future(fut)
 				}
 				MethodCallback::Sync(callback) => {
-					let rp = (callback)(id, params, max_response_body_size);
+					let rp = (callback)(id, params, connection_context);
 					ResponseFuture::ready(rp)
 				}
 				MethodCallback::Subscription(callback) => {
@@ -132,7 +133,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 						return ResponseFuture::ready(rp);
 					};
 
-					let rp = callback(id, params, conn_id, max_response_body_size);
+					let rp = callback(id, params, connection_context);
 					ResponseFuture::ready(rp)
 				}
 			},
