@@ -77,6 +77,15 @@ impl RpcDescription {
 			let mut sub_sig = sub.signature.clone();
 
 			sub_sig.sig.inputs.insert(1, subscription_sink);
+
+			if sub.with_context {
+				let context_ty = self.jrps_server_item(quote! { Context });
+				// Add `Context` as the third input parameter to the signature.
+				let context: syn::FnArg = syn::parse_quote!(context: #context_ty);
+
+				sub_sig.sig.inputs.insert(1, context);
+			}
+
 			quote! {
 				#docs
 				#sub_sig
