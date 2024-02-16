@@ -49,7 +49,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async move {
@@ -135,10 +135,10 @@ pub async fn server_with_subscription() -> SocketAddr {
 pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	module
-		.register_async_method("slow_hello", |_, _| async {
+		.register_async_method("slow_hello", |_, _, _| async {
 			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 			"hello"
 		})
@@ -152,7 +152,7 @@ pub async fn server() -> SocketAddr {
 		}
 	}
 
-	module.register_async_method::<Result<(), CustomError>, _, _>("err", |_, _| async { Err(CustomError) }).unwrap();
+	module.register_async_method::<Result<(), CustomError>, _, _>("err", |_, _, _| async { Err(CustomError) }).unwrap();
 
 	let addr = server.local_addr().unwrap();
 
@@ -204,10 +204,10 @@ pub async fn server_with_cors(cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
-	module.register_method("notif", |_, _| "").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
+	module.register_method("notif", |_, _, _| "").unwrap();
 
-	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
+	module.register_method("system_health", |_, _, _| serde_json::json!({ "health": true })).unwrap();
 
 	let handle = server.start(module);
 	(addr, handle)

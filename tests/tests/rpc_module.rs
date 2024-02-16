@@ -55,9 +55,9 @@ macro_rules! assert_type {
 fn rpc_modules_with_different_contexts_can_be_merged() {
 	let cx = Vec::<u8>::new();
 	let mut mod1 = RpcModule::new(cx);
-	mod1.register_method("bla with Vec context", |_: Params, _| ()).unwrap();
+	mod1.register_method("bla with Vec context", |_: Params, _, _| ()).unwrap();
 	let mut mod2 = RpcModule::new(String::new());
-	mod2.register_method("bla with String context", |_: Params, _| ()).unwrap();
+	mod2.register_method("bla with String context", |_: Params, _, _| ()).unwrap();
 
 	mod1.merge(mod2).unwrap();
 
@@ -86,7 +86,7 @@ fn rpc_context_modules_can_register_subscriptions() {
 fn rpc_register_alias() {
 	let mut module = RpcModule::new(());
 
-	module.register_method("hello_world", |_: Params, _| RpcResult::Ok(())).unwrap();
+	module.register_method("hello_world", |_: Params, _, _| RpcResult::Ok(())).unwrap();
 	module.register_alias("hello_foobar", "hello_world").unwrap();
 
 	assert!(module.method("hello_world").is_some());
@@ -97,14 +97,14 @@ fn rpc_register_alias() {
 async fn calling_method_without_server() {
 	// Call sync method with no params
 	let mut module = RpcModule::new(());
-	module.register_method("boo", |_: Params, _| String::from("boo!")).unwrap();
+	module.register_method("boo", |_: Params, _, _| String::from("boo!")).unwrap();
 
 	let res: String = module.call("boo", EmptyServerParams::new()).await.unwrap();
 	assert_eq!(&res, "boo!");
 
 	// Call sync method with params
 	module
-		.register_method::<Result<u16, ErrorObjectOwned>, _>("foo", |params, _| {
+		.register_method::<Result<u16, ErrorObjectOwned>, _>("foo", |params, _, _| {
 			let n: u16 = params.one()?;
 			Ok(n * 2)
 		})
@@ -128,7 +128,7 @@ async fn calling_method_without_server() {
 	}
 	let mut module = RpcModule::new(MyContext);
 	module
-		.register_async_method("roo", |params, ctx| {
+		.register_async_method("roo", |params, _, ctx| {
 			let ns: Vec<u8> = params.parse().expect("valid params please");
 			async move { ctx.roo(ns) }
 		})
@@ -601,7 +601,7 @@ async fn method_response_notify_on_completion() {
 		let mut module = RpcModule::new(tx);
 
 		module
-			.register_method("hey", |params, ctx| {
+			.register_method("hey", |params, _, ctx| {
 				let kind: String = params.one().unwrap();
 				let server_sender = ctx.clone();
 

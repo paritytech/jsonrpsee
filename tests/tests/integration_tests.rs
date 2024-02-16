@@ -1096,7 +1096,7 @@ async fn ws_host_filtering_wildcard_works() {
 	let server = ServerBuilder::default().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	let _handle = server.start(module);
 
@@ -1118,7 +1118,7 @@ async fn http_host_filtering_wildcard_works() {
 	let server = ServerBuilder::default().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	let _handle = server.start(module);
 
@@ -1139,7 +1139,7 @@ async fn deny_invalid_host() {
 	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	let _handle = server.start(module);
 
@@ -1171,7 +1171,7 @@ async fn disable_host_filter_works() {
 	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	let _handle = server.start(module);
 
@@ -1316,7 +1316,7 @@ async fn response_payload_async_api_works() {
 
 		let mut module = RpcModule::new(state);
 		module
-			.register_method("get", |_params, ctx| {
+			.register_method("get", |_params, _, ctx| {
 				let ctx = ctx.clone();
 				let (rp, rp_future) = ResponsePayload::success(1).notify_on_completion();
 
@@ -1403,7 +1403,7 @@ async fn run_shutdown_test(transport: &str) {
 		let mut module = RpcModule::new((tx, call_answered.clone()));
 
 		module
-			.register_async_method("sleep_20s", |_, mut ctx| async move {
+			.register_async_method("sleep_20s", |_, _, mut ctx| async move {
 				let ctx = Arc::make_mut(&mut ctx);
 				let _ = ctx.0.send(());
 				tokio::time::sleep(Duration::from_secs(20)).await;

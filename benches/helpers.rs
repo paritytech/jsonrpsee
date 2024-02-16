@@ -169,22 +169,22 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::se
 fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	let mut module = jsonrpsee::RpcModule::new(());
 
-	module.register_method(SYNC_FAST_CALL, |_, _| "lo").unwrap();
-	module.register_async_method(ASYNC_FAST_CALL, |_, _| async { "lo" }).unwrap();
+	module.register_method(SYNC_FAST_CALL, |_, _, _| "lo").unwrap();
+	module.register_async_method(ASYNC_FAST_CALL, |_, _, _| async { "lo" }).unwrap();
 
-	module.register_method(SYNC_MEM_CALL, |_, _| "A".repeat(MIB)).unwrap();
+	module.register_method(SYNC_MEM_CALL, |_, _, _| "A".repeat(MIB)).unwrap();
 
-	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { "A".repeat(MIB) }).unwrap();
+	module.register_async_method(ASYNC_MEM_CALL, |_, _, _| async move { "A".repeat(MIB) }).unwrap();
 
 	module
-		.register_method(SYNC_SLOW_CALL, |_, _| {
+		.register_method(SYNC_SLOW_CALL, |_, _, _| {
 			std::thread::sleep(SLOW_CALL);
 			"slow call"
 		})
 		.unwrap();
 
 	module
-		.register_async_method(ASYNC_SLOW_CALL, |_, _| async move {
+		.register_async_method(ASYNC_SLOW_CALL, |_, _, _| async move {
 			tokio::time::sleep(SLOW_CALL).await;
 			"slow call async"
 		})
