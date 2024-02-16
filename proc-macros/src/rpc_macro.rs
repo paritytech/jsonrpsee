@@ -48,12 +48,13 @@ pub struct RpcMethod {
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
+	pub with_context: bool,
 }
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, blocking, name, param_kind] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
+		let [aliases, blocking, name, param_kind, with_context] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "with_context"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
@@ -95,10 +96,23 @@ impl RpcMethod {
 			syn::ReturnType::Type(_, output) => Some(*output),
 		};
 
+		let with_context = optional(with_context, Argument::flag)?.is_some();
+
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated })
+		Ok(Self {
+			aliases,
+			blocking,
+			name,
+			params,
+			param_kind,
+			returns,
+			signature: method,
+			docs,
+			deprecated,
+			with_context,
+		})
 	}
 }
 
