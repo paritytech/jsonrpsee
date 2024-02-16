@@ -43,7 +43,6 @@ use crate::server::ConnectionContext;
 use crate::server::{ResponsePayload, LOG_TARGET};
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
-use hyper::client::conn;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
 	ErrorObjectOwned, Id, Params, Request, Response, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
@@ -67,13 +66,6 @@ pub type SubscriptionMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionContext) -> MethodResponse>;
-
-/// Connection ID, used for stateful protocol such as WebSockets.
-/// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
-pub type ConnectionId = usize;
-
-/// Max response size.
-pub type MaxResponseSize = usize;
 
 /// Raw response from an RPC
 /// A tuple containing:
@@ -353,10 +345,11 @@ impl Methods {
 		let id = req.id.clone();
 		let params = Params::new(req.params.as_ref().map(|params| params.as_ref().get()));
 
+		let connection_context = ConnectionContext::new(0, usize::MAX);
 		let response = match self.method(&req.method) {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
-			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX),
-			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
+			Some(MethodCallback::Sync(cb)) => (cb)(id, params, connection_context),
+			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), connection_context).await,
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
@@ -370,7 +363,7 @@ impl Methods {
 
 				res
 			}
-			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
+			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, connection_context),
 		};
 
 		let is_success = response.is_success();

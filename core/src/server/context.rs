@@ -28,7 +28,7 @@
 
 /// The context of a JSON-RPC server that is passed to methods and subscriptions
 /// that enabled the `with_context` attribute.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConnectionContext {
 	/// The ID of the connection.
 	connection_id: ConnectionId,
@@ -55,7 +55,7 @@ impl ConnectionContext {
 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
-type ConnectionId = usize;
+pub type ConnectionId = usize;
 
 /// Max response size.
 pub type MaxResponseSize = usize;

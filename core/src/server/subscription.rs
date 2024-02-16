@@ -29,7 +29,7 @@
 use super::helpers::MethodSink;
 use super::{MethodResponse, MethodsError, ResponsePayload};
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
-use crate::server::rpc_module::ConnectionId;
+use crate::server::ConnectionId;
 use crate::server::LOG_TARGET;
 use crate::{error::StringError, traits::IdProvider};
 use jsonrpsee_types::SubscriptionPayload;
