@@ -27,14 +27,13 @@
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
-use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, ServerHandle, StopHandle};
+use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, SessionClosedFuture, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
@@ -46,7 +45,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::server::helpers::{prepare_error, MethodResponseResult};
+use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
@@ -203,6 +202,8 @@ pub struct ServerConfig {
 	pub(crate) ping_config: Option<PingConfig>,
 	/// ID provider.
 	pub(crate) id_provider: Arc<dyn IdProvider>,
+	/// `TCP_NODELAY` settings.
+	pub(crate) tcp_no_delay: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -274,19 +275,18 @@ impl ConnectionState {
 	}
 }
 
-/// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect inactive
-/// clients.
-///
-/// It's possible to configure how often pings are sent out and how long the server will
-/// wait until a client is determined as "inactive".
+/// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect
+/// an inactive connection.
 ///
 /// jsonrpsee doesn't associate the ping/pong frames just that if
-/// pong frame isn't received within `inactive_limit` then it's regarded
+/// a pong frame isn't received within the `inactive_limit` then it's regarded
 /// as missed.
 ///
 /// Such that the `inactive_limit` should be configured to longer than a single
 /// WebSocket ping takes or it might be missed and may end up
 /// terminating the connection.
+///
+/// Default: ping_interval: 30 seconds, max failures: 1 and inactive limit: 40 seconds.
 #[derive(Debug, Copy, Clone)]
 pub struct PingConfig {
 	/// Period which the server pings the connected client.
@@ -294,16 +294,12 @@ pub struct PingConfig {
 	/// Max allowed time for a connection to stay idle.
 	pub(crate) inactive_limit: Duration,
 	/// Max failures.
-	pub(crate) max_failures: NonZeroUsize,
+	pub(crate) max_failures: usize,
 }
 
 impl Default for PingConfig {
 	fn default() -> Self {
-		Self {
-			ping_interval: Duration::from_secs(30),
-			max_failures: NonZeroUsize::new(1).expect("1 > 0; qed"),
-			inactive_limit: Duration::from_secs(40),
-		}
+		Self { ping_interval: Duration::from_secs(30), max_failures: 1, inactive_limit: Duration::from_secs(40) }
 	}
 }
 
@@ -331,7 +327,12 @@ impl PingConfig {
 
 	/// Configure how many times the remote peer is allowed be
 	/// inactive until the connection is closed.
-	pub fn max_failures(mut self, max: NonZeroUsize) -> Self {
+	///
+	/// # Panics
+	///
+	/// This method panics if `max` == 0.
+	pub fn max_failures(mut self, max: usize) -> Self {
+		assert!(max > 0);
 		self.max_failures = max;
 		self
 	}
@@ -351,6 +352,7 @@ impl Default for ServerConfig {
 			message_buffer_capacity: 1024,
 			ping_config: None,
 			id_provider: Arc::new(RandomIntegerIdProvider),
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -499,6 +501,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 				conn_guard: self.conn_guard,
 				server_cfg: self.server_cfg,
 			},
+			on_session_close: None,
 		};
 
 		TowerService { rpc_middleware, http_middleware: self.http_middleware }
@@ -615,18 +618,18 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
 	/// where S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 	/// {
-	///    type Future = BoxFuture<'a, MethodResponse>;  
-	///  
+	///    type Future = BoxFuture<'a, MethodResponse>;
+	///
 	///    fn call(&self, req: Request<'a>) -> Self::Future {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         let count = self.count.clone();
-	///         let service = self.service.clone();  
+	///         let service = self.service.clone();
 	///
 	///         Box::pin(async move {
 	///             let rp = service.call(req).await;
 	///             // Modify the state.
 	///             count.fetch_add(1, Ordering::Relaxed);
-	///             rp         
+	///             rp
 	///         })
 	///    }
 	/// }
@@ -724,6 +727,14 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// ```
 	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
 		Builder { server_cfg: self.server_cfg, http_middleware, rpc_middleware: self.rpc_middleware }
+	}
+
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	///
+	/// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.server_cfg.tcp_no_delay = no_delay;
+		self
 	}
 
 	/// Configure the server to only serve JSON-RPC HTTP requests.
@@ -931,6 +942,24 @@ pub struct TowerService<RpcMiddleware, HttpMiddleware> {
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
 }
 
+impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> {
+	/// A future that returns when the connection has been closed.
+	///
+	/// This method must be called before every [`TowerService::call`]
+	/// because the `SessionClosedFuture` may already been consumed or
+	/// not used.
+	pub fn on_session_closed(&mut self) -> SessionClosedFuture {
+		if let Some(n) = self.rpc_middleware.on_session_close.as_mut() {
+			// If it's called more then once another listener is created.
+			n.closed()
+		} else {
+			let (session_close, fut) = session_close();
+			self.rpc_middleware.on_session_close = Some(session_close);
+			fut
+		}
+	}
+}
+
 impl<RpcMiddleware, HttpMiddleware> hyper::service::Service<hyper::Request<hyper::Body>>
 	for TowerService<RpcMiddleware, HttpMiddleware>
 where
@@ -969,6 +998,7 @@ where
 pub struct TowerServiceNoHttp<L> {
 	inner: ServiceData,
 	rpc_middleware: RpcServiceBuilder<L>,
+	on_session_close: Option<SessionClose>,
 }
 
 impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerServiceNoHttp<RpcMiddleware>
@@ -994,6 +1024,7 @@ where
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
 		let conn_id = self.inner.conn_id;
+		let on_session_close = self.on_session_close.take();
 
 		tracing::trace!(target: LOG_TARGET, "{:?}", request);
 
@@ -1066,6 +1097,7 @@ where
 								sink,
 								rx,
 								pending_calls_completed,
+								on_session_close,
 							};
 
 							ws::background_task(params).await;
@@ -1152,7 +1184,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 		..
 	} = params;
 
-	if let Err(e) = socket.set_nodelay(true) {
+	if let Err(e) = socket.set_nodelay(server_cfg.tcp_no_delay) {
 		tracing::warn!(target: LOG_TARGET, "Could not set NODELAY on socket: {:?}", e);
 		return;
 	}
@@ -1166,6 +1198,7 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 			conn_guard: conn_guard.clone(),
 		},
 		rpc_middleware,
+		on_session_close: None,
 	};
 
 	let service = http_middleware.service(tower_service);
@@ -1299,8 +1332,8 @@ where
 			if got_notif && batch_response.is_empty() {
 				None
 			} else {
-				let result = batch_response.finish();
-				Some(MethodResponse { result, success_or_error: MethodResponseResult::Success, is_subscription: false })
+				let batch_rp = batch_response.finish();
+				Some(MethodResponse::from_batch(batch_rp))
 			}
 		} else {
 			Some(MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError)))

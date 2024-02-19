@@ -26,16 +26,14 @@
 
 //! Subscription related types and traits for server implementations.
 
-use super::MethodsError;
-use super::helpers::{MethodResponse, MethodSink};
-use crate::server::LOG_TARGET;
+use super::helpers::MethodSink;
+use super::{MethodResponse, MethodsError, ResponsePayload};
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{traits::IdProvider, error::StringError};
+use crate::server::LOG_TARGET;
+use crate::{error::StringError, traits::IdProvider};
 use jsonrpsee_types::SubscriptionPayload;
-use jsonrpsee_types::{
-	response::SubscriptionError, ErrorObjectOwned, Id, ResponsePayload, SubscriptionId, SubscriptionResponse,
-};
+use jsonrpsee_types::{response::SubscriptionError, ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
@@ -261,7 +259,7 @@ impl PendingSubscriptionSink {
 	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
 		let err = MethodResponse::subscription_error(self.id, err.into());
-		_ = self.inner.send(err.result.clone()).await;
+		_ = self.inner.send(err.to_result()).await;
 		_ = self.subscribe.send(err);
 	}
 
@@ -273,7 +271,7 @@ impl PendingSubscriptionSink {
 	pub async fn accept(self) -> Result<SubscriptionSink, PendingSubscriptionAcceptError> {
 		let response = MethodResponse::subscription_response(
 			self.id,
-			ResponsePayload::result_borrowed(&self.uniq_sub.sub_id),
+			ResponsePayload::success_borrowed(&self.uniq_sub.sub_id),
 			self.inner.max_response_size() as usize,
 		);
 		let success = response.is_success();
@@ -283,8 +281,8 @@ impl PendingSubscriptionSink {
 		// Ideally the message should be sent only once.
 		//
 		// The same message is sent twice here because one is sent directly to the transport layer and
-		// the other one is sent internally to accept the subscription and register it in the RPC logger.
-		self.inner.send(response.result.clone()).await.map_err(|_| PendingSubscriptionAcceptError)?;
+		// the other one is sent internally to accept the subscription.
+		self.inner.send(response.to_result()).await.map_err(|_| PendingSubscriptionAcceptError)?;
 		self.subscribe.send(response).map_err(|_| PendingSubscriptionAcceptError)?;
 
 		if success {

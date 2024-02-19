@@ -34,6 +34,7 @@ tokio = { version = "1.16", optional = true }
 tokio-stream = { version = "0.1", optional = true, features = ["sync"] }
 wasm-bindgen-futures = { version = "0.4.19", optional = true }
 futures-timer = { version = "3", optional = true }
+pin-project = { version = "1", optional = true }
 
 [features]
 default = []
@@ -58,6 +59,8 @@ async-client = [
 	"tokio/rt",
 	"tokio/time",
 	"futures-timer",
+	"tokio-stream",
+	"pin-project",
 ]
 async-wasm-client = [
 	"async-lock",
@@ -68,6 +71,7 @@ async-wasm-client = [
 	"futures-timer/wasm-bindgen",
 	"tokio/macros",
 	"tokio/time",
+	"pin-project",
 ]
 
 [dev-dependencies]

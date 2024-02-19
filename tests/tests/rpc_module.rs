@@ -263,7 +263,7 @@ async fn subscribing_without_server() {
 		assert_eq!(&id, my_sub.subscription_id());
 	}
 
-	assert!(matches!(my_sub.next::<char>().await, None));
+	assert!(my_sub.next::<char>().await.is_none());
 }
 
 #[tokio::test]
@@ -298,7 +298,7 @@ async fn close_test_subscribing_without_server() {
 
 	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
-	assert!(matches!(my_sub.next::<String>().await, None));
+	assert!(my_sub.next::<String>().await.is_none());
 
 	// The second subscription still works
 	let (val, _) = my_sub2.next::<String>().await.unwrap().unwrap();
@@ -308,7 +308,7 @@ async fn close_test_subscribing_without_server() {
 		std::mem::ManuallyDrop::drop(&mut my_sub2);
 	}
 
-	assert!(matches!(my_sub.next::<String>().await, None));
+	assert!(my_sub.next::<String>().await.is_none());
 }
 
 #[tokio::test]
@@ -384,13 +384,13 @@ async fn subscribe_unsubscribe_without_server() {
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
 		let (resp, _) = module.raw_json_request(&unsub_req, 1).await.unwrap();
 
-		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
+		assert_eq!(resp, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 
 		// Unsubscribe already performed; should be error.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
 		let (resp, _) = module.raw_json_request(&unsub_req, 2).await.unwrap();
 
-		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
+		assert_eq!(resp, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
 	}
 
 	let sub1 = subscribe_and_assert(&module);
@@ -404,7 +404,7 @@ async fn rejected_subscription_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
-			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, "rejected", None);
 			pending.reject(err.into_owned()).await;
 			Ok(())
 		})
@@ -430,7 +430,7 @@ async fn reject_works() {
 		.unwrap();
 
 	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
-	assert_eq!(rp.result, r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"rejected"},"id":0}"#);
+	assert_eq!(rp, r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"rejected"},"id":0}"#);
 	assert!(stream.recv().await.is_none());
 }
 
@@ -521,11 +521,11 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 		.unwrap();
 
 	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
-	let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
+	let resp = serde_json::from_str::<Response<u64>>(&rp).unwrap();
 	let sub_resp = stream.recv().await.unwrap();
 
 	let resp = match resp.payload {
-		ResponsePayload::Result(val) => val,
+		ResponsePayload::Success(val) => val,
 		_ => panic!("Expected valid response"),
 	};
 
@@ -566,10 +566,10 @@ async fn subscription_close_response_works() {
 	{
 		let (rp, mut stream) =
 			module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","params":[1],"id":0}"#, 1).await.unwrap();
-		let resp = serde_json::from_str::<Response<u64>>(&rp.result).unwrap();
+		let resp = serde_json::from_str::<Response<u64>>(&rp).unwrap();
 
 		let sub_id = match resp.payload {
-			ResponsePayload::Result(val) => val,
+			ResponsePayload::Success(val) => val,
 			_ => panic!("Expected valid response"),
 		};
 
@@ -585,4 +585,55 @@ async fn subscription_close_response_works() {
 		let (rx, _id) = sub.next::<usize>().await.unwrap().unwrap();
 		assert_eq!(rx, 1);
 	}
+}
+
+#[tokio::test]
+async fn method_response_notify_on_completion() {
+	use jsonrpsee::server::ResponsePayload;
+
+	init_logger();
+
+	// The outcome of the response future is sent out on this channel
+	// to test whether the call produced a valid response or not.
+	let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+	let module = {
+		let mut module = RpcModule::new(tx);
+
+		module
+			.register_method("hey", |params, ctx| {
+				let kind: String = params.one().unwrap();
+				let server_sender = ctx.clone();
+
+				let (rp, rp_future) = if kind == "success" {
+					ResponsePayload::success("lo").notify_on_completion()
+				} else {
+					ResponsePayload::error(ErrorCode::InvalidParams).notify_on_completion()
+				};
+
+				tokio::spawn(async move {
+					let rp = rp_future.await;
+					server_sender.send(rp).unwrap();
+				});
+
+				rp
+			})
+			.unwrap();
+
+		module
+	};
+
+	// Successful call should return a successful notification.
+	assert_eq!(module.call::<_, String>("hey", ["success"]).await.unwrap(), "lo");
+	assert!(matches!(rx.recv().await, Some(Ok(_))));
+
+	// Low level call should also work.
+	let (rp, _) =
+		module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hey","params":["success"],"id":0}"#, 1).await.unwrap();
+	assert_eq!(rp, r#"{"jsonrpc":"2.0","result":"lo","id":0}"#);
+	assert!(matches!(rx.recv().await, Some(Ok(_))));
+
+	// Error call should return a failed notification.
+	assert!(module.call::<_, String>("hey", ["not success"]).await.is_err());
+	assert!(matches!(rx.recv().await, Some(Err(MethodResponseError::JsonRpcError))));
 }

@@ -30,17 +30,20 @@
 mod error;
 /// Helpers.
 pub mod helpers;
+/// Method response related types.
+mod method_response;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 mod rpc_module;
 /// Subscription related types.
 mod subscription;
 
 pub use error::*;
-pub use helpers::{BatchResponseBuilder, BoundedWriter, MethodResponse, MethodSink};
+pub use helpers::*;
+pub use method_response::*;
 pub use rpc_module::*;
 pub use subscription::*;
 
-use jsonrpsee_types::{ErrorObjectOwned, ResponsePayload};
+use jsonrpsee_types::ErrorObjectOwned;
 
 const LOG_TARGET: &str = "jsonrpsee-server";
 
@@ -64,8 +67,8 @@ where
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
 		match self {
-			Ok(val) => ResponsePayload::result(val),
-			Err(e) => ResponsePayload::Error(e.into()),
+			Ok(val) => ResponsePayload::success(val),
+			Err(e) => ResponsePayload::error(e),
 		}
 	}
 }
@@ -77,7 +80,7 @@ where
 	type Output = Option<T>;
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+		ResponsePayload::success(self)
 	}
 }
 
@@ -88,7 +91,7 @@ where
 	type Output = Vec<T>;
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+		ResponsePayload::success(self)
 	}
 }
 
@@ -99,7 +102,18 @@ where
 	type Output = [T; N];
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::result(self)
+		ResponsePayload::success(self)
+	}
+}
+
+impl<T> IntoResponse for jsonrpsee_types::ResponsePayload<'static, T>
+where
+	T: serde::Serialize + Clone,
+{
+	type Output = T;
+
+	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
+		self.into()
 	}
 }
 
@@ -115,10 +129,10 @@ where
 }
 
 impl IntoResponse for ErrorObjectOwned {
-	type Output = ErrorObjectOwned;
+	type Output = ();
 
 	fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-		ResponsePayload::Error(self)
+		ResponsePayload::error(self)
 	}
 }
 
@@ -129,7 +143,7 @@ macro_rules! impl_into_response {
 				type Output = $n;
 
 				fn into_response(self) -> ResponsePayload<'static, Self::Output> {
-					ResponsePayload::result(self)
+					ResponsePayload::success(self)
 				}
 			}
 		)+

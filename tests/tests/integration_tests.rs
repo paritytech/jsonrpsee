@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
-#![allow(clippy::blacklisted_name)]
+#![allow(clippy::disallowed_names)]
 
 mod helpers;
 
@@ -40,16 +40,18 @@ use helpers::{
 	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
-use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT, SubscriptionError};
+use jsonrpsee::core::client::{
+	ClientT, Error as ClientError, IdKind, Subscription, SubscriptionClientT, SubscriptionError,
+};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::{ClientError, JsonValue};
+use jsonrpsee::core::{JsonValue, StringError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, RpcModule};
+use jsonrpsee::{rpc_params, ResponsePayload, RpcModule};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -470,7 +472,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 		c1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await;
 
 	// no new request should be accepted.
-	assert!(matches!(sub2, Err(_)));
+	assert!(sub2.is_err());
 
 	// consume final message
 	for _ in 0..2 {
@@ -748,7 +750,7 @@ async fn ws_batch_works() {
 		})
 		.collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"err", None)]);
+	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
 }
 
 #[tokio::test]
@@ -788,7 +790,7 @@ async fn http_batch_works() {
 		})
 		.collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, &"err", None)]);
+	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
 }
 
 #[tokio::test]
@@ -932,7 +934,6 @@ async fn http_correct_content_type_required() {
 	init_logger();
 
 	let server_addr = server().await;
-
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
 
@@ -1293,6 +1294,89 @@ async fn run_shutdown_test_inner<C: ClientT + Send + Sync + 'static>(
 	assert!(client.request::<String, _>("sleep_20s", rpc_params!()).await.is_err());
 }
 
+#[tokio::test]
+async fn response_payload_async_api_works() {
+	use jsonrpsee::server::{Server, SubscriptionSink};
+	use std::sync::Arc;
+	use tokio::sync::Mutex as AsyncMutex;
+
+	init_logger();
+
+	let server_addr = {
+		#[allow(clippy::type_complexity)]
+		let state: Arc<AsyncMutex<Option<(SubscriptionSink, tokio::sync::oneshot::Sender<()>)>>> = Arc::default();
+
+		let mut module = RpcModule::new(state);
+		module
+			.register_method("get", |_params, ctx| {
+				let ctx = ctx.clone();
+				let (rp, rp_future) = ResponsePayload::success(1).notify_on_completion();
+
+				tokio::spawn(async move {
+					// Wait for response to sent to the internal WebSocket message buffer
+					// and if that fails just quit because it means that the connection
+					// was closed or that method response was an error.
+					//
+					// You can identify that by matching on the error.
+					if rp_future.await.is_err() {
+						return;
+					}
+
+					if let Some((sink, close)) = ctx.lock().await.take() {
+						for idx in 0..3 {
+							let msg = SubscriptionMessage::from_json(&idx).unwrap();
+							_ = sink.send(msg).await;
+						}
+						drop(sink);
+						drop(close);
+					}
+				});
+
+				rp
+			})
+			.unwrap();
+
+		module
+			.register_subscription::<Result<(), StringError>, _, _>("sub", "s", "unsub", |_, pending, ctx| async move {
+				let sink = pending.accept().await?;
+				let (tx, rx) = tokio::sync::oneshot::channel();
+				*ctx.lock().await = Some((sink, tx));
+				let _ = rx.await;
+				Err("Dropped".into())
+			})
+			.unwrap();
+
+		let server = Server::builder().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+		let addr = server.local_addr().unwrap();
+
+		let handle = server.start(module);
+
+		tokio::spawn(handle.stopped());
+
+		format!("ws://{addr}")
+	};
+
+	let client = jsonrpsee::ws_client::WsClientBuilder::default()
+		.build(&server_addr)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	// Make a subscription which is stored as state in the sequent rpc call "get".
+	let sub =
+		client.subscribe::<usize, _>("sub", rpc_params!(), "unsub").with_default_timeout().await.unwrap().unwrap();
+
+	// assert that method call was answered
+	// and a few notification were sent by
+	// the spawned the task.
+	//
+	// ideally, that ordering should also be tested here
+	// but not possible to test properly.
+	assert!(client.request::<usize, _>("get", rpc_params!()).await.is_ok());
+	assert_eq!(sub.count().await, 3);
+}
+
 /// Run shutdown test and it does:
 ///
 /// - Make 10 calls that sleeps for 20 seconds
@@ -1326,11 +1410,11 @@ async fn run_shutdown_test(transport: &str) {
 
 	match transport {
 		"ws" => {
-			let ws = Arc::new(WsClientBuilder::default().build(&format!("ws://{addr}")).await.unwrap());
+			let ws = Arc::new(WsClientBuilder::default().build(format!("ws://{addr}")).await.unwrap());
 			run_shutdown_test_inner(ws, handle, call_answered, call_ack).await
 		}
 		"http" => {
-			let http = Arc::new(HttpClientBuilder::default().build(&format!("http://{addr}")).unwrap());
+			let http = Arc::new(HttpClientBuilder::default().build(format!("http://{addr}")).unwrap());
 			run_shutdown_test_inner(http, handle, call_answered, call_ack).await
 		}
 		_ => unreachable!("Only `http` and `ws` supported"),

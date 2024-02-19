@@ -24,10 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::num::NonZeroUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::tests::helpers::{deser_call, init_logger, server_with_context};
+use crate::tests::helpers::{deser_call, init_logger, server_with_context, ws_server_with_stats, Metrics};
 use crate::types::SubscriptionId;
 use crate::{BatchRequestConfig, RegisterMethodError};
 use crate::{RpcModule, ServerBuilder};
@@ -212,7 +212,7 @@ async fn batch_method_call_where_some_calls_fail() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-	let batch = vec![
+	let batch = [
 		r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#,
 		r#"{"jsonrpc":"2.0","method":"call_fail","id":2}"#,
 		r#"{"jsonrpc":"2.0","method":"add","params":[34, 45],"id":3}"#,
@@ -875,13 +875,37 @@ async fn drop_client_with_pending_calls_works() {
 	assert!(handle.stopped().with_timeout(MAX_TIMEOUT).await.is_ok());
 }
 
+#[tokio::test]
+async fn server_notify_on_conn_close() {
+	init_logger();
+
+	let metrics = Metrics::default();
+	let addr = ws_server_with_stats(metrics.clone());
+
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	// Wait for the server to process
+	tokio::time::sleep(Duration::from_millis(100)).await;
+
+	assert_eq!(metrics.ws_sessions_opened.load(Ordering::SeqCst), 1);
+	assert_eq!(metrics.ws_sessions_closed.load(Ordering::SeqCst), 0);
+
+	client.close().with_default_timeout().await.unwrap().unwrap();
+
+	// Wait for the server to process
+	tokio::time::sleep(Duration::from_millis(100)).await;
+
+	assert_eq!(metrics.ws_sessions_opened.load(Ordering::SeqCst), 1);
+	assert_eq!(metrics.ws_sessions_closed.load(Ordering::SeqCst), 1);
+}
+
 async fn server_with_infinite_call(
 	timeout: Duration,
 	tx: tokio::sync::mpsc::UnboundedSender<()>,
 ) -> (crate::ServerHandle, std::net::SocketAddr) {
 	let server = ServerBuilder::default()
 		// Make sure that the ping_interval doesn't force the connection to be closed
-		.enable_ws_ping(crate::server::PingConfig::new().max_failures(NonZeroUsize::MAX).ping_interval(timeout))
+		.enable_ws_ping(crate::PingConfig::new().max_failures(usize::MAX).ping_interval(timeout))
 		.build("127.0.0.1:0")
 		.with_default_timeout()
 		.await

@@ -26,32 +26,38 @@
 
 //! Utility methods relying on hyper
 
-use crate::error::GenericTransportError;
-use anyhow::anyhow;
 use hyper::body::{Buf, HttpBody};
-use std::error::Error as StdError;
+
+/// Represents error that can when reading with a HTTP body.
+#[derive(Debug, thiserror::Error)]
+pub enum HttpError {
+	/// The HTTP message was too large.
+	#[error("The HTTP message was too big")]
+	TooLarge,
+	/// Malformed request
+	#[error("Malformed request")]
+	Malformed,
+	/// Represents error that can happen when dealing with HTTP streams.
+	#[error("{0}")]
+	Stream(#[from] hyper::Error),
+}
 
 /// Read a data from [`hyper::body::HttpBody`] and return the data if it is valid JSON and within the allowed size range.
 ///
 /// Returns `Ok((bytes, single))` if the body was in valid size range; and a bool indicating whether the JSON-RPC
 /// request is a single or a batch.
 /// Returns `Err` if the body was too large or the body couldn't be read.
-pub async fn read_body<B>(
-	headers: &hyper::HeaderMap,
-	body: B,
-	max_body_size: u32,
-) -> Result<(Vec<u8>, bool), GenericTransportError>
+pub async fn read_body<B>(headers: &hyper::HeaderMap, body: B, max_body_size: u32) -> Result<(Vec<u8>, bool), HttpError>
 where
-	B: HttpBody + Send + 'static,
+	B: HttpBody<Error = hyper::Error> + Send + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in
 	// practice and in that case we fallback to allocating in the while-loop below instead of pre-allocating.
 	let body_size = read_header_content_length(headers).unwrap_or(0);
 
 	if body_size > max_body_size {
-		return Err(GenericTransportError::TooLarge);
+		return Err(HttpError::TooLarge);
 	}
 
 	futures_util::pin_mut!(body);
@@ -61,7 +67,7 @@ where
 	let mut is_single = None;
 
 	while let Some(d) = body.data().await {
-		let data = d.map_err(|e| GenericTransportError::Inner(anyhow!(e.into())))?;
+		let data = d.map_err(HttpError::Stream)?;
 
 		// If it's the first chunk, trim the whitespaces to determine whether it's valid JSON-RPC call.
 		if received_data.is_empty() {
@@ -77,18 +83,18 @@ where
 					is_single = Some(false);
 					idx
 				}
-				_ => return Err(GenericTransportError::Malformed),
+				_ => return Err(HttpError::Malformed),
 			};
 
 			if data.chunk().len() - skip > max_body_size as usize {
-				return Err(GenericTransportError::TooLarge);
+				return Err(HttpError::TooLarge);
 			}
 
 			// ignore whitespace as these doesn't matter just makes the JSON decoding slower.
 			received_data.extend_from_slice(&data.chunk()[skip..]);
 		} else {
 			if data.chunk().len() + received_data.len() > max_body_size as usize {
-				return Err(GenericTransportError::TooLarge);
+				return Err(HttpError::TooLarge);
 			}
 
 			received_data.extend_from_slice(data.chunk());
@@ -104,7 +110,7 @@ where
 			);
 			Ok((received_data, single))
 		}
-		_ => Err(GenericTransportError::Malformed),
+		_ => Err(HttpError::Malformed),
 	}
 }
 

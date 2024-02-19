@@ -150,7 +150,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let global_cnt = Arc::new(AtomicUsize::new(0));
 
 	let rpc_middleware = RpcServiceBuilder::new()
-		.layer_fn(|service| Logger(service))
+		.layer_fn(Logger)
 		// This state is created per connection.
 		.layer_fn(|service| CallsPerConn { service, count: Default::default() })
 		// This state is shared by all connections.

@@ -1,12 +1,40 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 //! Abstract async client.
 
 mod helpers;
 mod manager;
+mod utils;
 
 use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
+use crate::client::async_client::utils::MaybePendingFutures;
 use crate::client::{
-	BatchMessage, BatchResponse, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
-	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT, Error
+	BatchMessage, BatchResponse, ClientT, Error, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
+	Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
 };
 use crate::error::RegisterMethodError;
 use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
@@ -22,25 +50,88 @@ use helpers::{
 };
 use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
 
 use async_lock::RwLock as AsyncRwLock;
 use async_trait::async_trait;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
-use futures_util::stream::{FuturesUnordered, StreamExt};
-use futures_util::{Future, Stream};
+use futures_util::stream::StreamExt;
+use futures_util::Stream;
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
-use tokio::sync::{mpsc, oneshot, broadcast};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::instrument;
+
+use self::utils::{InactivityCheck, IntervalStream};
 
 use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
 
 const LOG_TARGET: &str = "jsonrpsee-client";
+
+/// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect
+/// an inactive connection.
+///
+/// jsonrpsee doesn't associate the ping/pong frames just that if
+/// a pong frame isn't received within the `inactive_limit` then it's regarded
+/// as missed.
+///
+/// Such that the `inactive_limit` should be configured to longer than a single
+/// WebSocket ping takes or it might be missed and may end up
+/// terminating the connection.
+///
+/// Default: ping_interval: 30 seconds, max failures: 1 and inactive limit: 40 seconds.
+#[derive(Debug, Copy, Clone)]
+pub struct PingConfig {
+	/// Interval that the pings are sent.
+	pub(crate) ping_interval: Duration,
+	/// Max allowed time for a connection to stay idle.
+	pub(crate) inactive_limit: Duration,
+	/// Max failures.
+	pub(crate) max_failures: usize,
+}
+
+impl Default for PingConfig {
+	fn default() -> Self {
+		Self { ping_interval: Duration::from_secs(30), max_failures: 1, inactive_limit: Duration::from_secs(40) }
+	}
+}
+
+impl PingConfig {
+	/// Create a new PingConfig.
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	/// Configure the interval when the WebSocket pings are sent out.
+	pub fn ping_interval(mut self, ping_interval: Duration) -> Self {
+		self.ping_interval = ping_interval;
+		self
+	}
+
+	/// Configure how long to wait for the WebSocket pong.
+	/// When this limit is expired it's regarded as inresponsive.
+	///
+	/// You may configure how many times the connection is allowed to
+	/// be inactive by [`PingConfig::max_failures`].
+	pub fn inactive_limit(mut self, inactivity_limit: Duration) -> Self {
+		self.inactive_limit = inactivity_limit;
+		self
+	}
+
+	/// Configure how many times the connection is allowed be
+	/// inactive until the connection is closed.
+	///
+	/// # Panics
+	///
+	/// This method panics if `max` == 0.
+	pub fn max_failures(mut self, max: usize) -> Self {
+		assert!(max > 0);
+		self.max_failures = max;
+		self
+	}
+}
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ThreadSafeRequestManager(Arc<std::sync::Mutex<RequestManager>>);
@@ -83,7 +174,9 @@ impl ErrorFromBack {
 					// This should never happen because the receiving end is still alive.
 					// Before shutting down the background task a error message should
 					// be emitted.
-					Err(_) => Error::Custom("Error reason could not be found. This is a bug. Please open an issue.".to_string()),
+					Err(_) => Error::Custom(
+						"Error reason could not be found. This is a bug. Please open an issue.".to_string(),
+					),
 				});
 				*write = Some(ReadErrorOnce::Read(arc_err.clone()));
 				arc_err
@@ -118,7 +211,8 @@ pub struct ClientBuilder {
 	subscription_buf_cap: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
-	ping_interval: Option<Duration>,
+	ping_config: Option<PingConfig>,
+	tcp_no_delay: bool,
 }
 
 impl Default for ClientBuilder {
@@ -129,7 +223,8 @@ impl Default for ClientBuilder {
 			subscription_buf_cap: 1024,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
-			ping_interval: None,
+			ping_config: None,
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -153,7 +248,7 @@ impl ClientBuilder {
 	}
 
 	/// All the subscription messages from the server must be kept in a buffer in the client
-	/// until they are read by polling the [`Subscription`]. If you don't 
+	/// until they are read by polling the [`Subscription`]. If you don't
 	/// poll the client subscription quickly enough, the buffer may fill
 	/// up, which will result in messages being lost.
 	///
@@ -170,10 +265,7 @@ impl ClientBuilder {
 	pub fn with_buf_capacity_per_subscription(mut self, capacity: usize) -> Self {
 		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
 		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
-        assert!(
-            capacity <= usize::MAX >> 1,
-            "subscription buffer capacity exceeded `usize::MAX / 2`"
-        );
+		assert!(capacity <= usize::MAX >> 1, "subscription buffer capacity exceeded `usize::MAX / 2`");
 
 		self.subscription_buf_cap = capacity;
 		self
@@ -193,20 +285,31 @@ impl ClientBuilder {
 		self
 	}
 
-	/// Set the interval at which pings frames are submitted (disabled by default).
+	/// Enable WebSocket ping/pong on the client.
 	///
-	/// Periodically submitting pings at a defined interval has mainly two benefits:
-	///  - Directly, it acts as a "keep-alive" alternative in the WebSocket world.
-	///  - Indirectly by inspecting debug logs, it ensures that the endpoint is still responding to messages.
+	/// This only works if the transport supports WebSocket pings.
 	///
-	/// The underlying implementation does not make any assumptions about at which intervals pongs are received.
+	/// Default: pings are disabled.
+	pub fn enable_ws_ping(mut self, cfg: PingConfig) -> Self {
+		self.ping_config = Some(cfg);
+		self
+	}
+
+	/// Disable WebSocket ping/pong on the server.
 	///
-	/// Note: The interval duration is restarted when
-	///  - a frontend command is submitted
-	///  - a reply is received from the backend
-	///  - the interval duration expires
-	pub fn ping_interval(mut self, interval: Duration) -> Self {
-		self.ping_interval = Some(interval);
+	/// Default: pings are disabled.
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.ping_config = None;
+		self
+	}
+
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	///
+	/// On some transports this may have no effect.
+	///
+	/// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.tcp_no_delay = no_delay;
 		self
 	}
 
@@ -225,10 +328,32 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let subscription_buf_cap = self.subscription_buf_cap;
-		let ping_interval = self.ping_interval;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
+
+		let (ping_interval, inactivity_stream, inactivity_check) = match self.ping_config {
+			None => (IntervalStream::pending(), IntervalStream::pending(), InactivityCheck::Disabled),
+			Some(p) => {
+				// NOTE: This emits a tick immediately to sync how the `inactive_interval` works
+				// because it starts measuring when the client start-ups.
+				let ping_interval = IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(
+					tokio::time::interval(p.ping_interval),
+				));
+
+				let inactive_interval = {
+					let start = tokio::time::Instant::now() + p.inactive_limit;
+					IntervalStream::new(tokio_stream::wrappers::IntervalStream::new(tokio::time::interval_at(
+						start,
+						p.inactive_limit,
+					)))
+				};
+
+				let inactivity_check = InactivityCheck::new(p.inactive_limit, p.max_failures);
+
+				(ping_interval, inactive_interval, inactivity_check)
+			}
+		};
 
 		tokio::spawn(send_task(SendTaskParams {
 			sender,
@@ -245,6 +370,8 @@ impl ClientBuilder {
 			to_send_task: to_back.clone(),
 			manager,
 			subscription_buf_cap,
+			inactivity_check,
+			inactivity_stream,
 		}));
 
 		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, err_to_front));
@@ -267,13 +394,21 @@ impl ClientBuilder {
 		S: TransportSenderT,
 		R: TransportReceiverT,
 	{
+		use futures_util::stream::Pending;
+
+		type PendingIntervalStream = IntervalStream<Pending<()>>;
+
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let subscription_buf_cap = self.subscription_buf_cap;
-		let ping_interval = self.ping_interval;
+		let ping_interval = self.ping_config;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
+
+		let ping_interval = PendingIntervalStream::pending();
+		let inactivity_stream = PendingIntervalStream::pending();
+		let inactivity_check = InactivityCheck::Disabled;
 
 		wasm_bindgen_futures::spawn_local(send_task(SendTaskParams {
 			sender,
@@ -290,6 +425,8 @@ impl ClientBuilder {
 			to_send_task: to_back.clone(),
 			manager,
 			subscription_buf_cap,
+			inactivity_check,
+			inactivity_stream,
 		}));
 
 		wasm_bindgen_futures::spawn_local(wait_for_shutdown(
@@ -340,12 +477,12 @@ impl Client {
 
 	/// This is similar to [`Client::on_disconnect`] but it can be used to get
 	/// the reason why the client was disconnected but it's not cancel-safe.
-	/// 
+	///
 	/// The typical use-case is that this method will be called after
 	/// [`Client::on_disconnect`] has returned in a "select loop".
-	/// 
+	///
 	/// # Cancel-safety
-	/// 
+	///
 	/// This method is not cancel-safe
 	pub async fn disconnect_reason(&self) -> Error {
 		self.error.read_error().await
@@ -428,7 +565,7 @@ impl ClientT for Client {
 			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
-		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&json_value), id), self.max_log_length);
+		rx_log_from_json(&Response::new(ResponsePayload::success_borrowed(&json_value), id), self.max_log_length);
 
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
@@ -517,9 +654,7 @@ impl SubscriptionClientT for Client {
 		Notif: DeserializeOwned,
 	{
 		if subscribe_method == unsubscribe_method {
-			return Err(RegisterMethodError::SubscriptionNameConflict(
-				unsubscribe_method.to_owned(),
-			).into());
+			return Err(RegisterMethodError::SubscriptionNameConflict(unsubscribe_method.to_owned()).into());
 		}
 
 		let guard = self.id_manager.next_request_two_ids()?;
@@ -554,7 +689,7 @@ impl SubscriptionClientT for Client {
 			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
-		rx_log_from_json(&Response::new(ResponsePayload::result_borrowed(&sub_id), id_unsub), self.max_log_length);
+		rx_log_from_json(&Response::new(ResponsePayload::success_borrowed(&sub_id), id_unsub), self.max_log_length);
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
@@ -775,8 +910,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
 			} else {
-				let _ =
-					reg.send_back.send(Err(RegisterMethodError::AlreadyRegistered(reg.method).into()));
+				let _ = reg.send_back.send(Err(RegisterMethodError::AlreadyRegistered(reg.method).into()));
 			}
 		}
 		// User dropped the NotificationHandler for this method
@@ -799,73 +933,45 @@ fn unparse_error(raw: &[u8]) -> Error {
 	Error::Custom(format!("Unparseable message: {json_str}"))
 }
 
-struct SendTaskParams<S: TransportSenderT> {
-	sender: S,
+struct SendTaskParams<T: TransportSenderT, S> {
+	sender: T,
 	from_frontend: mpsc::Receiver<FrontToBack>,
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	manager: ThreadSafeRequestManager,
 	subscription_buf_cap: usize,
-	ping_interval: Option<Duration>,
+	ping_interval: IntervalStream<S>,
 }
 
-async fn send_task<S>(params: SendTaskParams<S>)
+async fn send_task<T, S>(params: SendTaskParams<T, S>)
 where
-	S: TransportSenderT,
+	T: TransportSenderT,
+	S: Stream + Unpin,
 {
-	let SendTaskParams {
-		mut sender,
-		mut from_frontend,
-		close_tx,
-		manager,
-		subscription_buf_cap,
-		ping_interval,
-	} = params;
+	let SendTaskParams { mut sender, mut from_frontend, close_tx, manager, subscription_buf_cap, mut ping_interval } =
+		params;
 
 	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
 	// are cancel-safe.
-	let res = if let Some(ping_interval) = ping_interval {
-		let mut ping = tokio::time::interval_at(tokio::time::Instant::now() + ping_interval, ping_interval);
+	let res = loop {
+		tokio::select! {
+			biased;
+			_ = close_tx.closed() => break Ok(()),
+			maybe_msg = from_frontend.recv() => {
+				let Some(msg) = maybe_msg else {
+					break Ok(());
+				};
 
-		loop {
-			tokio::select! {
-				biased;
-				_ = close_tx.closed() => break Ok(()),
-				maybe_msg = from_frontend.recv() => {
-					let Some(msg) = maybe_msg else {
-						break Ok(());
-					};
-
-					if let Err(e) =
-						handle_frontend_messages(msg, &manager, &mut sender, subscription_buf_cap).await
-					{
-						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
-						break Err(Error::Transport(e.into()));
-					}
-				}
-				_ = ping.tick() => {
-					if let Err(err) = sender.send_ping().await {
-						tracing::error!(target: LOG_TARGET, "Could not send ping frame: {err}");
-						break Err(Error::Custom("Could not send ping frame".into()));
-					}
+				if let Err(e) =
+					handle_frontend_messages(msg, &manager, &mut sender, subscription_buf_cap).await
+				{
+					tracing::error!(target: LOG_TARGET, "ws send failed: {e}");
+					break Err(Error::Transport(e.into()));
 				}
 			}
-		}
-	} else {
-		loop {
-			tokio::select! {
-				biased;
-				_ = close_tx.closed() => break Ok(()),
-				maybe_msg = from_frontend.recv() => {
-					let Some(msg) = maybe_msg else {
-						break Ok(());
-					};
-
-					if let Err(e) =
-						handle_frontend_messages(msg, &manager, &mut sender, subscription_buf_cap).await
-					{
-						tracing::error!(target: LOG_TARGET, "Could not send message: {e}");
-						break Err(Error::Transport(e.into()));
-					}
+			_ = ping_interval.next() => {
+				if let Err(err) = sender.send_ping().await {
+					tracing::error!(target: LOG_TARGET, "Send ws ping failed: {err}");
+					break Err(Error::Transport(err.into()));
 				}
 			}
 		}
@@ -876,19 +982,30 @@ where
 	let _ = close_tx.send(res).await;
 }
 
-struct ReadTaskParams<R: TransportReceiverT> {
+struct ReadTaskParams<R: TransportReceiverT, S> {
 	receiver: R,
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	to_send_task: mpsc::Sender<FrontToBack>,
 	manager: ThreadSafeRequestManager,
 	subscription_buf_cap: usize,
+	inactivity_check: InactivityCheck,
+	inactivity_stream: IntervalStream<S>,
 }
 
-async fn read_task<R>(params: ReadTaskParams<R>)
+async fn read_task<R, S>(params: ReadTaskParams<R, S>)
 where
 	R: TransportReceiverT,
+	S: Stream + Unpin,
 {
-	let ReadTaskParams { receiver, close_tx, to_send_task, manager, subscription_buf_cap } = params;
+	let ReadTaskParams {
+		receiver,
+		close_tx,
+		to_send_task,
+		manager,
+		subscription_buf_cap,
+		mut inactivity_check,
+		mut inactivity_stream,
+	} = params;
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
@@ -914,6 +1031,7 @@ where
 			_ = pending_unsubscribes.next() => (),
 			// New message received.
 			maybe_msg = backend_event.next() => {
+				inactivity_check.mark_as_active();
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
 				match handle_backend_messages::<R>(Some(msg), &manager, subscription_buf_cap) {
@@ -926,7 +1044,11 @@ where
 					}
 					Ok(None) => (),
 				}
-
+			}
+			_ = inactivity_stream.next() => {
+				if inactivity_check.is_inactive() {
+					break Err(Error::Transport(anyhow::anyhow!("WebSocket ping/pong inactive")));
+				}
 			}
 		}
 	};
@@ -946,38 +1068,5 @@ async fn wait_for_shutdown(
 	// Send an error to the frontend if the send or receive task completed with an error.
 	if let Either::Left((Some(Err(err)), _)) = future::select(rx_item, client_dropped).await {
 		let _ = err_to_front.send(err);
-	}
-}
-
-/// A wrapper around `FuturesUnordered` that doesn't return `None` when it's empty.
-struct MaybePendingFutures<Fut> {
-	futs: FuturesUnordered<Fut>,
-	waker: Option<Waker>,
-}
-
-impl<Fut> MaybePendingFutures<Fut> {
-	fn new() -> Self {
-		Self { futs: FuturesUnordered::new(), waker: None }
-	}
-
-	fn push(&mut self, fut: Fut) {
-		self.futs.push(fut);
-
-		if let Some(w) = self.waker.take() {
-			w.wake();
-		}
-	}
-}
-
-impl<Fut: Future> Stream for MaybePendingFutures<Fut> {
-	type Item = Fut::Output;
-
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-		if self.futs.is_empty() {
-			self.waker = Some(cx.waker().clone());
-			return Poll::Pending;
-		}
-
-		self.futs.poll_next_unpin(cx)
 	}
 }

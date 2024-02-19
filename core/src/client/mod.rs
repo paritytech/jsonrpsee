@@ -37,7 +37,7 @@ pub use error::Error;
 use std::fmt;
 use std::ops::Range;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task;
 
@@ -450,7 +450,7 @@ pub struct RequestIdManager {
 	/// Max concurrent pending requests allowed.
 	max_concurrent_requests: usize,
 	/// Get the next request ID.
-	current_id: AtomicU64,
+	current_id: CurrentId,
 	/// Request ID type.
 	id_kind: IdKind,
 }
@@ -458,7 +458,7 @@ pub struct RequestIdManager {
 impl RequestIdManager {
 	/// Create a new `RequestIdGuard` with the provided concurrency limit.
 	pub fn new(limit: usize, id_kind: IdKind) -> Self {
-		Self { current_pending: Arc::new(()), max_concurrent_requests: limit, current_id: AtomicU64::new(0), id_kind }
+		Self { current_pending: Arc::new(()), max_concurrent_requests: limit, current_id: CurrentId::new(), id_kind }
 	}
 
 	fn get_slot(&self) -> Result<Arc<()>, Error> {
@@ -475,7 +475,7 @@ impl RequestIdManager {
 	/// Fails if request limit has been exceeded.
 	pub fn next_request_id(&self) -> Result<RequestIdGuard<Id<'static>>, Error> {
 		let rc = self.get_slot()?;
-		let id = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+		let id = self.id_kind.into_id(self.current_id.next());
 
 		Ok(RequestIdGuard { _rc: rc, id })
 	}
@@ -486,8 +486,8 @@ impl RequestIdManager {
 	/// Fails if request limit has been exceeded.
 	pub fn next_request_two_ids(&self) -> Result<RequestIdGuard<(Id<'static>, Id<'static>)>, Error> {
 		let rc = self.get_slot()?;
-		let id1 = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
-		let id2 = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+		let id1 = self.id_kind.into_id(self.current_id.next());
+		let id2 = self.id_kind.into_id(self.current_id.next());
 		Ok(RequestIdGuard { _rc: rc, id: (id1, id2) })
 	}
 
@@ -538,6 +538,22 @@ impl IdKind {
 			IdKind::Number => Id::Number(id),
 			IdKind::String => Id::Str(format!("{id}").into()),
 		}
+	}
+}
+
+#[derive(Debug)]
+struct CurrentId(AtomicUsize);
+
+impl CurrentId {
+	fn new() -> Self {
+		CurrentId(AtomicUsize::new(0))
+	}
+
+	fn next(&self) -> u64 {
+		self.0
+			.fetch_add(1, Ordering::Relaxed)
+			.try_into()
+			.expect("usize -> u64 infallible, there are no CPUs > 64 bits; qed")
 	}
 }
 

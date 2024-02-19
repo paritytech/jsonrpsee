@@ -39,6 +39,7 @@
 mod tests;
 
 pub use http::{HeaderMap, HeaderValue};
+pub use jsonrpsee_core::client::async_client::PingConfig;
 pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
 
@@ -82,13 +83,14 @@ pub struct WsClientBuilder {
 	max_response_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	ping_interval: Option<Duration>,
+	ping_config: Option<PingConfig>,
 	headers: http::HeaderMap,
 	max_concurrent_requests: usize,
 	subscription_buf_cap: usize,
 	max_redirections: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
+	tcp_no_delay: bool,
 }
 
 impl Default for WsClientBuilder {
@@ -99,13 +101,14 @@ impl Default for WsClientBuilder {
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
-			ping_interval: None,
+			ping_config: None,
 			headers: HeaderMap::new(),
 			max_concurrent_requests: 256,
 			subscription_buf_cap: 16,
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -170,9 +173,15 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// See documentation [`ClientBuilder::ping_interval`] (disabled by default).
-	pub fn ping_interval(mut self, interval: Duration) -> Self {
-		self.ping_interval = Some(interval);
+	/// See documentation [`ClientBuilder::enable_ws_ping`] (disabled by default).
+	pub fn enable_ws_ping(mut self, cfg: PingConfig) -> Self {
+		self.ping_config = Some(cfg);
+		self
+	}
+
+	/// See documentation [`ClientBuilder::disable_ws_ping`]
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.ping_config = None;
 		self
 	}
 
@@ -218,6 +227,12 @@ impl WsClientBuilder {
 		self
 	}
 
+	/// See documentation [`ClientBuilder::set_tcp_no_delay`] (default is true).
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.tcp_no_delay = no_delay;
+		self
+	}
+
 	/// Build the [`WsClient`] with specified [`TransportSenderT`] [`TransportReceiverT`] parameters
 	///
 	/// ## Panics
@@ -231,10 +246,11 @@ impl WsClientBuilder {
 		let Self {
 			max_concurrent_requests,
 			request_timeout,
-			ping_interval,
+			ping_config,
 			subscription_buf_cap,
 			id_kind,
 			max_log_length,
+			tcp_no_delay,
 			..
 		} = self;
 
@@ -243,10 +259,11 @@ impl WsClientBuilder {
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)
-			.set_max_logging_length(max_log_length);
+			.set_max_logging_length(max_log_length)
+			.set_tcp_no_delay(tcp_no_delay);
 
-		if let Some(interval) = ping_interval {
-			client = client.ping_interval(interval);
+		if let Some(cfg) = ping_config {
+			client = client.enable_ws_ping(cfg);
 		}
 
 		client.build_with_tokio(sender, receiver)
@@ -268,6 +285,7 @@ impl WsClientBuilder {
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			max_redirections: self.max_redirections,
+			tcp_no_delay: self.tcp_no_delay,
 		};
 
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
@@ -292,6 +310,7 @@ impl WsClientBuilder {
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			max_redirections: self.max_redirections,
+			tcp_no_delay: self.tcp_no_delay,
 		};
 
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;

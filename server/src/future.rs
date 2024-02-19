@@ -30,10 +30,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_util::{Stream, StreamExt};
+use futures_util::{Future, Stream, StreamExt};
 use pin_project::pin_project;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::Interval;
+use tokio_stream::wrappers::BroadcastStream;
 
 /// Create channel to determine whether
 /// the server shall continue to run or not.
@@ -156,4 +157,41 @@ impl Stream for IntervalStream {
 			Poll::Pending
 		}
 	}
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SessionClose(tokio::sync::broadcast::Sender<()>);
+
+impl SessionClose {
+	pub(crate) fn close(self) {
+		let _ = self.0.send(());
+	}
+
+	pub(crate) fn closed(&self) -> SessionClosedFuture {
+		SessionClosedFuture(BroadcastStream::new(self.0.subscribe()))
+	}
+}
+
+/// A future that resolves when the connection has been closed.
+#[derive(Debug)]
+pub struct SessionClosedFuture(BroadcastStream<()>);
+
+impl Future for SessionClosedFuture {
+	type Output = ();
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		match self.0.poll_next_unpin(cx) {
+			Poll::Pending => Poll::Pending,
+			// Only message is only sent and
+			// ignore can't keep up errors.
+			Poll::Ready(_) => Poll::Ready(()),
+		}
+	}
+}
+
+pub(crate) fn session_close() -> (SessionClose, SessionClosedFuture) {
+	// SessionClosedFuture is closed after one message has been recevied
+	// and max one message is handled then it's closed.
+	let (tx, rx) = tokio::sync::broadcast::channel(1);
+	(SessionClose(tx), SessionClosedFuture(BroadcastStream::new(rx)))
 }

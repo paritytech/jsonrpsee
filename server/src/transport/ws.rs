@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::future::IntervalStream;
+use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
 use crate::{PingConfig, LOG_TARGET};
@@ -10,8 +10,7 @@ use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::server::helpers::MethodSink;
-use jsonrpsee_core::server::{BoundedSubscriptions, Methods};
+use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
 use soketto::connection::Error as SokettoError;
@@ -56,6 +55,7 @@ pub(crate) struct BackgroundTaskParams<S> {
 	pub(crate) sink: MethodSink,
 	pub(crate) rx: mpsc::Receiver<String>,
 	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
+	pub(crate) on_session_close: Option<SessionClose>,
 }
 
 pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
@@ -71,6 +71,7 @@ where
 		sink,
 		rx,
 		pending_calls_completed,
+		mut on_session_close,
 	} = params;
 	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
 		server_cfg;
@@ -155,8 +156,20 @@ where
 				handle_rpc_call(&data[idx..], is_single, batch_requests_config, max_response_body_size, &*rpc_service)
 					.await
 			{
-				if !rp.is_subscription {
-					_ = sink.send(rp.result).await;
+				if !rp.is_subscription() {
+					let is_success = rp.is_success();
+					let (serialized_rp, mut on_close) = rp.into_parts();
+
+					// The connection is closed, just quit.
+					if sink.send(serialized_rp).await.is_err() {
+						return;
+					}
+
+					// Notify that the message has been sent out to the internal
+					// WebSocket buffer.
+					if let Some(n) = on_close.take() {
+						n.notify(is_success);
+					}
 				}
 			}
 		});
@@ -169,6 +182,10 @@ where
 	graceful_shutdown(result, pending_calls_completed, ws_stream, conn_tx, send_task_handle).await;
 
 	drop(conn);
+
+	if let Some(c) = on_session_close.take() {
+		c.close();
+	}
 }
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
@@ -282,7 +299,7 @@ where
 					if last_active.elapsed() > p.inactive_limit {
 						missed += 1;
 
-						if missed >= p.max_failures.get() {
+						if missed >= p.max_failures {
 							break Receive::ConnectionClosed;
 						}
 					}
@@ -338,16 +355,16 @@ async fn graceful_shutdown<S>(
 	_ = send_task_handle.await;
 }
 
-/// Low-level API that attempts to establish WebSocket connection
+/// Low-level API that tries to upgrade the HTTP connection to a WebSocket connection.
 ///
-/// Returns Ok((http_response, fut)) if websocket connection was successfully established
-/// otherwise Err(http_response).
+/// Returns `Ok((http_response, conn_fut))` if the WebSocket connection was successfully established
+/// otherwise `Err(http_response)`.
 ///
-/// `fut` is a future that drives the WebSocket connection
+/// `conn_fut` is a future that drives the WebSocket connection
 /// and if it's dropped the connection will be closed.
 ///
-/// If you calling this from the `hyper::service_fn` the HTTP response
-/// must be sent back and the websocket connection will held in another task.
+/// Because this API depends on [`hyper`] the response needs to be sent
+/// to complete the HTTP request.
 ///
 /// ```no_run
 /// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState};
@@ -398,6 +415,14 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
+			let upgraded = match hyper::upgrade::on(req).await {
+				Ok(u) => u,
+				Err(e) => {
+					tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
+					return Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed {e}"))));
+				}
+			};
+
 			let (tx, rx) = mpsc::channel::<String>(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
@@ -423,14 +448,6 @@ where
 			let rpc_service = rpc_middleware.service(rpc_service);
 
 			let fut = async move {
-				let upgraded = match hyper::upgrade::on(req).await {
-					Ok(u) => u,
-					Err(e) => {
-						tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-						return;
-					}
-				};
-
 				let stream = BufReader::new(BufWriter::new(upgraded.compat()));
 				let mut ws_builder = server.into_builder(stream);
 				ws_builder.set_max_message_size(server_cfg.max_response_body_size as usize);
@@ -445,6 +462,7 @@ where
 					sink,
 					rx,
 					pending_calls_completed,
+					on_session_close: None,
 				};
 
 				background_task(params).await;
@@ -454,7 +472,7 @@ where
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-			Err(hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}"))))
+			Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed: {e}"))))
 		}
 	}
 }

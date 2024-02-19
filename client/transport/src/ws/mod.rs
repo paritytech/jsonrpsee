@@ -78,6 +78,8 @@ pub struct WsTransportClientBuilder {
 	pub max_response_size: u32,
 	/// Max number of redirections.
 	pub max_redirections: usize,
+	/// TCP no delay.
+	pub tcp_no_delay: bool,
 }
 
 impl Default for WsTransportClientBuilder {
@@ -89,6 +91,7 @@ impl Default for WsTransportClientBuilder {
 			connection_timeout: Duration::from_secs(10),
 			headers: http::HeaderMap::new(),
 			max_redirections: 5,
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -184,7 +187,7 @@ pub enum WsHandshakeError {
 	Io(io::Error),
 
 	/// Error in the transport layer.
-	#[error("Error in the WebSocket handshake: {0}")]
+	#[error("{0}")]
 	Transport(#[source] soketto::handshake::Error),
 
 	/// Server rejected the handshake.
@@ -220,7 +223,7 @@ pub enum WsHandshakeError {
 #[derive(Debug, Error)]
 pub enum WsError {
 	/// Error in the WebSocket connection.
-	#[error("WebSocket connection error: {0}")]
+	#[error("{0}")]
 	Connection(#[source] soketto::connection::Error),
 	/// Message was too large.
 	#[error("The message was too large")]
@@ -338,7 +341,9 @@ impl WsTransportClientBuilder {
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
 				#[cfg(feature = "__tls")]
-				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref()).await {
+				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref(), self.tcp_no_delay)
+					.await
+				{
 					Ok(stream) => stream,
 					Err(e) => {
 						tracing::debug!(target: LOG_TARGET, "Failed to connect to sockaddr: {:?}", sockaddr);
@@ -469,20 +474,21 @@ async fn connect(
 	timeout_dur: Duration,
 	host: &str,
 	tls_connector: Option<&tokio_rustls::TlsConnector>,
+	tcp_no_delay: bool,
 ) -> Result<EitherStream, WsHandshakeError> {
 	let socket = TcpStream::connect(sockaddr);
 	let timeout = tokio::time::sleep(timeout_dur);
 	tokio::select! {
 		socket = socket => {
 			let socket = socket?;
-			if let Err(err) = socket.set_nodelay(true) {
+			if let Err(err) = socket.set_nodelay(tcp_no_delay) {
 				tracing::warn!(target: LOG_TARGET, "set nodelay failed: {:?}", err);
 			}
 			match tls_connector {
 				None => Ok(EitherStream::Plain(socket)),
 				Some(connector) => {
-					let server_name: tokio_rustls::rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {host} {e:?}").into()))?;
-					let tls_stream = connector.connect(server_name, socket).await?;
+					let server_name: rustls_pki_types::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {host} {e:?}").into()))?;
+					let tls_stream = connector.connect(server_name.to_owned(), socket).await?;
 					Ok(EitherStream::Tls(tls_stream))
 				}
 			}
@@ -588,8 +594,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 			let mut first_error = None;
 			let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
 			for cert in certs {
-				let cert = rustls::Certificate(cert.0);
-				if let Err(err) = roots.add(&cert) {
+				if let Err(err) = roots.add(cert) {
 					first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
 				}
 			}
@@ -601,9 +606,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 		}
 		#[cfg(feature = "webpki-tls")]
 		CertificateStore::WebPki => {
-			roots.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
-			}));
+			roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 		}
 		_ => {
 			let err = io::Error::new(io::ErrorKind::NotFound, "Invalid certificate store");
@@ -611,8 +614,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 		}
 	};
 
-	let config =
-		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(roots).with_no_client_auth();
+	let config = rustls::ClientConfig::builder().with_root_certificates(roots).with_no_client_auth();
 
 	Ok(std::sync::Arc::new(config).into())
 }

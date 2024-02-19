@@ -1,11 +1,18 @@
-use std::fmt;
+use std::error::Error as StdError;
 use std::net::SocketAddr;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::{fmt, sync::atomic::AtomicUsize};
 
-use crate::{RpcModule, ServerBuilder, ServerHandle};
+use crate::{stop_channel, RpcModule, Server, ServerBuilder, ServerHandle};
 
+use futures_util::FutureExt;
+use hyper::server::conn::AddrStream;
+use jsonrpsee_core::server::Methods;
 use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::{error::ErrorCode, ErrorObject, ErrorObjectOwned, Response, ResponseSuccess};
+use tower::Service;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 pub(crate) struct TestContext;
@@ -193,4 +200,64 @@ impl From<MyAppError> for ErrorObjectOwned {
 
 fn invalid_params() -> ErrorObjectOwned {
 	ErrorCode::InvalidParams.into()
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Metrics {
+	pub(crate) ws_sessions_opened: Arc<AtomicUsize>,
+	pub(crate) ws_sessions_closed: Arc<AtomicUsize>,
+}
+
+pub(crate) fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
+	use hyper::service::{make_service_fn, service_fn};
+
+	let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+	let (stop_handle, server_handle) = stop_channel();
+	let stop_handle2 = stop_handle.clone();
+
+	// And a MakeService to handle each connection...
+	let make_service = make_service_fn(move |_conn: &AddrStream| {
+		let stop_handle = stop_handle2.clone();
+		let metrics = metrics.clone();
+
+		async move {
+			Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
+				let is_websocket = crate::ws::is_upgrade_request(&req);
+				let metrics = metrics.clone();
+				let stop_handle = stop_handle.clone();
+
+				let mut svc =
+					Server::builder().max_connections(33).to_service_builder().build(Methods::new(), stop_handle);
+
+				if is_websocket {
+					// This should work for each callback.
+					let session_close1 = svc.on_session_closed();
+					let session_close2 = svc.on_session_closed();
+
+					tokio::spawn(async move {
+						metrics.ws_sessions_opened.fetch_add(1, Ordering::SeqCst);
+						tokio::join!(session_close2, session_close1);
+						metrics.ws_sessions_closed.fetch_add(1, Ordering::SeqCst);
+					});
+
+					async move { svc.call(req).await }.boxed()
+				} else {
+					// HTTP.
+					async move { svc.call(req).await }.boxed()
+				}
+			}))
+		}
+	});
+
+	let server = hyper::Server::bind(&addr).serve(make_service);
+
+	let addr = server.local_addr();
+
+	tokio::spawn(async move {
+		let graceful = server.with_graceful_shutdown(async move { stop_handle.shutdown().await });
+		graceful.await.unwrap();
+		drop(server_handle)
+	});
+
+	addr
 }
