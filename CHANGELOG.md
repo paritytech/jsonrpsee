@@ -4,6 +4,16 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.22.1] - 2024-02-19
+
+This is a small patch release that internally changes `AtomicU64` to `AtomicUsize`
+to support more targets.
+
+### [Fixed]
+- fix(docs): part of proc-macro documentation not rendering correctly in IDE ([#1294](https://github.com/paritytech/jsonrpsee/pull/1294))
+- fix(client): change to `AtomicU64` to `AtomicUsize` ([#1293](https://github.com/paritytech/jsonrpsee/pull/1293))
+- fix(server): return err on WS handshake err ([#1288](https://github.com/paritytech/jsonrpsee/pull/1288))
+
 ## [v0.22.0] - 2024-02-07
 
 Another breaking release where a new `ResponsePayload` type is introduced in order
