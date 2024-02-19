@@ -12,7 +12,7 @@ to support more targets.
 ### [Fixed]
 - fix(docs): part of proc-macro documentation not rendering correctly in IDE ([#1294](https://github.com/paritytech/jsonrpsee/pull/1294))
 - fix(client): change to `AtomicU64` to `AtomicUsize` ([#1293](https://github.com/paritytech/jsonrpsee/pull/1293))
-- fix(server): return err on WS handshake err ([#1288](https://github.com/paritytech/jsonrpsee/pull/1288))
+- fix(server): low-level API return err on WS handshake err ([#1288](https://github.com/paritytech/jsonrpsee/pull/1288))
 
 ## [v0.22.0] - 2024-02-07
 
