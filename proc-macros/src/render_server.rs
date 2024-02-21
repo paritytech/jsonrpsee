@@ -142,13 +142,12 @@ impl RpcDescription {
 				check_name(&rpc_method_name, rust_method_name.span());
 
 				if self.with_context {
-					let blocking = if method.blocking { quote!(true) } else { quote!(false) };
-					let maybe_await = if method.signature.sig.asyncness.is_some() { quote!(.await) } else { quote!() };
+					
 
 					handle_register_result(quote! {
-						rpc.register_raw_method(#rpc_method_name, #blocking, |params, connection_id, context| async move {
+						rpc.register_raw_method(#rpc_method_name, |params, connection_id, context| {
 							#parsing
-							#into_response::into_response(context.as_ref().#rust_method_name(connection_id, #params_seq) #maybe_await)
+							#into_response::into_response(context.#rust_method_name(connection_id, #params_seq))
 						})
 					})
 				} else {

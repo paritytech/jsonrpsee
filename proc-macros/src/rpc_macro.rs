@@ -270,6 +270,14 @@ impl RpcDescription {
 					is_method = true;
 
 					let method_data = RpcMethod::from_item(attr.clone(), method.clone())?;
+
+					if method_data.blocking && with_context {
+						return Err(syn::Error::new_spanned(
+							method,
+							"Methods cannot be blocking when used with `with_context`; remove `blocking` attribute or `with_context` attribute",
+						));
+					}
+
 					methods.push(method_data);
 				}
 				if let Some(attr) = find_attr(&method.attrs, "subscription") {
@@ -289,6 +297,13 @@ impl RpcDescription {
 					return Err(syn::Error::new_spanned(
 						method,
 						"Methods must have either 'method' or 'subscription' attribute",
+					));
+				}
+
+				if is_method && method.sig.asyncness.is_some() && with_context {
+					return Err(syn::Error::new_spanned(
+						method,
+						"Methods must be synchronous when used with `with_context`; use `fn` instead of `async fn`",
 					));
 				}
 			} else {
