@@ -61,7 +61,8 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Similar to [`SyncMethod`], but represents a raw handler that has access to the connection Id.
-pub type RawMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
+pub type RawMethod<'a> =
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
@@ -134,7 +135,7 @@ pub enum MethodCallback {
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
 	/// Raw method handler.
-	Raw(RawMethod),
+	Raw(RawMethod<'static>),
 	/// Subscription method handler.
 	Subscription(SubscriptionMethod<'static>),
 	/// Unsubscription method handler.
@@ -360,7 +361,7 @@ impl Methods {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
 			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX),
 			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
-			Some(MethodCallback::Raw(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX),
+			Some(MethodCallback::Raw(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
@@ -602,6 +603,63 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		)?;
 
 		Ok(callback)
+	}
+
+	/// Register a new raw RPC method, which computes the response with the given callback.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use jsonrpsee_core::server::RpcModule;
+	///
+	/// let mut module = RpcModule::new(());
+	/// module.register_raw_method("say_hello", false, |_params, _connection_id, _ctx| "lo").unwrap();
+	/// ```
+	pub fn register_raw_method<R, F>(
+		&mut self,
+		method_name: &'static str,
+		blocking: bool,
+		callback: F,
+	) -> Result<&mut MethodCallback, RegisterMethodError>
+	where
+		Context: Send + Sync + 'static,
+		R: IntoResponse + 'static,
+		F: Fn(Params, usize, Arc<Context>) -> R + Clone + Send + Sync + 'static,
+	{
+		let ctx = self.ctx.clone();
+		if blocking {
+			let callback = self.methods.verify_and_insert(
+				method_name,
+				MethodCallback::Raw(Arc::new(move |id, params, connection_id, max_response_size| {
+					let ctx = ctx.clone();
+					let callback = callback.clone();
+
+					tokio::task::spawn_blocking(move || {
+						let rp = callback(params, connection_id, ctx).into_response();
+						MethodResponse::response(id, rp, max_response_size)
+					})
+					.map(|result| match result {
+						Ok(r) => r,
+						Err(err) => {
+							tracing::error!(target: LOG_TARGET, "Join error for blocking RPC method: {:?}", err);
+							MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
+						}
+					})
+					.boxed()
+				})),
+			)?;
+
+			return Ok(callback);
+		}
+
+		self.methods.verify_and_insert(
+			method_name,
+			MethodCallback::Raw(Arc::new(move |id, params, connection_id, max_response_size| {
+				let ctx = ctx.clone();
+				let rp = callback(params, connection_id, ctx).into_response();
+				futures_util::future::ready(MethodResponse::response(id, rp, max_response_size)).boxed()
+			})),
+		)
 	}
 
 	/// Register a new publish/subscribe interface using JSON-RPC notifications.

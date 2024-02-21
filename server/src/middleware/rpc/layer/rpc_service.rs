@@ -99,8 +99,11 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					ResponseFuture::ready(rp)
 				}
 				MethodCallback::Raw(callback) => {
-					let rp = (callback)(id, params, conn_id, max_response_body_size);
-					ResponseFuture::ready(rp)
+					let params = params.into_owned();
+					let id = id.into_owned();
+
+					let fut = (callback)(id, params, conn_id, max_response_body_size);
+					ResponseFuture::future(fut)
 				}
 				MethodCallback::Subscription(callback) => {
 					let RpcServiceCfg::CallsAndSubscriptions {
