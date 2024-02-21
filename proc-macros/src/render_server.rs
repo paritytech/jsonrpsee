@@ -142,8 +142,6 @@ impl RpcDescription {
 				check_name(&rpc_method_name, rust_method_name.span());
 
 				if self.with_context {
-					
-
 					handle_register_result(quote! {
 						rpc.register_raw_method(#rpc_method_name, |params, connection_id, context| {
 							#parsing
