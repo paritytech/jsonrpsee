@@ -188,6 +188,8 @@ pub struct RpcDescription {
 	/// Assuming that trait to which attribute is applied is named `Foo`, the generated
 	/// client trait will have `FooClient` name.
 	pub(crate) needs_client: bool,
+	/// Expose the server methods with additional connection context.
+	pub(crate) with_context: bool,
 	/// Optional prefix for RPC namespace.
 	pub(crate) namespace: Option<String>,
 	/// Trait definition in which all the attributes were stripped.
@@ -204,17 +206,25 @@ pub struct RpcDescription {
 
 impl RpcDescription {
 	pub fn from_item(attr: Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
-		let [client, server, namespace, client_bounds, server_bounds] =
-			AttributeMeta::parse(attr)?.retain(["client", "server", "namespace", "client_bounds", "server_bounds"])?;
+		let [client, server, namespace, client_bounds, server_bounds, with_context] = AttributeMeta::parse(attr)?
+			.retain(["client", "server", "namespace", "client_bounds", "server_bounds", "with_context"])?;
 
 		let needs_server = optional(server, Argument::flag)?.is_some();
 		let needs_client = optional(client, Argument::flag)?.is_some();
 		let namespace = optional(namespace, Argument::string)?;
 		let client_bounds = optional(client_bounds, Argument::group)?;
 		let server_bounds = optional(server_bounds, Argument::group)?;
+		let with_context = optional(with_context, Argument::flag)?.is_some();
 
 		if !needs_server && !needs_client {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
+		}
+
+		if !needs_server && with_context {
+			return Err(syn::Error::new_spanned(
+				&item.ident,
+				"Attribute 'with_context' must be specified with 'server'",
+			));
 		}
 
 		if client_bounds.is_some() && !needs_client {
@@ -295,6 +305,7 @@ impl RpcDescription {
 			jsonrpsee_server_path,
 			needs_server,
 			needs_client,
+			with_context,
 			namespace,
 			trait_def: item,
 			methods,

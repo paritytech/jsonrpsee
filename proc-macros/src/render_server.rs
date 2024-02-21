@@ -62,7 +62,15 @@ impl RpcDescription {
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
 		let methods = self.methods.iter().map(|method| {
 			let docs = &method.docs;
-			let method_sig = &method.signature;
+			let mut method_sig = method.signature.clone();
+
+			if self.with_context {
+				let context_ty = self.jrps_server_item(quote! { ConnectionId });
+				// Add `connection ID` as the second input parameter to the signature.
+				let context: syn::FnArg = syn::parse_quote!(connection_context: #context_ty);
+				method_sig.sig.inputs.insert(1, context);
+			}
+
 			quote! {
 				#docs
 				#method_sig
@@ -133,23 +141,35 @@ impl RpcDescription {
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
-				if method.signature.sig.asyncness.is_some() {
+				if self.with_context {
+					let blocking = if method.blocking { quote!(true) } else { quote!(false) };
+					let maybe_await = if method.signature.sig.asyncness.is_some() { quote!(.await) } else { quote!() };
+
 					handle_register_result(quote! {
-						rpc.register_async_method(#rpc_method_name, |params, context| async move {
+						rpc.register_raw_method(#rpc_method_name, #blocking, |params, connection_id, context| async move {
 							#parsing
-							#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
+							#into_response::into_response(context.as_ref().#rust_method_name(connection_id, #params_seq) #maybe_await)
 						})
 					})
 				} else {
-					let register_kind =
-						if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
-
-					handle_register_result(quote! {
-						rpc.#register_kind(#rpc_method_name, |params, context| {
-							#parsing
-							#into_response::into_response(context.#rust_method_name(#params_seq))
+					if method.signature.sig.asyncness.is_some() {
+						handle_register_result(quote! {
+							rpc.register_async_method(#rpc_method_name, |params, context| async move {
+								#parsing
+								#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
+							})
 						})
-					})
+					} else {
+						let register_kind =
+							if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
+
+						handle_register_result(quote! {
+							rpc.#register_kind(#rpc_method_name, |params, context| {
+								#parsing
+								#into_response::into_response(context.#rust_method_name(#params_seq))
+							})
+						})
+					}
 				}
 			})
 			.collect::<Vec<_>>();
