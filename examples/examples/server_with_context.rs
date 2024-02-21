@@ -1,0 +1,129 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+use std::net::SocketAddr;
+
+use jsonrpsee::core::{async_trait, client::Subscription, SubscriptionResult};
+use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
+use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::ConnectionId;
+
+type ExampleHash = [u8; 32];
+type ExampleStorageKey = Vec<u8>;
+
+#[rpc(server, client, with_context)]
+pub trait Rpc<Hash, StorageKey>
+where
+	Hash: std::fmt::Debug,
+{
+	/// Async method call example.
+	#[method(name = "getKeys")]
+	fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<usize, ErrorObjectOwned>;
+
+	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
+	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
+	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> SubscriptionResult;
+
+	#[subscription(name = "subscribeSync" => "sync", item = Vec<Hash>)]
+	fn s(&self, keys: Option<Vec<StorageKey>>);
+}
+
+pub struct RpcServerImpl;
+
+#[async_trait]
+impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
+	fn storage_keys(
+		&self,
+		connection_id: ConnectionId,
+		_storage_key: ExampleStorageKey,
+		_hash: Option<ExampleHash>,
+	) -> Result<usize, ErrorObjectOwned> {
+		Ok(connection_id)
+	}
+
+	async fn subscribe_storage(
+		&self,
+		pending: PendingSubscriptionSink,
+		_keys: Option<Vec<ExampleStorageKey>>,
+	) -> SubscriptionResult {
+		let sink = pending.accept().await?;
+		let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
+		sink.send(msg).await?;
+
+		Ok(())
+	}
+
+	fn s(&self, pending: PendingSubscriptionSink, _keys: Option<Vec<ExampleStorageKey>>) {
+		tokio::spawn(async move {
+			let sink = pending.accept().await.unwrap();
+			let msg = SubscriptionMessage::from_json(&vec![[0; 32]]).unwrap();
+			sink.send(msg).await.unwrap();
+		});
+	}
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
+	let server_addr = run_server().await?;
+	let url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().build(&url).await?;
+	let connection_id_first = client.storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>).await.unwrap();
+
+	// Second call from the same connection ID.
+	assert_eq!(client.storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>).await.unwrap(), connection_id_first);
+
+	// Second client will increment the connection ID.
+	let client_second = WsClientBuilder::default().build(&url).await?;
+	let connection_id_second = client_second.storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>).await.unwrap();
+	assert_ne!(connection_id_first, connection_id_second);
+
+	let mut sub: Subscription<Vec<ExampleHash>> =
+		RpcClient::<ExampleHash, ExampleStorageKey>::subscribe_storage(&client, None).await.unwrap();
+	assert_eq!(Some(vec![[0; 32]]), sub.next().await.transpose().unwrap());
+
+	Ok(())
+}
+
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let server = Server::builder().build("127.0.0.1:0").await?;
+
+	let addr = server.local_addr()?;
+	let handle = server.start(RpcServerImpl.into_rpc());
+
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(handle.stopped());
+
+	Ok(addr)
+}
