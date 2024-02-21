@@ -60,6 +60,8 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
+/// Similar to [`SyncMethod`], but represents a raw handler that has access to the connection Id.
+pub type RawMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
@@ -131,6 +133,8 @@ pub enum MethodCallback {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
+	/// Raw method handler.
+	Raw(RawMethod),
 	/// Subscription method handler.
 	Subscription(SubscriptionMethod<'static>),
 	/// Unsubscription method handler.
@@ -185,6 +189,7 @@ impl Debug for MethodCallback {
 		match self {
 			Self::Async(_) => write!(f, "Async"),
 			Self::Sync(_) => write!(f, "Sync"),
+			Self::Raw(_) => write!(f, "Raw"),
 			Self::Subscription(_) => write!(f, "Subscription"),
 			Self::Unsubscription(_) => write!(f, "Unsubscription"),
 		}
@@ -355,6 +360,7 @@ impl Methods {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
 			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX),
 			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
+			Some(MethodCallback::Raw(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX),
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
