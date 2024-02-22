@@ -26,62 +26,57 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, client::Subscription, SubscriptionResult};
+use jsonrpsee::core::{async_trait, client::Subscription};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ConnectionId;
 
-type ExampleHash = [u8; 32];
-type ExampleStorageKey = Vec<u8>;
+#[rpc(server, client)]
+pub trait Rpc {
+	/// Raw method with connection ID.
+	#[method(name = "connectionIdMethod", raw_method)]
+	fn raw_method(&self, first_param: usize, second_param: u16) -> Result<usize, ErrorObjectOwned>;
 
-#[rpc(server, client, with_context)]
-pub trait Rpc<Hash, StorageKey>
-where
-	Hash: std::fmt::Debug,
-{
-	/// Async method call example.
-	#[method(name = "getKeys")]
-	fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<usize, ErrorObjectOwned>;
+	/// Normal method call example.
+	#[method(name = "normalMethod")]
+	fn normal_method(&self, first_param: usize, second_param: u16) -> Result<usize, ErrorObjectOwned>;
 
-	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
-	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
-	async fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> SubscriptionResult;
-
-	#[subscription(name = "subscribeSync" => "sync", item = Vec<Hash>)]
-	fn s(&self, keys: Option<Vec<StorageKey>>);
+	/// Subscriptions expose the connection ID on the subscription sink.
+	#[subscription(name = "subscribeSync" => "sync", item = usize)]
+	fn sub(&self, first_param: usize);
 }
 
 pub struct RpcServerImpl;
 
 #[async_trait]
-impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
-	fn storage_keys(
+impl RpcServer for RpcServerImpl {
+	fn raw_method(
 		&self,
 		connection_id: ConnectionId,
-		_storage_key: ExampleStorageKey,
-		_hash: Option<ExampleHash>,
+		_first_param: usize,
+		_second_param: u16,
 	) -> Result<usize, ErrorObjectOwned> {
+		// Return the connection ID from which this method was called.
 		Ok(connection_id)
 	}
 
-	async fn subscribe_storage(
-		&self,
-		pending: PendingSubscriptionSink,
-		_keys: Option<Vec<ExampleStorageKey>>,
-	) -> SubscriptionResult {
-		let sink = pending.accept().await?;
-		let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
-		sink.send(msg).await?;
-
-		Ok(())
+	fn normal_method(&self, _first_param: usize, _second_param: u16) -> Result<usize, ErrorObjectOwned> {
+		// The normal method does not have access to the connection ID.
+		Ok(usize::MAX)
 	}
 
-	fn s(&self, pending: PendingSubscriptionSink, _keys: Option<Vec<ExampleStorageKey>>) {
+	fn sub(&self, pending: PendingSubscriptionSink, _first_param: usize) {
 		tokio::spawn(async move {
+			// The connection ID can be obtained before or after accepting the subscription
+			let pending_connection_id = pending.connection_id();
 			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&vec![[0; 32]]).unwrap();
+			let sink_connection_id = sink.connection_id();
+
+			assert_eq!(pending_connection_id, sink_connection_id);
+
+			let msg = SubscriptionMessage::from_json(&sink_connection_id).unwrap();
 			sink.send(msg).await.unwrap();
 		});
 	}
@@ -98,19 +93,21 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let connection_id_first = client.storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>).await.unwrap();
+	let connection_id_first = client.raw_method(1, 2).await.unwrap();
 
 	// Second call from the same connection ID.
-	assert_eq!(client.storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>).await.unwrap(), connection_id_first);
+	assert_eq!(client.raw_method(1, 2).await.unwrap(), connection_id_first);
 
 	// Second client will increment the connection ID.
 	let client_second = WsClientBuilder::default().build(&url).await?;
-	let connection_id_second = client_second.storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>).await.unwrap();
+	let connection_id_second = client_second.raw_method(1, 2).await.unwrap();
 	assert_ne!(connection_id_first, connection_id_second);
 
-	let mut sub: Subscription<Vec<ExampleHash>> =
-		RpcClient::<ExampleHash, ExampleStorageKey>::subscribe_storage(&client, None).await.unwrap();
-	assert_eq!(Some(vec![[0; 32]]), sub.next().await.transpose().unwrap());
+	let mut sub: Subscription<usize> = RpcClient::sub(&client, 0).await.unwrap();
+	assert_eq!(connection_id_first, sub.next().await.transpose().unwrap().unwrap());
+
+	let mut sub: Subscription<usize> = RpcClient::sub(&client_second, 0).await.unwrap();
+	assert_eq!(connection_id_second, sub.next().await.transpose().unwrap().unwrap());
 
 	Ok(())
 }
