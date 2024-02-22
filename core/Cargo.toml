@@ -50,7 +50,7 @@ server = [
 	"tokio/macros",
 	"tokio/time",
 ]
-client = ["async-broadcast","futures-util/sink", "tokio/sync", "tokio-stream"]
+client = ["async-broadcast","futures-util/sink", "tokio/sync"]
 async-client = [
 	"async-lock",
 	"client",
