@@ -199,7 +199,6 @@ impl WsClientBuilder {
 
 	/// See documentation [`ClientBuilder::max_buffer_capacity_per_subscription`] (default is 1024).
 	pub fn max_buffer_capacity_per_subscription(mut self, capacity: usize) -> Self {
-		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
 		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
 
 		self.max_buffer_capacity_per_subscription = capacity;
