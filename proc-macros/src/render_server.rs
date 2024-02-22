@@ -64,7 +64,7 @@ impl RpcDescription {
 			let docs = &method.docs;
 			let mut method_sig = method.signature.clone();
 
-			if self.with_context {
+			if method.raw_method {
 				let context_ty = self.jrps_server_item(quote! { ConnectionId });
 				// Add `connection ID` as the second input parameter to the signature.
 				let context: syn::FnArg = syn::parse_quote!(connection_context: #context_ty);
@@ -141,7 +141,7 @@ impl RpcDescription {
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
-				if self.with_context {
+				if method.raw_method {
 					handle_register_result(quote! {
 						rpc.register_raw_method(#rpc_method_name, |params, connection_id, context| {
 							#parsing

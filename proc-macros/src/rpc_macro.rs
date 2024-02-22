@@ -48,17 +48,19 @@ pub struct RpcMethod {
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
+	pub raw_method: bool,
 }
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, blocking, name, param_kind] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
+		let [aliases, blocking, name, param_kind, raw_method] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "raw_method"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
 		let param_kind = parse_param_kind(param_kind)?;
+		let raw_method = optional(raw_method, Argument::flag)?.is_some();
 
 		let sig = method.sig.clone();
 		let docs = extract_doc_comments(&method.attrs);
@@ -98,7 +100,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated })
+		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated, raw_method })
 	}
 }
 
@@ -188,8 +190,6 @@ pub struct RpcDescription {
 	/// Assuming that trait to which attribute is applied is named `Foo`, the generated
 	/// client trait will have `FooClient` name.
 	pub(crate) needs_client: bool,
-	/// Expose the server methods with additional connection context.
-	pub(crate) with_context: bool,
 	/// Optional prefix for RPC namespace.
 	pub(crate) namespace: Option<String>,
 	/// Trait definition in which all the attributes were stripped.
@@ -206,25 +206,16 @@ pub struct RpcDescription {
 
 impl RpcDescription {
 	pub fn from_item(attr: Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
-		let [client, server, namespace, client_bounds, server_bounds, with_context] = AttributeMeta::parse(attr)?
-			.retain(["client", "server", "namespace", "client_bounds", "server_bounds", "with_context"])?;
+		let [client, server, namespace, client_bounds, server_bounds] = AttributeMeta::parse(attr)?
+			.retain(["client", "server", "namespace", "client_bounds", "server_bounds"])?;
 
 		let needs_server = optional(server, Argument::flag)?.is_some();
 		let needs_client = optional(client, Argument::flag)?.is_some();
 		let namespace = optional(namespace, Argument::string)?;
 		let client_bounds = optional(client_bounds, Argument::group)?;
 		let server_bounds = optional(server_bounds, Argument::group)?;
-		let with_context = optional(with_context, Argument::flag)?.is_some();
-
 		if !needs_server && !needs_client {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
-		}
-
-		if !needs_server && with_context {
-			return Err(syn::Error::new_spanned(
-				&item.ident,
-				"Attribute 'with_context' must be specified with 'server'",
-			));
 		}
 
 		if client_bounds.is_some() && !needs_client {
@@ -271,10 +262,24 @@ impl RpcDescription {
 
 					let method_data = RpcMethod::from_item(attr.clone(), method.clone())?;
 
-					if method_data.blocking && with_context {
+					if method_data.blocking && method_data.raw_method {
 						return Err(syn::Error::new_spanned(
 							method,
-							"Methods cannot be blocking when used with `with_context`; remove `blocking` attribute or `with_context` attribute",
+							"Methods cannot be blocking when used with `raw_method`; remove `blocking` attribute or `raw_method` attribute",
+						));
+					}
+
+					if !needs_server && method_data.raw_method {
+						return Err(syn::Error::new_spanned(
+							&item.ident,
+							"Attribute 'raw_method' must be specified with 'server'",
+						));
+					}
+
+					if method.sig.asyncness.is_some() && method_data.raw_method {
+						return Err(syn::Error::new_spanned(
+							method,
+							"Methods must be synchronous when used with `raw_method`; use `fn` instead of `async fn`",
 						));
 					}
 
@@ -299,13 +304,6 @@ impl RpcDescription {
 						"Methods must have either 'method' or 'subscription' attribute",
 					));
 				}
-
-				if is_method && method.sig.asyncness.is_some() && with_context {
-					return Err(syn::Error::new_spanned(
-						method,
-						"Methods must be synchronous when used with `with_context`; use `fn` instead of `async fn`",
-					));
-				}
 			} else {
 				return Err(syn::Error::new_spanned(entry, "Only methods allowed in RPC traits"));
 			}
@@ -320,7 +318,6 @@ impl RpcDescription {
 			jsonrpsee_server_path,
 			needs_server,
 			needs_client,
-			with_context,
 			namespace,
 			trait_def: item,
 			methods,
