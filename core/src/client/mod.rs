@@ -680,10 +680,12 @@ pub(crate) struct SubscriptionTx {
 #[derive(Debug)]
 pub(crate) struct SubscriptionRx(async_broadcast::Receiver<serde_json::Value>);
 
+#[derive(Debug, Copy, Clone, thiserror::Error)]
+#[error("The subscription was closed")]
 pub(crate) struct Closed;
 
 impl SubscriptionTx {
-	pub(crate) fn send(&mut self, msg: serde_json::Value) -> Result<(), Closed> {
+	pub(crate) fn send(&mut self, msg: serde_json::Value) -> Result<Option<serde_json::Value>, Closed> {
 		loop {
 			if !self.inner.is_full() {
 				break;
@@ -699,12 +701,7 @@ impl SubscriptionTx {
 
 		// If the channel is full the oldest message will be replaced.
 		match self.inner.try_broadcast(msg) {
-			Ok(maybe_dropped) => {
-				if let Some(dropped) = maybe_dropped {
-					tracing::debug!(target: "jsonrpsee-client", "Replacing oldest sub message: {:?}", dropped);
-				}
-				Ok(())
-			}
+			Ok(maybe_dropped) => Ok(maybe_dropped),
 			// Only closed is possible because the receiver is never deactived and overflowing-mode
 			// is enabled.
 			Err(TrySendError::Full(_)) | Err(TrySendError::Inactive(_)) => unreachable!(),
@@ -738,7 +735,7 @@ pub(crate) fn subscription_stream(max_cap: usize) -> (SubscriptionTx, Subscripti
 
 #[cfg(test)]
 mod tests {
-	use super::{IdKind, RequestIdManager};
+	use super::{subscription_stream, IdKind, RecvError, RequestIdManager};
 
 	#[test]
 	fn request_id_guard_works() {
@@ -752,5 +749,39 @@ mod tests {
 		}
 
 		assert!(manager.next_request_id().is_ok());
+	}
+
+	#[tokio::test]
+	async fn subscription_channel_works() {
+		let (mut tx, mut rx) = subscription_stream(16);
+
+		for _ in 0..16 {
+			let res = tx.send(serde_json::json! { "foo"}).unwrap();
+			assert!(res.is_none());
+		}
+
+		// The channel should be full and the capacity==max
+		assert_eq!(tx.inner.capacity(), 16);
+		assert_eq!(tx.inner.len(), 16);
+
+		for _ in 0..16 {
+			assert!(rx.recv().await.is_ok());
+		}
+
+		// The channel should be empty and the capacity==min
+		assert_eq!(tx.inner.capacity(), 1);
+		assert_eq!(tx.inner.len(), 0);
+	}
+
+	#[tokio::test]
+	async fn subscription_lagging_works() {
+		let (mut tx, mut rx) = subscription_stream(1);
+
+		assert!(tx.send(serde_json::json! { 1 }).unwrap().is_none());
+		let rm = tx.send(serde_json::json! { 2 }).unwrap().unwrap();
+		assert_eq!(serde_json::json!(1), rm);
+
+		assert!(matches!(rx.recv().await, Err(RecvError::Overflowed(old)) if old == 1));
+		assert!(matches!(rx.recv().await, Ok(head) if head == 2));
 	}
 }

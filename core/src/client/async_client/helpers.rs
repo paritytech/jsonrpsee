@@ -108,9 +108,14 @@ pub(crate) fn process_subscription_response(
 
 	match manager.as_subscription_mut(&request_id) {
 		Some(send_back_sink) => match send_back_sink.send(response.params.result) {
-			Ok(_) => Ok(()),
+			Ok(maybe_dropped) => {
+				if let Some(d) = maybe_dropped {
+					tracing::debug!(target: LOG_TARGET, "Subscription lagged; message: {d} removed");
+				}
+				Ok(())
+			}
 			Err(_) => {
-				tracing::debug!(target: LOG_TARGET, "Subscription is dropped");
+				tracing::debug!(target: LOG_TARGET, "Subscription {:?} closed", sub_id);
 				Err(Some(sub_id))
 			}
 		},
@@ -151,7 +156,11 @@ pub(crate) fn process_subscription_close_response(
 pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
 		Some(send_back_sink) => match send_back_sink.send(notif.params) {
-			Ok(_) => (),
+			Ok(maybe_dropped) => {
+				if let Some(d) = maybe_dropped {
+					tracing::debug!(target: LOG_TARGET, "Notification lagged; message: {d} removed");
+				}
+			}
 			Err(_) => {
 				let _ = manager.remove_notification_handler(&notif.method);
 			}

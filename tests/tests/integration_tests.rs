@@ -34,7 +34,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::stream::FuturesUnordered;
-use futures::{channel::mpsc, StreamExt};
+use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
 	connect_over_socks_stream, init_logger, pipe_from_stream_and_drop, server, server_with_cors,
 	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
@@ -657,7 +657,7 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	assert_eq!(rx_len, 10);
 }
 
-/*#[tokio::test]
+#[tokio::test]
 async fn ws_server_subscribe_with_stream() {
 	init_logger();
 
@@ -687,7 +687,7 @@ async fn ws_server_subscribe_with_stream() {
 	assert_eq!(sub1.by_ref().take(3).try_collect::<Vec<usize>>().await.unwrap(), vec![3, 4, 5]);
 
 	assert!(sub1.next().await.is_none());
-}*/
+}
 
 #[tokio::test]
 async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {

@@ -255,17 +255,12 @@ impl ClientBuilder {
 	/// For such cases you may decide to increase the subscription buffer by using
 	/// this API.
 	///
-	/// Beware of that this API configures the buffer size allocated up front a subscription when [`SubscriptionClientT::subscribe`]
-	/// is invoked which works similar to Vec::with_capacity.
-	/// Such as if one opening lots of concurrent subscriptions it may allocate plenty of memory.
-	///
 	/// # Panics
 	///
-	/// This function panics if `max` is 0 or bigger than usize::MAX / 2.
+	/// This function panics if `max` is 0.
 	pub fn with_buf_capacity_per_subscription(mut self, capacity: usize) -> Self {
 		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
 		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
-		assert!(capacity <= usize::MAX >> 1, "subscription buffer capacity exceeded `usize::MAX / 2`");
 
 		self.subscription_buf_cap = capacity;
 		self
@@ -401,7 +396,6 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
 		let subscription_buf_cap = self.subscription_buf_cap;
-		let ping_interval = self.ping_config;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();

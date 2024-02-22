@@ -104,7 +104,7 @@ impl Default for WsClientBuilder {
 			ping_config: None,
 			headers: HeaderMap::new(),
 			max_concurrent_requests: 256,
-			subscription_buf_cap: 16,
+			subscription_buf_cap: 1024,
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
@@ -197,7 +197,7 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// See documentation [`ClientBuilder::with_buf_capacity_per_subscription`] (default is 16).
+	/// See documentation [`ClientBuilder::with_buf_capacity_per_subscription`] (default is 1024).
 	pub fn with_buf_capacity_per_subscription(mut self, capacity: usize) -> Self {
 		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
 		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
