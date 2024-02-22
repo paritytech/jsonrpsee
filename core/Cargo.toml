@@ -51,10 +51,9 @@ server = [
 	"tokio/macros",
 	"tokio/time",
 ]
-client = ["futures-util/sink", "tokio/sync", "tokio-stream"]
+client = ["async-broadcast","futures-util/sink", "tokio/sync", "tokio-stream"]
 async-client = [
 	"async-lock",
-	"async-broadcast",
 	"client",
 	"futures-util/alloc",
 	"rustc-hash",
@@ -67,7 +66,6 @@ async-client = [
 ]
 async-wasm-client = [
 	"async-lock",
-	"async-broadcast",
 	"client",
 	"futures-util/alloc",
 	"wasm-bindgen-futures",
