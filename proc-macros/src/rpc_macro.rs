@@ -100,7 +100,18 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated, raw_method })
+		Ok(Self {
+			aliases,
+			blocking,
+			name,
+			params,
+			param_kind,
+			returns,
+			signature: method,
+			docs,
+			deprecated,
+			raw_method,
+		})
 	}
 }
 
@@ -206,8 +217,8 @@ pub struct RpcDescription {
 
 impl RpcDescription {
 	pub fn from_item(attr: Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
-		let [client, server, namespace, client_bounds, server_bounds] = AttributeMeta::parse(attr)?
-			.retain(["client", "server", "namespace", "client_bounds", "server_bounds"])?;
+		let [client, server, namespace, client_bounds, server_bounds] =
+			AttributeMeta::parse(attr)?.retain(["client", "server", "namespace", "client_bounds", "server_bounds"])?;
 
 		let needs_server = optional(server, Argument::flag)?.is_some();
 		let needs_client = optional(client, Argument::flag)?.is_some();
