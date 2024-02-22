@@ -208,7 +208,7 @@ enum ReadErrorOnce {
 pub struct ClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
-	subscription_buf_cap: usize,
+	max_buffer_capacity_per_subscription: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
 	ping_config: Option<PingConfig>,
@@ -220,7 +220,7 @@ impl Default for ClientBuilder {
 		Self {
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
-			subscription_buf_cap: 1024,
+			max_buffer_capacity_per_subscription: 1024,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			ping_config: None,
@@ -258,11 +258,11 @@ impl ClientBuilder {
 	/// # Panics
 	///
 	/// This function panics if `max` is 0.
-	pub fn with_buf_capacity_per_subscription(mut self, capacity: usize) -> Self {
+	pub fn max_buffer_capacity_per_subscription(mut self, capacity: usize) -> Self {
 		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
 		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
 
-		self.subscription_buf_cap = capacity;
+		self.max_buffer_capacity_per_subscription = capacity;
 		self
 	}
 
@@ -322,7 +322,7 @@ impl ClientBuilder {
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
-		let subscription_buf_cap = self.subscription_buf_cap;
+		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
@@ -355,7 +355,7 @@ impl ClientBuilder {
 			from_frontend: from_front,
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
-			subscription_buf_cap,
+			max_buffer_capacity_per_subscription,
 			ping_interval,
 		}));
 
@@ -364,7 +364,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			subscription_buf_cap,
+			max_buffer_capacity_per_subscription,
 			inactivity_check,
 			inactivity_stream,
 		}));
@@ -395,7 +395,7 @@ impl ClientBuilder {
 
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
-		let subscription_buf_cap = self.subscription_buf_cap;
+		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
@@ -409,7 +409,7 @@ impl ClientBuilder {
 			from_frontend: from_front,
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
-			subscription_buf_cap,
+			max_buffer_capacity_per_subscription,
 			ping_interval,
 		}));
 
@@ -418,7 +418,7 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			subscription_buf_cap,
+			max_buffer_capacity_per_subscription,
 			inactivity_check,
 			inactivity_stream,
 		}));
@@ -932,7 +932,7 @@ struct SendTaskParams<T: TransportSenderT, S> {
 	from_frontend: mpsc::Receiver<FrontToBack>,
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	manager: ThreadSafeRequestManager,
-	subscription_buf_cap: usize,
+	max_buffer_capacity_per_subscription: usize,
 	ping_interval: IntervalStream<S>,
 }
 
@@ -941,8 +941,14 @@ where
 	T: TransportSenderT,
 	S: Stream + Unpin,
 {
-	let SendTaskParams { mut sender, mut from_frontend, close_tx, manager, subscription_buf_cap, mut ping_interval } =
-		params;
+	let SendTaskParams {
+		mut sender,
+		mut from_frontend,
+		close_tx,
+		manager,
+		max_buffer_capacity_per_subscription,
+		mut ping_interval,
+	} = params;
 
 	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
 	// are cancel-safe.
@@ -956,7 +962,7 @@ where
 				};
 
 				if let Err(e) =
-					handle_frontend_messages(msg, &manager, &mut sender, subscription_buf_cap).await
+					handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
 				{
 					tracing::error!(target: LOG_TARGET, "ws send failed: {e}");
 					break Err(Error::Transport(e.into()));
@@ -981,7 +987,7 @@ struct ReadTaskParams<R: TransportReceiverT, S> {
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	to_send_task: mpsc::Sender<FrontToBack>,
 	manager: ThreadSafeRequestManager,
-	subscription_buf_cap: usize,
+	max_buffer_capacity_per_subscription: usize,
 	inactivity_check: InactivityCheck,
 	inactivity_stream: IntervalStream<S>,
 }
@@ -996,7 +1002,7 @@ where
 		close_tx,
 		to_send_task,
 		manager,
-		subscription_buf_cap,
+		max_buffer_capacity_per_subscription,
 		mut inactivity_check,
 		mut inactivity_stream,
 	} = params;
@@ -1028,7 +1034,7 @@ where
 				inactivity_check.mark_as_active();
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
-				match handle_backend_messages::<R>(Some(msg), &manager, subscription_buf_cap) {
+				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
 					Ok(Some(msg)) => {
 						pending_unsubscribes.push(to_send_task.send(msg));
 					}

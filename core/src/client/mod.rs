@@ -235,7 +235,7 @@ pub enum SubscriptionKind {
 /// just drop the subscription and create a new subscription.
 ///
 /// To avoid `Lagging` from happening you may increase the buffer capacity
-/// by [`ClientBuilder::with_buf_capacity_per_subscription`] or ensure that [`Subscription::next`]
+/// by [`ClientBuilder::max_buffer_capacity_per_subscription`] or ensure that [`Subscription::next`]
 /// is polled often enough such as in a separate tokio task.
 ///
 /// ## Connection closed
