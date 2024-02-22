@@ -16,7 +16,7 @@ variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
   CARGO_INCREMENTAL:               0
-  CI_IMAGE:                        "paritytech/ci-unified:bullseye-1.71.0-2023-05-23"
+  CI_IMAGE:                        "paritytech/ci-unified:bullseye-1.75.0-2024-01-22-v20240109"
 
 .common-refs:                      &common-refs
   rules:
@@ -128,4 +128,3 @@ publish-bench:
   script:
     - echo $RUNNER_NAME
     - ./scripts/ci/push_bench_results.sh artifacts/output.txt
-
