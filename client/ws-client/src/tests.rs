@@ -166,7 +166,7 @@ async fn subscription_works() {
 			.await
 			.unwrap()
 			.unwrap();
-		let response: String = sub.next().with_default_timeout().await.unwrap().unwrap().unwrap();
+		let response: String = sub.recv().with_default_timeout().await.unwrap().unwrap();
 		assert_eq!("hello my friend".to_owned(), response);
 	}
 }
@@ -186,7 +186,7 @@ async fn notification_handler_works() {
 	{
 		let mut nh: Subscription<String> =
 			client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
-		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
+		let response: String = nh.recv().with_default_timeout().await.unwrap().unwrap();
 		assert_eq!("server originated notification works".to_owned(), response);
 	}
 }
@@ -217,10 +217,10 @@ async fn notification_slow_reader() {
 	// Don't read the notification stream for 2 seconds, should be full now.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-	assert!(matches!(nh.next().await, Some(Err(SubscriptionError::Lagged(_)))));
+	assert!(matches!(nh.recv().await, Err(SubscriptionError::Lagged(_))));
 
 	// Ensure that notification stream yields after lagging.
-	assert!(nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
+	assert!(nh.recv().with_default_timeout().await.unwrap().is_ok());
 	assert!(client.is_connected());
 }
 

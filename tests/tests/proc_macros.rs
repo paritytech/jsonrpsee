@@ -226,16 +226,16 @@ async fn proc_macros_generic_ws_client_api() {
 
 	// Sub without params
 	let mut sub = client.sub().await.unwrap();
-	let first_recv = sub.next().await.unwrap().unwrap();
+	let first_recv = sub.recv().await.unwrap();
 	assert_eq!(first_recv, "Response_A".to_string());
-	let second_recv = sub.next().await.unwrap().unwrap();
+	let second_recv = sub.recv().await.unwrap();
 	assert_eq!(second_recv, "Response_B".to_string());
 
 	// Sub with params
 	let mut sub = client.sub_with_params(42).await.unwrap();
-	let first_recv = sub.next().await.unwrap().unwrap();
+	let first_recv = sub.recv().await.unwrap();
 	assert_eq!(first_recv, 42);
-	let second_recv = sub.next().await.unwrap().unwrap();
+	let second_recv = sub.recv().await.unwrap();
 	assert_eq!(second_recv, 42);
 }
 
@@ -424,5 +424,5 @@ async fn sync_sub_works() {
 
 	let mut sub = client.sync_sub().await.unwrap();
 
-	assert_eq!(sub.next().await.unwrap().unwrap(), "hello");
+	assert_eq!(sub.recv().await.unwrap(), "hello");
 }

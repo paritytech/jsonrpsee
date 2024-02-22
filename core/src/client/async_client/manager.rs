@@ -38,13 +38,13 @@ use std::{
 };
 
 use crate::{
-	client::{BatchEntry, SubscriptionStream, Error},
+	client::{BatchEntry, Error, SubscriptionRx, SubscriptionTx},
 	error::RegisterMethodError,
 };
 use jsonrpsee_types::{Id, SubscriptionId};
 use rustc_hash::FxHashMap;
 use serde_json::value::Value as JsonValue;
-use tokio::sync::{oneshot, broadcast};
+use tokio::sync::oneshot;
 
 #[derive(Debug)]
 enum Kind {
@@ -68,8 +68,8 @@ pub(crate) enum RequestStatus {
 
 type PendingCallOneshot = Option<oneshot::Sender<Result<serde_json::Value, Error>>>;
 type PendingBatchOneshot = oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>;
-type PendingSubscriptionOneshot = oneshot::Sender<Result<(SubscriptionStream, SubscriptionId<'static>), Error>>;
-type SubscriptionSink = broadcast::Sender<serde_json::Value>;
+type PendingSubscriptionOneshot = oneshot::Sender<Result<(SubscriptionRx, SubscriptionId<'static>), Error>>;
+type SubscriptionSink = SubscriptionTx;
 type UnsubscribeMethod = String;
 type RequestId = Id<'static>;
 
@@ -339,10 +339,12 @@ impl RequestManager {
 
 #[cfg(test)]
 mod tests {
+	use crate::client::subscription_stream;
+
 	use super::{Error, RequestManager};
 	use jsonrpsee_types::{Id, SubscriptionId};
 	use serde_json::Value as JsonValue;
-	use tokio::sync::{oneshot, broadcast};
+	use tokio::sync::oneshot;
 
 	#[test]
 	fn insert_remove_pending_request_works() {
@@ -356,7 +358,7 @@ mod tests {
 	#[test]
 	fn insert_remove_subscription_works() {
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx, _) = broadcast::channel(1);
+		let (sub_tx, _) = subscription_stream(1);
 		let mut manager = RequestManager::new();
 		assert!(manager
 			.insert_pending_subscription(Id::Number(1), Id::Number(2), pending_sub_tx, "unsubscribe_method".into())
@@ -422,7 +424,7 @@ mod tests {
 		let (request_tx1, _) = oneshot::channel();
 		let (request_tx2, _) = oneshot::channel();
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx, _) = broadcast::channel(1);
+		let (sub_tx, _) = subscription_stream(1);
 
 		let mut manager = RequestManager::new();
 		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx1)).is_ok());
@@ -450,7 +452,7 @@ mod tests {
 		let (request_tx, _) = oneshot::channel();
 		let (pending_sub_tx1, _) = oneshot::channel();
 		let (pending_sub_tx2, _) = oneshot::channel();
-		let (sub_tx, _) = broadcast::channel(1);
+		let (sub_tx, _) = subscription_stream(1);
 
 		let mut manager = RequestManager::new();
 		assert!(manager
@@ -480,8 +482,8 @@ mod tests {
 	fn active_subscriptions_faulty() {
 		let (request_tx, _) = oneshot::channel();
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx1, _) = broadcast::channel(1);
-		let (sub_tx2, _) = broadcast::channel(1);
+		let (sub_tx1, _) = subscription_stream(1);
+		let (sub_tx2, _) = subscription_stream(1);
 
 		let mut manager = RequestManager::new();
 

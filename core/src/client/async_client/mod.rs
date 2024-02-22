@@ -61,12 +61,12 @@ use futures_util::Stream;
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
 use self::utils::{InactivityCheck, IntervalStream};
 
-use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
+use super::{generate_batch_id_range, subscription_stream, FrontToBack, IdKind, RequestIdManager};
 
 const LOG_TARGET: &str = "jsonrpsee-client";
 
@@ -905,7 +905,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
-			let (subscribe_tx, subscribe_rx) = broadcast::channel(max_buffer_capacity_per_subscription);
+			let (subscribe_tx, subscribe_rx) = subscription_stream(max_buffer_capacity_per_subscription);
 
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
