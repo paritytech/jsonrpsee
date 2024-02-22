@@ -622,13 +622,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
-		F: Fn(Params, ConnectionId, &Context) -> R + Send + Sync + 'static,
+		F: Fn(Params, ConnectionId, Arc<Context>) -> R + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::Raw(Arc::new(move |id, params, connection_id, max_response_size| {
-				let rp = callback(params, connection_id, &*ctx).into_response();
+				let ctx = ctx.clone();
+				let rp = callback(params, connection_id, ctx).into_response();
 				MethodResponse::response(id, rp, max_response_size)
 			})),
 		)
