@@ -74,6 +74,9 @@ mod rpc_impl {
 		#[method(name = "bar")]
 		fn sync_method(&self) -> Result<u16, ErrorObjectOwned>;
 
+		#[method(name = "syncRaw", raw_method)]
+		fn sync_raw_method(&self) -> Result<usize, ErrorObjectOwned>;
+
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
 		async fn sub(&self) -> SubscriptionResult;
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
@@ -162,6 +165,10 @@ mod rpc_impl {
 			Ok(10)
 		}
 
+		fn sync_raw_method(&self, connection_id: usize) -> Result<usize, ErrorObjectOwned> {
+			Ok(connection_id)
+		}
+
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 			let sink = pending.accept().await?;
 			sink.send("Response_A".into()).await?;
@@ -237,6 +244,24 @@ async fn proc_macros_generic_ws_client_api() {
 	assert_eq!(first_recv, 42);
 	let second_recv = sub.next().await.unwrap().unwrap();
 	assert_eq!(second_recv, 42);
+}
+
+#[tokio::test]
+async fn raw_methods_with_different_ws_clients() {
+	init_logger();
+
+	let server_addr = server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Connection ID does not change for the same client.
+	let connection_id = client.sync_raw_method().await.unwrap();
+	assert_eq!(connection_id, client.sync_raw_method().await.unwrap());
+
+	// Connection ID is different for different clients.
+	let second_client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let second_connection_id = second_client.sync_raw_method().await.unwrap();
+	assert_ne!(connection_id, second_connection_id);
 }
 
 #[tokio::test]
