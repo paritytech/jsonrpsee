@@ -32,7 +32,9 @@ cfg_async_client! {
 }
 
 pub mod error;
+use async_broadcast::{RecvError, TrySendError};
 pub use error::Error;
+use futures_util::{Stream, StreamExt};
 
 use std::fmt;
 use std::ops::Range;
@@ -46,7 +48,7 @@ use core::marker::PhantomData;
 use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
-use tokio::sync::{broadcast::error::RecvError, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
@@ -270,12 +272,12 @@ impl<Notif> Subscription<Notif> {
 		self.kind.as_ref().expect("only None after unsubscribe; qed")
 	}
 
-	/// Remove all queued subscription messages except the most recent message.
+	/// Remove all queued subscription messages.
 	///
 	/// For instance if your subscription lagged behind you may not be interested
 	/// in the old messages and clear the queue instead of re-subscribing.
 	pub fn clear(&mut self) {
-		self.rx.resubscribe();
+		self.rx.0 = self.rx.0.new_receiver();
 	}
 
 	/// Unsubscribe and consume the subscription.
@@ -304,6 +306,17 @@ impl<Notif: DeserializeOwned> Subscription<Notif> {
 	pub async fn recv(&mut self) -> Result<Notif, SubscriptionError> {
 		let json = self.rx.recv().await?;
 		serde_json::from_value(json).map_err(Into::into)
+	}
+
+	/// Returns the next notification from the stream.
+	/// This may returns `None` if the subscription has been terminated.
+	///
+	/// **Note:** This has an identical signature to the [`StreamExt::next`]
+	/// method (and delegates to that). Import [`StreamExt`] if you'd like
+	/// access to other stream combinator methods.
+	#[allow(clippy::should_implement_trait)]
+	pub async fn next(&mut self) -> Option<Result<Notif, serde_json::Error>> {
+		StreamExt::next(self).await
 	}
 }
 
@@ -402,7 +415,7 @@ impl From<RecvError> for SubscriptionError {
 	fn from(err: RecvError) -> Self {
 		match err {
 			RecvError::Closed => SubscriptionError::Closed,
-			RecvError::Lagged(n) => SubscriptionError::Lagged(n),
+			RecvError::Overflowed(n) => SubscriptionError::Lagged(n),
 		}
 	}
 }
@@ -420,6 +433,25 @@ impl<Notif> Drop for Subscription<Notif> {
 			None => return,
 		};
 		let _ = self.to_back.try_send(msg);
+	}
+}
+
+impl<Notif> Stream for Subscription<Notif>
+where
+	Notif: DeserializeOwned,
+{
+	type Item = Result<Notif, serde_json::Error>;
+
+	fn poll_next(
+		mut self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<Option<Self::Item>> {
+		let n = futures_util::ready!(self.rx.0.poll_next_unpin(cx));
+		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
+			Ok(parsed) => Ok(parsed),
+			Err(err) => Err(err),
+		});
+		std::task::Poll::Ready(res)
 	}
 }
 
@@ -627,11 +659,69 @@ impl<'a, R> IntoIterator for BatchResponse<'a, R> {
 	}
 }
 
-pub(crate) type SubscriptionTx = tokio::sync::broadcast::Sender<serde_json::Value>;
-pub(crate) type SubscriptionRx = tokio::sync::broadcast::Receiver<serde_json::Value>;
+#[derive(Debug)]
+pub(crate) struct SubscriptionTx {
+	inner: async_broadcast::Sender<serde_json::Value>,
+	max: usize,
+}
 
-pub(crate) fn subscription_stream(cap: usize) -> (SubscriptionTx, SubscriptionRx) {
-	tokio::sync::broadcast::channel(cap)
+#[derive(Debug)]
+pub(crate) struct SubscriptionRx(async_broadcast::Receiver<serde_json::Value>);
+
+pub(crate) struct Closed;
+
+impl SubscriptionTx {
+	pub(crate) fn send(&mut self, msg: serde_json::Value) -> Result<(), Closed> {
+		loop {
+			if !self.inner.is_full() {
+				break;
+			}
+
+			if self.inner.capacity() >= self.max {
+				break;
+			}
+
+			let cap = std::cmp::min(self.max, self.inner.capacity() * 2);
+			self.inner.set_capacity(cap);
+		}
+
+		// If the channel is full the oldest message will be replaced.
+		match self.inner.try_broadcast(msg) {
+			Ok(maybe_dropped) => {
+				if let Some(dropped) = maybe_dropped {
+					tracing::debug!(target: "jsonrpsee-client", "Replacing oldest sub message: {:?}", dropped);
+				}
+				Ok(())
+			}
+			// Only closed is possible because the receiver is never deactived and overflowing-mode
+			// is enabled.
+			Err(TrySendError::Full(_)) | Err(TrySendError::Inactive(_)) => unreachable!(),
+			Err(TrySendError::Closed(_)) => Err(Closed),
+		}
+	}
+}
+
+impl SubscriptionRx {
+	pub(crate) async fn recv(&mut self) -> Result<serde_json::Value, RecvError> {
+		let next = self.0.recv().await;
+
+		let min_cap = self.0.capacity() / 2;
+
+		if self.0.len() < min_cap {
+			let cap = std::cmp::max(1, min_cap);
+			self.0.set_capacity(cap);
+		}
+
+		next
+	}
+}
+
+pub(crate) fn subscription_stream(max_cap: usize) -> (SubscriptionTx, SubscriptionRx) {
+	let cap = std::cmp::min(1, max_cap);
+	let (mut tx, rx) = async_broadcast::broadcast(cap);
+	tx.set_capacity(cap);
+	tx.set_overflow(true);
+	(SubscriptionTx { inner: tx, max: max_cap }, SubscriptionRx(rx))
 }
 
 #[cfg(test)]
