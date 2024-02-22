@@ -201,7 +201,6 @@ impl WsClientBuilder {
 	pub fn with_buf_capacity_per_subscription(mut self, capacity: usize) -> Self {
 		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
 		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
-		assert!(capacity <= usize::MAX >> 1, "subscription buffer capacity exceeded `usize::MAX / 2`");
 
 		self.subscription_buf_cap = capacity;
 		self

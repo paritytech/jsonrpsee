@@ -463,7 +463,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 	let mut sub: Subscription<String> =
 		c1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
-	assert!(matches!(sub.recv().await, Ok(_)));
+	assert!(sub.recv().await.is_ok());
 
 	server_handle.stop().unwrap();
 	server_handle.stopped().await;
@@ -1364,7 +1364,7 @@ async fn response_payload_async_api_works() {
 		.unwrap();
 
 	// Make a subscription which is stored as state in the sequent rpc call "get".
-	let mut sub =
+	let sub =
 		client.subscribe::<usize, _>("sub", rpc_params!(), "unsub").with_default_timeout().await.unwrap().unwrap();
 
 	// assert that method call was answered
@@ -1374,19 +1374,7 @@ async fn response_payload_async_api_works() {
 	// ideally, that ordering should also be tested here
 	// but not possible to test properly.
 	assert!(client.request::<usize, _>("get", rpc_params!()).await.is_ok());
-
-	let mut cnt = 0;
-	loop {
-		match sub.recv().await {
-			Ok(_) => {
-				cnt += 1;
-			}
-			Err(SubscriptionError::Closed) => break,
-			_ => (),
-		}
-	}
-
-	assert_eq!(cnt, 3);
+	assert_eq!(sub.count().await, 3);
 }
 
 /// Run shutdown test and it does:

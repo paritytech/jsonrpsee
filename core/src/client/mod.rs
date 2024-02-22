@@ -226,9 +226,10 @@ pub enum SubscriptionKind {
 /// up, which will result in messages being lost.
 ///
 /// If that occurs, an error [`SubscriptionError::Lagged`] is emitted.
-/// to indicate the n oldest messages were lost. It still possibe to use
-/// the subscription after it has lagged and the subsequent read operation
-/// will return the oldest message in the buffer but without the lost messages.
+/// to indicate the n oldest messages were replaced/removed by newer messages.
+/// It still possibe to use the subscription after it has lagged and the subsequent
+/// read operation will return the oldest message in the buffer but
+/// without the replaced/removed messages.
 ///
 /// Thus, it's application dependent and if losing message is not acceptable
 /// just drop the subscription and create a new subscription.
@@ -286,14 +287,16 @@ impl<Notif> Subscription<Notif> {
 			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
 			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
 		};
-		// If this fails the connection was already closed i.e, already "unsubscribed".
-		let _ = self.to_back.send(msg).await;
 
-		// wait until notif channel is closed then the subscription is closed.
+		// If this fails the connection was already closed i.e, already "unsubscribed".
+		if self.to_back.send(msg).await.is_ok() {
+			return Ok(());
+		}
+
+		// Wait until the background task closed down the subscription.
 		loop {
-			match self.rx.recv().await {
-				Err(RecvError::Closed) => break,
-				_ => (),
+			if let Err(RecvError::Closed) = self.rx.recv().await {
+				break;
 			}
 		}
 
@@ -302,7 +305,13 @@ impl<Notif> Subscription<Notif> {
 }
 
 impl<Notif: DeserializeOwned> Subscription<Notif> {
-	/// Receive the next message.
+	/// Receive the next notification from the stream.
+	///
+	/// This is similar to [`Subscription::next`] but
+	/// it returns an additional error [`SubscriptionError::Lagged`]
+	/// if a subscription message was replaced by a new message.
+	///
+	/// For further documentation see [`Subscription`].
 	pub async fn recv(&mut self) -> Result<Notif, SubscriptionError> {
 		let json = self.rx.recv().await?;
 		serde_json::from_value(json).map_err(Into::into)
@@ -397,9 +406,10 @@ pub(crate) enum FrontToBack {
 #[derive(Debug, thiserror::Error)]
 pub enum SubscriptionError {
 	/// The subscription lagged too far behind i.e, could not keep up with the server.
-	/// The error itself indicates how many messages that were missed.
+	/// The error itself indicates how many messages that were replaced/removed by
+	/// newer messages.
 	///
-	/// You may decide to drop the subscription or continue
+	/// You may decide to drop the subscription, clear the subscription buffer, or continue
 	/// and the next recv will fetch the oldest message in the buffer.
 	#[error("The subscription lagged")]
 	Lagged(u64),
@@ -446,6 +456,8 @@ where
 		mut self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Option<Self::Item>> {
+		// NOTE: https://docs.rs/async-broadcast/latest/src/async_broadcast/lib.rs.html#1361-1406
+		// this will ignore `TryRecvError::Overflowed` and thus not emit `SubscriptionError::Lagged`
 		let n = futures_util::ready!(self.rx.0.poll_next_unpin(cx));
 		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
 			Ok(parsed) => Ok(parsed),
