@@ -201,6 +201,25 @@ async fn ws_method_call_works_over_proxy_stream() {
 }
 
 #[tokio::test]
+async fn raw_methods_with_different_ws_clients() {
+	init_logger();
+
+	let server_addr = server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Connection ID does not change for the same client.
+	let connection_id: usize = client.request("raw_method", rpc_params![]).await.unwrap();
+	let identical_connection_id: usize = client.request("raw_method", rpc_params![]).await.unwrap();
+	assert_eq!(connection_id, identical_connection_id);
+
+	// Connection ID is different for different clients.
+	let second_client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let second_connection_id: usize = second_client.request("raw_method", rpc_params![]).await.unwrap();
+	assert_ne!(connection_id, second_connection_id);
+}
+
+#[tokio::test]
 async fn ws_method_call_str_id_works() {
 	init_logger();
 
