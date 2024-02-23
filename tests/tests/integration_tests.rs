@@ -1431,15 +1431,21 @@ async fn ws_client_modify_sub_buffer_len_works() {
 	let client = WsClientBuilder::default()
 		.max_buffer_capacity_per_subscription(u32::MAX as usize)
 		.build(server_url)
+		.with_default_timeout()
 		.await
+		.unwrap()
 		.unwrap();
 
-	let mut sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+	let mut sub: Subscription<JsonValue> = client
+		.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 
 	// Decrease the buffer capacity but no items should have been removed
 	sub.max_capacity(128);
-	assert!(sub.recv().await.is_ok());
+	assert!(sub.recv().with_default_timeout().await.unwrap().is_ok());
 
 	while sub.len() < 5 {
 		tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1447,9 +1453,9 @@ async fn ws_client_modify_sub_buffer_len_works() {
 
 	// Decrease buffer capacity, at least one item should be been removed now
 	sub.max_capacity(4);
-	assert!(matches!(sub.recv().await, Err(SubscriptionError::Lagged(_))));
+	assert!(matches!(sub.recv().with_default_timeout().await.unwrap(), Err(SubscriptionError::Lagged(_))));
 
 	// Clear the subscription and the next item should be successful.
 	sub.clear();
-	assert!(sub.recv().await.is_ok());
+	assert!(sub.recv().with_default_timeout().await.unwrap().is_ok());
 }

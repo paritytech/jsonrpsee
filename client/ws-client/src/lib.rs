@@ -48,6 +48,7 @@ use jsonrpsee_core::client::{
 	CertificateStore, ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
 };
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
+use std::num::NonZeroUsize;
 use std::time::Duration;
 use url::Url;
 
@@ -86,7 +87,7 @@ pub struct WsClientBuilder {
 	ping_config: Option<PingConfig>,
 	headers: http::HeaderMap,
 	max_concurrent_requests: usize,
-	max_buffer_capacity_per_subscription: usize,
+	max_buffer_capacity_per_subscription: NonZeroUsize,
 	max_redirections: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
@@ -104,7 +105,7 @@ impl Default for WsClientBuilder {
 			ping_config: None,
 			headers: HeaderMap::new(),
 			max_concurrent_requests: 256,
-			max_buffer_capacity_per_subscription: 1024,
+			max_buffer_capacity_per_subscription: NonZeroUsize::new(1024).unwrap(),
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
@@ -199,9 +200,8 @@ impl WsClientBuilder {
 
 	/// See documentation [`ClientBuilder::max_buffer_capacity_per_subscription`] (default is 1024).
 	pub fn max_buffer_capacity_per_subscription(mut self, capacity: usize) -> Self {
-		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
-
-		self.max_buffer_capacity_per_subscription = capacity;
+		self.max_buffer_capacity_per_subscription =
+			NonZeroUsize::new(capacity).expect("subscription buffer capacity cannot be zero");
 		self
 	}
 
@@ -253,7 +253,7 @@ impl WsClientBuilder {
 		} = self;
 
 		let mut client = ClientBuilder::default()
-			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription)
+			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription.get())
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)

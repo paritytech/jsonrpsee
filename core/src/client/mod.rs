@@ -37,6 +37,7 @@ pub use error::Error;
 use futures_util::{Stream, StreamExt};
 
 use std::fmt;
+use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -289,13 +290,23 @@ impl<Notif> Subscription<Notif> {
 	///
 	/// If `l` is lower than number of messages in subscription the oldest
 	/// messages will be removed.
+	///
+	/// # Panics
+	///
+	/// This method panics if max == 0.
 	pub fn max_capacity(&mut self, max: usize) {
+		let max = NonZeroUsize::new(max).expect("subscription buffer capacity cannot be zero");
 		self.rx.max_capacity(max)
 	}
 
 	/// Get the number of unread subscription messages.
 	pub fn len(&self) -> usize {
 		self.rx.len()
+	}
+
+	/// Returns whether the subscription queue is empty.
+	pub fn is_empty(&self) -> bool {
+		self.rx.len() == 0
 	}
 
 	/// Unsubscribe and consume the subscription.
@@ -689,18 +700,18 @@ impl<'a, R> IntoIterator for BatchResponse<'a, R> {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct MaxSubscriptionLen(Arc<RwLock<usize>>);
+pub(crate) struct MaxSubscriptionLen(Arc<RwLock<NonZeroUsize>>);
 
 impl MaxSubscriptionLen {
-	pub(crate) fn new(n: usize) -> Self {
+	pub(crate) fn new(n: NonZeroUsize) -> Self {
 		Self(Arc::new(RwLock::new(n)))
 	}
 
-	pub(crate) fn get(&self) -> usize {
+	pub(crate) fn get(&self) -> NonZeroUsize {
 		*self.0.read().unwrap()
 	}
 
-	pub(crate) fn set(&self, n: usize) {
+	pub(crate) fn set(&self, n: NonZeroUsize) {
 		*self.0.write().unwrap() = n;
 	}
 }
@@ -728,13 +739,14 @@ impl SubscriptionTx {
 				break;
 			}
 
-			let max = self.max.get();
+			let max = self.max.get().get();
 
 			if self.inner.capacity() >= max {
 				break;
 			}
 
 			let cap = std::cmp::min(max, self.inner.capacity() * 2);
+
 			self.inner.set_capacity(cap);
 		}
 
@@ -763,9 +775,11 @@ impl SubscriptionRx {
 		next
 	}
 
-	fn max_capacity(&mut self, max: usize) {
-		let curr_len = self.inner.len();
-		let cap = std::cmp::min(max, curr_len);
+	fn max_capacity(&mut self, max: NonZeroUsize) {
+		// The length of the queue may be zero and
+		// ensure that the capacity is at least one.
+		let min_cap = std::cmp::max(1, self.inner.len());
+		let cap = std::cmp::min(max.get(), min_cap);
 		self.inner.set_capacity(cap);
 		self.max.set(max);
 	}
@@ -779,8 +793,8 @@ impl SubscriptionRx {
 	}
 }
 
-pub(crate) fn subscription_stream(max_cap: usize) -> (SubscriptionTx, SubscriptionRx) {
-	let cap = std::cmp::min(1, max_cap);
+pub(crate) fn subscription_stream(max_cap: NonZeroUsize) -> (SubscriptionTx, SubscriptionRx) {
+	let cap = std::cmp::min(1, max_cap.get());
 	let (mut tx, rx) = async_broadcast::broadcast(cap);
 	let max = MaxSubscriptionLen::new(max_cap);
 	tx.set_capacity(cap);
@@ -790,7 +804,13 @@ pub(crate) fn subscription_stream(max_cap: usize) -> (SubscriptionTx, Subscripti
 
 #[cfg(test)]
 mod tests {
+	use std::num::NonZeroUsize;
+
 	use super::{subscription_stream, IdKind, RecvError, RequestIdManager};
+
+	fn non_zero(n: usize) -> NonZeroUsize {
+		NonZeroUsize::new(n).unwrap()
+	}
 
 	#[test]
 	fn request_id_guard_works() {
@@ -808,7 +828,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn subscription_channel_works() {
-		let (mut tx, mut rx) = subscription_stream(16);
+		let (mut tx, mut rx) = subscription_stream(non_zero(16));
 
 		for _ in 0..16 {
 			let res = tx.send(serde_json::json! { "foo"}).unwrap();
@@ -830,7 +850,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn subscription_lagging_works() {
-		let (mut tx, mut rx) = subscription_stream(1);
+		let (mut tx, mut rx) = subscription_stream(non_zero(1));
 
 		assert!(tx.send(serde_json::json! { 1 }).unwrap().is_none());
 		let rm = tx.send(serde_json::json! { 2 }).unwrap().unwrap();
@@ -842,14 +862,14 @@ mod tests {
 
 	#[tokio::test]
 	async fn subscription_modify_len_works() {
-		let (mut tx, mut rx) = subscription_stream(4);
+		let (mut tx, mut rx) = subscription_stream(non_zero(4));
 
 		assert!(tx.send(serde_json::json! { 1 }).unwrap().is_none());
 		assert!(tx.send(serde_json::json! { 2 }).unwrap().is_none());
 		assert!(tx.send(serde_json::json! { 3 }).unwrap().is_none());
 		assert!(tx.send(serde_json::json! { 4 }).unwrap().is_none());
 
-		rx.max_capacity(2);
+		rx.max_capacity(non_zero(2));
 
 		assert!(matches!(rx.recv().await, Err(RecvError::Overflowed(removed)) if removed == 2));
 		assert!(matches!(rx.recv().await, Ok(head) if head == 3));

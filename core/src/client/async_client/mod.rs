@@ -50,6 +50,7 @@ use helpers::{
 };
 use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use async_lock::RwLock as AsyncRwLock;
@@ -208,7 +209,7 @@ enum ReadErrorOnce {
 pub struct ClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
-	max_buffer_capacity_per_subscription: usize,
+	max_buffer_capacity_per_subscription: NonZeroUsize,
 	id_kind: IdKind,
 	max_log_length: u32,
 	ping_config: Option<PingConfig>,
@@ -220,7 +221,7 @@ impl Default for ClientBuilder {
 		Self {
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
-			max_buffer_capacity_per_subscription: 1024,
+			max_buffer_capacity_per_subscription: NonZeroUsize::new(1024).unwrap(),
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			ping_config: None,
@@ -259,10 +260,8 @@ impl ClientBuilder {
 	///
 	/// This function panics if `max` is 0.
 	pub fn max_buffer_capacity_per_subscription(mut self, capacity: usize) -> Self {
-		// https://docs.rs/tokio/latest/src/tokio/sync/broadcast.rs.html#501-506
-		assert!(capacity > 0, "subscription buffer capacity cannot be zero");
-
-		self.max_buffer_capacity_per_subscription = capacity;
+		self.max_buffer_capacity_per_subscription =
+			NonZeroUsize::new(capacity).expect("subscription buffer capacity cannot be zero");
 		self
 	}
 
@@ -726,13 +725,13 @@ impl SubscriptionClientT for Client {
 fn handle_backend_messages<R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
 	manager: &ThreadSafeRequestManager,
-	max_buffer_capacity_per_subscription: usize,
+	max_buffer_capacity_per_subscription: NonZeroUsize,
 ) -> Result<Option<FrontToBack>, Error> {
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
 	fn handle_recv_message(
 		raw: &[u8],
 		manager: &ThreadSafeRequestManager,
-		max_buffer_capacity_per_subscription: usize,
+		max_buffer_capacity_per_subscription: NonZeroUsize,
 	) -> Result<Option<FrontToBack>, Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
 
@@ -831,7 +830,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 	message: FrontToBack,
 	manager: &ThreadSafeRequestManager,
 	sender: &mut S,
-	max_buffer_capacity_per_subscription: usize,
+	max_buffer_capacity_per_subscription: NonZeroUsize,
 ) -> Result<(), S::Error> {
 	match message {
 		FrontToBack::Batch(batch) => {
@@ -932,7 +931,7 @@ struct SendTaskParams<T: TransportSenderT, S> {
 	from_frontend: mpsc::Receiver<FrontToBack>,
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	manager: ThreadSafeRequestManager,
-	max_buffer_capacity_per_subscription: usize,
+	max_buffer_capacity_per_subscription: NonZeroUsize,
 	ping_interval: IntervalStream<S>,
 }
 
@@ -987,7 +986,7 @@ struct ReadTaskParams<R: TransportReceiverT, S> {
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	to_send_task: mpsc::Sender<FrontToBack>,
 	manager: ThreadSafeRequestManager,
-	max_buffer_capacity_per_subscription: usize,
+	max_buffer_capacity_per_subscription: NonZeroUsize,
 	inactivity_check: InactivityCheck,
 	inactivity_stream: IntervalStream<S>,
 }

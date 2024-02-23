@@ -40,6 +40,7 @@ use jsonrpsee_types::{
 	SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
+use std::num::NonZeroUsize;
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -179,7 +180,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
 	response: Response<JsonValue>,
-	max_capacity_per_subscription: usize,
+	max_capacity_per_subscription: NonZeroUsize,
 ) -> Result<Option<RequestMessage>, InvalidRequestId> {
 	let response_id = response.id.clone().into_owned();
 	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(Error::Call);

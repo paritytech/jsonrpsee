@@ -339,12 +339,16 @@ impl RequestManager {
 
 #[cfg(test)]
 mod tests {
+	use std::num::NonZeroUsize;
+
 	use crate::client::subscription_stream;
 
 	use super::{Error, RequestManager};
 	use jsonrpsee_types::{Id, SubscriptionId};
 	use serde_json::Value as JsonValue;
 	use tokio::sync::oneshot;
+
+	const ONE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 
 	#[test]
 	fn insert_remove_pending_request_works() {
@@ -358,7 +362,7 @@ mod tests {
 	#[test]
 	fn insert_remove_subscription_works() {
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx, _) = subscription_stream(1);
+		let (sub_tx, _) = subscription_stream(NonZeroUsize::new(1).unwrap());
 		let mut manager = RequestManager::new();
 		assert!(manager
 			.insert_pending_subscription(Id::Number(1), Id::Number(2), pending_sub_tx, "unsubscribe_method".into())
@@ -424,7 +428,7 @@ mod tests {
 		let (request_tx1, _) = oneshot::channel();
 		let (request_tx2, _) = oneshot::channel();
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx, _) = subscription_stream(1);
+		let (sub_tx, _) = subscription_stream(NonZeroUsize::new(1).unwrap());
 
 		let mut manager = RequestManager::new();
 		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx1)).is_ok());
@@ -452,7 +456,7 @@ mod tests {
 		let (request_tx, _) = oneshot::channel();
 		let (pending_sub_tx1, _) = oneshot::channel();
 		let (pending_sub_tx2, _) = oneshot::channel();
-		let (sub_tx, _) = subscription_stream(1);
+		let (sub_tx, _) = subscription_stream(ONE);
 
 		let mut manager = RequestManager::new();
 		assert!(manager
@@ -482,8 +486,8 @@ mod tests {
 	fn active_subscriptions_faulty() {
 		let (request_tx, _) = oneshot::channel();
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx1, _) = subscription_stream(1);
-		let (sub_tx2, _) = subscription_stream(1);
+		let (sub_tx1, _) = subscription_stream(ONE);
+		let (sub_tx2, _) = subscription_stream(ONE);
 
 		let mut manager = RequestManager::new();
 

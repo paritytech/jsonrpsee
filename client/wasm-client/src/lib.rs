@@ -33,7 +33,7 @@
 pub use jsonrpsee_core::client::Client;
 pub use jsonrpsee_types as types;
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use jsonrpsee_client_transport::web;
 use jsonrpsee_core::client::{ClientBuilder, Error, IdKind};
@@ -62,7 +62,7 @@ use jsonrpsee_core::client::{ClientBuilder, Error, IdKind};
 pub struct WasmClientBuilder {
 	id_kind: IdKind,
 	max_concurrent_requests: usize,
-	max_buffer_capacity_per_subscription: usize,
+	max_buffer_capacity_per_subscription: NonZeroUsize,
 	max_log_length: u32,
 	request_timeout: Duration,
 }
@@ -73,7 +73,7 @@ impl Default for WasmClientBuilder {
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			max_concurrent_requests: 256,
-			max_buffer_capacity_per_subscription: 1024,
+			max_buffer_capacity_per_subscription: NonZeroUsize::unchecked(1024),
 			request_timeout: Duration::from_secs(60),
 		}
 	}
@@ -99,7 +99,8 @@ impl WasmClientBuilder {
 
 	/// See documentation [`ClientBuilder::max_buffer_capacity_per_subscription`] (default is 1024).
 	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
-		self.max_buffer_capacity_per_subscription = max;
+		self.max_buffer_capacity_per_subscription =
+			NonZeroUsize::new(max).expect("subscription buffer capacity cannot be zero");
 		self
 	}
 
