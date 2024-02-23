@@ -37,7 +37,7 @@ use jsonrpsee::ConnectionId;
 pub trait Rpc {
 	/// Raw method with connection ID.
 	#[method(name = "connectionIdMethod", raw_method)]
-	fn raw_method(&self, first_param: usize, second_param: u16) -> Result<usize, ErrorObjectOwned>;
+	async fn raw_method(&self, first_param: usize, second_param: u16) -> Result<usize, ErrorObjectOwned>;
 
 	/// Normal method call example.
 	#[method(name = "normalMethod")]
@@ -52,7 +52,7 @@ pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	fn raw_method(
+	async fn raw_method(
 		&self,
 		connection_id: ConnectionId,
 		_first_param: usize,

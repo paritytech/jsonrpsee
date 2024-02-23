@@ -143,9 +143,9 @@ impl RpcDescription {
 
 				if method.raw_method {
 					handle_register_result(quote! {
-						rpc.register_raw_method(#rpc_method_name, |params, connection_id, context| {
+						rpc.register_raw_method(#rpc_method_name, |params, connection_id, context| async move {
 							#parsing
-							#into_response::into_response(context.#rust_method_name(connection_id, #params_seq))
+							#into_response::into_response(context.as_ref().#rust_method_name(connection_id, #params_seq).await)
 						})
 					})
 				} else {

@@ -287,10 +287,10 @@ impl RpcDescription {
 						));
 					}
 
-					if method.sig.asyncness.is_some() && method_data.raw_method {
+					if method.sig.asyncness.is_none() && method_data.raw_method {
 						return Err(syn::Error::new_spanned(
 							method,
-							"Methods must be synchronous when used with `raw_method`; use `fn` instead of `async fn`",
+							"Methods must be asynchronous when used with `raw_method`; use `async fn` instead of `fn`",
 						));
 					}
 

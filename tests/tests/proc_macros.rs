@@ -75,7 +75,7 @@ mod rpc_impl {
 		fn sync_method(&self) -> Result<u16, ErrorObjectOwned>;
 
 		#[method(name = "syncRaw", raw_method)]
-		fn sync_raw_method(&self) -> Result<usize, ErrorObjectOwned>;
+		async fn async_raw_method(&self) -> Result<usize, ErrorObjectOwned>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
 		async fn sub(&self) -> SubscriptionResult;
@@ -165,7 +165,7 @@ mod rpc_impl {
 			Ok(10)
 		}
 
-		fn sync_raw_method(&self, connection_id: usize) -> Result<usize, ErrorObjectOwned> {
+		async fn async_raw_method(&self, connection_id: usize) -> Result<usize, ErrorObjectOwned> {
 			Ok(connection_id)
 		}
 
@@ -255,12 +255,12 @@ async fn raw_methods_with_different_ws_clients() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	// Connection ID does not change for the same client.
-	let connection_id = client.sync_raw_method().await.unwrap();
-	assert_eq!(connection_id, client.sync_raw_method().await.unwrap());
+	let connection_id = client.async_raw_method().await.unwrap();
+	assert_eq!(connection_id, client.async_raw_method().await.unwrap());
 
 	// Connection ID is different for different clients.
 	let second_client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let second_connection_id = second_client.sync_raw_method().await.unwrap();
+	let second_connection_id = second_client.async_raw_method().await.unwrap();
 	assert_ne!(connection_id, second_connection_id);
 }
 
