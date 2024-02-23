@@ -1420,3 +1420,36 @@ async fn run_shutdown_test(transport: &str) {
 		_ => unreachable!("Only `http` and `ws` supported"),
 	}
 }
+
+#[tokio::test]
+async fn ws_client_modify_sub_buffer_len_works() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default()
+		.max_buffer_capacity_per_subscription(u32::MAX as usize)
+		.build(server_url)
+		.await
+		.unwrap();
+
+	let mut sub: Subscription<JsonValue> =
+		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+
+	// Decrease the buffer capacity but no items should have been removed
+	sub.max_capacity(128);
+	assert!(sub.recv().await.is_ok());
+
+	while sub.len() < 5 {
+		tokio::time::sleep(Duration::from_millis(100)).await;
+	}
+
+	// Decrease buffer capacity, at least one item should be been removed now
+	sub.max_capacity(4);
+	assert!(matches!(sub.recv().await, Err(SubscriptionError::Lagged(_))));
+
+	// Clear the subscription and the next item should be successful.
+	sub.clear();
+	assert!(sub.recv().await.is_ok());
+}

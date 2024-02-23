@@ -39,7 +39,7 @@ use futures_util::{Stream, StreamExt};
 use std::fmt;
 use std::ops::Range;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
@@ -278,7 +278,24 @@ impl<Notif> Subscription<Notif> {
 	/// For instance if your subscription lagged behind you may not be interested
 	/// in the old messages and clear the queue instead of re-subscribing.
 	pub fn clear(&mut self) {
-		self.rx.0 = self.rx.0.new_receiver();
+		self.rx.clear();
+	}
+
+	/// Change the max capacity of the subscription.
+	///
+	/// Because the subscription buffer limit is applied
+	/// for all subscription this may be used to increase/decrease it
+	/// for individual subscriptions.
+	///
+	/// If `l` is lower than number of messages in subscription the oldest
+	/// messages will be removed.
+	pub fn max_capacity(&mut self, max: usize) {
+		self.rx.max_capacity(max)
+	}
+
+	/// Get the number of unread subscription messages.
+	pub fn len(&self) -> usize {
+		self.rx.len()
 	}
 
 	/// Unsubscribe and consume the subscription.
@@ -458,7 +475,7 @@ where
 	) -> std::task::Poll<Option<Self::Item>> {
 		// NOTE: https://docs.rs/async-broadcast/latest/src/async_broadcast/lib.rs.html#1361-1406
 		// this will ignore `TryRecvError::Overflowed` and thus not emit `SubscriptionError::Lagged`
-		let n = futures_util::ready!(self.rx.0.poll_next_unpin(cx));
+		let n = futures_util::ready!(self.rx.inner.poll_next_unpin(cx));
 		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
 			Ok(parsed) => Ok(parsed),
 			Err(err) => Err(err),
@@ -671,31 +688,53 @@ impl<'a, R> IntoIterator for BatchResponse<'a, R> {
 	}
 }
 
-#[derive(Debug)]
-pub(crate) struct SubscriptionTx {
-	inner: async_broadcast::Sender<serde_json::Value>,
-	max: usize,
+#[derive(Debug, Clone)]
+pub(crate) struct MaxSubscriptionLen(Arc<RwLock<usize>>);
+
+impl MaxSubscriptionLen {
+	pub(crate) fn new(n: usize) -> Self {
+		Self(Arc::new(RwLock::new(n)))
+	}
+
+	pub(crate) fn get(&self) -> usize {
+		*self.0.read().unwrap()
+	}
+
+	pub(crate) fn set(&self, n: usize) {
+		*self.0.write().unwrap() = n;
+	}
 }
 
 #[derive(Debug)]
-pub(crate) struct SubscriptionRx(async_broadcast::Receiver<serde_json::Value>);
+pub(crate) struct SubscriptionTx {
+	inner: async_broadcast::Sender<serde_json::Value>,
+	max: MaxSubscriptionLen,
+}
+
+#[derive(Debug)]
+pub(crate) struct SubscriptionRx {
+	inner: async_broadcast::Receiver<serde_json::Value>,
+	max: MaxSubscriptionLen,
+}
 
 #[derive(Debug, Copy, Clone, thiserror::Error)]
 #[error("The subscription was closed")]
 pub(crate) struct Closed;
 
 impl SubscriptionTx {
-	pub(crate) fn send(&mut self, msg: serde_json::Value) -> Result<Option<serde_json::Value>, Closed> {
+	fn send(&mut self, msg: serde_json::Value) -> Result<Option<serde_json::Value>, Closed> {
 		loop {
 			if !self.inner.is_full() {
 				break;
 			}
 
-			if self.inner.capacity() >= self.max {
+			let max = self.max.get();
+
+			if self.inner.capacity() >= max {
 				break;
 			}
 
-			let cap = std::cmp::min(self.max, self.inner.capacity() * 2);
+			let cap = std::cmp::min(max, self.inner.capacity() * 2);
 			self.inner.set_capacity(cap);
 		}
 
@@ -711,26 +750,42 @@ impl SubscriptionTx {
 }
 
 impl SubscriptionRx {
-	pub(crate) async fn recv(&mut self) -> Result<serde_json::Value, RecvError> {
-		let next = self.0.recv().await;
+	async fn recv(&mut self) -> Result<serde_json::Value, RecvError> {
+		let next = self.inner.recv().await;
 
-		let min_cap = self.0.capacity() / 2;
+		let min_cap = self.inner.capacity() / 2;
 
-		if self.0.len() < min_cap {
+		if self.inner.len() < min_cap {
 			let cap = std::cmp::max(1, min_cap);
-			self.0.set_capacity(cap);
+			self.inner.set_capacity(cap);
 		}
 
 		next
+	}
+
+	fn max_capacity(&mut self, max: usize) {
+		let curr_len = self.inner.len();
+		let cap = std::cmp::min(max, curr_len);
+		self.inner.set_capacity(cap);
+		self.max.set(max);
+	}
+
+	fn len(&self) -> usize {
+		self.inner.len()
+	}
+
+	fn clear(&mut self) {
+		self.inner = self.inner.new_receiver();
 	}
 }
 
 pub(crate) fn subscription_stream(max_cap: usize) -> (SubscriptionTx, SubscriptionRx) {
 	let cap = std::cmp::min(1, max_cap);
 	let (mut tx, rx) = async_broadcast::broadcast(cap);
+	let max = MaxSubscriptionLen::new(max_cap);
 	tx.set_capacity(cap);
 	tx.set_overflow(true);
-	(SubscriptionTx { inner: tx, max: max_cap }, SubscriptionRx(rx))
+	(SubscriptionTx { inner: tx, max: max.clone() }, SubscriptionRx { inner: rx, max })
 }
 
 #[cfg(test)]
@@ -781,7 +836,23 @@ mod tests {
 		let rm = tx.send(serde_json::json! { 2 }).unwrap().unwrap();
 		assert_eq!(serde_json::json!(1), rm);
 
-		assert!(matches!(rx.recv().await, Err(RecvError::Overflowed(old)) if old == 1));
+		assert!(matches!(rx.recv().await, Err(RecvError::Overflowed(removed)) if removed == 1));
 		assert!(matches!(rx.recv().await, Ok(head) if head == 2));
+	}
+
+	#[tokio::test]
+	async fn subscription_modify_len_works() {
+		let (mut tx, mut rx) = subscription_stream(4);
+
+		assert!(tx.send(serde_json::json! { 1 }).unwrap().is_none());
+		assert!(tx.send(serde_json::json! { 2 }).unwrap().is_none());
+		assert!(tx.send(serde_json::json! { 3 }).unwrap().is_none());
+		assert!(tx.send(serde_json::json! { 4 }).unwrap().is_none());
+
+		rx.max_capacity(2);
+
+		assert!(matches!(rx.recv().await, Err(RecvError::Overflowed(removed)) if removed == 2));
+		assert!(matches!(rx.recv().await, Ok(head) if head == 3));
+		assert!(matches!(rx.recv().await, Ok(head) if head == 4));
 	}
 }
