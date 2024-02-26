@@ -486,7 +486,7 @@ where
 	) -> std::task::Poll<Option<Self::Item>> {
 		// NOTE: https://docs.rs/async-broadcast/latest/src/async_broadcast/lib.rs.html#1361-1406
 		// this will ignore `TryRecvError::Overflowed` and thus not emit `SubscriptionError::Lagged`
-		let n = futures_util::ready!(self.rx.inner.poll_next_unpin(cx));
+		let n = futures_util::ready!(self.rx.poll_next_unpin(cx));
 		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
 			Ok(parsed) => Ok(parsed),
 			Err(err) => Err(err),
@@ -790,6 +790,26 @@ impl SubscriptionRx {
 
 	fn clear(&mut self) {
 		self.inner = self.inner.new_receiver();
+	}
+}
+
+impl Stream for SubscriptionRx {
+	type Item = serde_json::Value;
+
+	fn poll_next(
+		mut self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<Option<Self::Item>> {
+		let ready = futures_util::ready!(self.inner.poll_next_unpin(cx));
+
+		let min_cap = self.inner.capacity() / 2;
+
+		if self.inner.len() < min_cap {
+			let cap = std::cmp::max(1, min_cap);
+			self.inner.set_capacity(cap);
+		}
+
+		std::task::Poll::Ready(ready)
 	}
 }
 
