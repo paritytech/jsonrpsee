@@ -73,7 +73,7 @@ impl Default for WasmClientBuilder {
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			max_concurrent_requests: 256,
-			max_buffer_capacity_per_subscription: NonZeroUsize::unchecked(1024),
+			max_buffer_capacity_per_subscription: NonZeroUsize::new(1024).unwrap(),
 			request_timeout: Duration::from_secs(60),
 		}
 	}
@@ -133,7 +133,7 @@ impl WasmClientBuilder {
 			.set_max_logging_length(max_log_length)
 			.request_timeout(request_timeout)
 			.id_format(id_kind)
-			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription)
+			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription.get())
 			.max_concurrent_requests(max_concurrent_requests);
 
 		Ok(builder.build_with_wasm(sender, receiver))
