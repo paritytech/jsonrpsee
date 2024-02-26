@@ -121,17 +121,21 @@ where
 
 		let stop_handle = StopHandle::new(stop_rx);
 
+		let connection_guard = match self.server_cfg.connection_guard.take() {
+			Some(guard) => guard,
+			None => ConnectionGuard::new(self.server_cfg.max_connections as usize)
+		};
+
 		match self.server_cfg.tokio_runtime.take() {
-			Some(rt) => rt.spawn(self.start_inner(methods, stop_handle)),
-			None => tokio::spawn(self.start_inner(methods, stop_handle)),
+			Some(rt) => rt.spawn(self.start_inner(methods, stop_handle, connection_guard)),
+			None => tokio::spawn(self.start_inner(methods, stop_handle, connection_guard)),
 		};
 
 		ServerHandle::new(stop_tx)
 	}
 
-	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
+	async fn start_inner(self, methods: Methods, stop_handle: StopHandle, connection_guard: ConnectionGuard) {
 		let mut id: u32 = 0;
-		let connection_guard = ConnectionGuard::new(self.server_cfg.max_connections as usize);
 		let listener = self.listener;
 
 		let stopped = stop_handle.clone().shutdown();
@@ -186,6 +190,8 @@ pub struct ServerConfig {
 	pub(crate) max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	pub(crate) max_connections: u32,
+	/// Custom/shared connection guard. If not `None`, this will override `max_connections`.
+	pub(crate) connection_guard: Option<ConnectionGuard>,
 	/// Maximum number of subscriptions per connection.
 	pub(crate) max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
@@ -344,6 +350,7 @@ impl Default for ServerConfig {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			max_connections: MAX_CONNECTIONS,
+			connection_guard: None,
 			max_subscriptions_per_connection: 1024,
 			batch_requests_config: BatchRequestConfig::Unlimited,
 			tokio_runtime: None,
@@ -651,6 +658,12 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
+	/// Configure a custom [`ConnectionGuard`] for the server to use.
+	pub fn custom_connection_guard(mut self, guard: ConnectionGuard) -> Self {
+		self.server_cfg.connection_guard = Some(guard);
+		self
+	}
+
 	/// Enable WebSocket ping/pong on the server.
 	///
 	/// Default: pings are disabled.
@@ -841,14 +854,17 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	/// ```
 	pub fn to_service_builder(self) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
-		let max_conns = self.server_cfg.max_connections as usize;
+		let conn_guard = match &self.server_cfg.connection_guard {
+			Some(guard) => guard.clone(),
+			None => ConnectionGuard::new(self.server_cfg.max_connections as usize),
+		};
 
 		TowerServiceBuilder {
 			server_cfg: self.server_cfg,
 			rpc_middleware: self.rpc_middleware,
 			http_middleware: self.http_middleware,
 			conn_id: Arc::new(AtomicU32::new(0)),
-			conn_guard: ConnectionGuard::new(max_conns),
+			conn_guard: conn_guard
 		}
 	}
 
