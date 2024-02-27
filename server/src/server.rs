@@ -864,7 +864,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			rpc_middleware: self.rpc_middleware,
 			http_middleware: self.http_middleware,
 			conn_id: Arc::new(AtomicU32::new(0)),
-			conn_guard: conn_guard
+			conn_guard,
 		}
 	}
 
