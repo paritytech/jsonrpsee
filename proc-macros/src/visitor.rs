@@ -186,10 +186,8 @@ impl FindSubscriptionParams {
 				for arg in &arguments.args {
 					match arg {
 						syn::GenericArgument::Type(arg) => self.visit_type(arg),
-						syn::GenericArgument::Binding(arg) => self.visit_type(&arg.ty),
-						syn::GenericArgument::Lifetime(_)
-						| syn::GenericArgument::Constraint(_)
-						| syn::GenericArgument::Const(_) => {}
+						syn::GenericArgument::AssocType(arg) => self.visit_type(&arg.ty),
+						_ => {}
 					}
 				}
 			}
@@ -214,7 +212,7 @@ impl FindSubscriptionParams {
 	fn visit_type_param_bound(&mut self, bound: &syn::TypeParamBound) {
 		match bound {
 			syn::TypeParamBound::Trait(bound) => self.visit_path(&bound.path),
-			syn::TypeParamBound::Lifetime(_) => {}
+			_ => {}
 		}
 	}
 

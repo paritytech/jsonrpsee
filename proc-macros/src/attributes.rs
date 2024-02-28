@@ -108,7 +108,7 @@ impl<T: Parse> Parse for Bracketed<T> {
 
 		syn::bracketed!(content in input);
 
-		let list = content.parse_terminated(Parse::parse)?;
+		let list = content.parse_terminated(Parse::parse, Token![,])?;
 
 		Ok(Bracketed { list })
 	}
@@ -119,15 +119,17 @@ fn parenthesized<T: Parse>(input: ParseStream) -> syn::Result<Punctuated<T, Toke
 
 	syn::parenthesized!(content in input);
 
-	content.parse_terminated(T::parse)
+	content.parse_terminated(T::parse, Token![,])
 }
 
 impl AttributeMeta {
 	/// Parses `Attribute` with plain `TokenStream` into a more robust `AttributeMeta` with
 	/// a collection `Arguments`.
 	pub fn parse(attr: Attribute) -> syn::Result<AttributeMeta> {
-		let path = attr.path;
-		let arguments = parenthesized.parse2(attr.tokens)?;
+		let path = attr.path().clone();
+
+		let arguments = attr.parse_args_with(parenthesized)?;
+		// let arguments = parenthesized.parse2(attr.tokens)?;
 
 		Ok(AttributeMeta { path, arguments })
 	}

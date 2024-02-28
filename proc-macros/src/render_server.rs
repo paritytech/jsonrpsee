@@ -25,14 +25,13 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashSet;
-use std::str::FromStr;
 
 use super::RpcDescription;
 use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::{token, AttrStyle, Attribute, Path, PathSegment};
+use syn::{token, AttrStyle, Attribute, Meta, Path, PathSegment};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -388,8 +387,7 @@ impl RpcDescription {
 					pound_token: token::Pound::default(),
 					style: AttrStyle::Outer,
 					bracket_token: Default::default(),
-					path: Path { leading_colon: None, segments: punc_attr },
-					tokens: TokenStream2::from_str(&format!("({})", alias_vals.as_str())).unwrap(),
+					meta: Meta::Path(Path { leading_colon: None, segments: punc_attr }),
 				};
 
 				quote! {

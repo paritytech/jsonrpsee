@@ -27,7 +27,6 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::quote;
 use rpc_macro::RpcDescription;
 
 mod attributes;
@@ -394,8 +393,7 @@ pub fn rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
 		pound_token: syn::token::Pound::default(),
 		style: syn::AttrStyle::Outer,
 		bracket_token: syn::token::Bracket::default(),
-		path: syn::Ident::new("rpc", proc_macro2::Span::call_site()).into(),
-		tokens: quote! { (#attr) },
+		meta: syn::Meta::Path(syn::Ident::new("rpc", proc_macro2::Span::call_site()).into()),
 	};
 
 	match rpc_impl(rebuilt_rpc_attribute, item) {

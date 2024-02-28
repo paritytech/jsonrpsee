@@ -46,12 +46,12 @@ pub struct RpcMethod {
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub param_kind: ParamKind,
 	pub returns: Option<syn::Type>,
-	pub signature: syn::TraitItemMethod,
+	pub signature: syn::TraitItemFn,
 	pub aliases: Vec<String>,
 }
 
 impl RpcMethod {
-	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
+	pub fn from_item(attr: Attribute, mut method: syn::TraitItemFn) -> syn::Result<Self> {
 		let [aliases, blocking, name, param_kind] =
 			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
 
@@ -117,13 +117,13 @@ pub struct RpcSubscription {
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub param_kind: ParamKind,
 	pub item: syn::Type,
-	pub signature: syn::TraitItemMethod,
+	pub signature: syn::TraitItemFn,
 	pub aliases: Vec<String>,
 	pub unsubscribe_aliases: Vec<String>,
 }
 
 impl RpcSubscription {
-	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
+	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemFn) -> syn::Result<Self> {
 		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases] = AttributeMeta::parse(attr)?
 			.retain(["aliases", "item", "name", "param_kind", "unsubscribe", "unsubscribe_aliases"])?;
 
@@ -249,7 +249,7 @@ impl RpcDescription {
 		// Go through all the methods in the trait and collect methods and
 		// subscriptions.
 		for entry in item.items.iter() {
-			if let syn::TraitItem::Method(method) = entry {
+			if let syn::TraitItem::Fn(method) = entry {
 				if method.sig.receiver().is_none() {
 					return Err(syn::Error::new_spanned(&method.sig, "First argument of the trait must be '&self'"));
 				}
@@ -354,7 +354,7 @@ fn parse_subscribe(arg: Result<Argument, MissingArgument>) -> syn::Result<Option
 }
 
 fn find_attr<'a>(attrs: &'a [Attribute], ident: &str) -> Option<&'a Attribute> {
-	attrs.iter().find(|a| a.path.is_ident(ident))
+	attrs.iter().find(|a| a.path().is_ident(ident))
 }
 
 fn build_unsubscribe_method(method: &str) -> Option<String> {
