@@ -210,9 +210,8 @@ impl FindSubscriptionParams {
 
 	/// Traverse syntax tree.
 	fn visit_type_param_bound(&mut self, bound: &syn::TypeParamBound) {
-		match bound {
-			syn::TypeParamBound::Trait(bound) => self.visit_path(&bound.path),
-			_ => {}
+		if let syn::TypeParamBound::Trait(bound) = bound {
+			self.visit_path(&bound.path);
 		}
 	}
 
