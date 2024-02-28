@@ -128,8 +128,7 @@ impl AttributeMeta {
 	pub fn parse(attr: Attribute) -> syn::Result<AttributeMeta> {
 		let path = attr.path().clone();
 
-		let arguments = attr.parse_args_with(parenthesized)?;
-		// let arguments = parenthesized.parse2(attr.tokens)?;
+		let arguments = attr.parse_args_with(|input: ParseStream| input.parse_terminated(Parse::parse, Token![,]))?;
 
 		Ok(AttributeMeta { path, arguments })
 	}

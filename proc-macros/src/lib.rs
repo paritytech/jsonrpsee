@@ -387,15 +387,16 @@ pub(crate) mod visitor;
 /// ```
 #[proc_macro_attribute]
 pub fn rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
-	let attr = proc_macro2::TokenStream::from(attr);
-
 	let rebuilt_rpc_attribute = syn::Attribute {
 		pound_token: syn::token::Pound::default(),
 		style: syn::AttrStyle::Outer,
 		bracket_token: syn::token::Bracket::default(),
-		meta: syn::Meta::Path(syn::Ident::new("rpc", proc_macro2::Span::call_site()).into()),
+		meta: syn::Meta::List(syn::MetaList {
+			path: syn::Ident::new("rpc", proc_macro2::Span::call_site()).into(),
+			delimiter: syn::MacroDelimiter::Paren(syn::token::Paren(proc_macro2::Span::call_site())),
+			tokens: attr.into(),
+		}),
 	};
-
 	match rpc_impl(rebuilt_rpc_attribute, item) {
 		Ok(tokens) => tokens,
 		Err(err) => err.to_compile_error(),
