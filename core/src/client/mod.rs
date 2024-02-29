@@ -231,7 +231,7 @@ pub struct Subscription<Notif> {
 	/// The weak-sender side of the `notifs_rx` channel (Used to tell whether the buffer is full).
 	notifs_tx_weak: mpsc::WeakSender<JsonValue>,
 	/// If this flag is set, the `notifs_rx` will be drained before further recv-attempts.
-	shedding: Arc<AtomicBool>,
+	drain_requested: Arc<AtomicBool>,
 
 	/// Callback kind.
 	kind: Option<SubscriptionKind>,
@@ -251,7 +251,7 @@ impl<Notif> Subscription<Notif> {
 		notifs_tx_weak: mpsc::WeakSender<JsonValue>,
 		kind: SubscriptionKind,
 	) -> Self {
-		Self { to_back, notifs_rx, notifs_tx_weak, shedding: Default::default(), kind: Some(kind), marker: PhantomData }
+		Self { to_back, notifs_rx, notifs_tx_weak, drain_requested: Default::default(), kind: Some(kind), marker: PhantomData }
 	}
 
 	/// Return the subscription type and, if applicable, ID.
@@ -371,7 +371,7 @@ where
 	type Item = Result<Notif, Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		task::Poll::Ready(
-			if self.shedding.swap(false, Ordering::Relaxed) {
+			if self.drain_requested.swap(false, Ordering::Relaxed) {
 				loop {
 					let n = task::ready!(self.notifs_rx.poll_recv(cx));
 					if n.is_none() {
@@ -379,8 +379,8 @@ where
 					}
 				}
 			} else if self.notifs_tx_weak.upgrade().map(|tx| tx.capacity()) == Some(0) {
-				let shedding = Arc::clone(&self.shedding);
-				let slow_subscriber_error = SlowSubscriberError(shedding);
+				let drain_requested = Arc::clone(&self.drain_requested);
+				let slow_subscriber_error = SlowSubscriberError(drain_requested);
 				Some(Err(slow_subscriber_error.into()))
 			} else {
 				let n = task::ready!(self.notifs_rx.poll_recv(cx));

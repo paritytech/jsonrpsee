@@ -353,7 +353,7 @@ async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 	tokio::time::sleep(Duration::from_secs(2)).await;
 
 	match hello_sub.next().await.unwrap() {
-		Err(Error::SlowSubscriber(slow_subscriber)) => slow_subscriber.shed_buffered_notifications(),
+		Err(Error::SlowSubscriber(slow_subscriber)) => slow_subscriber.drain_buffer(),
 		unexpected => {
 			panic!("Expected Error::SlowSubscriber from a subscription with a full channel, not: {:?}", unexpected)
 		}

@@ -83,7 +83,7 @@ pub struct SlowSubscriberError(pub(crate) Arc<AtomicBool>);
 
 impl SlowSubscriberError {
 	/// Drain all the notifications out of the channel buffer.
-	pub fn shed_buffered_notifications(self) {
+	pub fn drain_buffer(self) {
 		self.0.store(true, std::sync::atomic::Ordering::Relaxed);
 	}
 }
