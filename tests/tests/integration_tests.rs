@@ -361,9 +361,7 @@ async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 
 	// NOTE: the subscription should remain usable.
 	for i in 0..4 {
-		let ret = hello_sub.next().await.unwrap();
-		eprintln!("#{}: {:?}", i, ret);
-		assert!(ret.is_ok());
+		assert!(hello_sub.next().await.unwrap().is_ok());
 	}
 
 	// The client should still be useable => make sure it still works.
