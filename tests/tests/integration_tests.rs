@@ -33,7 +33,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::stream::FuturesUnordered;
+use futures::sink;
+use futures::stream::{self, FuturesUnordered};
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{
 	connect_over_socks_stream, init_logger, pipe_from_stream_and_drop, server, server_with_cors,
@@ -360,7 +361,7 @@ async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 	};
 
 	// NOTE: the subscription should remain usable.
-	for i in 0..4 {
+	for _ in 0..4 {
 		assert!(hello_sub.next().await.unwrap().is_ok());
 	}
 
@@ -372,6 +373,54 @@ async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
 	other_sub.next().await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn ws_subscription_fast_producer_slow_consumer_recovery_example() {
+	init_logger();
+
+	const ITEMS_TAKEN: usize = 3;
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().max_buffer_capacity_per_subscription(4).build(&server_url).await.unwrap();
+
+	let recover = |e| async move {
+		if let Error::SlowSubscriber(slow_subscriber) = e {
+			slow_subscriber.drain_buffer();
+			Ok(None)
+		} else {
+			Err(e)
+		}
+	};
+
+	let fast_producer =
+		|| async { client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap() };
+
+	let slow_consumer = || {
+		sink::unfold((), |(), _item: JsonValue| async move {
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			Ok(())
+		})
+	};
+
+	let should_be_ok = fast_producer()
+		.await
+		.map_ok(Some)
+		.or_else(recover)
+		.map(Result::transpose)
+		.map(stream::iter)
+		.flatten()
+		.take(ITEMS_TAKEN)
+		.forward(slow_consumer());
+
+	let should_be_err = fast_producer().await.take(ITEMS_TAKEN).forward(slow_consumer());
+
+	let (should_be_ok, should_be_err) = futures::future::join(should_be_ok, should_be_err).await;
+
+	should_be_ok.expect("should not fail");
+	should_be_err.expect_err("should fail");
 }
 
 #[tokio::test]
