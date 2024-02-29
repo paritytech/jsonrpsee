@@ -31,8 +31,7 @@ use super::RpcDescription;
 use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
-use syn::punctuated::Punctuated;
-use syn::{token, AttrStyle, Attribute, Path, PathSegment};
+use syn::Attribute;
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -379,17 +378,10 @@ impl RpcDescription {
 					heck::ToLowerCamelCase::to_lower_camel_case(name.ident.to_string().as_str())
 				));
 
-				let mut punc_attr = Punctuated::new();
+				let alias = TokenStream2::from_str(alias_vals.as_str()).unwrap();
 
-				punc_attr
-					.push_value(PathSegment { ident: quote::format_ident!("serde"), arguments: Default::default() });
-
-				let serde_alias = Attribute {
-					pound_token: token::Pound::default(),
-					style: AttrStyle::Outer,
-					bracket_token: Default::default(),
-					path: Path { leading_colon: None, segments: punc_attr },
-					tokens: TokenStream2::from_str(&format!("({})", alias_vals.as_str())).unwrap(),
+				let serde_alias: Attribute = syn::parse_quote! {
+					#[serde(#alias)]
 				};
 
 				quote! {
