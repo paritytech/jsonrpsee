@@ -33,11 +33,12 @@ cfg_async_client! {
 
 pub mod error;
 pub use error::Error;
+pub use error::SlowSubscriberError;
 
 use std::fmt;
 use std::ops::Range;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task;
 
@@ -227,6 +228,11 @@ pub struct Subscription<Notif> {
 	to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
+	/// The weak-sender side of the `notifs_rx` channel (Used to tell whether the buffer is full).
+	notifs_tx_weak: mpsc::WeakSender<JsonValue>,
+	/// If this flag is set, the `notifs_rx` will be drained before further recv-attempts.
+	shedding: Arc<AtomicBool>,
+
 	/// Callback kind.
 	kind: Option<SubscriptionKind>,
 	/// Marker in order to pin the `Notif` parameter.
@@ -242,9 +248,10 @@ impl<Notif> Subscription<Notif> {
 	pub fn new(
 		to_back: mpsc::Sender<FrontToBack>,
 		notifs_rx: mpsc::Receiver<JsonValue>,
+		notifs_tx_weak: mpsc::WeakSender<JsonValue>,
 		kind: SubscriptionKind,
 	) -> Self {
-		Self { to_back, notifs_rx, kind: Some(kind), marker: PhantomData }
+		Self { to_back, notifs_rx, notifs_tx_weak, shedding: Default::default(), kind: Some(kind), marker: PhantomData }
 	}
 
 	/// Return the subscription type and, if applicable, ID.
@@ -303,7 +310,7 @@ pub struct SubscriptionMessage {
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>,
+	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, mpsc::WeakSender<JsonValue>, SubscriptionId<'static>), Error>>,
 }
 
 /// RegisterNotification message.
@@ -314,7 +321,7 @@ pub struct RegisterNotificationMessage {
 	/// We return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, String), Error>>,
+	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, mpsc::WeakSender<JsonValue>, String), Error>>,
 }
 
 /// Message that the Client can send to the background task.
@@ -363,12 +370,27 @@ where
 {
 	type Item = Result<Notif, Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
-		let n = futures_util::ready!(self.notifs_rx.poll_recv(cx));
-		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
-			Ok(parsed) => Ok(parsed),
-			Err(e) => Err(Error::ParseError(e)),
-		});
-		task::Poll::Ready(res)
+		task::Poll::Ready(
+			if self.shedding.swap(false, Ordering::Relaxed) {
+				loop {
+					let n = task::ready!(self.notifs_rx.poll_recv(cx));
+					if n.is_none() {
+						break None
+					}
+				}
+			} else if self.notifs_tx_weak.upgrade().map(|tx| tx.capacity()) == Some(0) {
+				let shedding = Arc::clone(&self.shedding);
+				let slow_subscriber_error = SlowSubscriberError(shedding);
+				Some(Err(slow_subscriber_error.into()))
+			} else {
+				let n = task::ready!(self.notifs_rx.poll_recv(cx));
+
+				n.map(|n| match serde_json::from_value::<Notif>(n) {
+					Ok(parsed) => Ok(parsed),
+					Err(e) => Err(Error::ParseError(e)),
+				})
+			}	
+		)
 	}
 }
 

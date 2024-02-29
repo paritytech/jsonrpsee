@@ -674,7 +674,7 @@ impl SubscriptionClientT for Client {
 			return Err(self.disconnect_reason().await);
 		}
 
-		let (notifs_rx, sub_id) = match call_with_timeout(self.request_timeout, send_back_rx).await {
+		let (notifs_rx, notifs_tx_weak, sub_id) = match call_with_timeout(self.request_timeout, send_back_rx).await {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.disconnect_reason().await),
@@ -682,7 +682,7 @@ impl SubscriptionClientT for Client {
 
 		rx_log_from_json(&Response::new(ResponsePayload::success_borrowed(&sub_id), id_unsub), self.max_log_length);
 
-		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
+		Ok(Subscription::new(self.to_back.clone(), notifs_rx, notifs_tx_weak, SubscriptionKind::Subscription(sub_id)))
 	}
 
 	/// Subscribe to a specific method.
@@ -707,13 +707,13 @@ impl SubscriptionClientT for Client {
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
-		let (notifs_rx, method) = match res {
+		let (notifs_rx, notifs_tx_weak, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
-		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Method(method)))
+		Ok(Subscription::new(self.to_back.clone(), notifs_rx, notifs_tx_weak, SubscriptionKind::Method(method)))
 	}
 }
 
@@ -897,9 +897,10 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
+			let subscirbe_tx_weak = subscribe_tx.downgrade();
 
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
-				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
+				let _ = reg.send_back.send(Ok((subscribe_rx, subscirbe_tx_weak, reg.method)));
 			} else {
 				let _ = reg.send_back.send(Err(RegisterMethodError::AlreadyRegistered(reg.method).into()));
 			}

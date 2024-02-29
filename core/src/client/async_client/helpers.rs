@@ -32,6 +32,7 @@ use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{mpsc, oneshot};
 
 use jsonrpsee_types::response::SubscriptionError;
@@ -109,8 +110,14 @@ pub(crate) fn process_subscription_response(
 	match manager.as_subscription_mut(&request_id) {
 		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
-			Err(err) => {
-				tracing::error!(target: LOG_TARGET, "Dropping subscription {:?} error: {:?}", sub_id, err);
+			
+			Err(TrySendError::Full(_rejected_notification)) => {
+				tracing::warn!(target: LOG_TARGET, "Notification channel is full: shedding inbound notification");
+				Ok(())
+			},
+
+			Err(TrySendError::Closed(_rejected_notification)) => {
+				tracing::error!(target: LOG_TARGET, "Dropping subscription {:?} error: Closed", sub_id);
 				Err(Some(sub_id))
 			}
 		},
@@ -207,11 +214,12 @@ pub(crate) fn process_single_response(
 			};
 
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
+			let subscribe_tx_weak = subscribe_tx.downgrade();
 			if manager
 				.insert_subscription(response_id.clone(), unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
 				.is_ok()
 			{
-				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
+				match send_back_oneshot.send(Ok((subscribe_rx, subscribe_tx_weak, sub_id.clone()))) {
 					Ok(_) => Ok(None),
 					Err(_) => Ok(build_unsubscribe_message(manager, response_id, sub_id)),
 				}

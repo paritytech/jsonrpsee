@@ -28,7 +28,7 @@
 
 use crate::{params::EmptyBatchRequest, RegisterMethodError};
 use jsonrpsee_types::{ErrorObjectOwned, InvalidRequestId};
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 /// Error type.
 #[derive(Debug, thiserror::Error)]
@@ -69,4 +69,21 @@ pub enum Error {
 	/// The error returned when registering a method or subscription failed.
 	#[error("{0}")]
 	RegisterMethod(#[from] RegisterMethodError),
+	/// The subscriber consumes the notifications slower than those arrive.
+	#[error("{0}")]
+	SlowSubscriber(#[from] #[source] SlowSubscriberError),
+}
+
+/// The subscriber consumes the notifications slower than those arrive.
+///
+/// See [`shed_buffered_notifications`](`Self::shed_buffered_notifications`).
+#[derive(Debug, thiserror::Error)]
+#[error("The subscriber is too slow")]
+pub struct SlowSubscriberError(pub(crate) Arc<AtomicBool>);
+
+impl SlowSubscriberError {
+	/// Drain all the notifications out of the channel buffer.
+	pub fn shed_buffered_notifications(self) {
+		self.0.store(true, std::sync::atomic::Ordering::Relaxed);
+	}
 }
