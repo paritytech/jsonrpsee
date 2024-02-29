@@ -352,12 +352,19 @@ async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 	// don't poll the subscription stream for 2 seconds, should be full now.
 	tokio::time::sleep(Duration::from_secs(2)).await;
 
-	for _ in 0..4 {
-		assert!(hello_sub.next().await.unwrap().is_ok());
-	}
+	match hello_sub.next().await.unwrap() {
+		Err(Error::SlowSubscriber(slow_subscriber)) => slow_subscriber.shed_buffered_notifications(),
+		unexpected => {
+			panic!("Expected Error::SlowSubscriber from a subscription with a full channel, not: {:?}", unexpected)
+		}
+	};
 
-	// NOTE: this is now unusable and unregistered.
-	assert!(hello_sub.next().await.is_none());
+	// NOTE: the subscription should remain usable.
+	for i in 0..4 {
+		let ret = hello_sub.next().await.unwrap();
+		eprintln!("#{}: {:?}", i, ret);
+		assert!(ret.is_ok());
+	}
 
 	// The client should still be useable => make sure it still works.
 	let _hello_req: JsonValue = client.request("say_hello", rpc_params![]).await.unwrap();
