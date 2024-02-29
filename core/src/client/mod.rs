@@ -39,8 +39,10 @@ use futures_util::{Stream, StreamExt};
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::ops::Range;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+use std::task::Poll;
 
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
@@ -352,7 +354,7 @@ impl<Notif: DeserializeOwned> Subscription<Notif> {
 	/// method (and delegates to that). Import [`StreamExt`] if you'd like
 	/// access to other stream combinator methods.
 	#[allow(clippy::should_implement_trait)]
-	pub async fn next(&mut self) -> Option<Result<Notif, serde_json::Error>> {
+	pub async fn next(&mut self) -> Option<Result<Notif, SubscriptionError>> {
 		StreamExt::next(self).await
 	}
 }
@@ -478,20 +480,19 @@ impl<Notif> Stream for Subscription<Notif>
 where
 	Notif: DeserializeOwned,
 {
-	type Item = Result<Notif, serde_json::Error>;
+	type Item = Result<Notif, SubscriptionError>;
 
 	fn poll_next(
 		mut self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Option<Self::Item>> {
-		// NOTE: https://docs.rs/async-broadcast/latest/src/async_broadcast/lib.rs.html#1361-1406
-		// this will ignore `TryRecvError::Overflowed` and thus not emit `SubscriptionError::Lagged`
-		let n = futures_util::ready!(self.rx.poll_next_unpin(cx));
-		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
-			Ok(parsed) => Ok(parsed),
-			Err(err) => Err(err),
-		});
-		std::task::Poll::Ready(res)
+		let n = match futures_util::ready!(self.rx.poll_next_unpin(cx)) {
+			Some(Ok(v)) => Some(serde_json::from_value(v).map_err(Into::into)),
+			Some(Err(e)) => Some(Err(e)),
+			None => None,
+		};
+
+		Poll::Ready(n)
 	}
 }
 
@@ -794,13 +795,20 @@ impl SubscriptionRx {
 }
 
 impl Stream for SubscriptionRx {
-	type Item = serde_json::Value;
+	type Item = Result<serde_json::Value, SubscriptionError>;
 
 	fn poll_next(
 		mut self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Option<Self::Item>> {
-		let ready = futures_util::ready!(self.inner.poll_next_unpin(cx));
+		let this = Pin::new(&mut self.inner);
+
+		let res = match futures_util::ready!(this.poll_recv(cx)) {
+			Some(Ok(v)) => Some(Ok(v)),
+			Some(Err(RecvError::Closed)) => None,
+			Some(Err(RecvError::Overflowed(n))) => Some(Err(SubscriptionError::Lagged(n))),
+			None => None,
+		};
 
 		let min_cap = self.inner.capacity() / 2;
 
@@ -809,7 +817,7 @@ impl Stream for SubscriptionRx {
 			self.inner.set_capacity(cap);
 		}
 
-		std::task::Poll::Ready(ready)
+		std::task::Poll::Ready(res)
 	}
 }
 
