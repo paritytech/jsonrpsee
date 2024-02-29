@@ -34,11 +34,12 @@ use crate::{
 	Params,
 };
 use beef::Cow;
+use http::Extensions;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 /// JSON-RPC request object as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Request<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -51,12 +52,15 @@ pub struct Request<'a> {
 	/// Parameter values of the request.
 	#[serde(borrow)]
 	pub params: Option<StdCow<'a, RawValue>>,
+	/// The request's extensions.
+	#[serde(skip)]
+	extensions: Extensions,
 }
 
 impl<'a> Request<'a> {
 	/// Create a new [`Request`].
 	pub fn new(method: Cow<'a, str>, params: Option<&'a RawValue>, id: Id<'a>) -> Self {
-		Self { jsonrpc: TwoPointZero, id, method, params: params.map(StdCow::Borrowed) }
+		Self { jsonrpc: TwoPointZero, id, method, params: params.map(StdCow::Borrowed), extensions: Extensions::new() }
 	}
 
 	/// Get the ID of the request.
@@ -72,6 +76,16 @@ impl<'a> Request<'a> {
 	/// Get the params of the request.
 	pub fn params(&self) -> Params {
 		Params::new(self.params.as_ref().map(|p| RawValue::get(p)))
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 

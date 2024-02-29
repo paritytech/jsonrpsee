@@ -28,6 +28,7 @@ use crate::server::{BoundedWriter, LOG_TARGET};
 use std::task::Poll;
 
 use futures_util::{Future, FutureExt};
+use hyper::http::Extensions;
 use jsonrpsee_types::error::{
 	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
 };
@@ -59,6 +60,8 @@ pub struct MethodResponse {
 	/// Optional callback that may be utilized to notif
 	/// that the method response has been processed
 	on_close: Option<MethodResponseNotifyTx>,
+	/// The response's extensions.
+	extensions: Extensions,
 }
 
 impl MethodResponse {
@@ -121,6 +124,7 @@ impl MethodResponse {
 			success_or_error: MethodResponseResult::Success,
 			kind: ResponseKind::Batch,
 			on_close: None,
+			extensions: Extensions::new(),
 		}
 	}
 
@@ -158,7 +162,7 @@ impl MethodResponse {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
 
-				Self { result, success_or_error, kind, on_close: rp.on_exit }
+				Self { result, success_or_error, kind, on_close: rp.on_exit, extensions: Extensions::new() }
 			}
 			Err(err) => {
 				tracing::error!(target: LOG_TARGET, "Error serializing response: {:?}", err);
@@ -180,6 +184,7 @@ impl MethodResponse {
 						success_or_error: MethodResponseResult::Failed(err_code),
 						kind,
 						on_close: rp.on_exit,
+						extensions: Extensions::new(),
 					}
 				} else {
 					let err = ErrorCode::InternalError;
@@ -191,6 +196,7 @@ impl MethodResponse {
 						success_or_error: MethodResponseResult::Failed(err.code()),
 						kind,
 						on_close: rp.on_exit,
+						extensions: Extensions::new(),
 					}
 				}
 			}
@@ -216,7 +222,18 @@ impl MethodResponse {
 			success_or_error: MethodResponseResult::Failed(err_code),
 			kind: ResponseKind::MethodCall,
 			on_close: None,
+			extensions: Extensions::new(),
 		}
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 
