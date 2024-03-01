@@ -30,7 +30,7 @@ use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
 
 use jsonrpsee_core::client::{
-	BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT, SubscriptionError,
+	BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT, SubscriptionConfig, SubscriptionError,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::{rpc_params, DeserializeOwned};
@@ -161,7 +161,7 @@ async fn subscription_works() {
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
 		let mut sub: Subscription<String> = client
-			.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
+			.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello", SubscriptionConfig::default())
 			.with_default_timeout()
 			.await
 			.unwrap()
@@ -184,8 +184,12 @@ async fn notification_handler_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
-		let mut nh: Subscription<String> =
-			client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+		let mut nh: Subscription<String> = client
+			.subscribe_to_method("test", SubscriptionConfig::default())
+			.with_default_timeout()
+			.await
+			.unwrap()
+			.unwrap();
 		let response: String = nh.recv().with_default_timeout().await.unwrap().unwrap();
 		assert_eq!("server originated notification works".to_owned(), response);
 	}
@@ -211,13 +215,17 @@ async fn notification_slow_reader() {
 		.await
 		.unwrap()
 		.unwrap();
-	let mut nh: Subscription<String> =
-		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+	let mut nh: Subscription<String> = client
+		.subscribe_to_method("test", SubscriptionConfig::default())
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
 
 	// Don't read the notification stream for 2 seconds, should be full now.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-	assert!(matches!(nh.recv().await, Err(SubscriptionError::Lagged(_))));
+	assert!(matches!(nh.recv().await, Err(SubscriptionError::TooSlow)));
 
 	// Ensure that notification stream yields after lagging.
 	assert!(nh.recv().with_default_timeout().await.unwrap().is_ok());

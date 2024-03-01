@@ -38,7 +38,7 @@ use hyper::http::HeaderMap;
 use hyper::Body;
 use jsonrpsee_core::client::{
 	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, Error, IdKind, RequestIdManager, Subscription,
-	SubscriptionClientT,
+	SubscriptionClientT, SubscriptionConfig,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
@@ -418,6 +418,7 @@ where
 		_subscribe_method: &'a str,
 		_params: Params,
 		_unsubscribe_method: &'a str,
+		_config: SubscriptionConfig,
 	) -> Result<Subscription<N>, Error>
 	where
 		Params: ToRpcParams + Send,
@@ -428,7 +429,11 @@ where
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscribe_method", fields(method = _method), skip(self, _method), level = "trace")]
-	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
+	async fn subscribe_to_method<'a, N>(
+		&self,
+		_method: &'a str,
+		_config: SubscriptionConfig,
+	) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
 	{

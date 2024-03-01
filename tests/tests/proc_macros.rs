@@ -33,7 +33,7 @@ mod helpers;
 use std::net::SocketAddr;
 
 use helpers::init_logger;
-use jsonrpsee::core::client::{ClientT, Error, SubscriptionClientT};
+use jsonrpsee::core::client::{ClientT, Error, SubscriptionClientT, SubscriptionConfig};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::ServerBuilder;
@@ -349,7 +349,12 @@ async fn calls_with_bad_params() {
 
 	// Sub with faulty params as array.
 	let err: Error = client
-		.subscribe::<String, ArrayParams>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
+		.subscribe::<String, ArrayParams>(
+			"foo_echo",
+			rpc_params!["0x0"],
+			"foo_unsubscribe_echo",
+			SubscriptionConfig::default(),
+		)
 		.await
 		.unwrap_err();
 
@@ -369,8 +374,10 @@ async fn calls_with_bad_params() {
 	let mut params = ObjectParams::new();
 	params.insert("val", "0x0").unwrap();
 
-	let err: Error =
-		client.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
+	let err: Error = client
+		.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo", SubscriptionConfig::default())
+		.await
+		.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(e) if e.data().unwrap().get().contains("invalid type: string \\\"0x0\\\", expected u32") && e.code() == ErrorCode::InvalidParams.code()
 				&& e.message() == INVALID_PARAMS_MSG

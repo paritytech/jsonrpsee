@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{Stream, StreamExt};
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{Subscription, SubscriptionClientT, SubscriptionConfig};
 use jsonrpsee::core::Serialize;
 use jsonrpsee::server::{RpcModule, Server, SubscriptionMessage, TrySendError};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -50,12 +50,13 @@ async fn main() -> anyhow::Result<()> {
 
 	// Subscription with a single parameter
 	let mut sub_params_one: Subscription<Option<char>> =
-		client.subscribe("sub_one_param", rpc_params![3], "unsub_one_param").await?;
+		client.subscribe("sub_one_param", rpc_params![3], "unsub_one_param", SubscriptionConfig::default()).await?;
 	tracing::info!("subscription with one param: {:?}", sub_params_one.recv().await);
 
 	// Subscription with multiple parameters
-	let mut sub_params_two: Subscription<String> =
-		client.subscribe("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
+	let mut sub_params_two: Subscription<String> = client
+		.subscribe("sub_params_two", rpc_params![2, 5], "unsub_params_two", SubscriptionConfig::default())
+		.await?;
 	tracing::info!("subscription with two params: {:?}", sub_params_two.recv().await);
 
 	Ok(())

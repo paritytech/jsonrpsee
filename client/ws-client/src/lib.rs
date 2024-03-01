@@ -242,18 +242,10 @@ impl WsClientBuilder {
 		R: TransportReceiverT + Send,
 	{
 		let Self {
-			max_concurrent_requests,
-			request_timeout,
-			ping_config,
-			max_buffer_capacity_per_subscription,
-			id_kind,
-			max_log_length,
-			tcp_no_delay,
-			..
+			max_concurrent_requests, request_timeout, ping_config, id_kind, max_log_length, tcp_no_delay, ..
 		} = self;
 
 		let mut client = ClientBuilder::default()
-			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription.get())
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)

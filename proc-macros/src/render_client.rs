@@ -186,6 +186,8 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method*, which is wrapped
 		// into the `Subscription` object.
 		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
+		// TODO: add macro attribute for this.
+		let sub_cfg = self.jrps_client_item(quote! { core::client::SubscriptionConfig::default() });
 		let item = &sub.item;
 		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
 
@@ -198,7 +200,7 @@ impl RpcDescription {
 			#docs
 			async fn #rust_method_name(#rust_method_params) -> #returns {
 				let params = #parameter_builder;
-				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name).await
+				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name, #sub_cfg).await
 			}
 		};
 		Ok(method)

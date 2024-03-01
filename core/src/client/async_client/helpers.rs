@@ -40,7 +40,6 @@ use jsonrpsee_types::{
 	SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
-use std::num::NonZeroUsize;
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -180,7 +179,6 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
 	response: Response<JsonValue>,
-	max_capacity_per_subscription: NonZeroUsize,
 ) -> Result<Option<RequestMessage>, InvalidRequestId> {
 	let response_id = response.id.clone().into_owned();
 	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(Error::Call);
@@ -197,7 +195,7 @@ pub(crate) fn process_single_response(
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
-			let (unsub_id, send_back_oneshot, unsubscribe_method) = manager
+			let (unsub_id, send_back_oneshot, unsubscribe_method, config) = manager
 				.complete_pending_subscription(response_id.clone())
 				.ok_or(InvalidRequestId::NotPendingRequest(response_id.to_string()))?;
 
@@ -215,7 +213,7 @@ pub(crate) fn process_single_response(
 				}
 			};
 
-			let (subscribe_tx, subscribe_rx) = subscription_stream(max_capacity_per_subscription);
+			let (subscribe_tx, subscribe_rx) = subscription_stream(config);
 			if manager
 				.insert_subscription(response_id.clone(), unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
 				.is_ok()

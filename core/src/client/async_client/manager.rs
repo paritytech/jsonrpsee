@@ -38,7 +38,7 @@ use std::{
 };
 
 use crate::{
-	client::{BatchEntry, Error, SubscriptionRx, SubscriptionTx},
+	client::{BatchEntry, Error, SubscriptionConfig, SubscriptionRx, SubscriptionTx},
 	error::RegisterMethodError,
 };
 use jsonrpsee_types::{Id, SubscriptionId};
@@ -49,7 +49,7 @@ use tokio::sync::oneshot;
 #[derive(Debug)]
 enum Kind {
 	PendingMethodCall(PendingCallOneshot),
-	PendingSubscription((RequestId, PendingSubscriptionOneshot, UnsubscribeMethod)),
+	PendingSubscription((RequestId, PendingSubscriptionOneshot, UnsubscribeMethod, SubscriptionConfig)),
 	Subscription((RequestId, SubscriptionSink, UnsubscribeMethod)),
 }
 
@@ -144,14 +144,17 @@ impl RequestManager {
 		unsub_req_id: RequestId,
 		send_back: PendingSubscriptionOneshot,
 		unsubscribe_method: UnsubscribeMethod,
+		config: SubscriptionConfig,
 	) -> Result<(), PendingSubscriptionOneshot> {
 		// The request IDs are not in the manager and the `sub_id` and `unsub_id` are not equal.
 		if !self.requests.contains_key(&sub_req_id)
 			&& !self.requests.contains_key(&unsub_req_id)
 			&& sub_req_id != unsub_req_id
 		{
-			self.requests
-				.insert(sub_req_id, Kind::PendingSubscription((unsub_req_id.clone(), send_back, unsubscribe_method)));
+			self.requests.insert(
+				sub_req_id,
+				Kind::PendingSubscription((unsub_req_id.clone(), send_back, unsubscribe_method, config)),
+			);
 			self.requests.insert(unsub_req_id, Kind::PendingMethodCall(None));
 			Ok(())
 		} else {
@@ -206,7 +209,7 @@ impl RequestManager {
 	pub(crate) fn complete_pending_subscription(
 		&mut self,
 		request_id: RequestId,
-	) -> Option<(RequestId, PendingSubscriptionOneshot, UnsubscribeMethod)> {
+	) -> Option<(RequestId, PendingSubscriptionOneshot, UnsubscribeMethod, SubscriptionConfig)> {
 		match self.requests.entry(request_id) {
 			Entry::Occupied(request) if matches!(request.get(), Kind::PendingSubscription(_)) => {
 				let (_req_id, kind) = request.remove_entry();
@@ -339,16 +342,12 @@ impl RequestManager {
 
 #[cfg(test)]
 mod tests {
-	use std::num::NonZeroUsize;
-
-	use crate::client::subscription_stream;
-
 	use super::{Error, RequestManager};
+	use crate::client::{subscription_stream, SubscriptionConfig};
+
 	use jsonrpsee_types::{Id, SubscriptionId};
 	use serde_json::Value as JsonValue;
 	use tokio::sync::oneshot;
-
-	const ONE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 
 	#[test]
 	fn insert_remove_pending_request_works() {
@@ -362,12 +361,18 @@ mod tests {
 	#[test]
 	fn insert_remove_subscription_works() {
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx, _) = subscription_stream(NonZeroUsize::new(1).unwrap());
+		let (sub_tx, _) = subscription_stream(SubscriptionConfig::default());
 		let mut manager = RequestManager::new();
 		assert!(manager
-			.insert_pending_subscription(Id::Number(1), Id::Number(2), pending_sub_tx, "unsubscribe_method".into())
+			.insert_pending_subscription(
+				Id::Number(1),
+				Id::Number(2),
+				pending_sub_tx,
+				"unsubscribe_method".into(),
+				SubscriptionConfig::default()
+			)
 			.is_ok());
-		let (unsub_req_id, _send_back_oneshot, unsubscribe_method) =
+		let (unsub_req_id, _send_back_oneshot, unsubscribe_method, _) =
 			manager.complete_pending_subscription(Id::Number(1)).unwrap();
 		assert_eq!(unsub_req_id, Id::Number(2));
 		assert!(manager
@@ -394,10 +399,22 @@ mod tests {
 		let (tx4, _) = oneshot::channel();
 		let mut manager = RequestManager::new();
 		assert!(manager
-			.insert_pending_subscription(Id::Str("1".into()), Id::Str("1".into()), tx1, "unsubscribe_method".into())
+			.insert_pending_subscription(
+				Id::Str("1".into()),
+				Id::Str("1".into()),
+				tx1,
+				"unsubscribe_method".into(),
+				SubscriptionConfig::default()
+			)
 			.is_err());
 		assert!(manager
-			.insert_pending_subscription(Id::Str("0".into()), Id::Str("1".into()), tx2, "unsubscribe_method".into())
+			.insert_pending_subscription(
+				Id::Str("0".into()),
+				Id::Str("1".into()),
+				tx2,
+				"unsubscribe_method".into(),
+				SubscriptionConfig::default()
+			)
 			.is_ok());
 		assert!(
 			manager
@@ -405,7 +422,8 @@ mod tests {
 					Id::Str("99".into()),
 					Id::Str("0".into()),
 					tx3,
-					"unsubscribe_method".into()
+					"unsubscribe_method".into(),
+					SubscriptionConfig::default()
 				)
 				.is_err(),
 			"unsub request ID already occupied"
@@ -416,7 +434,8 @@ mod tests {
 					Id::Str("99".into()),
 					Id::Str("1".into()),
 					tx4,
-					"unsubscribe_method".into()
+					"unsubscribe_method".into(),
+					SubscriptionConfig::default()
 				)
 				.is_err(),
 			"sub request ID already occupied"
@@ -428,13 +447,19 @@ mod tests {
 		let (request_tx1, _) = oneshot::channel();
 		let (request_tx2, _) = oneshot::channel();
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx, _) = subscription_stream(NonZeroUsize::new(1).unwrap());
+		let (sub_tx, _) = subscription_stream(SubscriptionConfig::default());
 
 		let mut manager = RequestManager::new();
 		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx1)).is_ok());
 		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx2)).is_err());
 		assert!(manager
-			.insert_pending_subscription(Id::Number(0), Id::Number(1), pending_sub_tx, "beef".to_string())
+			.insert_pending_subscription(
+				Id::Number(0),
+				Id::Number(1),
+				pending_sub_tx,
+				"beef".to_string(),
+				SubscriptionConfig::default()
+			)
 			.is_err());
 		assert!(manager
 			.insert_subscription(
@@ -456,15 +481,16 @@ mod tests {
 		let (request_tx, _) = oneshot::channel();
 		let (pending_sub_tx1, _) = oneshot::channel();
 		let (pending_sub_tx2, _) = oneshot::channel();
-		let (sub_tx, _) = subscription_stream(ONE);
+		let cfg = SubscriptionConfig::default();
+		let (sub_tx, _) = subscription_stream(cfg);
 
 		let mut manager = RequestManager::new();
 		assert!(manager
-			.insert_pending_subscription(Id::Number(99), Id::Number(100), pending_sub_tx1, "beef".to_string())
+			.insert_pending_subscription(Id::Number(99), Id::Number(100), pending_sub_tx1, "beef".to_string(), cfg)
 			.is_ok());
 		assert!(manager.insert_pending_call(Id::Number(99), Some(request_tx)).is_err());
 		assert!(manager
-			.insert_pending_subscription(Id::Number(99), Id::Number(1337), pending_sub_tx2, "vegan".to_string())
+			.insert_pending_subscription(Id::Number(99), Id::Number(1337), pending_sub_tx2, "vegan".to_string(), cfg)
 			.is_err());
 
 		assert!(manager
@@ -486,8 +512,9 @@ mod tests {
 	fn active_subscriptions_faulty() {
 		let (request_tx, _) = oneshot::channel();
 		let (pending_sub_tx, _) = oneshot::channel();
-		let (sub_tx1, _) = subscription_stream(ONE);
-		let (sub_tx2, _) = subscription_stream(ONE);
+		let cfg = SubscriptionConfig::default();
+		let (sub_tx1, _) = subscription_stream(cfg);
+		let (sub_tx2, _) = subscription_stream(cfg);
 
 		let mut manager = RequestManager::new();
 
@@ -498,7 +525,7 @@ mod tests {
 			.insert_subscription(Id::Number(3), Id::Number(4), SubscriptionId::Num(1), sub_tx2, "bibimbap".to_string())
 			.is_err());
 		assert!(manager
-			.insert_pending_subscription(Id::Number(3), Id::Number(4), pending_sub_tx, "beef".to_string())
+			.insert_pending_subscription(Id::Number(3), Id::Number(4), pending_sub_tx, "beef".to_string(), cfg)
 			.is_err());
 		assert!(manager.insert_pending_call(Id::Number(3), Some(request_tx)).is_err());
 
