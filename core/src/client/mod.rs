@@ -276,12 +276,12 @@ impl<Notif> Subscription<Notif> {
 		self.kind.as_ref().expect("only None after unsubscribe; qed")
 	}
 
-	/// Remove all queued subscription messages.
+	/// Drain the subscription.
 	///
 	/// For instance if your subscription lagged behind you may not be interested
-	/// in the old messages and clear the queue instead of re-subscribing.
-	pub fn clear(&mut self) {
-		self.rx.clear();
+	/// in the old messages and drain the queue instead of re-subscribing.
+	pub fn drain(&mut self) {
+		self.rx.drain();
 	}
 
 	/// Change the max capacity of the subscription.
@@ -789,7 +789,7 @@ impl SubscriptionRx {
 		self.inner.len()
 	}
 
-	fn clear(&mut self) {
+	fn drain(&mut self) {
 		self.inner = self.inner.new_receiver();
 	}
 }

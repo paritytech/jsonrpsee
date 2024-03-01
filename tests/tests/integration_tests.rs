@@ -1456,6 +1456,6 @@ async fn ws_client_modify_sub_buffer_len_works() {
 	assert!(matches!(sub.recv().with_default_timeout().await.unwrap(), Err(SubscriptionError::Lagged(_))));
 
 	// Clear the subscription and the next item should be successful.
-	sub.clear();
+	sub.drain();
 	assert!(sub.recv().with_default_timeout().await.unwrap().is_ok());
 }
