@@ -232,18 +232,11 @@ pub enum SubscriptionKind {
 /// poll the client subscription quickly enough, the buffer may fill
 /// up, which will result in messages being lost.
 ///
-/// If that occurs, an error [`SubscriptionError::Lagged`] is emitted.
-/// to indicate the n oldest messages were replaced/removed by newer messages.
-/// It still possibe to use the subscription after it has lagged and the subsequent
-/// read operation will return the oldest message in the buffer but
-/// without the replaced/removed messages.
+/// If that occurs, an error [`SubscriptionError::TooSlow`] is emitted.
+/// to indicate the at least one message was dropped.
 ///
-/// Thus, it's application dependent and if losing message is not acceptable
-/// just drop the subscription and create a new subscription.
-///
-/// To avoid `Lagging` from happening you may increase the buffer capacity
-/// by [`ClientBuilder::max_buffer_capacity_per_subscription`] or ensure that [`Subscription::next`]
-/// is polled often enough such as in a separate tokio task.
+/// The subscription itself has configuration how to deal with
+/// lagging see [`SubscriptionConfig`] for that.
 ///
 /// ## Connection closed
 ///
@@ -281,9 +274,6 @@ impl<Notif> Subscription<Notif> {
 	}
 
 	/// Drain the subscription.
-	///
-	/// For instance if your subscription lagged behind you may not be interested
-	/// in the old messages and drain the queue instead of re-subscribing.
 	pub fn drain(&mut self) {
 		self.rx.drain();
 	}
@@ -296,6 +286,11 @@ impl<Notif> Subscription<Notif> {
 	/// Get the number of unread subscription messages.
 	pub fn len(&self) -> usize {
 		self.rx.len()
+	}
+
+	/// Returns whether the subscription queue is full.
+	pub fn is_full(&self) -> bool {
+		self.len() >= self.capacity()
 	}
 
 	/// Returns whether the subscription queue is empty.
@@ -327,11 +322,7 @@ impl<Notif> Subscription<Notif> {
 }
 
 impl<Notif: DeserializeOwned> Subscription<Notif> {
-	/// Receive the next notification from the stream.
-	///
-	/// This is similar to [`Subscription::next`] but
-	/// it returns an additional error [`SubscriptionError::Lagged`]
-	/// if a subscription message was replaced by a new message.
+	/// Receive the next subscription notification.
 	///
 	/// For further documentation see [`Subscription`].
 	pub async fn recv(&mut self) -> Result<Notif, SubscriptionError> {
@@ -437,9 +428,6 @@ pub enum SubscriptionError {
 	/// The subscription was closed because the connection was closed.
 	#[error("The subscription was closed")]
 	Closed,
-	/// Drained
-	#[error("The subscription was too slow and was drained")]
-	Drained,
 	/// The subscription notification parsing failed.
 	#[error("{0}")]
 	Parse(#[from] serde_json::Error),
@@ -728,9 +716,7 @@ impl SubscriptionTx {
 				}
 				InnerStrategy::DropOldest => unreachable!("Drop oldest will remove the oldest item; qed"),
 			},
-			// Only closed is possible because the receiver is never deactived and overflowing-mode
-			// is enabled.
-			Err(TrySendError::Inactive(_)) => unreachable!("Not possible to inactivate the Receiver; qed"),
+			Err(TrySendError::Inactive(_)) => unreachable!("Receiver never deactived; qed"),
 			Err(TrySendError::Closed(_)) => Err(Closed),
 		}
 	}
@@ -766,7 +752,7 @@ impl SubscriptionRx {
 
 				if drain {
 					self.drain();
-					return Err(SubscriptionError::Drained);
+					return Err(SubscriptionError::TooSlow);
 				}
 			}
 			InnerStrategy::DropLatest(full) => {
@@ -819,7 +805,7 @@ impl Stream for SubscriptionRx {
 pub(crate) fn subscription_stream(config: SubscriptionConfig) -> (SubscriptionTx, SubscriptionRx) {
 	let (mut tx, rx) = async_broadcast::broadcast(config.max_capacity);
 
-	if let SubscriptionLaggingStrategy::DropOldest = config.strategy {
+	if let LaggingStrategy::DropOldest = config.strategy {
 		tx.set_overflow(true);
 	}
 
@@ -831,43 +817,53 @@ pub(crate) fn subscription_stream(config: SubscriptionConfig) -> (SubscriptionTx
 	)
 }
 
-/// All the subscription messages from the server must be kept in a buffer in the client
-/// until they are read by polling the [`Subscription`]. If you don't
-/// poll the client subscription quickly enough, the buffer may fill
-/// up, which will result in messages being lost.
+/// Individual subscription configuration.
 ///
-/// For such cases you may decide to increase the subscription buffer by using
-/// this API.
+/// Subscriptions are implemented on top of a bounded channel which may suffer from
+/// slow receiver problem" where it's an item can't fit in the buffer.
+///
+/// By this configuration it's possible to configure such scearios such
+/// how big the max buffer capacity, whether it's okay to drop item and similar.
+///
+/// See [`LaggingStrategy`] for more information about different strategies to use.
 #[derive(Debug, Copy, Clone)]
 pub struct SubscriptionConfig {
 	max_capacity: usize,
-	strategy: SubscriptionLaggingStrategy,
+	strategy: LaggingStrategy,
 }
 
 impl Default for SubscriptionConfig {
 	fn default() -> Self {
-		Self { max_capacity: 16, strategy: SubscriptionLaggingStrategy::Close }
+		Self { max_capacity: 16, strategy: LaggingStrategy::Close }
 	}
 }
 
 impl SubscriptionConfig {
+	/// Create new [`SubscriptionConfig`]
 	pub fn new() -> Self {
 		Self::default()
 	}
 
-	pub fn max_capacity(mut self, max_cap: usize) -> Self {
+	/// Set the capacity for the subscription, this will allocate buffer with the capacity.
+	///
+	/// # Panics
+	///
+	/// This method panics if `capacity == 0`
+	pub fn set_capacity(mut self, max_cap: usize) -> Self {
 		self.max_capacity = max_cap;
 		self
 	}
 
-	pub fn lagging_strategy(mut self, strategy: SubscriptionLaggingStrategy) -> Self {
+	/// The subscription may suffer from the slow-receiver problem
+	pub fn set_lagging_strategy(mut self, strategy: LaggingStrategy) -> Self {
 		self.strategy = strategy;
 		self
 	}
 }
 
+/// Strategy to use when a message could not be handled
 #[derive(Debug, Copy, Clone)]
-pub enum SubscriptionLaggingStrategy {
+pub enum LaggingStrategy {
 	/// If the subscription can't keep up with the server
 	/// the oldest message is replaced/removed.
 	DropOldest,
@@ -882,19 +878,19 @@ pub enum SubscriptionLaggingStrategy {
 	Drain,
 }
 
-impl From<SubscriptionLaggingStrategy> for InnerStrategy {
-	fn from(value: SubscriptionLaggingStrategy) -> Self {
+impl From<LaggingStrategy> for InnerStrategy {
+	fn from(value: LaggingStrategy) -> Self {
 		match value {
-			SubscriptionLaggingStrategy::Close => Self::Close,
-			SubscriptionLaggingStrategy::Drain => Self::Drain(Arc::new(Mutex::new(false))),
-			SubscriptionLaggingStrategy::DropLatest => Self::DropLatest(Arc::new(Mutex::new(false))),
-			SubscriptionLaggingStrategy::DropOldest => Self::DropOldest,
+			LaggingStrategy::Close => Self::Close,
+			LaggingStrategy::Drain => Self::Drain(Arc::new(Mutex::new(false))),
+			LaggingStrategy::DropLatest => Self::DropLatest(Arc::new(Mutex::new(false))),
+			LaggingStrategy::DropOldest => Self::DropOldest,
 		}
 	}
 }
 
 #[derive(Debug, Clone)]
-pub enum InnerStrategy {
+enum InnerStrategy {
 	/// If the subscription can't keep up with the server
 	/// the oldest message is replaced/removed.
 	DropOldest,
@@ -912,7 +908,7 @@ pub enum InnerStrategy {
 #[cfg(test)]
 mod tests {
 	use super::{subscription_stream, IdKind, RequestIdManager};
-	use crate::client::{SubscriptionConfig, SubscriptionError};
+	use crate::client::{LaggingStrategy, SubscriptionConfig, SubscriptionError};
 
 	#[test]
 	fn request_id_guard_works() {
@@ -930,7 +926,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn subscription_channel_works() {
-		let (mut tx, mut rx) = subscription_stream(SubscriptionConfig::default().max_capacity(16));
+		let (mut tx, mut rx) = subscription_stream(SubscriptionConfig::default().set_capacity(16));
 
 		for _ in 0..16 {
 			let res = tx.send(serde_json::json! { "foo"}).unwrap();
@@ -953,8 +949,8 @@ mod tests {
 	async fn subscription_drop_oldest_works() {
 		let (mut tx, mut rx) = subscription_stream(
 			SubscriptionConfig::default()
-				.max_capacity(1)
-				.lagging_strategy(crate::client::SubscriptionLaggingStrategy::DropOldest),
+				.set_capacity(1)
+				.set_lagging_strategy(crate::client::LaggingStrategy::DropOldest),
 		);
 
 		assert!(tx.send(serde_json::json! { 1 }).unwrap().is_none());
@@ -968,9 +964,7 @@ mod tests {
 	#[tokio::test]
 	async fn subscription_drop_newest_works() {
 		let (mut tx, mut rx) = subscription_stream(
-			SubscriptionConfig::default()
-				.max_capacity(1)
-				.lagging_strategy(crate::client::SubscriptionLaggingStrategy::DropLatest),
+			SubscriptionConfig::default().set_capacity(1).set_lagging_strategy(LaggingStrategy::DropLatest),
 		);
 
 		assert!(tx.send(serde_json::json! { 1 }).unwrap().is_none());
@@ -984,16 +978,14 @@ mod tests {
 	#[tokio::test]
 	async fn subscription_drain_when_full() {
 		let (mut tx, mut rx) = subscription_stream(
-			SubscriptionConfig::default()
-				.max_capacity(1)
-				.lagging_strategy(crate::client::SubscriptionLaggingStrategy::Drain),
+			SubscriptionConfig::default().set_capacity(1).set_lagging_strategy(LaggingStrategy::Drain),
 		);
 
 		assert!(tx.send(serde_json::json! { 1 }).unwrap().is_none());
 		let rm = tx.send(serde_json::json! { 2 }).unwrap().unwrap();
 		assert_eq!(serde_json::json!(2), rm);
 
-		assert!(matches!(rx.recv().await, Err(SubscriptionError::Drained)));
+		assert!(matches!(rx.recv().await, Err(SubscriptionError::TooSlow)));
 		assert_eq!(rx.len(), 0);
 	}
 }

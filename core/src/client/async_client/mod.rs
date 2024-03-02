@@ -372,7 +372,6 @@ impl ClientBuilder {
 
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
-		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
@@ -386,7 +385,6 @@ impl ClientBuilder {
 			from_frontend: from_front,
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
-			max_buffer_capacity_per_subscription,
 			ping_interval,
 		}));
 
@@ -395,7 +393,6 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			max_buffer_capacity_per_subscription,
 			inactivity_check,
 			inactivity_stream,
 		}));

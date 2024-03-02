@@ -208,15 +208,14 @@ async fn notification_slow_reader() {
 	.unwrap();
 
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default()
-		.max_buffer_capacity_per_subscription(4)
-		.build(&uri)
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
+	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	let mut nh: Subscription<String> = client
-		.subscribe_to_method("test", SubscriptionConfig::default())
+		.subscribe_to_method(
+			"test",
+			SubscriptionConfig::new()
+				.set_lagging_strategy(jsonrpsee_core::client::LaggingStrategy::DropOldest)
+				.set_capacity(2),
+		)
 		.with_default_timeout()
 		.await
 		.unwrap()

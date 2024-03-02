@@ -41,8 +41,8 @@ use helpers::{
 };
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{
-	ClientT, Error as ClientError, IdKind, Subscription, SubscriptionClientT, SubscriptionConfig, SubscriptionError,
-	SubscriptionLaggingStrategy,
+	ClientT, Error as ClientError, IdKind, LaggingStrategy, Subscription, SubscriptionClientT, SubscriptionConfig,
+	SubscriptionError,
 };
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
@@ -316,7 +316,7 @@ async fn ws_subscription_several_clients_with_drop() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let cfg = SubscriptionConfig::new().max_capacity(u16::MAX as usize);
+	let cfg = SubscriptionConfig::new().set_capacity(u16::MAX as usize);
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
@@ -360,19 +360,19 @@ async fn ws_subscription_several_clients_with_drop() {
 }
 
 #[tokio::test]
-async fn ws_subscription_slow_reader() {
+async fn ws_subscription_slow_reader_drop_oldest() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut hello_sub: Subscription<JsonValue> = client
+	let mut hello_sub: Subscription<usize> = client
 		.subscribe(
-			"subscribe_hello",
+			"subscribe_5_ints",
 			rpc_params![],
-			"unsubscribe_hello",
-			SubscriptionConfig::new().max_capacity(4).lagging_strategy(SubscriptionLaggingStrategy::DropOldest),
+			"unsubscribe_5_ints",
+			SubscriptionConfig::new().set_capacity(2).set_lagging_strategy(LaggingStrategy::DropOldest),
 		)
 		.await
 		.unwrap();
@@ -383,8 +383,90 @@ async fn ws_subscription_slow_reader() {
 	assert!(matches!(hello_sub.recv().await, Err(SubscriptionError::TooSlow)));
 
 	// Ensure that subscription stream yields after lagging.
-	assert!(hello_sub.recv().with_default_timeout().await.unwrap().is_ok());
+	// The stream sends [1, 2, 3, 4, 5] but oldest values are overwritten
+	let res: Vec<usize> = hello_sub.try_collect().await.unwrap();
+	assert_eq!(res, vec![4, 5]);
 	assert!(client.is_connected());
+}
+
+#[tokio::test]
+async fn ws_subscription_slow_reader_drop_newest() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let mut hello_sub: Subscription<usize> = client
+		.subscribe(
+			"subscribe_5_ints",
+			rpc_params![],
+			"unsubscribe_5_ints",
+			SubscriptionConfig::new().set_capacity(2).set_lagging_strategy(LaggingStrategy::DropLatest),
+		)
+		.await
+		.unwrap();
+
+	// Don't read the subscription stream for 2 seconds, should be full now.
+	tokio::time::sleep(Duration::from_secs(2)).await;
+
+	assert!(matches!(hello_sub.recv().await, Err(SubscriptionError::TooSlow)));
+
+	// Ensure that subscription stream yields after lagging.
+	// The stream sends [1, 2, 3, 4, 5] but oldest values are overwritten
+	let res: Vec<usize> = hello_sub.try_collect().await.unwrap();
+	assert_eq!(res, vec![1, 2]);
+	assert!(client.is_connected());
+}
+
+#[tokio::test]
+async fn ws_subscription_slow_reader_close_sub() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let hello_sub: Subscription<usize> = client
+		.subscribe(
+			"subscribe_5_ints",
+			rpc_params![],
+			"unsubscribe_5_ints",
+			SubscriptionConfig::new().set_capacity(2).set_lagging_strategy(LaggingStrategy::Close),
+		)
+		.await
+		.unwrap();
+
+	// Don't read the subscription stream for 2 seconds, should be full now.
+	tokio::time::sleep(Duration::from_secs(2)).await;
+
+	let res: Vec<usize> = hello_sub.try_collect().await.unwrap();
+	assert_eq!(res, vec![1, 2]);
+}
+
+#[tokio::test]
+async fn ws_subscription_slow_reader_drain() {
+	init_logger();
+
+	let server_addr = server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let mut hello_sub: Subscription<usize> = client
+		.subscribe(
+			"subscribe_5_ints",
+			rpc_params![],
+			"unsubscribe_5_ints",
+			SubscriptionConfig::new().set_capacity(2).set_lagging_strategy(LaggingStrategy::Drain),
+		)
+		.await
+		.unwrap();
+
+	// Don't read the subscription stream for 2 seconds, should be full now.
+	tokio::time::sleep(Duration::from_secs(2)).await;
+
+	assert!(matches!(hello_sub.next().await.unwrap(), Err(SubscriptionError::TooSlow)));
+	assert_eq!(hello_sub.len(), 0);
 }
 
 #[tokio::test]
