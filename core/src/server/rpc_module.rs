@@ -80,6 +80,23 @@ pub type MaxResponseSize = usize;
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (String, mpsc::Receiver<String>);
 
+/// The connection details exposed to the server methods.
+pub struct ConnectionDetails {
+	id: ConnectionId,
+}
+
+impl ConnectionDetails {
+	/// Construct a new [`ConnectionDetails`] with the given connection ID.
+	pub(crate) fn new(id: ConnectionId) -> Self {
+		Self { id }
+	}
+
+	/// Get the connection ID.
+	pub fn id(&self) -> ConnectionId {
+		self.id
+	}
+}
+
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
 pub enum MethodsError {
