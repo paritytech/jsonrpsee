@@ -60,7 +60,7 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
-/// Similar to [`SyncMethod`], but represents an asynchronous handler with connection details.
+/// Similar to [`AsyncMethod`], but represents an asynchronous handler with connection details.
 pub type AsyncMethodWithDetails<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionDetails, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Similar to [`SyncMethod`], but represents a raw handler that has access to the connection Id.
