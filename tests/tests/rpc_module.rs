@@ -37,7 +37,6 @@ use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::core::{server::*, RpcResult};
 use jsonrpsee::types::error::{ErrorCode, ErrorObject, INVALID_PARAMS_MSG, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Params, Response, ResponsePayload};
-use jsonrpsee::SubscriptionMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::time::interval;
