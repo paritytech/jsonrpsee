@@ -636,9 +636,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_core::server::RpcModule;
 	///
 	/// let mut module = RpcModule::new(());
-	/// module.register_async_with_details("say_hello", |_params, _connection_details, _ctx| async { "lo" }).unwrap();
+	/// module.register_async_method_with_details("say_hello", |_params, _connection_details, _ctx| async { "lo" }).unwrap();
 	/// ```
-	pub fn register_async_with_details<R, Fun, Fut>(
+	pub fn register_async_method_with_details<R, Fun, Fut>(
 		&mut self,
 		method_name: &'static str,
 		callback: Fun,

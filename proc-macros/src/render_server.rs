@@ -142,7 +142,7 @@ impl RpcDescription {
 
 				if method.raw_method {
 					handle_register_result(quote! {
-						rpc.register_async_with_details(#rpc_method_name, |params, connection_details, context| async move {
+						rpc.register_async_method_with_details(#rpc_method_name, |params, connection_details, context| async move {
 							#parsing
 							#into_response::into_response(context.as_ref().#rust_method_name(connection_details, #params_seq).await)
 						})

@@ -138,7 +138,10 @@ pub async fn server() -> SocketAddr {
 	module.register_method("say_hello", |_, _| "hello").unwrap();
 
 	module
-		.register_async_with_details("raw_method", |_, connection_details, _| async move { connection_details.id() })
+		.register_async_method_with_details(
+			"raw_method",
+			|_, connection_details, _| async move { connection_details.id() },
+		)
 		.unwrap();
 
 	module
