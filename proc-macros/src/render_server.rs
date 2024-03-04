@@ -65,8 +65,8 @@ impl RpcDescription {
 
 			if method.raw_method {
 				let context_ty = self.jrps_server_item(quote! { ConnectionDetails });
-				// Add `connection ID` as the second input parameter to the signature.
-				let context: syn::FnArg = syn::parse_quote!(connection_context: #context_ty);
+				// Add `ConnectionDetails` as the second parameter to the signature.
+				let context: syn::FnArg = syn::parse_quote!(connection_details: #context_ty);
 				method_sig.sig.inputs.insert(1, context);
 			}
 
