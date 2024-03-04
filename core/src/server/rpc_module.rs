@@ -91,34 +91,15 @@ pub struct ConnectionDetails {
 }
 
 impl ConnectionDetails {
-	/// Construct a new [`ConnectionDetailsBuilder`].
-	pub fn builder() -> ConnectionDetailsBuilder {
-		ConnectionDetailsBuilder { id: 0 }
+	/// Construct a new [`ConnectionDetails`].
+	#[doc(hidden)]
+	pub fn _new(id: ConnectionId) -> ConnectionDetails {
+		Self { id }
 	}
 
 	/// Get the connection ID.
 	pub fn id(&self) -> ConnectionId {
 		self.id
-	}
-}
-
-#[derive(Debug, Clone)]
-#[allow(missing_copy_implementations)]
-/// The connection details exposed to the server methods.
-pub struct ConnectionDetailsBuilder {
-	id: ConnectionId,
-}
-
-impl ConnectionDetailsBuilder {
-	/// Set the connection ID.
-	pub fn id(mut self, id: ConnectionId) -> Self {
-		self.id = id;
-		self
-	}
-
-	/// Build the [`ConnectionDetails`].
-	pub fn build(self) -> ConnectionDetails {
-		ConnectionDetails { id: self.id }
 	}
 }
 
@@ -402,7 +383,7 @@ impl Methods {
 			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX),
 			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
 			Some(MethodCallback::AsyncWithDetails(cb)) => {
-				(cb)(id.into_owned(), params.into_owned(), ConnectionDetails::builder().build(), usize::MAX).await
+				(cb)(id.into_owned(), params.into_owned(), ConnectionDetails::_new(0), usize::MAX).await
 			}
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =

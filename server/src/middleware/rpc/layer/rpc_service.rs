@@ -99,8 +99,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					let id = id.into_owned();
 
 					// Note: Add the `Request::extensions` to the connection details when available here.
-					let connection_details = ConnectionDetails::builder().id(conn_id).build();
-					let fut = (callback)(id, params, connection_details, max_response_body_size);
+					let fut = (callback)(id, params, ConnectionDetails::_new(conn_id), max_response_body_size);
 					ResponseFuture::future(fut)
 				}
 				MethodCallback::Sync(callback) => {
