@@ -31,7 +31,7 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ConnectionId;
+use jsonrpsee::ConnectionDetails;
 
 #[rpc(server, client)]
 pub trait Rpc {
@@ -54,12 +54,12 @@ pub struct RpcServerImpl;
 impl RpcServer for RpcServerImpl {
 	async fn raw_method(
 		&self,
-		connection_id: ConnectionId,
+		connection_details: ConnectionDetails,
 		_first_param: usize,
 		_second_param: u16,
 	) -> Result<usize, ErrorObjectOwned> {
 		// Return the connection ID from which this method was called.
-		Ok(connection_id)
+		Ok(connection_details.id())
 	}
 
 	fn normal_method(&self, _first_param: usize, _second_param: u16) -> Result<usize, ErrorObjectOwned> {

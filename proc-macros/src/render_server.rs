@@ -64,7 +64,7 @@ impl RpcDescription {
 			let mut method_sig = method.signature.clone();
 
 			if method.raw_method {
-				let context_ty = self.jrps_server_item(quote! { ConnectionId });
+				let context_ty = self.jrps_server_item(quote! { ConnectionDetails });
 				// Add `connection ID` as the second input parameter to the signature.
 				let context: syn::FnArg = syn::parse_quote!(connection_context: #context_ty);
 				method_sig.sig.inputs.insert(1, context);
@@ -142,9 +142,9 @@ impl RpcDescription {
 
 				if method.raw_method {
 					handle_register_result(quote! {
-						rpc.register_async_with_details(#rpc_method_name, |params, connection_id, context| async move {
+						rpc.register_async_with_details(#rpc_method_name, |params, connection_details, context| async move {
 							#parsing
-							#into_response::into_response(context.as_ref().#rust_method_name(connection_id, #params_seq).await)
+							#into_response::into_response(context.as_ref().#rust_method_name(connection_details, #params_seq).await)
 						})
 					})
 				} else {

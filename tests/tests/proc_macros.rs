@@ -49,6 +49,7 @@ mod rpc_impl {
 	use jsonrpsee::core::{async_trait, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
+	use jsonrpsee::ConnectionDetails;
 
 	pub struct CustomSubscriptionRet;
 
@@ -165,8 +166,8 @@ mod rpc_impl {
 			Ok(10)
 		}
 
-		async fn async_raw_method(&self, connection_id: usize) -> Result<usize, ErrorObjectOwned> {
-			Ok(connection_id)
+		async fn async_raw_method(&self, connection_details: ConnectionDetails) -> Result<usize, ErrorObjectOwned> {
+			Ok(connection_details.id())
 		}
 
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {

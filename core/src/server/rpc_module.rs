@@ -655,7 +655,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_core::server::RpcModule;
 	///
 	/// let mut module = RpcModule::new(());
-	/// module.register_async_with_details("say_hello", |_params, _connection_id, _ctx| async { "lo" }).unwrap();
+	/// module.register_async_with_details("say_hello", |_params, _connection_details, _ctx| async { "lo" }).unwrap();
 	/// ```
 	pub fn register_async_with_details<R, Fun, Fut>(
 		&mut self,
@@ -665,17 +665,17 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		R: IntoResponse + 'static,
 		Fut: Future<Output = R> + Send,
-		Fun: (Fn(Params<'static>, ConnectionId, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
+		Fun: (Fn(Params<'static>, ConnectionDetails, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Async(Arc::new(move |id, params, connection_id, max_response_size| {
+			MethodCallback::AsyncWithDetails(Arc::new(move |id, params, connection_details, max_response_size| {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
 				let future = async move {
-					let rp = callback(params, connection_id, ctx).await.into_response();
+					let rp = callback(params, connection_details, ctx).await.into_response();
 					MethodResponse::response(id, rp, max_response_size)
 				};
 				future.boxed()
