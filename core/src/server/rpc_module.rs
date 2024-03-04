@@ -60,6 +60,9 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
+/// Similar to [`SyncMethod`], but represents an asynchronous handler with connection details.
+pub type AsyncMethodWithDetails<'a> =
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionDetails, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Similar to [`SyncMethod`], but represents a raw handler that has access to the connection Id.
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
@@ -80,20 +83,42 @@ pub type MaxResponseSize = usize;
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (String, mpsc::Receiver<String>);
 
+#[derive(Debug, Clone)]
+#[allow(missing_copy_implementations)]
 /// The connection details exposed to the server methods.
 pub struct ConnectionDetails {
 	id: ConnectionId,
 }
 
 impl ConnectionDetails {
-	/// Construct a new [`ConnectionDetails`] with the given connection ID.
-	pub(crate) fn new(id: ConnectionId) -> Self {
-		Self { id }
+	/// Construct a new [`ConnectionDetailsBuilder`].
+	pub fn builder() -> ConnectionDetailsBuilder {
+		ConnectionDetailsBuilder { id: 0 }
 	}
 
 	/// Get the connection ID.
 	pub fn id(&self) -> ConnectionId {
 		self.id
+	}
+}
+
+#[derive(Debug, Clone)]
+#[allow(missing_copy_implementations)]
+/// The connection details exposed to the server methods.
+pub struct ConnectionDetailsBuilder {
+	id: ConnectionId,
+}
+
+impl ConnectionDetailsBuilder {
+	/// Set the connection ID.
+	pub fn id(mut self, id: ConnectionId) -> Self {
+		self.id = id;
+		self
+	}
+
+	/// Build the [`ConnectionDetails`].
+	pub fn build(self) -> ConnectionDetails {
+		ConnectionDetails { id: self.id }
 	}
 }
 
@@ -149,6 +174,8 @@ pub enum MethodCallback {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
+	/// Asynchronous method handler with details.
+	AsyncWithDetails(AsyncMethodWithDetails<'static>),
 	/// Subscription method handler.
 	Subscription(SubscriptionMethod<'static>),
 	/// Unsubscription method handler.
@@ -202,6 +229,7 @@ impl Debug for MethodCallback {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Async(_) => write!(f, "Async"),
+			Self::AsyncWithDetails(_) => write!(f, "AsyncWithDetails"),
 			Self::Sync(_) => write!(f, "Sync"),
 			Self::Subscription(_) => write!(f, "Subscription"),
 			Self::Unsubscription(_) => write!(f, "Unsubscription"),
@@ -373,6 +401,9 @@ impl Methods {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
 			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX),
 			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
+			Some(MethodCallback::AsyncWithDetails(cb)) => {
+				(cb)(id.into_owned(), params.into_owned(), ConnectionDetails::builder().build(), usize::MAX).await
+			}
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
