@@ -13,7 +13,7 @@ We plan to extend this functionality in jsonrpsee v1.0, although this will neces
 - server: Register raw method with connection ID ([#1297](https://github.com/paritytech/jsonrpsee/pull/1297))
 
 ### [Changed]
-- Update Syn 1.0 -> 2.0  ([#1304](https://github.com/paritytech/jsonrpsee/pull/1304))
+- Update Syn 1.0 -> 2.0 ([#1304](https://github.com/paritytech/jsonrpsee/pull/1304))
 
 ## [v0.22.1] - 2024-02-19
 
