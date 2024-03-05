@@ -101,7 +101,6 @@ impl ConnectionDetails {
 	}
 
 	/// Get the connection ID.
-	#[doc(hidden)]
 	pub fn id(&self) -> ConnectionId {
 		self.id
 	}
