@@ -160,6 +160,7 @@ pub enum MethodCallback {
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
 	/// Asynchronous method handler with details.
+    #[doc(hidden)]
 	AsyncWithDetails(AsyncMethodWithDetails<'static>),
 	/// Subscription method handler.
 	Subscription(SubscriptionMethod<'static>),
