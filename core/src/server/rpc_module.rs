@@ -60,7 +60,9 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
+
 /// Similar to [`AsyncMethod`], but represents an asynchronous handler with connection details.
+#[doc(hidden)]
 pub type AsyncMethodWithDetails<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionDetails, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Similar to [`SyncMethod`], but represents a raw handler that has access to the connection Id.
@@ -83,9 +85,10 @@ pub type MaxResponseSize = usize;
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (String, mpsc::Receiver<String>);
 
+/// The connection details exposed to the server methods.
 #[derive(Debug, Clone)]
 #[allow(missing_copy_implementations)]
-/// The connection details exposed to the server methods.
+#[doc(hidden)]
 pub struct ConnectionDetails {
 	id: ConnectionId,
 }
@@ -98,6 +101,7 @@ impl ConnectionDetails {
 	}
 
 	/// Get the connection ID.
+	#[doc(hidden)]
 	pub fn id(&self) -> ConnectionId {
 		self.id
 	}
@@ -638,6 +642,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// let mut module = RpcModule::new(());
 	/// module.register_async_method_with_details("say_hello", |_params, _connection_details, _ctx| async { "lo" }).unwrap();
 	/// ```
+	#[doc(hidden)]
 	pub fn register_async_method_with_details<R, Fun, Fut>(
 		&mut self,
 		method_name: &'static str,
