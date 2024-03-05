@@ -83,7 +83,6 @@ async fn run_server() -> anyhow::Result<(ServerHandle, Addrs)> {
 	// given an RpcModule and the stop handle.
 	let svc = jsonrpsee::server::Server::builder().to_service_builder().build(module, stop_hdl.clone());
 
-	//
 	tokio::spawn(async move {
 		loop {
 			// The `tokio::select!` macro is used to wait for either of the
