@@ -7,7 +7,6 @@ The format is based on [Keep a Changelog].
 ## [v0.22.2] - 2024-03-05
 
 This is a small patch release that exposes the connection details in server method implementations without breaking changes.
-Currently, users can only retrieve the connection ID from these details.
 We plan to extend this functionality in jsonrpsee v1.0, although this will necessitate a breaking change.
 
 ### [Added]
