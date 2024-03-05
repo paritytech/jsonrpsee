@@ -4,6 +4,18 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.22.2] - 2024-03-05
+
+This is a small patch release that exposes the connection details to server methods without breaking changes.
+Currently, users can only retrieve the connection ID from these details.
+We plan to extend this functionality in jsonrpsee v1.0, although this will necessitate a breaking change.
+
+### [Added]
+- server: Register raw method with connection ID  ([#1297](https://github.com/paritytech/jsonrpsee/pull/1297))
+
+### [Changed]
+- Update Syn 1.0 -> 2.0  ([#1304](https://github.com/paritytech/jsonrpsee/pull/1304))
+
 ## [v0.22.1] - 2024-02-19
 
 This is a small patch release that internally changes `AtomicU64` to `AtomicUsize`
