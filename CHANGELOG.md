@@ -10,7 +10,7 @@ This is a small patch release that exposes the connection details in server meth
 We plan to extend this functionality in jsonrpsee v1.0, although this will necessitate a breaking change.
 
 ### [Added]
-- server: Register raw method with connection ID  ([#1297](https://github.com/paritytech/jsonrpsee/pull/1297))
+- server: Register raw method with connection ID ([#1297](https://github.com/paritytech/jsonrpsee/pull/1297))
 
 ### [Changed]
 - Update Syn 1.0 -> 2.0  ([#1304](https://github.com/paritytech/jsonrpsee/pull/1304))
