@@ -65,7 +65,6 @@ pub type AsyncMethod<'a> =
 #[doc(hidden)]
 pub type AsyncMethodWithDetails<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionDetails, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
-/// Similar to [`SyncMethod`], but represents a raw handler that has access to the connection Id.
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
