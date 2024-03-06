@@ -24,14 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::client::async_client::LOG_TARGET;
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
-use crate::client::{RequestMessage, TransportSenderT, Error};
+use crate::client::async_client::LOG_TARGET;
+use crate::client::{Error, RequestMessage, TransportSenderT};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
-use futures_util::future::{self, Either};
+use futures_util::future::{self, BoxFuture, Either};
+use futures_util::FutureExt;
 use tokio::sync::{mpsc, oneshot};
 
 use jsonrpsee_types::response::SubscriptionError;
@@ -95,30 +96,31 @@ pub(crate) fn process_batch_response(
 /// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
-	response: SubscriptionResponse<JsonValue>,
-) -> Result<(), Option<SubscriptionId<'static>>> {
+	response: SubscriptionResponse<'_, JsonValue>,
+) -> BoxFuture<'static, Result<(), SubscriptionId<'static>>> {
 	let sub_id = response.params.subscription.into_owned();
-	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
-		Some(request_id) => request_id,
-		None => {
-			tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
-			return Err(None);
-		}
+	let Some(request_id) = manager.get_request_id_by_subscription_id(&sub_id) else {
+		tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
+		return async { Ok(()) }.boxed();
 	};
 
-	match manager.as_subscription_mut(&request_id) {
-		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
-			Ok(()) => Ok(()),
-			Err(err) => {
-				tracing::error!(target: LOG_TARGET, "Dropping subscription {:?} error: {:?}", sub_id, err);
-				Err(Some(sub_id))
-			}
-		},
-		None => {
+	let maybe_sub = manager.as_subscription_mut(&request_id).cloned();
+
+	let fut = async move {
+		let Some(sub) = maybe_sub else {
 			tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
-			Err(None)
+			return Ok(());
+		};
+
+		if sub.send(response.params.result).await.is_ok() {
+			Ok(())
+		} else {
+			Err(sub_id)
 		}
 	}
+	.boxed();
+
+	fut
 }
 
 /// Attempts to close a subscription when a [`SubscriptionError`] is received.
@@ -171,7 +173,6 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
 	response: Response<JsonValue>,
-	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, InvalidRequestId> {
 	let response_id = response.id.clone().into_owned();
 	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(Error::Call);
@@ -206,7 +207,7 @@ pub(crate) fn process_single_response(
 				}
 			};
 
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
+			let (subscribe_tx, subscribe_rx) = mpsc::channel(1);
 			if manager
 				.insert_subscription(response_id.clone(), unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
 				.is_ok()

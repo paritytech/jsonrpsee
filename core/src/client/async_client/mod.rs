@@ -208,7 +208,6 @@ enum ReadErrorOnce {
 pub struct ClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
-	max_buffer_capacity_per_subscription: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
 	ping_config: Option<PingConfig>,
@@ -220,7 +219,6 @@ impl Default for ClientBuilder {
 		Self {
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
-			max_buffer_capacity_per_subscription: 1024,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
 			ping_config: None,
@@ -244,22 +242,6 @@ impl ClientBuilder {
 	/// Set max concurrent requests (default is 256).
 	pub fn max_concurrent_requests(mut self, max: usize) -> Self {
 		self.max_concurrent_requests = max;
-		self
-	}
-
-	/// Set max buffer capacity for each subscription; when the capacity is exceeded the subscription
-	/// will be dropped (default is 1024).
-	///
-	/// You may prevent the subscription from being dropped by polling often enough
-	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) such that
-	/// it can keep with the rate as server produces new items on the subscription.
-	///
-	///
-	/// # Panics
-	///
-	/// This function panics if `max` is 0.
-	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
-		self.max_buffer_capacity_per_subscription = max;
 		self
 	}
 
@@ -319,7 +301,6 @@ impl ClientBuilder {
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
-		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
@@ -352,7 +333,6 @@ impl ClientBuilder {
 			from_frontend: from_front,
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
-			max_buffer_capacity_per_subscription,
 			ping_interval,
 		}));
 
@@ -361,7 +341,6 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
 			inactivity_check,
 			inactivity_stream,
 		}));
@@ -392,7 +371,6 @@ impl ClientBuilder {
 
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
-		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
 		let manager = ThreadSafeRequestManager::new();
@@ -406,7 +384,6 @@ impl ClientBuilder {
 			from_frontend: from_front,
 			close_tx: send_receive_task_sync_tx.clone(),
 			manager: manager.clone(),
-			max_buffer_capacity_per_subscription,
 			ping_interval,
 		}));
 
@@ -415,7 +392,6 @@ impl ClientBuilder {
 			close_tx: send_receive_task_sync_tx,
 			to_send_task: to_back.clone(),
 			manager,
-			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
 			inactivity_check,
 			inactivity_stream,
 		}));
@@ -720,25 +696,19 @@ impl SubscriptionClientT for Client {
 /// Handle backend messages.
 ///
 /// Returns an error if the main background loop should be terminated.
-fn handle_backend_messages<R: TransportReceiverT>(
+async fn handle_backend_messages<R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
 	manager: &ThreadSafeRequestManager,
-	max_buffer_capacity_per_subscription: usize,
 ) -> Result<Option<FrontToBack>, Error> {
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
-	fn handle_recv_message(
-		raw: &[u8],
-		manager: &ThreadSafeRequestManager,
-		max_buffer_capacity_per_subscription: usize,
-	) -> Result<Option<FrontToBack>, Error> {
+	async fn handle_recv_message(raw: &[u8], manager: &ThreadSafeRequestManager) -> Result<Option<FrontToBack>, Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
 
 		match first_non_whitespace {
 			Some(b'{') => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
-					let maybe_unsub =
-						process_single_response(&mut manager.lock(), single, max_buffer_capacity_per_subscription)?;
+					let maybe_unsub = process_single_response(&mut manager.lock(), single)?;
 
 					if let Some(unsub) = maybe_unsub {
 						return Ok(Some(FrontToBack::Request(unsub)));
@@ -746,7 +716,9 @@ fn handle_backend_messages<R: TransportReceiverT>(
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
-					if let Err(Some(sub_id)) = process_subscription_response(&mut manager.lock(), response) {
+					let fut = process_subscription_response(&mut manager.lock(), response);
+
+					if let Err(sub_id) = fut.await {
 						return Ok(Some(FrontToBack::SubscriptionClosed(sub_id)));
 					}
 				}
@@ -812,12 +784,8 @@ fn handle_backend_messages<R: TransportReceiverT>(
 			tracing::debug!(target: LOG_TARGET, "Received pong");
 			Ok(None)
 		}
-		Some(Ok(ReceivedMessage::Bytes(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)
-		}
-		Some(Ok(ReceivedMessage::Text(raw))) => {
-			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)
-		}
+		Some(Ok(ReceivedMessage::Bytes(raw))) => handle_recv_message(raw.as_ref(), manager).await,
+		Some(Ok(ReceivedMessage::Text(raw))) => handle_recv_message(raw.as_ref(), manager).await,
 		Some(Err(e)) => Err(Error::Transport(e.into())),
 		None => Err(Error::Custom("TransportReceiver dropped".into())),
 	}
@@ -828,7 +796,6 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 	message: FrontToBack,
 	manager: &ThreadSafeRequestManager,
 	sender: &mut S,
-	max_buffer_capacity_per_subscription: usize,
 ) -> Result<(), S::Error> {
 	match message {
 		FrontToBack::Batch(batch) => {
@@ -896,7 +863,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
+			let (subscribe_tx, subscribe_rx) = mpsc::channel(1);
 
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
@@ -929,7 +896,6 @@ struct SendTaskParams<T: TransportSenderT, S> {
 	from_frontend: mpsc::Receiver<FrontToBack>,
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	manager: ThreadSafeRequestManager,
-	max_buffer_capacity_per_subscription: usize,
 	ping_interval: IntervalStream<S>,
 }
 
@@ -938,14 +904,7 @@ where
 	T: TransportSenderT,
 	S: Stream + Unpin,
 {
-	let SendTaskParams {
-		mut sender,
-		mut from_frontend,
-		close_tx,
-		manager,
-		max_buffer_capacity_per_subscription,
-		mut ping_interval,
-	} = params;
+	let SendTaskParams { mut sender, mut from_frontend, close_tx, manager, mut ping_interval } = params;
 
 	// This is safe because `tokio::time::Interval`, `tokio::mpsc::Sender` and `tokio::mpsc::Receiver`
 	// are cancel-safe.
@@ -959,7 +918,7 @@ where
 				};
 
 				if let Err(e) =
-					handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
+					handle_frontend_messages(msg, &manager, &mut sender).await
 				{
 					tracing::error!(target: LOG_TARGET, "ws send failed: {e}");
 					break Err(Error::Transport(e.into()));
@@ -984,7 +943,6 @@ struct ReadTaskParams<R: TransportReceiverT, S> {
 	close_tx: mpsc::Sender<Result<(), Error>>,
 	to_send_task: mpsc::Sender<FrontToBack>,
 	manager: ThreadSafeRequestManager,
-	max_buffer_capacity_per_subscription: usize,
 	inactivity_check: InactivityCheck,
 	inactivity_stream: IntervalStream<S>,
 }
@@ -994,15 +952,8 @@ where
 	R: TransportReceiverT,
 	S: Stream + Unpin,
 {
-	let ReadTaskParams {
-		receiver,
-		close_tx,
-		to_send_task,
-		manager,
-		max_buffer_capacity_per_subscription,
-		mut inactivity_check,
-		mut inactivity_stream,
-	} = params;
+	let ReadTaskParams { receiver, close_tx, to_send_task, manager, mut inactivity_check, mut inactivity_stream } =
+		params;
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
@@ -1031,7 +982,7 @@ where
 				inactivity_check.mark_as_active();
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
-				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
+				match handle_backend_messages::<R>(Some(msg), &manager).await {
 					Ok(Some(msg)) => {
 						pending_unsubscribes.push(to_send_task.send(msg));
 					}

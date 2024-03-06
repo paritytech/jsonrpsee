@@ -86,7 +86,6 @@ pub struct WsClientBuilder {
 	ping_config: Option<PingConfig>,
 	headers: http::HeaderMap,
 	max_concurrent_requests: usize,
-	max_buffer_capacity_per_subscription: usize,
 	max_redirections: usize,
 	id_kind: IdKind,
 	max_log_length: u32,
@@ -104,7 +103,6 @@ impl Default for WsClientBuilder {
 			ping_config: None,
 			headers: HeaderMap::new(),
 			max_concurrent_requests: 256,
-			max_buffer_capacity_per_subscription: 1024,
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
@@ -197,12 +195,6 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// See documentation [`ClientBuilder::max_buffer_capacity_per_subscription`] (default is 1024).
-	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
-		self.max_buffer_capacity_per_subscription = max;
-		self
-	}
-
 	/// See documentation [`WsTransportClientBuilder::max_redirections`] (default is 5).
 	pub fn max_redirections(mut self, redirect: usize) -> Self {
 		self.max_redirections = redirect;
@@ -240,18 +232,10 @@ impl WsClientBuilder {
 		R: TransportReceiverT + Send,
 	{
 		let Self {
-			max_concurrent_requests,
-			request_timeout,
-			ping_config,
-			max_buffer_capacity_per_subscription,
-			id_kind,
-			max_log_length,
-			tcp_no_delay,
-			..
+			max_concurrent_requests, request_timeout, ping_config, id_kind, max_log_length, tcp_no_delay, ..
 		} = self;
 
 		let mut client = ClientBuilder::default()
-			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription)
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)

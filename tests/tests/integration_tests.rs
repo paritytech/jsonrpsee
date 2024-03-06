@@ -70,10 +70,14 @@ async fn ws_subscription_works() {
 		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
-		let hello = hello_sub.next().await.unwrap().unwrap();
-		let foo = foo_sub.next().await.unwrap().unwrap();
-		assert_eq!(hello, "hello from subscription".to_string());
-		assert_eq!(foo, 1337);
+		tokio::select! {
+			n = hello_sub.next() => {
+				assert_eq!(n.unwrap().unwrap(), "hello from subscription");
+			}
+			n = foo_sub.next() => {
+				assert_eq!(n.unwrap().unwrap(), 1337);
+			}
+		}
 	}
 }
 
@@ -93,10 +97,14 @@ async fn ws_subscription_works_over_proxy_stream() {
 		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
-		let hello = hello_sub.next().await.unwrap().unwrap();
-		let foo = foo_sub.next().await.unwrap().unwrap();
-		assert_eq!(hello, "hello from subscription".to_string());
-		assert_eq!(foo, 1337);
+		tokio::select! {
+			n = hello_sub.next() => {
+				assert_eq!(n.unwrap().unwrap(), "hello from subscription");
+			}
+			n = foo_sub.next() => {
+				assert_eq!(n.unwrap().unwrap(), 1337);
+			}
+		}
 	}
 }
 
@@ -314,11 +322,7 @@ async fn ws_subscription_several_clients_with_drop() {
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
-		let client = WsClientBuilder::default()
-			.max_buffer_capacity_per_subscription(u32::MAX as usize)
-			.build(&server_url)
-			.await
-			.unwrap();
+		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 		let hello_sub: Subscription<String> =
 			client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 		let foo_sub: Subscription<u64> =
@@ -328,10 +332,14 @@ async fn ws_subscription_several_clients_with_drop() {
 
 	for _ in 0..10 {
 		for (_client, hello_sub, foo_sub) in &mut clients {
-			let hello = hello_sub.next().await.unwrap().unwrap();
-			let foo = foo_sub.next().await.unwrap().unwrap();
-			assert_eq!(&hello, "hello from subscription");
-			assert_eq!(foo, 1337);
+			tokio::select! {
+				n = hello_sub.next() => {
+					assert_eq!(n.unwrap().unwrap(), "hello from subscription");
+				}
+				n = foo_sub.next() => {
+					assert_eq!(n.unwrap().unwrap(), 1337);
+				}
+			}
 		}
 	}
 
@@ -349,43 +357,41 @@ async fn ws_subscription_several_clients_with_drop() {
 	for _ in 0..10 {
 		for (client, hello_sub, foo_sub) in &mut clients {
 			assert!(client.is_connected());
-			let hello = hello_sub.next().await.unwrap().unwrap();
-			let foo = foo_sub.next().await.unwrap().unwrap();
-			assert_eq!(&hello, "hello from subscription");
-			assert_eq!(foo, 1337);
+			tokio::select! {
+				n = hello_sub.next() => {
+					assert_eq!(n.unwrap().unwrap(), "hello from subscription");
+				}
+				n = foo_sub.next() => {
+					assert_eq!(n.unwrap().unwrap(), 1337);
+				}
+			}
 		}
 	}
 }
 
 #[tokio::test]
-async fn ws_subscription_without_polling_does_not_make_client_unusable() {
+async fn ws_subscription_without_polling_makes_client_unusable() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let client = WsClientBuilder::default().max_buffer_capacity_per_subscription(4).build(&server_url).await.unwrap();
-	let mut hello_sub: Subscription<JsonValue> =
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let hello_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
-	// don't poll the subscription stream for 2 seconds, should be full now.
+	// Don't poll the subscription stream for 2 seconds, should be full now.
 	tokio::time::sleep(Duration::from_secs(2)).await;
 
-	for _ in 0..4 {
-		assert!(hello_sub.next().await.unwrap().is_ok());
-	}
+	// The client is "backpressured" until the subscription is polled.
+	let res = client.request::<JsonValue, _>("say_hello", rpc_params![]).with_timeout(Duration::from_secs(10)).await;
 
-	// NOTE: this is now unusable and unregistered.
-	assert!(hello_sub.next().await.is_none());
+	assert!(res.is_err());
 
-	// The client should still be useable => make sure it still works.
-	let _hello_req: JsonValue = client.request("say_hello", rpc_params![]).await.unwrap();
+	drop(hello_sub);
 
-	// The same subscription should be possible to register again.
-	let mut other_sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-
-	other_sub.next().await.unwrap().unwrap();
+	// The subscription is closed, new messages should be handled now.
+	assert!(client.request::<JsonValue, _>("say_hello", rpc_params![]).with_default_timeout().await.is_ok());
 }
 
 #[tokio::test]
