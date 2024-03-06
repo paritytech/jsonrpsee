@@ -9,6 +9,7 @@ use crate::{PingConfig, LOG_TARGET};
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, StreamExt, TryStreamExt};
+use hyper::body::Body;
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
@@ -400,12 +401,12 @@ async fn graceful_shutdown<S>(
 /// }
 /// ```
 pub async fn connect<L>(
-	req: hyper::Request<hyper::Body>,
+	req: hyper::Request<WhatBody>,
 	server_cfg: ServerConfig,
 	methods: impl Into<Methods>,
 	conn: ConnectionState,
 	rpc_middleware: RpcServiceBuilder<L>,
-) -> Result<(hyper::Response<hyper::Body>, impl Future<Output = ()>), hyper::Response<hyper::Body>>
+) -> Result<(hyper::Response<http_body_util::StreamBody<Vec<u8>>>, impl Future<Output = ()>), hyper::Response<WhatBody>>
 where
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -419,7 +420,9 @@ where
 				Ok(u) => u,
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-					return Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed {e}"))));
+					return Err(hyper::Response::new(http_body_util::Full::new(
+						format!("WS upgrade handshake failed {e}").as_bytes().to_vec(),
+					)));
 				}
 			};
 
@@ -468,10 +471,11 @@ where
 				background_task(params).await;
 			};
 
-			Ok((response.map(|()| hyper::Body::empty()), fut))
+			Ok((response.map(|()| hyper::Body::empty()), fut)) // empty body here
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
+			// full body here:
 			Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed: {e}"))))
 		}
 	}

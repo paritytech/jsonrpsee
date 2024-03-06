@@ -27,7 +27,7 @@
 //! Utility and types related to the authority of an URI.
 
 use http::uri::{InvalidUri, Uri};
-use hyper::{Body, Request};
+use hyper::Request;
 use jsonrpsee_core::http_helpers;
 
 /// Represent the http URI scheme that is returned by the HTTP host header
@@ -96,7 +96,7 @@ impl Authority {
 	///
 	/// The `Authority` can be sent by the client in the `Host header` or in the `URI`
 	/// such that both must be checked.
-	pub fn from_http_request(request: &Request<Body>) -> Option<Self> {
+	pub fn from_http_request<T>(request: &Request<T>) -> Option<Self> {
 		// NOTE: we use our own `Authority type` here because an invalid port number would return `None` here
 		// and that should be denied.
 		let host_header =
@@ -160,8 +160,8 @@ fn default_port(scheme: Option<&str>) -> Option<u16> {
 #[cfg(test)]
 mod tests {
 	use super::{Authority, Port};
+	use hyper::body::Body;
 	use hyper::header::HOST;
-	use hyper::Body;
 
 	fn authority(host: &str, port: Port) -> Authority {
 		Authority { host: host.to_owned(), port }

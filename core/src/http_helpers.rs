@@ -26,7 +26,8 @@
 
 //! Utility methods relying on hyper
 
-use hyper::body::{Buf, HttpBody};
+use http_body_util::BodyExt;
+use hyper::body::{Body, Buf};
 
 /// Represents error that can when reading with a HTTP body.
 #[derive(Debug, thiserror::Error)]
@@ -49,7 +50,7 @@ pub enum HttpError {
 /// Returns `Err` if the body was too large or the body couldn't be read.
 pub async fn read_body<B>(headers: &hyper::HeaderMap, body: B, max_body_size: u32) -> Result<(Vec<u8>, bool), HttpError>
 where
-	B: HttpBody<Error = hyper::Error> + Send + 'static,
+	B: Body<Error = hyper::Error> + Send + 'static,
 	B::Data: Send,
 {
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in
@@ -64,10 +65,14 @@ where
 
 	// Allocate up to 16KB initially.
 	let mut received_data = Vec::with_capacity(std::cmp::min(body_size as usize, 16 * 1024));
+
 	let mut is_single = None;
 
-	while let Some(d) = body.data().await {
-		let data = d.map_err(HttpError::Stream)?;
+	while let Some(frame_or_err) = body.frame().await {
+		let frame = frame_or_err.map_err(HttpError::Stream)?;
+		let Some(data) = frame.data_ref() else {
+			continue;
+		};
 
 		// If it's the first chunk, trim the whitespaces to determine whether it's valid JSON-RPC call.
 		if received_data.is_empty() {
