@@ -28,9 +28,10 @@
 //! RPC method calls.
 
 use crate::transport::http;
+use hyper::body::Body;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
-use hyper::{Body, Method, Request, Response, Uri};
+use hyper::{Method, Request, Response, Uri};
 use jsonrpsee_types::{Id, RequestSer};
 use std::error::Error;
 use std::future::Future;
@@ -109,9 +110,9 @@ impl<S> ProxyGetRequest<S> {
 	}
 }
 
-impl<S> Service<Request<Body>> for ProxyGetRequest<S>
+impl<S> Service<Request<WhatBody>> for ProxyGetRequest<S>
 where
-	S: Service<Request<Body>, Response = Response<Body>>,
+	S: Service<Request<WhatBody>, Response = Response<WhatBody>>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
@@ -143,7 +144,7 @@ where
 			let body = Body::from(
 				serde_json::to_string(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
 					.expect("Valid request; qed"),
-			);
+			); // full body ?
 			req = req.map(|_| body);
 		}
 
@@ -159,8 +160,9 @@ where
 				return Ok(res);
 			}
 
-			let body = res.into_body();
-			let bytes = hyper::body::to_bytes(body).await?;
+			let body = res.into_body(); // ???
+
+			hyper::body::to_bytes(body).await?;
 
 			#[derive(serde::Deserialize, Debug)]
 			struct RpcPayload<'a> {

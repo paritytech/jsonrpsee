@@ -6,8 +6,7 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use hyper::body::{Body, HttpBody};
-use hyper::client::{Client, HttpConnector};
+use hyper::body::Body;
 use hyper::http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};

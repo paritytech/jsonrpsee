@@ -40,7 +40,7 @@ use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-pub use hyper::{Body, HeaderMap, StatusCode, Uri};
+pub use hyper::{HeaderMap, StatusCode, Uri};
 
 type Error = Box<dyn std::error::Error>;
 
