@@ -728,7 +728,11 @@ async fn handle_backend_messages<R: TransportReceiverT>(
 				}
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
-					process_notification(&mut manager.lock(), notif);
+					let fut = process_notification(&mut manager.lock(), notif);
+
+					if let Err(method) = fut.await {
+						return Ok(Some(FrontToBack::UnregisterNotification(method)));
+					}
 				} else {
 					return Err(unparse_error(raw));
 				}

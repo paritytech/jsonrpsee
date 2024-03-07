@@ -32,7 +32,7 @@ use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
 use futures_util::future::{self, BoxFuture, Either};
-use futures_util::FutureExt;
+use futures_util::{Future, FutureExt};
 use tokio::sync::{mpsc, oneshot};
 
 use jsonrpsee_types::response::SubscriptionError;
@@ -91,9 +91,8 @@ pub(crate) fn process_batch_response(
 
 /// Attempts to process a subscription response.
 ///
-/// Returns `Ok()` if the response was successfully sent to the frontend.
-/// Return `Err(None)` if the subscription was not found.
-/// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
+/// Returns `Ok()` if the response was successfully sent otherwise
+/// the Err(SubscriptionID) is returned to close the subscription.
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<'_, JsonValue>,
@@ -150,18 +149,23 @@ pub(crate) fn process_subscription_close_response(
 /// will continue.
 ///
 /// It's possible that user close down the subscription before this notification is received.
-pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
-	match manager.as_notification_handler_mut(notif.method.to_string()) {
-		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
-			Ok(()) => (),
-			Err(err) => {
-				tracing::warn!(target: LOG_TARGET, "Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
-				let _ = manager.remove_notification_handler(&notif.method);
-			}
-		},
-		None => {
-			tracing::debug!(target: LOG_TARGET, "Notification: {:?} not a registered method", notif.method);
-		}
+pub(crate) fn process_notification(
+	manager: &mut RequestManager,
+	notif: Notification<JsonValue>,
+) -> impl Future<Output = Result<(), String>> {
+	let Notification { method, params, .. } = notif;
+	let method = method.to_string();
+	let msg = params;
+
+	let maybe_notif = manager.as_notification_handler_mut(method.clone()).cloned();
+
+	async move {
+		let Some(sender) = maybe_notif else {
+			tracing::debug!(target: LOG_TARGET, "Notification: {:?} not a registered method", method);
+			return Ok(());
+		};
+
+		sender.send(msg).await.map_err(|_| method)
 	}
 }
 

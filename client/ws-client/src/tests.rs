@@ -26,6 +26,8 @@
 
 #![cfg(test)]
 
+use std::time::Duration;
+
 use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
 
@@ -206,21 +208,27 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 	let mut nh: Subscription<String> =
 		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
-	// don't poll the notification stream for 2 seconds, should be full now.
+	// Don't poll the notification stream for 2 seconds, should be full now.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-	for _ in 0..4 {
-		assert!(nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
-	}
+	// The subscription must be polled to drive the connection
+	// and the response is not handled by the background task.
+	//
+	// In other words "backpressured".
+	assert!(client
+		.request::<JsonValue, _>("say_hello", rpc_params![])
+		.with_timeout(Duration::from_secs(10))
+		.await
+		.is_err());
+	assert!(nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
 
-	// NOTE: this is now unuseable and unregistered.
-	assert!(nh.next().with_default_timeout().await.unwrap().is_none());
+	nh.unsubscribe().await.unwrap();
 
 	// The same subscription should be possible to register again.
 	let mut other_nh: Subscription<String> =
 		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
-	// check that the new subscription works.
+	// Check that the new subscription works.
 	assert!(other_nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
 	assert!(client.is_connected());
 }
