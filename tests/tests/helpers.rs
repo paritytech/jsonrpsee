@@ -45,6 +45,14 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
+pub struct CustomError;
+
+impl From<CustomError> for ErrorObjectOwned {
+	fn from(_: CustomError) -> Self {
+		ErrorObject::owned(-32001, "err", None::<()>)
+	}
+}
+
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
@@ -150,14 +158,6 @@ pub async fn server() -> SocketAddr {
 			"hello"
 		})
 		.unwrap();
-
-	struct CustomError;
-
-	impl From<CustomError> for ErrorObjectOwned {
-		fn from(_: CustomError) -> Self {
-			ErrorObject::owned(-32001, "err", None::<()>)
-		}
-	}
 
 	module.register_async_method::<Result<(), CustomError>, _, _>("err", |_, _| async { Err(CustomError) }).unwrap();
 
