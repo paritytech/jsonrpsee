@@ -30,12 +30,10 @@
 use crate::transport::http;
 
 use http_body_util::BodyExt;
-use hyper::body::Body;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Method, Request, Response, Uri};
 use jsonrpsee_types::{Id, RequestSer};
-use std::collections::VecDeque;
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
@@ -43,7 +41,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
-type FullBody = http_body_util::Full<VecDeque<u8>>;
+type FullBody = http_body_util::Full<hyper::body::Bytes>;
 
 /// Error that occur if the specified path doesn't start with `/<path>`
 #[derive(Debug, thiserror::Error)]

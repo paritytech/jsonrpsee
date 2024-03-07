@@ -25,6 +25,7 @@ tokio = { version = "1.16", features = ["net", "rt-multi-thread", "macros", "tim
 tokio-util = { version = "0.7", features = ["compat"] }
 tokio-stream = { version = "0.1.7", features = ["sync"] }
 hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 http = "1"
 http-body = "1"
 http-body-util = "0.1.0"

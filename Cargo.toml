@@ -38,3 +38,6 @@ jsonrpsee-ws-client = { path = "client/ws-client", version = "0.22.1" }
 jsonrpsee-wasm-client = { path = "client/wasm-client", version = "0.22.1" }
 jsonrpsee-client-transport = { path = "client/transport", version = "0.22.1" }
 jsonrpsee-proc-macros = { path = "proc-macros", version = "0.22.1" }
+
+[patch.crates-io]
+soketto = { git = "https://github.com/paritytech/soketto" }

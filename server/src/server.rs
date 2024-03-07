@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::collections::VecDeque;
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
@@ -44,6 +43,8 @@ use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
 use http_body::Body;
+use hyper::body::Bytes;
+use hyper_util::rt::TokioIo;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
@@ -63,7 +64,7 @@ use tower::{Layer, Service};
 use tracing::{instrument, Instrument};
 
 type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
-type FullBody = http_body_util::Full<VecDeque<u8>>;
+type FullBody = http_body_util::Full<Bytes>;
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u32 = 100;
@@ -1016,7 +1017,8 @@ where
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
 		let conn_id = self.inner.conn_id;
-		let on_session_close = self.on_session_close.take();
+		// TODO.
+		//let on_session_close = self.on_session_close.take();
 
 		tracing::trace!(target: LOG_TARGET, "{:?}", request);
 
@@ -1075,7 +1077,9 @@ where
 								}
 							};
 
-							let stream = BufReader::new(BufWriter::new(upgraded.compat()));
+							let io = hyper_util::rt::TokioIo::new(upgraded);
+
+							let stream = BufReader::new(BufWriter::new(io.compat()));
 							let mut ws_builder = server.into_builder(stream);
 							ws_builder.set_max_message_size(this.server_cfg.max_request_body_size as usize);
 							let (sender, receiver) = ws_builder.finish();
@@ -1089,7 +1093,8 @@ where
 								sink,
 								rx,
 								pending_calls_completed,
-								on_session_close,
+								// TODO: hack.
+								on_session_close: None,
 							};
 
 							ws::background_task(params).await;
@@ -1097,7 +1102,7 @@ where
 						.in_current_span(),
 					);
 
-					response.map(|()| FullBody::empty()) // empty body
+					response.map(|()| FullBody::default()) // empty body
 				}
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
@@ -1211,9 +1216,15 @@ where
 	<B as Body>::Error: Send + Sync + StdError,
 	<B as Body>::Data: Send,
 {
-	let conn = hyper::server::conn::http2::Builder::new(tokio::runtime::Handle::current())
-		.serve_connection(socket, service)
-		.with_upgrades();
+	todo!();
+
+	/*let io = TokioIo::new(socket);
+
+	let conn =
+		hyper::server::conn::http2::Builder::new(tokio::runtime::Handle::current()).serve_connection(io, service);
+
+	let mut conn = conn.
+
 	let stopped = stop_handle.shutdown();
 
 	tokio::pin!(stopped);
@@ -1230,7 +1241,7 @@ where
 
 	if let Err(e) = res {
 		tracing::debug!(target: LOG_TARGET, "HTTP serve connection failed {:?}", e);
-	}
+	}*/
 }
 
 enum AcceptConnection<S> {
