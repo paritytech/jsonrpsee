@@ -31,7 +31,7 @@ use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
-use futures_util::future::{self, BoxFuture, Either};
+use futures_util::future::{self, Either};
 use futures_util::{Future, FutureExt};
 use tokio::sync::{mpsc, oneshot};
 
@@ -96,7 +96,7 @@ pub(crate) fn process_batch_response(
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<'_, JsonValue>,
-) -> BoxFuture<'static, Result<(), SubscriptionId<'static>>> {
+) -> impl Future<Output = Result<(), SubscriptionId<'static>>> {
 	let sub_id = response.params.subscription.into_owned();
 	let Some(request_id) = manager.get_request_id_by_subscription_id(&sub_id) else {
 		tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
@@ -105,21 +105,15 @@ pub(crate) fn process_subscription_response(
 
 	let maybe_sub = manager.as_subscription_mut(&request_id).cloned();
 
-	let fut = async move {
+	async move {
 		let Some(sub) = maybe_sub else {
 			tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
 			return Ok(());
 		};
 
-		if sub.send(response.params.result).await.is_ok() {
-			Ok(())
-		} else {
-			Err(sub_id)
-		}
+		sub.send(response.params.result).await.map_err(|_| sub_id)
 	}
-	.boxed();
-
-	fut
+	.boxed()
 }
 
 /// Attempts to close a subscription when a [`SubscriptionError`] is received.
