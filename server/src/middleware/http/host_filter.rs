@@ -99,9 +99,9 @@ pub struct HostFilter<S> {
 	filter: Option<Arc<WhitelistedHosts>>,
 }
 
-impl<S> Service<Request<Body>> for HostFilter<S>
+impl<S> Service<Request<hyper::body::Incoming>> for HostFilter<S>
 where
-	S: Service<Request<Body>, Response = Response<Body>>,
+	S: Service<hyper::body::Incoming>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn StdError + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
@@ -114,8 +114,10 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, request: Request<Body>) -> Self::Future {
-		let Some(authority) = Authority::from_http_request(&request) else {
+	fn call(&mut self, request: Request<hyper::body::Incoming>) -> Self::Future {
+		todo!();
+
+		/*let Some(authority) = Authority::from_http_request(&request) else {
 			return async { Ok(http::response::malformed()) }.boxed();
 		};
 
@@ -124,7 +126,7 @@ where
 		} else {
 			tracing::debug!(target: LOG_TARGET, "Denied request: {:?}", request);
 			async { Ok(http::response::host_not_allowed()) }.boxed()
-		}
+		}*/
 	}
 }
 

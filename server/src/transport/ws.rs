@@ -9,7 +9,7 @@ use crate::{PingConfig, LOG_TARGET};
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, StreamExt, TryStreamExt};
-use hyper::body::Body;
+use http_body::Body;
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};

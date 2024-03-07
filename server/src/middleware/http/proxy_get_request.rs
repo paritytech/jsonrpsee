@@ -28,17 +28,22 @@
 //! RPC method calls.
 
 use crate::transport::http;
+
+use http_body_util::BodyExt;
 use hyper::body::Body;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Method, Request, Response, Uri};
 use jsonrpsee_types::{Id, RequestSer};
+use std::collections::VecDeque;
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
+
+type FullBody = http_body_util::Full<VecDeque<u8>>;
 
 /// Error that occur if the specified path doesn't start with `/<path>`
 #[derive(Debug, thiserror::Error)]
@@ -110,9 +115,9 @@ impl<S> ProxyGetRequest<S> {
 	}
 }
 
-impl<S> Service<Request<WhatBody>> for ProxyGetRequest<S>
+impl<S> Service<Request<hyper::body::Incoming>> for ProxyGetRequest<S>
 where
-	S: Service<Request<WhatBody>, Response = Response<WhatBody>>,
+	S: Service<Request<hyper::body::Incoming>, Response = Response<FullBody>>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
@@ -126,7 +131,7 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+	fn call(&mut self, mut req: Request<hyper::body::Incoming>) -> Self::Future {
 		let modify = self.path.as_ref() == req.uri() && req.method() == Method::GET;
 
 		// Proxy the request to the appropriate method call.
@@ -141,11 +146,12 @@ where
 			req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
 
 			// Adjust the body to reflect the method call.
-			let body = Body::from(
-				serde_json::to_string(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
+			let body = FullBody::from(
+				serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
 					.expect("Valid request; qed"),
 			); // full body ?
-			req = req.map(|_| body);
+			 // TODO doesn't work
+			 //req = req.map(|_| body);
 		}
 
 		// Call the inner service and get a future that resolves to the response.
@@ -160,9 +166,14 @@ where
 				return Ok(res);
 			}
 
-			let body = res.into_body(); // ???
+			let mut body = http_body_util::BodyStream::new(res.into_body());
+			let mut bytes = Vec::new();
 
-			hyper::body::to_bytes(body).await?;
+			while let Some(frame) = body.frame().await {
+				// TODO error handling
+				let data = frame.unwrap().into_data().unwrap();
+				bytes.extend(data);
+			}
 
 			#[derive(serde::Deserialize, Debug)]
 			struct RpcPayload<'a> {

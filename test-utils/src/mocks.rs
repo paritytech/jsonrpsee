@@ -35,6 +35,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::sink::SinkExt;
 use futures_util::stream::{self, StreamExt};
 use futures_util::{pin_mut, select};
+use http_body_util::Empty as EmptyBody;
 use serde::{Deserialize, Serialize};
 use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
 use tokio::net::TcpStream;
@@ -339,9 +340,9 @@ pub fn ws_server_with_redirect(other_server: String) -> String {
 
 /// Handle incoming HTTP Requests.
 async fn handler(
-	req: hyper::Request<Body>,
+	req: hyper::Request<hyper::body::Incoming>,
 	other_server: String,
-) -> Result<hyper::Response<Body>, soketto::BoxedError> {
+) -> Result<hyper::Response<EmptyBody, soketto::BoxedError>> {
 	if is_upgrade_request(&req) {
 		tracing::debug!("{:?}", req);
 
@@ -350,20 +351,20 @@ async fn handler(
 				let response = hyper::Response::builder()
 					.status(301)
 					.header("Location", other_server)
-					.body(Body::empty())
+					.body(EmptyBody::new())
 					.unwrap();
 				Ok(response)
 			}
 			"/myblock/one" => {
 				let response =
-					hyper::Response::builder().status(301).header("Location", "two").body(Body::empty()).unwrap();
+					hyper::Response::builder().status(301).header("Location", "two").body(EmptyBody::new()).unwrap();
 				Ok(response)
 			}
 			_ => {
 				let response = hyper::Response::builder()
 					.status(301)
 					.header("Location", "/myblock/one")
-					.body(Body::empty())
+					.body(EmptyBody::new())
 					.unwrap();
 				Ok(response)
 			}
