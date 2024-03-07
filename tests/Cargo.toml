@@ -14,7 +14,8 @@ fast-socks5 = { version = "0.9.1" }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.14", default-features = false, features = ["alloc"]}
 hyper = { version = "1.2.0", features = ["http1", "client"] }
-jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
+jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "ws-client", "macros"] }
+# jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
 jsonrpsee-test-utils = { path = "../test-utils" }
 serde = "1"
 serde_json = "1"

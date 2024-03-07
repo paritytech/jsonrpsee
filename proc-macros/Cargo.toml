@@ -24,7 +24,8 @@ proc-macro-crate = "3"
 heck = "0.4.0"
 
 [dev-dependencies]
-jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
+# jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
+jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "ws-client", "macros"] }
 trybuild = "1.0"
 tokio = { version = "1.16", features = ["rt", "macros"] }
 futures-channel = { version = "0.3.14", default-features = false }
