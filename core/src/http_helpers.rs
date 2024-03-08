@@ -152,10 +152,13 @@ pub fn read_header_values<'a>(
 mod tests {
 	use super::{read_body, read_header_content_length};
 
+	type Body = http_body_util::Full<hyper::body::Bytes>;
+
 	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {
 		let headers = hyper::header::HeaderMap::new();
-		let body = hyper::Body::from(vec![0; 128]);
+		let full_body = Body::from(vec![0; 128]);
+		let body = full_body.map_err(|e| hyper::Error::from(e));
 		assert!(read_body(&headers, body, 127).await.is_err());
 	}
 

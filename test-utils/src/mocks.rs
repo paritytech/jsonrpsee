@@ -26,6 +26,7 @@
 
 use std::io;
 use std::net::SocketAddr;
+use std::net::TcpListener;
 use std::time::Duration;
 
 use futures_channel::mpsc;
@@ -35,7 +36,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::sink::SinkExt;
 use futures_util::stream::{self, StreamExt};
 use futures_util::{pin_mut, select};
-use http_body_util::Empty as EmptyBody;
+use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
 use tokio::net::TcpStream;
@@ -43,7 +44,8 @@ use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 pub use hyper::{HeaderMap, StatusCode, Uri};
 
-type Error = Box<dyn std::error::Error>;
+type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+type EmptyBody = http_body_util::Empty<hyper::body::Bytes>;
 
 /// Request Id
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
@@ -320,21 +322,34 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 // Run a WebSocket server running on localhost that redirects requests for testing.
 // Requests to any url except for `/myblock/two` will redirect one or two times (HTTP 301) and eventually end up in `/myblock/two`.
 pub fn ws_server_with_redirect(other_server: String) -> String {
-	let addr = ([127, 0, 0, 1], 0).into();
+	let addr: SocketAddr = ([127, 0, 0, 1], 0).into();
+	let listener = TcpListener::bind(addr).unwrap();
+	let addr = listener.local_addr().unwrap();
 
-	let service = hyper::service::make_service_fn(move |_| {
-		let other_server = other_server.clone();
-		async move {
-			Ok::<_, hyper::Error>(hyper::service::service_fn(move |req| {
-				let other_server = other_server.clone();
-				async move { handler(req, other_server).await }
-			}))
+	tokio::spawn(async move {
+		let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+
+		loop {
+			let Ok((stream, _addr)) = listener.accept().await else {
+				continue;
+			};
+
+			let other_server = other_server.clone();
+			tokio::spawn(async {
+				let io = TokioIo::new(stream);
+
+				let conn = hyper::server::conn::http1::Builder::new().serve_connection(
+					io,
+					hyper::service::service_fn(move |req| {
+						let other_server = other_server.clone();
+						async move { handler(req, other_server).await }
+					}),
+				);
+
+				conn.await.unwrap();
+			});
 		}
 	});
-	let server = hyper::Server::bind(&addr).serve(service);
-	let addr = server.local_addr();
-
-	tokio::spawn(server);
 	format!("ws://{addr}")
 }
 
@@ -342,7 +357,7 @@ pub fn ws_server_with_redirect(other_server: String) -> String {
 async fn handler(
 	req: hyper::Request<hyper::body::Incoming>,
 	other_server: String,
-) -> Result<hyper::Response<EmptyBody, soketto::BoxedError>> {
+) -> Result<hyper::Response<EmptyBody>, soketto::BoxedError> {
 	if is_upgrade_request(&req) {
 		tracing::debug!("{:?}", req);
 
