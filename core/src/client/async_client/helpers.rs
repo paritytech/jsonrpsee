@@ -24,9 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::client::async_client::LOG_TARGET;
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
-use crate::client::{RequestMessage, TransportSenderT, Error};
+use crate::client::async_client::LOG_TARGET;
+use crate::client::{Error, RequestMessage, TransportSenderT};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 
@@ -207,11 +207,12 @@ pub(crate) fn process_single_response(
 			};
 
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
+			let rx_lagged = subscribe_tx.clone();
 			if manager
 				.insert_subscription(response_id.clone(), unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
 				.is_ok()
 			{
-				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
+				match send_back_oneshot.send(Ok((subscribe_rx, rx_lagged, sub_id.clone()))) {
 					Ok(_) => Ok(None),
 					Err(_) => Ok(build_unsubscribe_message(manager, response_id, sub_id)),
 				}
