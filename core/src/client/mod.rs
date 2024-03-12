@@ -247,7 +247,7 @@ pub enum SubscriptionError {
 	/// The subscription lagged too far behind i.e, could not keep up with the server.
 	#[error("The subscription was too slow and at least one message was lost")]
 	TooSlow,
-	/// The subscription was closed because the connection was closed.
+	/// The subscription was closed.
 	#[error("The subscription was closed")]
 	Closed,
 	/// The subscription notification parsing failed.
