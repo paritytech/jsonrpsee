@@ -29,7 +29,9 @@
 use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
 
-use jsonrpsee_core::client::{BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT};
+use jsonrpsee_core::client::{
+	BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT, SubscriptionError,
+};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::{rpc_params, DeserializeOwned};
 use jsonrpsee_test_utils::helpers::*;
@@ -190,7 +192,7 @@ async fn notification_handler_works() {
 }
 
 #[tokio::test]
-async fn notification_without_polling_doesnt_make_client_unuseable() {
+async fn notification_lagging_works() {
 	init_logger();
 
 	let server = WebSocketTestServer::with_hardcoded_notification(
@@ -212,22 +214,14 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 	let mut nh: Subscription<String> =
 		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
-	// don't poll the notification stream for 2 seconds, should be full now.
+	// Don't poll the notification stream for 2 seconds, should be full now.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-	for _ in 0..4 {
-		assert!(nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
-	}
+	// Lagged
+	assert!(matches!(nh.next().with_default_timeout().await.unwrap(), Some(Err(SubscriptionError::TooSlow))));
+	// Next recv should poll the stream again.
+	assert!(matches!(nh.next().with_default_timeout().await.unwrap(), Some(Ok(_))));
 
-	// NOTE: this is now unuseable and unregistered.
-	assert!(nh.next().with_default_timeout().await.unwrap().is_none());
-
-	// The same subscription should be possible to register again.
-	let mut other_nh: Subscription<String> =
-		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
-
-	// check that the new subscription works.
-	assert!(other_nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
 	assert!(client.is_connected());
 }
 

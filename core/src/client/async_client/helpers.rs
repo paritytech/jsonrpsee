@@ -26,13 +26,13 @@
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::async_client::LOG_TARGET;
-use crate::client::{Error, RequestMessage, TransportSenderT};
+use crate::client::{subscription_channel, Error, RequestMessage, TransportSenderT, TrySubscriptionSendError};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::oneshot;
 
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
@@ -90,33 +90,33 @@ pub(crate) fn process_batch_response(
 
 /// Attempts to process a subscription response.
 ///
-/// Returns `Ok()` if the response was successfully sent to the frontend.
-/// Return `Err(None)` if the subscription was not found.
-/// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
+/// Returns `Some(sub_id)` if the subscription should be closed otherwise
+/// `None` is returned.
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
-) -> Result<(), Option<SubscriptionId<'static>>> {
+) -> Option<SubscriptionId<'static>> {
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => {
 			tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
-			return Err(None);
+			return None;
 		}
 	};
 
 	match manager.as_subscription_mut(&request_id) {
-		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
-			Ok(()) => Ok(()),
-			Err(err) => {
-				tracing::error!(target: LOG_TARGET, "Dropping subscription {:?} error: {:?}", sub_id, err);
-				Err(Some(sub_id))
+		Some(send_back_sink) => match send_back_sink.send(response.params.result) {
+			Ok(_) => None,
+			Err(TrySubscriptionSendError::Closed) => Some(sub_id),
+			Err(TrySubscriptionSendError::TooSlow(m)) => {
+				tracing::error!(target: LOG_TARGET, "Subscription {{method={}, sub_id={:?}}} couldn't keep up with server; failed to send {m}", response.method, sub_id);
+				None
 			}
 		},
 		None => {
 			tracing::debug!(target: LOG_TARGET, "Subscription {:?} is not active", sub_id);
-			Err(None)
+			None
 		}
 	}
 }
@@ -150,11 +150,13 @@ pub(crate) fn process_subscription_close_response(
 /// It's possible that user close down the subscription before this notification is received.
 pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
-		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
+		Some(send_back_sink) => match send_back_sink.send(notif.params) {
 			Ok(()) => (),
-			Err(err) => {
-				tracing::warn!(target: LOG_TARGET, "Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
+			Err(TrySubscriptionSendError::Closed) => {
 				let _ = manager.remove_notification_handler(&notif.method);
+			}
+			Err(TrySubscriptionSendError::TooSlow(m)) => {
+				tracing::error!(target: LOG_TARGET, "Notification `{}` couldn't keep up with server; failed to send {m}", notif.method);
 			}
 		},
 		None => {
@@ -206,13 +208,12 @@ pub(crate) fn process_single_response(
 				}
 			};
 
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
-			let rx_lagged = subscribe_tx.clone();
+			let (subscribe_tx, subscribe_rx) = subscription_channel(max_capacity_per_subscription);
 			if manager
 				.insert_subscription(response_id.clone(), unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
 				.is_ok()
 			{
-				match send_back_oneshot.send(Ok((subscribe_rx, rx_lagged, sub_id.clone()))) {
+				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
 					Ok(_) => Ok(None),
 					Err(_) => Ok(build_unsubscribe_message(manager, response_id, sub_id)),
 				}
