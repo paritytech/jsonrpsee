@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
 	tokio::time::sleep(Duration::from_secs(1)).await;
 
 	// The subscription starts from zero but you can
-	// noticed that many items have been replaced
+	// notice that many items have been replaced
 	// because the subscription wasn't polled.
 	for _ in 0..10 {
 		let n = sub.next().await.unwrap();
