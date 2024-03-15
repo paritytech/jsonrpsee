@@ -507,12 +507,14 @@ pub struct RpcModule<Context> {
 impl<Context> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		Self { ctx: Arc::new(ctx), methods: Default::default() }
+		Self::from_arc(Arc::new(ctx))
 	}
 
-	/// Get a reference to the shared `Context`.
-	pub fn context(&self) -> &Arc<Context> {
-		&self.ctx
+	/// Create a new module from an already shared `Context`.
+	///
+	/// This is useful if `Context` needs to be shared outside of an [`RpcModule`].
+	pub fn from_arc(ctx: Arc<Context>) -> Self {
+		Self { ctx, methods: Default::default() }
 	}
 
 	/// Transform a module into an `RpcModule<()>` (unit context).
