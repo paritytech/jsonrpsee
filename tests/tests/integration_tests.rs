@@ -121,7 +121,6 @@ async fn ws_unsubscription_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn ws_unsubscription_works_over_proxy_stream() {
 	init_logger();
 
