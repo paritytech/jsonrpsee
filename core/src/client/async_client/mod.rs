@@ -60,7 +60,7 @@ use futures_util::stream::StreamExt;
 use futures_util::Stream;
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
-use serde::de::DeserializeOwned;
+use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
@@ -526,9 +526,8 @@ impl ClientT for Client {
 	}
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
+	async fn request<Params>(&self, method: &str, params: Params) -> Result<Box<RawValue>, Error>
 	where
-		R: DeserializeOwned,
 		Params: ToRpcParams + Send,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -558,14 +557,11 @@ impl ClientT for Client {
 
 		rx_log_from_json(&Response::new(ResponsePayload::success_borrowed(&json_value), id), self.max_log_length);
 
-		serde_json::from_value(json_value).map_err(Error::ParseError)
+		Ok(json_value)
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
-	where
-		R: DeserializeOwned,
-	{
+	async fn batch_request<'a>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a>, Error> {
 		let batch = batch.build()?;
 		let guard = self.id_manager.next_request_id()?;
 		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
@@ -613,8 +609,7 @@ impl ClientT for Client {
 		for json_val in json_values {
 			match json_val {
 				Ok(val) => {
-					let result: R = serde_json::from_value(val).map_err(Error::ParseError)?;
-					responses.push(Ok(result));
+					responses.push(Ok(val));
 					successful_calls += 1;
 				}
 				Err(err) => {
@@ -634,15 +629,14 @@ impl SubscriptionClientT for Client {
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
 	#[instrument(name = "subscription", fields(method = subscribe_method), skip(self, params, subscribe_method, unsubscribe_method), level = "trace")]
-	async fn subscribe<'a, Notif, Params>(
+	async fn subscribe<'a, Params>(
 		&self,
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<Notif>, Error>
+	) -> Result<Subscription, Error>
 	where
 		Params: ToRpcParams + Send,
-		Notif: DeserializeOwned,
 	{
 		if subscribe_method == unsubscribe_method {
 			return Err(RegisterMethodError::SubscriptionNameConflict(unsubscribe_method.to_owned()).into());
@@ -687,10 +681,7 @@ impl SubscriptionClientT for Client {
 
 	/// Subscribe to a specific method.
 	#[instrument(name = "subscribe_method", skip(self), level = "trace")]
-	async fn subscribe_to_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
-	where
-		N: DeserializeOwned,
-	{
+	async fn subscribe_to_method<'a>(&self, method: &'a str) -> Result<Subscription, Error> {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
 			.to_back
@@ -736,7 +727,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 		match first_non_whitespace {
 			Some(b'{') => {
 				// Single response to a request.
-				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
+				if let Ok(single) = serde_json::from_slice::<Response<Box<RawValue>>>(raw) {
 					let maybe_unsub =
 						process_single_response(&mut manager.lock(), single, max_buffer_capacity_per_subscription)?;
 

@@ -33,6 +33,7 @@ use jsonrpsee::core::DeserializeOwned;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server, SubscriptionMessage};
 use jsonrpsee::ws_client::WsClientBuilder;
+use serde_json::value::RawValue;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -74,22 +75,14 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn drop_oldest_when_lagging<T: Clone + DeserializeOwned + Send + Sync + 'static>(
-	mut sub: Subscription<T>,
+	mut sub: Subscription,
 	buffer_size: usize,
-) -> impl Stream<Item = Result<T, BroadcastStreamRecvError>> {
+) -> impl Stream<Item = Result<Box<RawValue>, BroadcastStreamRecvError>> {
 	let (tx, rx) = tokio::sync::broadcast::channel(buffer_size);
 
 	tokio::spawn(async move {
 		// poll sub, sending msgs to our chan which throws stuff away
-		while let Some(n) = sub.next().await {
-			let msg = match n {
-				Ok(msg) => msg,
-				Err(e) => {
-					tracing::error!("Failed to recv subscription message: {e}");
-					continue;
-				}
-			};
-
+		while let Some(msg) = sub.next().await {
 			if tx.send(msg).is_err() {
 				return;
 			}

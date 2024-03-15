@@ -32,6 +32,7 @@ use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
+use serde_json::value::RawValue;
 use tokio::sync::oneshot;
 
 use jsonrpsee_types::response::SubscriptionError;
@@ -39,13 +40,12 @@ use jsonrpsee_types::{
 	ErrorObject, Id, InvalidRequestId, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId,
 	SubscriptionResponse,
 };
-use serde_json::Value as JsonValue;
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
 pub(crate) struct InnerBatchResponse {
 	pub(crate) id: u64,
-	pub(crate) result: Result<JsonValue, ErrorObject<'static>>,
+	pub(crate) result: Result<Box<RawValue>, ErrorObject<'static>>,
 }
 
 /// Attempts to process a batch response.
@@ -94,7 +94,7 @@ pub(crate) fn process_batch_response(
 /// `None` is returned.
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
-	response: SubscriptionResponse<JsonValue>,
+	response: SubscriptionResponse<Box<RawValue>>,
 ) -> Option<SubscriptionId<'static>> {
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -129,7 +129,7 @@ pub(crate) fn process_subscription_response(
 /// It's possible that the user closed down the subscription before the actual close response is received
 pub(crate) fn process_subscription_close_response(
 	manager: &mut RequestManager,
-	response: SubscriptionError<JsonValue>,
+	response: SubscriptionError<&RawValue>,
 ) {
 	let sub_id = response.params.subscription.into_owned();
 	match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -148,7 +148,7 @@ pub(crate) fn process_subscription_close_response(
 /// will continue.
 ///
 /// It's possible that user close down the subscription before this notification is received.
-pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
+pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<Box<RawValue>>) {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
 		Some(send_back_sink) => match send_back_sink.send(notif.params) {
 			Ok(()) => (),
@@ -173,7 +173,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 /// Returns `Err(_)` if the response couldn't be handled.
 pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
-	response: Response<JsonValue>,
+	response: Response<Box<RawValue>>,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, InvalidRequestId> {
 	let response_id = response.id.clone().into_owned();
@@ -195,19 +195,20 @@ pub(crate) fn process_single_response(
 				.complete_pending_subscription(response_id.clone())
 				.ok_or(InvalidRequestId::NotPendingRequest(response_id.to_string()))?;
 
-			let sub_id = result.map(|r| SubscriptionId::try_from(r).ok());
-
-			let sub_id = match sub_id {
-				Ok(Some(sub_id)) => sub_id,
-				Ok(None) => {
-					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
-					return Ok(None);
-				}
+			let json = match result {
+				Ok(v) => v,
 				Err(e) => {
 					let _ = send_back_oneshot.send(Err(e));
 					return Ok(None);
 				}
 			};
+
+			let Ok(sub_id) = serde_json::from_str::<SubscriptionId<'_>>(json.get()) else {
+				let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
+				return Ok(None);
+			};
+
+			let sub_id = sub_id.into_owned();
 
 			let (subscribe_tx, subscribe_rx) = subscription_channel(max_capacity_per_subscription);
 			if manager

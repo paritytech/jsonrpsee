@@ -291,24 +291,6 @@ impl<'a> From<String> for SubscriptionId<'a> {
 	}
 }
 
-impl<'a> TryFrom<JsonValue> for SubscriptionId<'a> {
-	type Error = ();
-
-	fn try_from(json: JsonValue) -> Result<SubscriptionId<'a>, ()> {
-		match json {
-			JsonValue::String(s) => Ok(SubscriptionId::Str(s.into())),
-			JsonValue::Number(n) => {
-				if let Some(n) = n.as_u64() {
-					Ok(SubscriptionId::Num(n))
-				} else {
-					Err(())
-				}
-			}
-			_ => Err(()),
-		}
-	}
-}
-
 impl<'a> SubscriptionId<'a> {
 	/// Convert `SubscriptionId<'a>` to `SubscriptionId<'static>` so that it can be moved across threads.
 	///

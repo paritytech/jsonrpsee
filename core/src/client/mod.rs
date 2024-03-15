@@ -34,22 +34,19 @@ cfg_async_client! {
 pub mod error;
 pub use error::Error;
 
-use std::fmt;
+use serde_json::value::RawValue;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-use std::task::{self, Poll};
+use std::task::{self};
 use tokio::sync::mpsc::error::TrySendError;
 
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 use async_trait::async_trait;
-use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
 use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
-use serde::de::DeserializeOwned;
-use serde_json::Value as JsonValue;
 use tokio::sync::{mpsc, oneshot};
 
 /// Shared state whether a subscription has lagged or not.
@@ -91,9 +88,8 @@ pub trait ClientT {
 		Params: ToRpcParams + Send;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
+	async fn request<Params>(&self, method: &str, params: Params) -> Result<Box<RawValue>, Error>
 	where
-		R: DeserializeOwned,
 		Params: ToRpcParams + Send;
 
 	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
@@ -103,9 +99,7 @@ pub trait ClientT {
 	///
 	/// Returns `Ok` if all requests in the batch were answered.
 	/// Returns `Error` if the network failed or any of the responses could be parsed a valid JSON-RPC response.
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
-	where
-		R: DeserializeOwned + fmt::Debug + 'a;
+	async fn batch_request<'a>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a>, Error>;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
@@ -123,23 +117,20 @@ pub trait SubscriptionClientT: ClientT {
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	async fn subscribe<'a, Notif, Params>(
+	async fn subscribe<'a, Params>(
 		&self,
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<Notif>, Error>
+	) -> Result<Subscription, Error>
 	where
-		Params: ToRpcParams + Send,
-		Notif: DeserializeOwned;
+		Params: ToRpcParams + Send;
 
 	/// Register a method subscription, this is used to filter only server notifications that a user is interested in.
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	async fn subscribe_to_method<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
-	where
-		Notif: DeserializeOwned;
+	async fn subscribe_to_method<'a>(&self, method: &'a str) -> Result<Subscription, Error>;
 }
 
 /// Marker trait to determine whether a type implements `Send` or not.
@@ -265,7 +256,7 @@ pub enum SubscriptionCloseReason {
 /// You can call [`Subscription::close_reason`] to determine why
 /// the subscription was closed.
 #[derive(Debug)]
-pub struct Subscription<Notif> {
+pub struct Subscription {
 	is_closed: bool,
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
@@ -273,18 +264,12 @@ pub struct Subscription<Notif> {
 	rx: SubscriptionReceiver,
 	/// Callback kind.
 	kind: Option<SubscriptionKind>,
-	/// Marker in order to pin the `Notif` parameter.
-	marker: PhantomData<Notif>,
 }
 
-// `Subscription` does not automatically implement this due to `PhantomData<Notif>`,
-// but type type has no need to be pinned.
-impl<Notif> std::marker::Unpin for Subscription<Notif> {}
-
-impl<Notif> Subscription<Notif> {
+impl Subscription {
 	/// Create a new subscription.
 	fn new(to_back: mpsc::Sender<FrontToBack>, rx: SubscriptionReceiver, kind: SubscriptionKind) -> Self {
-		Self { to_back, rx, kind: Some(kind), marker: PhantomData, is_closed: false }
+		Self { to_back, rx, kind: Some(kind), is_closed: false }
 	}
 
 	/// Return the subscription type and, if applicable, ID.
@@ -336,7 +321,7 @@ struct BatchMessage {
 	/// Request IDs.
 	ids: Range<u64>,
 	/// One-shot channel over which we send back the result of this request.
-	send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>,
+	send_back: oneshot::Sender<Result<Vec<BatchEntry<'static>>, Error>>,
 }
 
 /// Request message.
@@ -347,7 +332,7 @@ struct RequestMessage {
 	/// Request ID.
 	id: Id<'static>,
 	/// One-shot channel over which we send back the result of this request.
-	send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
+	send_back: Option<oneshot::Sender<Result<Box<RawValue>, Error>>>,
 }
 
 /// Subscription message.
@@ -401,10 +386,7 @@ enum FrontToBack {
 	SubscriptionClosed(SubscriptionId<'static>),
 }
 
-impl<Notif> Subscription<Notif>
-where
-	Notif: DeserializeOwned,
-{
+impl Subscription {
 	/// Returns the next notification from the stream.
 	/// This may return `None` if the subscription has been terminated,
 	/// which may happen if the channel becomes full or is dropped.
@@ -413,30 +395,19 @@ where
 	/// method (and delegates to that). Import [`StreamExt`] if you'd like
 	/// access to other stream combinator methods.
 	#[allow(clippy::should_implement_trait)]
-	pub async fn next(&mut self) -> Option<Result<Notif, serde_json::Error>> {
+	pub async fn next(&mut self) -> Option<Box<RawValue>> {
 		StreamExt::next(self).await
 	}
 }
 
-impl<Notif> Stream for Subscription<Notif>
-where
-	Notif: DeserializeOwned,
-{
-	type Item = Result<Notif, serde_json::Error>;
+impl Stream for Subscription {
+	type Item = Box<RawValue>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
-		let res = match futures_util::ready!(self.rx.poll_next_unpin(cx)) {
-			Some(v) => Some(serde_json::from_value::<Notif>(v).map_err(Into::into)),
-			None => {
-				self.is_closed = true;
-				None
-			}
-		};
-
-		Poll::Ready(res)
+		self.rx.poll_next_unpin(cx)
 	}
 }
 
-impl<Notif> Drop for Subscription<Notif> {
+impl Drop for Subscription {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
 		// the channel's buffer will be full.
@@ -578,19 +549,19 @@ pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<R
 }
 
 /// Represent a single entry in a batch response.
-pub type BatchEntry<'a, R> = Result<R, ErrorObject<'a>>;
+pub type BatchEntry<'a> = Result<Box<RawValue>, ErrorObject<'a>>;
 
 /// Batch response.
 #[derive(Debug, Clone)]
-pub struct BatchResponse<'a, R> {
+pub struct BatchResponse<'a> {
 	successful_calls: usize,
 	failed_calls: usize,
-	responses: Vec<BatchEntry<'a, R>>,
+	responses: Vec<BatchEntry<'a>>,
 }
 
-impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
+impl<'a> BatchResponse<'a> {
 	/// Create a new [`BatchResponse`].
-	pub fn new(successful_calls: usize, responses: Vec<BatchEntry<'a, R>>, failed_calls: usize) -> Self {
+	pub fn new(successful_calls: usize, responses: Vec<BatchEntry<'a>>, failed_calls: usize) -> Self {
 		Self { successful_calls, responses, failed_calls }
 	}
 
@@ -621,8 +592,10 @@ impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
 	/// instead where it's possible to implement customized logic.
 	pub fn into_ok(
 		self,
-	) -> Result<impl Iterator<Item = R> + 'a + std::fmt::Debug, impl Iterator<Item = ErrorObject<'a>> + std::fmt::Debug>
-	{
+	) -> Result<
+		impl Iterator<Item = Box<RawValue>> + std::fmt::Debug + 'a,
+		impl Iterator<Item = ErrorObject<'a>> + std::fmt::Debug,
+	> {
 		if self.failed_calls > 0 {
 			Err(self.into_iter().filter_map(|err| err.err()))
 		} else {
@@ -633,7 +606,7 @@ impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
 	/// Similar to [`BatchResponse::into_ok`] but takes the responses by reference instead.
 	pub fn ok(
 		&self,
-	) -> Result<impl Iterator<Item = &R> + std::fmt::Debug, impl Iterator<Item = &ErrorObject<'a>> + std::fmt::Debug> {
+	) -> Result<impl Iterator<Item = &Box<RawValue>>, impl Iterator<Item = &ErrorObject<'a>> + std::fmt::Debug> {
 		if self.failed_calls > 0 {
 			Err(self.responses.iter().filter_map(|err| err.as_ref().err()))
 		} else {
@@ -642,13 +615,13 @@ impl<'a, R: fmt::Debug + 'a> BatchResponse<'a, R> {
 	}
 
 	/// Returns an iterator over all responses.
-	pub fn iter(&self) -> impl Iterator<Item = &BatchEntry<'_, R>> {
+	pub fn iter(&self) -> impl Iterator<Item = &BatchEntry<'_>> {
 		self.responses.iter()
 	}
 }
 
-impl<'a, R> IntoIterator for BatchResponse<'a, R> {
-	type Item = BatchEntry<'a, R>;
+impl<'a> IntoIterator for BatchResponse<'a> {
+	type Item = BatchEntry<'a>;
 	type IntoIter = std::vec::IntoIter<Self::Item>;
 
 	fn into_iter(self) -> Self::IntoIter {
@@ -661,17 +634,17 @@ enum TrySubscriptionSendError {
 	#[error("The subscription is closed")]
 	Closed,
 	#[error("A subscription message was dropped")]
-	TooSlow(JsonValue),
+	TooSlow(Box<RawValue>),
 }
 
 #[derive(Debug)]
 pub(crate) struct SubscriptionSender {
-	inner: mpsc::Sender<JsonValue>,
+	inner: mpsc::Sender<Box<RawValue>>,
 	lagged: SubscriptionLagged,
 }
 
 impl SubscriptionSender {
-	fn send(&self, msg: JsonValue) -> Result<(), TrySubscriptionSendError> {
+	fn send(&self, msg: Box<RawValue>) -> Result<(), TrySubscriptionSendError> {
 		match self.inner.try_send(msg) {
 			Ok(_) => Ok(()),
 			Err(TrySendError::Closed(_)) => Err(TrySubscriptionSendError::Closed),
@@ -685,12 +658,12 @@ impl SubscriptionSender {
 
 #[derive(Debug)]
 pub(crate) struct SubscriptionReceiver {
-	inner: mpsc::Receiver<JsonValue>,
+	inner: mpsc::Receiver<Box<RawValue>>,
 	lagged: SubscriptionLagged,
 }
 
 impl Stream for SubscriptionReceiver {
-	type Item = JsonValue;
+	type Item = Box<RawValue>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		self.inner.poll_recv(cx)

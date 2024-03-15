@@ -1081,10 +1081,7 @@ async fn ws_subscribe_with_bad_params() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let err = client
-		.subscribe::<serde_json::Value, ArrayParams>("subscribe_add_one", rpc_params!["0x0"], "unsubscribe_add_one")
-		.await
-		.unwrap_err();
+	let err = client.subscribe("subscribe_add_one", rpc_params!["0x0"], "unsubscribe_add_one").await.unwrap_err();
 	assert!(matches!(err, Error::Call(_)));
 }
 

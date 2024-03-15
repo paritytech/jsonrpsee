@@ -395,8 +395,7 @@ async fn calls_with_bad_params() {
 	let mut params = ObjectParams::new();
 	params.insert("val", "0x0").unwrap();
 
-	let err: Error =
-		client.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
+	let err: Error = client.subscribe("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(e) if e.data().unwrap().get().contains("invalid type: string \\\"0x0\\\", expected u32") && e.code() == ErrorCode::InvalidParams.code()
 				&& e.message() == INVALID_PARAMS_MSG
@@ -450,5 +449,5 @@ async fn sync_sub_works() {
 
 	let mut sub = client.sync_sub().await.unwrap();
 
-	assert_eq!(sub.next().await.unwrap().unwrap(), "hello");
+	assert_eq!(sub.next().await.unwrap().get(), "hello");
 }

@@ -48,6 +48,7 @@ use jsonrpsee_types::{
 };
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
+use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
 
 use super::IntoResponse;
@@ -468,11 +469,9 @@ impl Methods {
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
 
 		// TODO: hack around the lifetime on the `SubscriptionId` by deserialize first to serde_json::Value.
-		let as_success: ResponseSuccess<serde_json::Value> = serde_json::from_str::<Response<_>>(&resp)?.try_into()?;
+		let rp: ResponseSuccess<RpcSubscriptionId> = serde_json::from_str::<Response<_>>(&resp)?.try_into()?;
 
-		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.clone()))?;
-
-		Ok(Subscription { sub_id, rx })
+		Ok(Subscription { sub_id: rp.result.into_owned(), rx })
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.

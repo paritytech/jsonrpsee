@@ -43,7 +43,7 @@ use crate::{
 };
 use jsonrpsee_types::{Id, SubscriptionId};
 use rustc_hash::FxHashMap;
-use serde_json::value::Value as JsonValue;
+use serde_json::value::RawValue;
 use tokio::sync::oneshot;
 
 #[derive(Debug)]
@@ -66,8 +66,8 @@ pub(crate) enum RequestStatus {
 	Invalid,
 }
 
-type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
-type PendingBatchOneshot = oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>;
+type PendingCallOneshot = Option<oneshot::Sender<Result<Box<RawValue>, Error>>>;
+type PendingBatchOneshot = oneshot::Sender<Result<Vec<BatchEntry<'static>>, Error>>;
 type PendingSubscriptionOneshot = oneshot::Sender<Result<(SubscriptionReceiver, SubscriptionId<'static>), Error>>;
 type SubscriptionSink = SubscriptionSender;
 type UnsubscribeMethod = String;
@@ -341,14 +341,13 @@ impl RequestManager {
 mod tests {
 	use crate::client::subscription_channel;
 
-	use super::{Error, RequestManager};
+	use super::RequestManager;
 	use jsonrpsee_types::{Id, SubscriptionId};
-	use serde_json::Value as JsonValue;
 	use tokio::sync::oneshot;
 
 	#[test]
 	fn insert_remove_pending_request_works() {
-		let (request_tx, _) = oneshot::channel::<Result<JsonValue, Error>>();
+		let (request_tx, _) = oneshot::channel();
 
 		let mut manager = RequestManager::new();
 		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx)).is_ok());

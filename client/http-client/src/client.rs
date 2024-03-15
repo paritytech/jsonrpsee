@@ -26,7 +26,6 @@
 
 use std::borrow::Cow as StdCow;
 use std::error::Error as StdError;
-use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,7 +43,7 @@ use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
-use serde::de::DeserializeOwned;
+use serde_json::value::RawValue;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::instrument;
@@ -297,9 +296,8 @@ where
 	}
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
+	async fn request<Params>(&self, method: &str, params: Params) -> Result<Box<RawValue>, Error>
 	where
-		R: DeserializeOwned,
 		Params: ToRpcParams + Send,
 	{
 		let guard = self.id_manager.next_request_id()?;
@@ -334,10 +332,7 @@ where
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
-	where
-		R: DeserializeOwned + fmt::Debug + 'a,
-	{
+	async fn batch_request<'a>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a>, Error> {
 		let batch = batch.build()?;
 		let guard = self.id_manager.next_request_id()?;
 		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
@@ -413,25 +408,21 @@ where
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscription", fields(method = _subscribe_method), skip(self, _params, _subscribe_method, _unsubscribe_method), level = "trace")]
-	async fn subscribe<'a, N, Params>(
+	async fn subscribe<'a, Params>(
 		&self,
 		_subscribe_method: &'a str,
 		_params: Params,
 		_unsubscribe_method: &'a str,
-	) -> Result<Subscription<N>, Error>
+	) -> Result<Subscription, Error>
 	where
 		Params: ToRpcParams + Send,
-		N: DeserializeOwned,
 	{
 		Err(Error::HttpNotImplemented)
 	}
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscribe_method", fields(method = _method), skip(self, _method), level = "trace")]
-	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
-	where
-		N: DeserializeOwned,
-	{
+	async fn subscribe_to_method<'a>(&self, _method: &'a str) -> Result<Subscription, Error> {
 		Err(Error::HttpNotImplemented)
 	}
 }

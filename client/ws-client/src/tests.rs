@@ -160,14 +160,14 @@ async fn subscription_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
-		let mut sub: Subscription<String> = client
+		let mut sub: Subscription = client
 			.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
 			.with_default_timeout()
 			.await
 			.unwrap()
 			.unwrap();
-		let response: String = sub.next().with_default_timeout().await.unwrap().unwrap().unwrap();
-		assert_eq!("hello my friend".to_owned(), response);
+		let response = sub.next().with_default_timeout().await.unwrap().unwrap();
+		assert_eq!("hello my friend", response.get());
 	}
 }
 
@@ -184,10 +184,9 @@ async fn notification_handler_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
-		let mut nh: Subscription<String> =
-			client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
-		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
-		assert_eq!("server originated notification works".to_owned(), response);
+		let mut nh: Subscription = client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+		let response = nh.next().with_default_timeout().await.unwrap().unwrap();
+		assert_eq!("server originated notification works", response.get());
 	}
 }
 
@@ -211,8 +210,7 @@ async fn notification_close_on_lagging() {
 		.await
 		.unwrap()
 		.unwrap();
-	let mut nh: Subscription<String> =
-		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+	let mut nh: Subscription = client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
 	// Don't poll the notification stream for 2 seconds, should be full now.
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -229,11 +227,10 @@ async fn notification_close_on_lagging() {
 	assert!(nh.next().with_default_timeout().await.unwrap().is_none());
 
 	// The same subscription should be possible to register again.
-	let mut other_nh: Subscription<String> =
-		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+	let mut other_nh: Subscription = client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
 	// check that the new subscription works.
-	assert!(other_nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
+	assert!(other_nh.next().with_default_timeout().await.unwrap().is_some());
 	assert!(client.is_connected());
 }
 
@@ -380,7 +377,7 @@ async fn is_connected_works() {
 async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
-) -> Result<BatchResponse<T>, Error> {
+) -> Result<BatchResponse, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
 		.with_default_timeout()
 		.await
