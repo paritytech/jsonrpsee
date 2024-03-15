@@ -314,7 +314,7 @@ impl<Notif> Subscription<Notif> {
 	pub fn close_reason(&self) -> Option<SubscriptionCloseReason> {
 		let lagged = self.rx.lagged.has_lagged();
 
-		// The `is_closed` is only set if the subscription has been polled
+		// `is_closed` is only set if the subscription has been polled
 		// and that is why lagged is checked here as well.
 		if !self.is_closed && !lagged {
 			return None;
