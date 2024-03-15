@@ -192,7 +192,7 @@ async fn notification_handler_works() {
 }
 
 #[tokio::test]
-async fn notification_lagging_works() {
+async fn notification_close_on_lagging() {
 	init_logger();
 
 	let server = WebSocketTestServer::with_hardcoded_notification(
@@ -228,6 +228,12 @@ async fn notification_lagging_works() {
 	// It should be dropped when lagging.
 	assert!(nh.next().with_default_timeout().await.unwrap().is_none());
 
+	// The same subscription should be possible to register again.
+	let mut other_nh: Subscription<String> =
+		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+
+	// check that the new subscription works.
+	assert!(other_nh.next().with_default_timeout().await.unwrap().unwrap().is_ok());
 	assert!(client.is_connected());
 }
 

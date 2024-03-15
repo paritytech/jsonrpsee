@@ -359,7 +359,7 @@ async fn ws_subscription_several_clients_with_drop() {
 }
 
 #[tokio::test]
-async fn ws_subscription_close_on_lagg() {
+async fn ws_subscription_close_on_lagging() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
@@ -383,6 +383,14 @@ async fn ws_subscription_close_on_lagg() {
 	// It should be dropped when lagging.
 	assert!(hello_sub.next().with_default_timeout().await.unwrap().is_none());
 
+	// The client should still be useable => make sure it still works.
+	let _hello_req: JsonValue = client.request("say_hello", rpc_params![]).await.unwrap();
+
+	// The same subscription should be possible to register again.
+	let mut other_sub: Subscription<JsonValue> =
+		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
+
+	assert!(other_sub.next().with_default_timeout().await.unwrap().is_some());
 	assert!(client.is_connected());
 }
 
