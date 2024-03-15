@@ -66,7 +66,7 @@ use tracing::instrument;
 
 use self::utils::{InactivityCheck, IntervalStream};
 
-use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
+use super::{generate_batch_id_range, subscription_channel, FrontToBack, IdKind, RequestIdManager};
 
 const LOG_TARGET: &str = "jsonrpsee-client";
 
@@ -707,13 +707,13 @@ impl SubscriptionClientT for Client {
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
-		let (notifs_rx, method) = match res {
+		let (rx, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
-		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Method(method)))
+		Ok(Subscription::new(self.to_back.clone(), rx, SubscriptionKind::Method(method)))
 	}
 }
 
@@ -746,7 +746,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
-					if let Err(Some(sub_id)) = process_subscription_response(&mut manager.lock(), response) {
+					if let Some(sub_id) = process_subscription_response(&mut manager.lock(), response) {
 						return Ok(Some(FrontToBack::SubscriptionClosed(sub_id)));
 					}
 				}
@@ -896,7 +896,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
+			let (subscribe_tx, subscribe_rx) = subscription_channel(max_buffer_capacity_per_subscription);
 
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
