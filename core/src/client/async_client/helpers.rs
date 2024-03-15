@@ -111,7 +111,7 @@ pub(crate) fn process_subscription_response(
 			Err(TrySubscriptionSendError::Closed) => Some(sub_id),
 			Err(TrySubscriptionSendError::TooSlow(m)) => {
 				tracing::error!(target: LOG_TARGET, "Subscription {{method={}, sub_id={:?}}} couldn't keep up with server; failed to send {m}", response.method, sub_id);
-				None
+				Some(sub_id)
 			}
 		},
 		None => {
@@ -157,6 +157,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 			}
 			Err(TrySubscriptionSendError::TooSlow(m)) => {
 				tracing::error!(target: LOG_TARGET, "Notification `{}` couldn't keep up with server; failed to send {m}", notif.method);
+				let _ = manager.remove_notification_handler(&notif.method);
 			}
 		},
 		None => {

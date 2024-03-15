@@ -40,7 +40,7 @@ use helpers::{
 	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
 };
 use hyper::http::HeaderValue;
-use jsonrpsee::core::client::SubscriptionError;
+use jsonrpsee::core::client::SubscriptionCloseReason;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
@@ -360,7 +360,7 @@ async fn ws_subscription_several_clients_with_drop() {
 }
 
 #[tokio::test]
-async fn ws_subscription_lagging_works() {
+async fn ws_subscription_close_on_lagg() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
@@ -373,10 +373,18 @@ async fn ws_subscription_lagging_works() {
 	// Don't poll the subscription stream for 2 seconds, should be full now.
 	tokio::time::sleep(Duration::from_secs(2)).await;
 
-	// Lagged.
-	assert!(matches!(hello_sub.next().await, Some(Err(SubscriptionError::TooSlow))));
-	// Next recv should poll the stream again.
-	assert!(matches!(hello_sub.next().await, Some(Ok(_))));
+	// Lagged
+	assert!(matches!(hello_sub.close_reason(), Some(SubscriptionCloseReason::Lagged)));
+
+	// Drain the subscription.
+	for _ in 0..4 {
+		assert!(hello_sub.next().with_default_timeout().await.unwrap().is_some());
+	}
+
+	// It should be dropped when lagging.
+	assert!(hello_sub.next().with_default_timeout().await.unwrap().is_none());
+
+	assert!(client.is_connected());
 }
 
 #[tokio::test]

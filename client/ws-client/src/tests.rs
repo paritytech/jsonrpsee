@@ -30,7 +30,7 @@ use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
 
 use jsonrpsee_core::client::{
-	BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT, SubscriptionError,
+	BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT, SubscriptionCloseReason,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::{rpc_params, DeserializeOwned};
@@ -218,9 +218,15 @@ async fn notification_lagging_works() {
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	// Lagged
-	assert!(matches!(nh.next().with_default_timeout().await.unwrap(), Some(Err(SubscriptionError::TooSlow))));
-	// Next recv should poll the stream again.
-	assert!(matches!(nh.next().with_default_timeout().await.unwrap(), Some(Ok(_))));
+	assert!(matches!(nh.close_reason(), Some(SubscriptionCloseReason::Lagged)));
+
+	// Drain the subscription.
+	for _ in 0..4 {
+		assert!(nh.next().with_default_timeout().await.unwrap().is_some());
+	}
+
+	// It should be dropped when lagging.
+	assert!(nh.next().with_default_timeout().await.unwrap().is_none());
 
 	assert!(client.is_connected());
 }

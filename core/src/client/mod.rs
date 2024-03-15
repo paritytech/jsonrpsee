@@ -33,14 +33,14 @@ cfg_async_client! {
 
 pub mod error;
 pub use error::Error;
-use tokio::sync::mpsc::error::TrySendError;
 
 use std::fmt;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::task::{self, Poll};
+use tokio::sync::mpsc::error::TrySendError;
 
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
@@ -54,26 +54,22 @@ use tokio::sync::{mpsc, oneshot};
 
 /// Shared state whether a subscription has lagged or not.
 #[derive(Debug, Clone)]
-pub(crate) struct SubscriptionLagged(Arc<Mutex<bool>>);
+pub(crate) struct SubscriptionLagged(Arc<RwLock<bool>>);
 
 impl SubscriptionLagged {
 	/// Create a new [`SubscriptionLagged`].
 	pub(crate) fn new() -> Self {
-		Self(Arc::new(Mutex::new(false)))
+		Self(Arc::new(RwLock::new(false)))
 	}
 
 	/// A message has been missed.
-	pub(crate) fn set_missed(&self) {
-		*self.0.lock().unwrap() = true;
+	pub(crate) fn set_lagged(&self) {
+		*self.0.write().expect("RwLock not poised; qed") = true;
 	}
 
 	/// Check whether the subscription has missed a message.
-	pub(crate) fn has_missed_message(&self) -> bool {
-		let mut lock = self.0.lock().unwrap();
-
-		let res = *lock;
-		*lock = false;
-		res
+	pub(crate) fn has_lagged(&self) -> bool {
+		*self.0.read().expect("RwLock not poised; qed")
 	}
 }
 
@@ -241,18 +237,13 @@ pub enum SubscriptionKind {
 	Method(String),
 }
 
-/// Error that may occur when subscribing.
-#[derive(Debug, thiserror::Error)]
-pub enum SubscriptionError {
-	/// The subscription lagged too far behind i.e, could not keep up with the server.
-	#[error("The subscription was too slow and at least one message was lost")]
-	TooSlow,
-	/// The subscription was closed because the connection was closed.
-	#[error("The subscription was closed")]
-	Closed,
-	/// The subscription notification parsing failed.
-	#[error("{0}")]
-	Parse(#[from] serde_json::Error),
+/// The reason why the subscription was closed.
+#[derive(Debug, Copy, Clone)]
+pub enum SubscriptionCloseReason {
+	/// The connection was closed.
+	ConnectionClosed,
+	/// The subscription could not keep up with the server.
+	Lagged,
 }
 
 /// Represent a client-side subscription which is implemented on top of
@@ -269,25 +260,13 @@ pub enum SubscriptionError {
 /// All messages from the server must be kept in a buffer in the client
 /// until they are read by polling the [`Subscription`]. If you don't
 /// poll the client subscription quickly enough, the buffer may fill
-/// up and then the most recent mesages will not be handled.
+/// up and when subscription is full the subscription is then closed.
 ///
-/// If that occurs, an error [`SubscriptionError::TooSlow`] is emitted.
-/// to indicate the at least one message was dropped.
-///
-/// The subscription is extendable and if you want drop the oldest message
-/// or some other logic you can provide a custom stream implementation
-/// on top of the subscription.
-///
-/// ## Connection closed
-///
-/// When the connection is closed the underlying stream will eventually
-/// return `None` to indicate that.
-///
-/// Because the subscription is implemented on top of a bounded channel
-/// it will not instantly return `None` when the connection is closed
-/// because all messages buffered must be read before it returns `None`.
+/// You can call [`Subscription::close_reason`] to determine why
+/// the subscription was closed.
 #[derive(Debug)]
 pub struct Subscription<Notif> {
+	is_closed: bool,
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
@@ -305,7 +284,7 @@ impl<Notif> std::marker::Unpin for Subscription<Notif> {}
 impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
 	fn new(to_back: mpsc::Sender<FrontToBack>, rx: SubscriptionReceiver, kind: SubscriptionKind) -> Self {
-		Self { to_back, rx, kind: Some(kind), marker: PhantomData }
+		Self { to_back, rx, kind: Some(kind), marker: PhantomData, is_closed: false }
 	}
 
 	/// Return the subscription type and, if applicable, ID.
@@ -326,6 +305,26 @@ impl<Notif> Subscription<Notif> {
 		while self.rx.next().await.is_some() {}
 
 		Ok(())
+	}
+
+	/// The reason why the subscription was closed.
+	///
+	/// Returns Some(reason) is the subscription was closed otherwise
+	/// None is returned.
+	pub fn close_reason(&self) -> Option<SubscriptionCloseReason> {
+		let lagged = self.rx.lagged.has_lagged();
+
+		// The `is_closed` is only set if the subscription has been polled
+		// and that is why lagged is checked here as well.
+		if !self.is_closed && !lagged {
+			return None;
+		}
+
+		if lagged {
+			Some(SubscriptionCloseReason::Lagged)
+		} else {
+			Some(SubscriptionCloseReason::ConnectionClosed)
+		}
 	}
 }
 
@@ -414,7 +413,7 @@ where
 	/// method (and delegates to that). Import [`StreamExt`] if you'd like
 	/// access to other stream combinator methods.
 	#[allow(clippy::should_implement_trait)]
-	pub async fn next(&mut self) -> Option<Result<Notif, SubscriptionError>> {
+	pub async fn next(&mut self) -> Option<Result<Notif, serde_json::Error>> {
 		StreamExt::next(self).await
 	}
 }
@@ -423,12 +422,14 @@ impl<Notif> Stream for Subscription<Notif>
 where
 	Notif: DeserializeOwned,
 {
-	type Item = Result<Notif, SubscriptionError>;
+	type Item = Result<Notif, serde_json::Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let res = match futures_util::ready!(self.rx.poll_next_unpin(cx)) {
-			Some(Ok(v)) => Some(serde_json::from_value::<Notif>(v).map_err(Into::into)),
-			Some(Err(TooSlow)) => Some(Err(SubscriptionError::TooSlow)),
-			None => None,
+			Some(v) => Some(serde_json::from_value::<Notif>(v).map_err(Into::into)),
+			None => {
+				self.is_closed = true;
+				None
+			}
 		};
 
 		Poll::Ready(res)
@@ -675,7 +676,7 @@ impl SubscriptionSender {
 			Ok(_) => Ok(()),
 			Err(TrySendError::Closed(_)) => Err(TrySubscriptionSendError::Closed),
 			Err(TrySendError::Full(m)) => {
-				self.lagged.set_missed();
+				self.lagged.set_lagged();
 				Err(TrySubscriptionSendError::TooSlow(m))
 			}
 		}
@@ -688,17 +689,11 @@ pub(crate) struct SubscriptionReceiver {
 	lagged: SubscriptionLagged,
 }
 
-pub(crate) struct TooSlow;
-
 impl Stream for SubscriptionReceiver {
-	type Item = Result<JsonValue, TooSlow>;
+	type Item = JsonValue;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
-		if self.lagged.has_missed_message() {
-			return Poll::Ready(Some(Err(TooSlow)));
-		};
-
-		Poll::Ready(futures_util::ready!(self.inner.poll_recv(cx)).map(Ok))
+		self.inner.poll_recv(cx)
 	}
 }
 
