@@ -33,6 +33,8 @@ use jsonrpsee::core::DeserializeOwned;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server, SubscriptionMessage};
 use jsonrpsee::ws_client::WsClientBuilder;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tokio_stream::wrappers::BroadcastStream;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -58,8 +60,14 @@ async fn main() -> anyhow::Result<()> {
 	// notice that many items have been replaced
 	// because the subscription wasn't polled.
 	for _ in 0..10 {
-		let n = sub.next().await.unwrap();
-		tracing::info!("sub item: {n}");
+		match sub.next().await.unwrap() {
+			Ok(n) => {
+				tracing::info!("recv={n}");
+			}
+			Err(e) => {
+				tracing::info!("{e}");
+			}
+		};
 	}
 
 	Ok(())
@@ -68,10 +76,8 @@ async fn main() -> anyhow::Result<()> {
 fn drop_oldest_when_lagging<T: Clone + DeserializeOwned + Send + Sync + 'static>(
 	mut sub: Subscription<T>,
 	buffer_size: usize,
-) -> impl Stream<Item = T> {
-	let (mut tx, rx) = async_broadcast::broadcast(buffer_size);
-
-	tx.set_overflow(true);
+) -> impl Stream<Item = Result<T, BroadcastStreamRecvError>> {
+	let (tx, rx) = tokio::sync::broadcast::channel(buffer_size);
 
 	tokio::spawn(async move {
 		// poll sub, sending msgs to our chan which throws stuff away
@@ -84,10 +90,13 @@ fn drop_oldest_when_lagging<T: Clone + DeserializeOwned + Send + Sync + 'static>
 				}
 			};
 
-			tx.try_broadcast(msg).expect("Infallible in overflowing mode; qed");
+			if tx.send(msg).is_err() {
+				return;
+			}
 		}
 	});
-	rx
+
+	BroadcastStream::new(rx)
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
