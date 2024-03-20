@@ -4,6 +4,20 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.22.3] - 2024-03-20
+
+Another small release that adds a new API for RpcModule if one already has the state in an `Arc`
+and a couple of bug fixes.
+
+### [Added]
+- add `RpcModule::from_arc` ([#1324](https://github.com/paritytech/jsonrpsee/pull/1324))
+
+### [Fixed]
+- Revert "fix(server): return err on WS handshake err (#1288)" ([#1326](https://github.com/paritytech/jsonrpsee/pull/1326))
+- export `AlreadyStoppedError` ([#1325](https://github.com/paritytech/jsonrpsee/pull/1325))
+
+Thanks to the external contributors [@mattsse](https://github.com/mattsse) and [@aatifsyed](https://github.com/mattsse) who contributed to this release.
+
 ## [v0.22.2] - 2024-03-05
 
 This is a small patch release that exposes the connection details in server method implementations without breaking changes.
