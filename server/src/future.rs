@@ -61,6 +61,7 @@ impl StopHandle {
 	}
 }
 
+/// Error when the server has already been stopped.
 #[derive(Debug, Copy, Clone, thiserror::Error)]
 #[error("The server is already stopped")]
 pub struct AlreadyStoppedError;
