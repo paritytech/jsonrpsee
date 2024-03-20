@@ -472,7 +472,7 @@ where
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-			Err(hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}"))))
+			Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed: {e}"))))
 		}
 	}
 }
