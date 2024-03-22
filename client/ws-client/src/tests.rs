@@ -190,6 +190,26 @@ async fn notification_handler_works() {
 }
 
 #[tokio::test]
+async fn batched_notification_handler_works() {
+	let server = WebSocketTestServer::with_hardcoded_notification(
+		"127.0.0.1:0".parse().unwrap(),
+		server_batched_notification("test", "batched server originated notification works".into()),
+	)
+	.with_default_timeout()
+	.await
+	.unwrap();
+
+	let uri = to_ws_uri_string(server.local_addr());
+	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+	{
+		let mut nh: Subscription<String> =
+			client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
+		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
+		assert_eq!("batched server originated notification works".to_owned(), response);
+	}
+}
+
+#[tokio::test]
 async fn notification_without_polling_doesnt_make_client_unuseable() {
 	init_logger();
 

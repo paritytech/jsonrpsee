@@ -767,32 +767,36 @@ fn handle_backend_messages<R: TransportReceiverT>(
 					let mut batch = Vec::with_capacity(raw_responses.len());
 
 					let mut range = None;
+					let mut got_notif = false;
 
 					for r in raw_responses {
-						let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) else {
+						if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
+							let id = response.id.try_parse_inner_as_number()?;
+							let result = ResponseSuccess::try_from(response).map(|s| s.result);
+							batch.push(InnerBatchResponse { id, result });
+
+							let r = range.get_or_insert(id..id);
+
+							if id < r.start {
+								r.start = id;
+							}
+
+							if id > r.end {
+								r.end = id;
+							}
+						} else if let Ok(notif) = serde_json::from_str::<Notification<_>>(r.get()) {
+							got_notif = true;
+							process_notification(&mut manager.lock(), notif);
+						} else {
 							return Err(unparse_error(raw));
 						};
-
-						let id = response.id.try_parse_inner_as_number()?;
-						let result = ResponseSuccess::try_from(response).map(|s| s.result);
-						batch.push(InnerBatchResponse { id, result });
-
-						let r = range.get_or_insert(id..id);
-
-						if id < r.start {
-							r.start = id;
-						}
-
-						if id > r.end {
-							r.end = id;
-						}
 					}
 
 					if let Some(mut range) = range {
 						// the range is exclusive so need to add one.
 						range.end += 1;
 						process_batch_response(&mut manager.lock(), batch, range)?;
-					} else {
+					} else if !got_notif {
 						return Err(EmptyBatchRequest.into());
 					}
 				} else {
