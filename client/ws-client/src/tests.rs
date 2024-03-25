@@ -212,6 +212,29 @@ async fn batched_notification_handler_works() {
 }
 
 #[tokio::test]
+async fn batched_subscription_notif_works() {
+	init_logger();
+
+	let server = WebSocketTestServer::with_hardcoded_subscription(
+		"127.0.0.1:0".parse().unwrap(),
+		server_subscription_id_response(Id::Num(0)),
+		server_batched_subscription("sub", "batched_notif".into()),
+	)
+	.with_default_timeout()
+	.await
+	.unwrap();
+
+	let uri = to_ws_uri_string(server.local_addr());
+	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+	{
+		let mut nh: Subscription<String> =
+			client.subscribe("sub", rpc_params![], "unsub").with_default_timeout().await.unwrap().unwrap();
+		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
+		assert_eq!("batched_notif", response);
+	}
+}
+
+#[tokio::test]
 async fn notification_close_on_lagging() {
 	init_logger();
 

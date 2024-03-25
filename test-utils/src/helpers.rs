@@ -191,6 +191,14 @@ pub fn server_batched_notification(method: &str, params: Value) -> String {
 	format!(r#"[{{"jsonrpc":"2.0","method":"{}", "params":{} }}]"#, method, serde_json::to_string(&params).unwrap())
 }
 
+/// Batched server originated notification
+pub fn server_batched_subscription(method: &str, result: Value) -> String {
+	format!(
+		r#"[{{"jsonrpc":"2.0","method":"{method}","params":{{"subscription":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","result":{}}}}}]"#,
+		serde_json::to_string(&result).unwrap()
+	)
+}
+
 pub async fn http_request(body: Body, uri: Uri) -> Result<HttpResponse, String> {
 	let client = hyper::Client::new();
 	http_post(client, body, uri).await
