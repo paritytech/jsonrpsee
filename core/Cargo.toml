@@ -41,8 +41,9 @@ default = []
 http-helpers = ["hyper", "futures-util"]
 server = [
 	"futures-util/alloc",
-	"rustc-hash/std",
+	"hyper",
 	"parking_lot",
+	"rustc-hash/std",
 	"rand",
 	"tokio/rt",
 	"tokio/sync",
