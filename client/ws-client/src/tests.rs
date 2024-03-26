@@ -38,6 +38,7 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::ErrorObjectOwned;
+use jsonrpsee_types::{Notification, SubscriptionId, SubscriptionPayload, SubscriptionResponse};
 use serde_json::Value as JsonValue;
 
 fn init_logger() {
@@ -152,7 +153,7 @@ async fn subscription_works() {
 	let server = WebSocketTestServer::with_hardcoded_subscription(
 		"127.0.0.1:0".parse().unwrap(),
 		server_subscription_id_response(Id::Num(0)),
-		server_subscription_response(JsonValue::String("hello my friend".to_owned())),
+		server_subscription_response("subscribe_hello", "hello my friend".into()),
 	)
 	.with_default_timeout()
 	.await
@@ -192,33 +193,28 @@ async fn notification_handler_works() {
 }
 
 #[tokio::test]
-async fn batched_notification_handler_works() {
-	let server = WebSocketTestServer::with_hardcoded_notification(
-		"127.0.0.1:0".parse().unwrap(),
-		server_batched_notification("test", "batched server originated notification works".into()),
-	)
-	.with_default_timeout()
-	.await
-	.unwrap();
-
-	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
-	{
-		let mut nh: Subscription<String> =
-			client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
-		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
-		assert_eq!("batched server originated notification works".to_owned(), response);
-	}
-}
-
-#[tokio::test]
-async fn batched_subscription_notif_works() {
+async fn batched_notifs_works() {
 	init_logger();
+
+	let notifs = vec![
+		serde_json::to_value(&Notification::new("test".into(), "method_notif".to_string())).unwrap(),
+		serde_json::to_value(&Notification::new("sub".into(), "method_notif".to_string())).unwrap(),
+		serde_json::to_value(&SubscriptionResponse::new(
+			"sub".into(),
+			SubscriptionPayload {
+				subscription: SubscriptionId::Str("D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o".into()),
+				result: "sub_notif".to_string(),
+			},
+		))
+		.unwrap(),
+	];
+
+	let serialized_batch = serde_json::to_string(&notifs).unwrap();
 
 	let server = WebSocketTestServer::with_hardcoded_subscription(
 		"127.0.0.1:0".parse().unwrap(),
 		server_subscription_id_response(Id::Num(0)),
-		server_batched_subscription("sub", "batched_notif".into()),
+		serialized_batch,
 	)
 	.with_default_timeout()
 	.await
@@ -226,11 +222,22 @@ async fn batched_subscription_notif_works() {
 
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+
+	// Ensure that subscription is returned back to the correct handle
+	// and is handled separately from ordinary notifications.
 	{
 		let mut nh: Subscription<String> =
 			client.subscribe("sub", rpc_params![], "unsub").with_default_timeout().await.unwrap().unwrap();
 		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
-		assert_eq!("batched_notif", response);
+		assert_eq!("sub_notif", response);
+	}
+
+	// Ensure that method notif is returned back to the correct handle.
+	{
+		let mut nh: Subscription<String> =
+			client.subscribe_to_method("sub").with_default_timeout().await.unwrap().unwrap();
+		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
+		assert_eq!("method_notif", response);
 	}
 }
 
