@@ -63,7 +63,7 @@ pub(crate) fn process_batch_response(
 	let batch_state = match manager.complete_pending_batch(range.clone()) {
 		Some(state) => state,
 		None => {
-			tracing::warn!(target: LOG_TARGET, "Received unknown batch response");
+			tracing::debug!(target: LOG_TARGET, "Received unknown batch response");
 			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)));
 		}
 	};
@@ -110,7 +110,7 @@ pub(crate) fn process_subscription_response(
 			Ok(_) => None,
 			Err(TrySubscriptionSendError::Closed) => Some(sub_id),
 			Err(TrySubscriptionSendError::TooSlow(m)) => {
-				tracing::error!(target: LOG_TARGET, "Subscription {{method={}, sub_id={:?}}} couldn't keep up with server; failed to send {m}", response.method, sub_id);
+				tracing::debug!(target: LOG_TARGET, "Subscription {{method={}, sub_id={:?}}} couldn't keep up with server; failed to send {m}", response.method, sub_id);
 				Some(sub_id)
 			}
 		},
@@ -156,7 +156,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 				let _ = manager.remove_notification_handler(&notif.method);
 			}
 			Err(TrySubscriptionSendError::TooSlow(m)) => {
-				tracing::error!(target: LOG_TARGET, "Notification `{}` couldn't keep up with server; failed to send {m}", notif.method);
+				tracing::debug!(target: LOG_TARGET, "Notification `{}` couldn't keep up with server; failed to send {m}", notif.method);
 				let _ = manager.remove_notification_handler(&notif.method);
 			}
 		},
