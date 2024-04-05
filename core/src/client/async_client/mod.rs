@@ -724,14 +724,15 @@ fn handle_backend_messages<R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
 	manager: &ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
-) -> Result<Option<FrontToBack>, Error> {
+) -> Result<Vec<FrontToBack>, Error> {
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
 	fn handle_recv_message(
 		raw: &[u8],
 		manager: &ThreadSafeRequestManager,
 		max_buffer_capacity_per_subscription: usize,
-	) -> Result<Option<FrontToBack>, Error> {
+	) -> Result<Vec<FrontToBack>, Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
+		let mut messages = Vec::new();
 
 		match first_non_whitespace {
 			Some(b'{') => {
@@ -741,13 +742,13 @@ fn handle_backend_messages<R: TransportReceiverT>(
 						process_single_response(&mut manager.lock(), single, max_buffer_capacity_per_subscription)?;
 
 					if let Some(unsub) = maybe_unsub {
-						return Ok(Some(FrontToBack::Request(unsub)));
+						return Ok(vec![FrontToBack::Request(unsub)]);
 					}
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
 					if let Err(Some(sub_id)) = process_subscription_response(&mut manager.lock(), response) {
-						return Ok(Some(FrontToBack::SubscriptionClosed(sub_id)));
+						return Ok(vec![FrontToBack::SubscriptionClosed(sub_id)]);
 					}
 				}
 				// Subscription error response.
@@ -784,6 +785,14 @@ fn handle_backend_messages<R: TransportReceiverT>(
 							if id > r.end {
 								r.end = id;
 							}
+						} else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(r.get()) {
+							got_notif = true;
+							if let Err(Some(sub_id)) = process_subscription_response(&mut manager.lock(), response) {
+								messages.push(FrontToBack::SubscriptionClosed(sub_id));
+							}
+						} else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
+							got_notif = true;
+							process_subscription_close_response(&mut manager.lock(), response);
 						} else if let Ok(notif) = serde_json::from_str::<Notification<_>>(r.get()) {
 							got_notif = true;
 							process_notification(&mut manager.lock(), notif);
@@ -808,13 +817,13 @@ fn handle_backend_messages<R: TransportReceiverT>(
 			}
 		};
 
-		Ok(None)
+		Ok(messages)
 	}
 
 	match message {
 		Some(Ok(ReceivedMessage::Pong)) => {
 			tracing::debug!(target: LOG_TARGET, "Received pong");
-			Ok(None)
+			Ok(vec![])
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)
@@ -1036,14 +1045,15 @@ where
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
 				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
-					Ok(Some(msg)) => {
-						pending_unsubscribes.push(to_send_task.send(msg));
+					Ok(messages) => {
+						for msg in messages {
+							pending_unsubscribes.push(to_send_task.send(msg));
+						}
 					}
 					Err(e) => {
 						tracing::error!(target: LOG_TARGET, "Failed to read message: {e}");
 						break Err(e);
 					}
-					Ok(None) => (),
 				}
 			}
 			_ = inactivity_stream.next() => {
