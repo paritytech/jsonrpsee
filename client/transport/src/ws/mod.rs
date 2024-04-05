@@ -372,7 +372,7 @@ impl WsTransportClientBuilder {
 							Ok(uri) => {
 								// Absolute URI.
 								target = uri.try_into().map_err(|e| {
-									tracing::error!(target: LOG_TARGET, "Redirection failed: {:?}", e);
+									tracing::debug!(target: LOG_TARGET, "Redirection failed: {:?}", e);
 									e
 								})?;
 
