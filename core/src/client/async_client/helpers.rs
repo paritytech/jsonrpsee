@@ -24,9 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::client::async_client::LOG_TARGET;
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
-use crate::client::{RequestMessage, TransportSenderT, Error};
+use crate::client::async_client::LOG_TARGET;
+use crate::client::{Error, RequestMessage, TransportSenderT};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 
@@ -63,7 +63,7 @@ pub(crate) fn process_batch_response(
 	let batch_state = match manager.complete_pending_batch(range.clone()) {
 		Some(state) => state,
 		None => {
-			tracing::warn!(target: LOG_TARGET, "Received unknown batch response");
+			tracing::debug!(target: LOG_TARGET, "Received unknown batch response");
 			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)));
 		}
 	};
@@ -110,7 +110,7 @@ pub(crate) fn process_subscription_response(
 		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
 			Err(err) => {
-				tracing::error!(target: LOG_TARGET, "Dropping subscription {:?} error: {:?}", sub_id, err);
+				tracing::debug!(target: LOG_TARGET, "Dropping subscription {:?} error: {:?}", sub_id, err);
 				Err(Some(sub_id))
 			}
 		},
@@ -153,7 +153,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => (),
 			Err(err) => {
-				tracing::warn!(target: LOG_TARGET, "Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
+				tracing::debug!(target: LOG_TARGET, "Could not send notification, dropping handler for {:?} error: {:?}", notif.method, err);
 				let _ = manager.remove_notification_handler(&notif.method);
 			}
 		},

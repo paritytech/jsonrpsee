@@ -846,7 +846,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 	match message {
 		FrontToBack::Batch(batch) => {
 			if let Err(send_back) = manager.lock().insert_pending_batch(batch.ids.clone(), batch.send_back) {
-				tracing::warn!(target: LOG_TARGET, "Batch request already pending: {:?}", batch.ids);
+				tracing::debug!(target: LOG_TARGET, "Batch request already pending: {:?}", batch.ids);
 				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!("{:?}", batch.ids)).into()));
 				return Ok(());
 			}
@@ -860,7 +860,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		// User called `request` on the front-end
 		FrontToBack::Request(request) => {
 			if let Err(send_back) = manager.lock().insert_pending_call(request.id.clone(), request.send_back) {
-				tracing::warn!(target: LOG_TARGET, "Denied duplicate method call");
+				tracing::debug!(target: LOG_TARGET, "Denied duplicate method call");
 
 				if let Some(s) = send_back {
 					let _ = s.send(Err(InvalidRequestId::Occupied(request.id.to_string()).into()));
@@ -878,7 +878,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				sub.send_back,
 				sub.unsubscribe_method,
 			) {
-				tracing::warn!(target: LOG_TARGET, "Denied duplicate subscription");
+				tracing::debug!(target: LOG_TARGET, "Denied duplicate subscription");
 
 				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!(
 					"sub_id={}:req_id={}",
@@ -974,13 +974,13 @@ where
 				if let Err(e) =
 					handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
 				{
-					tracing::error!(target: LOG_TARGET, "ws send failed: {e}");
+					tracing::debug!(target: LOG_TARGET, "ws send failed: {e}");
 					break Err(Error::Transport(e.into()));
 				}
 			}
 			_ = ping_interval.next() => {
 				if let Err(err) = sender.send_ping().await {
-					tracing::error!(target: LOG_TARGET, "Send ws ping failed: {err}");
+					tracing::debug!(target: LOG_TARGET, "Send ws ping failed: {err}");
 					break Err(Error::Transport(err.into()));
 				}
 			}
@@ -1051,7 +1051,7 @@ where
 						}
 					}
 					Err(e) => {
-						tracing::error!(target: LOG_TARGET, "Failed to read message: {e}");
+						tracing::debug!(target: LOG_TARGET, "Failed to read message: {e}");
 						break Err(e);
 					}
 				}
