@@ -137,7 +137,7 @@ impl MethodSink {
 		self.send(json).await
 	}
 
-	/// Similar to to `MethodSink::send` but only waits for a limited time.
+	/// Similar to `MethodSink::send` but only waits for a limited time.
 	pub async fn send_timeout(&self, msg: String, timeout: Duration) -> Result<(), SendTimeoutError> {
 		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
 	}
