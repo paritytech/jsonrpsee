@@ -52,7 +52,6 @@ use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
 use std::sync::Arc;
 
-use async_lock::RwLock as AsyncRwLock;
 use async_trait::async_trait;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
@@ -69,6 +68,7 @@ use self::utils::{InactivityCheck, IntervalStream};
 use super::{generate_batch_id_range, subscription_channel, FrontToBack, IdKind, RequestIdManager};
 
 const LOG_TARGET: &str = "jsonrpsee-client";
+const NOT_POISONED: &str = "Not poisoned; qed";
 
 /// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect
 /// an inactive connection.
@@ -142,11 +142,11 @@ impl ThreadSafeRequestManager {
 	}
 
 	pub(crate) fn lock(&self) -> std::sync::MutexGuard<RequestManager> {
-		self.0.lock().expect("Not poisoned; qed")
+		self.0.lock().expect(NOT_POISONED)
 	}
 }
 
-pub(crate) type SharedDisconnectReason = Arc<AsyncRwLock<Option<Arc<Error>>>>;
+pub(crate) type SharedDisconnectReason = Arc<std::sync::RwLock<Option<Arc<Error>>>>;
 
 /// If the background thread is terminated, this type
 /// can be used to read the error cause.
@@ -167,7 +167,7 @@ impl ErrorFromBack {
 		// When the background task is closed the error is written to `disconnect_reason`.
 		self.conn.closed().await;
 
-		if let Some(err) = self.disconnect_reason.read().await.as_ref() {
+		if let Some(err) = self.disconnect_reason.read().expect(NOT_POISONED).as_ref() {
 			Error::RestartNeeded(err.clone())
 		} else {
 			Error::Custom("Error reason could not be found. This is a bug. Please open an issue.".to_string())
@@ -1050,6 +1050,6 @@ async fn wait_for_shutdown(
 
 	// Send an error to the frontend if the send or receive task completed with an error.
 	if let Either::Left((Some(Err(err)), _)) = future::select(rx_item, client_dropped).await {
-		*err_to_front.write().await = Some(Arc::new(err));
+		*err_to_front.write().expect(NOT_POISONED) = Some(Arc::new(err));
 	}
 }
