@@ -363,7 +363,7 @@ impl ClientBuilder {
 		type PendingIntervalStream = IntervalStream<Pending<()>>;
 
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
+		let disconnect_reason = SharedDisconnectReason::default();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
@@ -395,13 +395,13 @@ impl ClientBuilder {
 		wasm_bindgen_futures::spawn_local(wait_for_shutdown(
 			send_receive_task_sync_rx,
 			client_dropped_rx,
-			err_to_front,
+			disconnect_reason.clone(),
 		));
 
 		Client {
-			to_back,
+			to_back: to_back.clone(),
 			request_timeout: self.request_timeout,
-			error: ErrorFromBack::new(err_from_back),
+			error: ErrorFromBack::new(to_back, disconnect_reason),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
