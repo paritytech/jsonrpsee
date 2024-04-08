@@ -4,6 +4,24 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.22.4] - 2024-04-08
+
+Yet another rather small release that fixes a cancel-safety issue that
+could cause an unexpected panic when reading disconnect reason from the background task.
+
+Also this makes the API `Client::disconnect_reason` cancel-safe.
+
+### [Added]
+- client: support batched notifications ([#1327](https://github.com/paritytech/jsonrpsee/pull/1327))
+- client: support batched subscription notifs ([#1332](https://github.com/paritytech/jsonrpsee/pull/1332))
+
+### [Changed]
+- client: downgrade logs from error/warn -> debug ([#1343](https://github.com/paritytech/jsonrpsee/pull/1343))
+
+### [Fixed]
+- Update MSRV to 1.74.1 in Cargo.toml ([#1338](https://github.com/paritytech/jsonrpsee/pull/1338))
+- client: disconnect_reason/read_error is now cancel-safe ([#1347](https://github.com/paritytech/jsonrpsee/pull/1347))
+
 ## [v0.22.3] - 2024-03-20
 
 Another small release that adds a new API for RpcModule if one already has the state in an `Arc`
