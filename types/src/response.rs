@@ -58,7 +58,12 @@ impl<'a, T: Clone> Response<'a, T> {
 
 	/// Create an owned [`Response`].
 	pub fn into_owned(self) -> Response<'static, T> {
-		Response { jsonrpc: self.jsonrpc, payload: self.payload.into_owned(), id: self.id.into_owned(), other: HashMap::new() }
+		Response {
+			jsonrpc: self.jsonrpc,
+			payload: self.payload.into_owned(),
+			id: self.id.into_owned(),
+			other: HashMap::new(),
+		}
 	}
 }
 
@@ -302,7 +307,9 @@ where
 					(Some(jsonrpc), Some(result), None) => {
 						Response { jsonrpc, payload: ResponsePayload::Success(result), id, other }
 					}
-					(Some(jsonrpc), None, Some(err)) => Response { jsonrpc, payload: ResponsePayload::Error(err), id, other },
+					(Some(jsonrpc), None, Some(err)) => {
+						Response { jsonrpc, payload: ResponsePayload::Error(err), id, other }
+					}
 					(None, Some(result), _) => {
 						Response { jsonrpc: None, payload: ResponsePayload::Success(result), id, other }
 					}
@@ -347,7 +354,7 @@ where
 mod tests {
 	use std::collections::HashMap;
 
-use super::{Id, Response, TwoPointZero};
+	use super::{Id, Response, TwoPointZero};
 	use crate::{response::ResponsePayload, ErrorObjectOwned};
 
 	#[test]
@@ -391,8 +398,12 @@ use super::{Id, Response, TwoPointZero};
 
 	#[test]
 	fn deserialize_success_call() {
-		let exp =
-			Response { jsonrpc: Some(TwoPointZero), payload: ResponsePayload::success(99_u64), id: Id::Number(11), other: HashMap::new() };
+		let exp = Response {
+			jsonrpc: Some(TwoPointZero),
+			payload: ResponsePayload::success(99_u64),
+			id: Id::Number(11),
+			other: HashMap::new(),
+		};
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.payload, exp.payload);
@@ -416,7 +427,12 @@ use super::{Id, Response, TwoPointZero};
 
 	#[test]
 	fn deserialize_call_missing_version_field() {
-		let exp = Response { jsonrpc: None, payload: ResponsePayload::success(99_u64), id: Id::Number(11), other: HashMap::new() };
+		let exp = Response {
+			jsonrpc: None,
+			payload: ResponsePayload::success(99_u64),
+			id: Id::Number(11),
+			other: HashMap::new(),
+		};
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":null, "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.payload, exp.payload);
@@ -425,7 +441,12 @@ use super::{Id, Response, TwoPointZero};
 
 	#[test]
 	fn deserialize_with_other_field() {
-		let exp = Response { jsonrpc: None, payload: ResponsePayload::success(99_u64), id: Id::Number(11), other: HashMap::new() };
+		let exp = Response {
+			jsonrpc: None,
+			payload: ResponsePayload::success(99_u64),
+			id: Id::Number(11),
+			other: HashMap::new(),
+		};
 		let dsr: Response<u64> =
 			serde_json::from_str(r#"{"jsonrpc":null, "result":99, "id":11, "unknown":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
