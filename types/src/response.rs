@@ -27,6 +27,7 @@
 //! Types pertaining to JSON-RPC responses.
 
 use std::borrow::Cow as StdCow;
+use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -45,17 +46,19 @@ pub struct Response<'a, T: Clone> {
 	pub payload: ResponsePayload<'a, T>,
 	/// Request ID
 	pub id: Id<'a>,
+	/// Non-standard fields
+	pub other: HashMap<String, &'a serde_json::value::RawValue>,
 }
 
 impl<'a, T: Clone> Response<'a, T> {
 	/// Create a new [`Response`].
 	pub fn new(payload: ResponsePayload<'a, T>, id: Id<'a>) -> Response<'a, T> {
-		Response { jsonrpc: Some(TwoPointZero), payload, id }
+		Response { jsonrpc: Some(TwoPointZero), payload, id, other: HashMap::new() }
 	}
 
 	/// Create an owned [`Response`].
 	pub fn into_owned(self) -> Response<'static, T> {
-		Response { jsonrpc: self.jsonrpc, payload: self.payload.into_owned(), id: self.id.into_owned() }
+		Response { jsonrpc: self.jsonrpc, payload: self.payload.into_owned(), id: self.id.into_owned(), other: HashMap::new() }
 	}
 }
 
@@ -195,7 +198,7 @@ where
 			Result,
 			Error,
 			Id,
-			Ignore,
+			Other(String),
 		}
 
 		impl<'de> Deserialize<'de> for Field {
@@ -221,7 +224,7 @@ where
 							"result" => Ok(Field::Result),
 							"error" => Ok(Field::Error),
 							"id" => Ok(Field::Id),
-							_ => Ok(Field::Ignore),
+							_ => Ok(Field::Other(value.to_owned())),
 						}
 					}
 				}
@@ -255,6 +258,7 @@ where
 				let mut result = None;
 				let mut error = None;
 				let mut id = None;
+				let mut other: HashMap<String, &serde_json::value::RawValue> = HashMap::new();
 				while let Some(key) = map.next_key()? {
 					match key {
 						Field::Result => {
@@ -281,8 +285,10 @@ where
 							}
 							jsonrpc = Some(map.next_value()?);
 						}
-						Field::Ignore => {
-							let _ = map.next_value::<serde::de::IgnoredAny>()?;
+						Field::Other(key) => {
+							if other.insert(key.to_owned(), map.next_value()?).is_some() {
+								return Err(serde::de::Error::custom(format!("duplicated field \"{key}\"")));
+							}
 						}
 					}
 				}
@@ -294,13 +300,13 @@ where
 						return Err(serde::de::Error::duplicate_field("result and error are mutually exclusive"))
 					}
 					(Some(jsonrpc), Some(result), None) => {
-						Response { jsonrpc, payload: ResponsePayload::Success(result), id }
+						Response { jsonrpc, payload: ResponsePayload::Success(result), id, other }
 					}
-					(Some(jsonrpc), None, Some(err)) => Response { jsonrpc, payload: ResponsePayload::Error(err), id },
+					(Some(jsonrpc), None, Some(err)) => Response { jsonrpc, payload: ResponsePayload::Error(err), id, other },
 					(None, Some(result), _) => {
-						Response { jsonrpc: None, payload: ResponsePayload::Success(result), id }
+						Response { jsonrpc: None, payload: ResponsePayload::Success(result), id, other }
 					}
-					(None, _, Some(err)) => Response { jsonrpc: None, payload: ResponsePayload::Error(err), id },
+					(None, _, Some(err)) => Response { jsonrpc: None, payload: ResponsePayload::Error(err), id, other },
 					(_, None, None) => return Err(serde::de::Error::missing_field("result/error")),
 				};
 
