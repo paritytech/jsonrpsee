@@ -231,6 +231,7 @@ impl ClientBuilder {
 	///
 	/// This function panics if `max` is 0.
 	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
+		assert!(max > 0);
 		self.max_buffer_capacity_per_subscription = max;
 		self
 	}
