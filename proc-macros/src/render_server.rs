@@ -64,7 +64,7 @@ impl RpcDescription {
 			let mut method_sig = method.signature.clone();
 
 			if method.raw_method {
-				let context_ty = self.jrps_server_item(quote! { ConnectionDetails });
+				let context_ty = self.jrps_server_item(quote! { core::server::ConnectionDetails });
 				// Add `ConnectionDetails` as the second parameter to the signature.
 				let context: syn::FnArg = syn::parse_quote!(connection_details: #context_ty);
 				method_sig.sig.inputs.insert(1, context);
@@ -78,7 +78,7 @@ impl RpcDescription {
 
 		let subscriptions = self.subscriptions.iter().map(|sub| {
 			let docs = &sub.docs;
-			let subscription_sink_ty = self.jrps_server_item(quote! { PendingSubscriptionSink });
+			let subscription_sink_ty = self.jrps_server_item(quote! { core::server::PendingSubscriptionSink });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
@@ -97,7 +97,7 @@ impl RpcDescription {
 	}
 
 	fn render_into_rpc(&self) -> Result<TokenStream2, syn::Error> {
-		let rpc_module = self.jrps_server_item(quote! { RpcModule });
+		let rpc_module = self.jrps_server_item(quote! { core::server::RpcModule });
 
 		let mut registered = HashSet::new();
 		let mut errors = Vec::new();
@@ -136,7 +136,7 @@ impl RpcDescription {
 				// called..
 				let (parsing, params_seq) = self.render_params_decoding(&method.params, None);
 
-				let into_response = self.jrps_server_item(quote! { IntoResponse });
+				let into_response = self.jrps_server_item(quote! { core::server::IntoResponse });
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
@@ -187,8 +187,8 @@ impl RpcDescription {
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let pending = proc_macro2::Ident::new("pending", rust_method_name.span());
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params, Some(pending));
-				let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
-				let into_sub_response = self.jrps_server_item(quote! { IntoSubscriptionCloseResponse });
+				let sub_err = self.jrps_server_item(quote! { core::server::SubscriptionCloseResponse });
+				let into_sub_response = self.jrps_server_item(quote! { core::server::IntoSubscriptionCloseResponse });
 
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
@@ -313,10 +313,10 @@ impl RpcDescription {
 
 		let params_fields_seq = params.iter().map(|(name, _)| name);
 		let params_fields = quote! { #(#params_fields_seq),* };
-		let tracing = self.jrps_server_item(quote! { tracing });
-		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
-		let response_payload = self.jrps_server_item(quote! { ResponsePayload });
-		let tokio = self.jrps_server_item(quote! { tokio });
+		let tracing = self.jrps_server_item(quote! { core::__reexports::tracing });
+		let sub_err = self.jrps_server_item(quote! { core::server::SubscriptionCloseResponse });
+		let response_payload = self.jrps_server_item(quote! { core::server::ResponsePayload });
+		let tokio = self.jrps_server_item(quote! { core::__reexports::tokio });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {

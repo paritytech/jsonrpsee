@@ -49,7 +49,6 @@ cfg_http_helpers! {
 cfg_server! {
 	pub mod id_providers;
 	pub mod server;
-
 }
 
 cfg_client! {
@@ -75,6 +74,11 @@ pub mod __reexports {
 	pub use async_trait::async_trait;
 	pub use serde;
 	pub use serde_json;
+	pub use tracing;
+
+	cfg_client_or_server! {
+		pub use tokio;
+	}
 }
 
 pub use beef::Cow;
