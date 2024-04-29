@@ -29,7 +29,7 @@ use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
-use syn::{AngleBracketedGenericArguments, FnArg, Pat, PatIdent, PatType, PathArguments, TypeParam};
+use syn::{AngleBracketedGenericArguments, FnArg, Ident, Pat, PatIdent, PatType, PathArguments, TypeParam};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -210,6 +210,8 @@ impl RpcDescription {
 		param_kind: &ParamKind,
 		signature: &syn::TraitItemFn,
 	) -> TokenStream2 {
+		const ILLEGAL_PARAM_NAME: &str = "__________________params";
+
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 
 		if params.is_empty() {
@@ -229,27 +231,49 @@ impl RpcDescription {
 					let (value, _value_type) = pair.1;
 					quote!(#name, #value)
 				});
+
+				let p = Ident::new(ILLEGAL_PARAM_NAME, proc_macro2::Span::call_site());
+
+				// It's possible that the user has a parameter named `ILLEGAL_PARAM_NAME` in there API
+				// which would conflict with our internal parameter name
+				//
+				// We will throw an error if that is the case.
+				if param_names.iter().any(|name| name == ILLEGAL_PARAM_NAME) {
+					panic!("Cannot use `{}` as a parameter name", ILLEGAL_PARAM_NAME);
+				}
+
 				quote!({
-					let mut params = #jsonrpsee::core::params::ObjectParams::new();
+					let mut #p #jsonrpsee::core::params::ObjectParams::new();
 					#(
-						if let Err(err) = params.insert( #params_insert ) {
+						if let Err(err) = #p.insert( #params_insert ) {
 							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params_insert ), err);
 						}
 					)*
-					params
+					#p
 				})
 			}
 			ParamKind::Array => {
+				let p = Ident::new(ILLEGAL_PARAM_NAME, proc_macro2::Span::call_site());
+
+				// It's possible that the user has a parameter named `ILLEGAL_PARAM_NAME` in there API
+				// which would conflict with our internal parameter name
+				//
+				// We will throw an error if that is the case.
+				if params.iter().any(|(id, _)| id.ident == p) {
+					panic!("Cannot use `{}` as a parameter name", ILLEGAL_PARAM_NAME);
+				}
+
 				// Throw away the type.
 				let params = params.iter().map(|(param, _param_type)| param);
+
 				quote!({
-					let mut params = #jsonrpsee::core::params::ArrayParams::new();
+					let mut #p = #jsonrpsee::core::params::ArrayParams::new();
 					#(
-						if let Err(err) = params.insert( #params ) {
+						if let Err(err) = #p.insert( #params ) {
 							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params ), err);
 						}
 					)*
-					params
+					#p
 				})
 			}
 		}
