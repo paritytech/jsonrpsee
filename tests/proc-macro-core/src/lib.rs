@@ -31,7 +31,7 @@ pub trait Api {
 	async fn async_call(&self, a: String) -> Result<String, ErrorObjectOwned>;
 
 	#[subscription(name = "subscribe", item = PubSubItem)]
-	async fn sub(&self, kind: PubSubKind, p: PubSubParams) -> SubscriptionResult;
+	async fn sub(&self, kind: PubSubKind, params: PubSubParams) -> SubscriptionResult;
 
 	#[subscription(name = "subscribeSync", item = String)]
 	fn sync_sub(&self, a: String) -> SubscriptionResult;
