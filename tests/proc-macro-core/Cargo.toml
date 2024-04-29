@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-proc-macro-core"
-description = "Test crate to make sure that jsonrpsee core compiles"
+description = "Test crate for the proc-macro API to make sure that it compiles with the core features"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
