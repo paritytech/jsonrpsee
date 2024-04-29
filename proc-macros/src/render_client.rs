@@ -243,7 +243,7 @@ impl RpcDescription {
 				}
 
 				quote!({
-					let mut #p #jsonrpsee::core::params::ObjectParams::new();
+					let mut #p = #jsonrpsee::core::params::ObjectParams::new();
 					#(
 						if let Err(err) = #p.insert( #params_insert ) {
 							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params_insert ), err);
