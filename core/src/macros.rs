@@ -20,6 +20,15 @@ macro_rules! cfg_server {
 	};
 }
 
+macro_rules! cfg_client_or_server {
+	($($item:item)*) => {
+		$(
+			#[cfg(any(feature = "client", feature = "server"))]
+			$item
+		)*
+	}
+}
+
 macro_rules! cfg_http_helpers {
  ($($item:item)*) => {
 		cfg_feature!("http-helpers", $($item)*);
