@@ -226,7 +226,9 @@ impl RpcDescription {
 		}
 
 		if params.iter().any(|(param, _)| param.ident == p) {
-			panic!("Cannot use `{}` as a parameter name", ILLEGAL_PARAM_NAME);
+			panic!(
+				"Cannot use `{}` as a parameter name because it's overlapping with an internal variable in the generated code. Change it something else to make it work", ILLEGAL_PARAM_NAME
+			);
 		}
 
 		match param_kind {
