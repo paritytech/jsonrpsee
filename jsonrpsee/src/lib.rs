@@ -78,8 +78,11 @@ cfg_client_transport! {
 
 cfg_server! {
 	pub use jsonrpsee_server as server;
-	pub use jsonrpsee_core::server::*;
 	pub use tokio;
+}
+
+cfg_server_core! {
+	pub use jsonrpsee_core::server::*;
 }
 
 cfg_proc_macros! {
