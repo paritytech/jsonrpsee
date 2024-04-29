@@ -1,4 +1,4 @@
-//! Test module for the proc-macro API to make sure that is compiles with core features.
+//! Test module for the proc-macro API to make sure that it compiles with core features.
 
 use jsonrpsee::core::{async_trait, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
