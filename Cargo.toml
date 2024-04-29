@@ -13,6 +13,7 @@ members = [
 	"test-utils",
 	"tests",
 	"tests/wasm-tests",
+	"tests/proc-macro-core",
 	"types",
 ]
 resolver = "2"
