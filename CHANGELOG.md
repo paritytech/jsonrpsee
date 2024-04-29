@@ -4,6 +4,16 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.22.5] - 2024-04-29
+
+A small bug-fix release, see each commit below for further information.
+
+### [Fixed]
+- proc macros: collision between generated code name and proc macro API ([#1363](https://github.com/paritytech/jsonrpsee/pull/1363))
+- proc-macros: `feature server-core` compiles without `feature server` ([#1360](https://github.com/paritytech/jsonrpsee/pull/1360))
+- client: add check in `max_buffer_capacity_per_subscription` that the buffer size > ([#1358](https://github.com/paritytech/jsonrpsee/pull/1358))
+- types: Response type ignore unknown fields ([#1353](https://github.com/paritytech/jsonrpsee/pull/1353))
+
 ## [v0.22.4] - 2024-04-08
 
 Yet another rather small release that fixes a cancel-safety issue that
