@@ -9,3 +9,4 @@ publish = false
 
 [dependencies]
 jsonrpsee = { path = "../../jsonrpsee", features = ["server-core", "client-core", "macros"] }
+serde = "1.0"

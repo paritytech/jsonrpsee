@@ -5,6 +5,24 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::{ConnectionDetails, PendingSubscriptionSink, SubscriptionMessage};
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum PubSubKind {
+	A,
+	B,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PubSubParams {
+	params: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PubSubItem {
+	result: String,
+}
+
 #[rpc(client, server)]
 pub trait Api {
 	#[method(name = "sync_call")]
@@ -13,8 +31,8 @@ pub trait Api {
 	#[method(name = "async_call")]
 	async fn async_call(&self, _x: String) -> Result<String, ErrorObjectOwned>;
 
-	#[subscription(name = "subscribe", item = String)]
-	async fn sub(&self, _x: String) -> SubscriptionResult;
+	#[subscription(name = "subscribe", item = PubSubItem)]
+	async fn sub(&self, kind: PubSubKind, _x: PubSubParams) -> SubscriptionResult;
 
 	#[subscription(name = "subscribeSync", item = String)]
 	fn sync_sub(&self, _x: String) -> SubscriptionResult;
@@ -36,7 +54,7 @@ impl ApiServer for () {
 		Ok("async_call".to_string())
 	}
 
-	async fn sub(&self, pending: PendingSubscriptionSink, _x: String) -> SubscriptionResult {
+	async fn sub(&self, pending: PendingSubscriptionSink, _: PubSubKind, _: PubSubParams) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 		sink.send(SubscriptionMessage::from("msg")).await?;
 		Ok(())
