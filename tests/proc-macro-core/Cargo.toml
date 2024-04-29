@@ -1,0 +1,11 @@
+[package]
+name = "jsonrpsee-proc-macro-core"
+description = "Test crate to make sure that jsonrpsee core compiles"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+jsonrpsee = { path = "../../jsonrpsee", features = ["server-core", "client-core", "macros"] }

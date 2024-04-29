@@ -316,7 +316,7 @@ impl RpcDescription {
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
 		let response_payload = self.jrps_server_item(quote! { ResponsePayload });
-		let tokio = self.jrps_server_item(quote! { tokio });
+		let tokio = self.jrps_server_item(quote! { core::__reexports::tokio });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
