@@ -87,7 +87,7 @@ pub struct RpcMethod {
 	pub blocking: bool,
 	pub docs: TokenStream2,
 	pub deprecated: TokenStream2,
-	pub params: Vec<(syn::PatIdent, syn::Type)>,
+	pub params: Vec<RpcFnArg>,
 	pub param_kind: ParamKind,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemFn,
@@ -106,24 +106,26 @@ impl RpcMethod {
 		let param_kind = parse_param_kind(param_kind)?;
 		let raw_method = optional(raw_method, Argument::flag)?.is_some();
 
-		let sig = method.sig.clone();
 		let docs = extract_doc_comments(&method.attrs);
 		let deprecated = match find_attr(&method.attrs, "deprecated") {
 			Some(attr) => quote!(#attr),
 			None => quote!(),
 		};
 
-		if blocking && sig.asyncness.is_some() {
-			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
+		if blocking && method.sig.asyncness.is_some() {
+			return Err(syn::Error::new(method.sig.span(), "Blocking method must be synchronous"));
 		}
 
-		let params: Vec<_> = sig
+		let params: Vec<_> = method
+			.sig
 			.inputs
-			.into_iter()
+			.iter_mut()
 			.filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
-				syn::FnArg::Typed(arg) => match *arg.pat {
-					syn::Pat::Ident(name) => Some(Ok((name, *arg.ty))),
+				syn::FnArg::Typed(arg) => match &*arg.pat {
+					syn::Pat::Ident(name) => {
+						Some(RpcFnArg::from_arg_attrs(name.clone(), (*arg.ty).clone(), &mut arg.attrs))
+					}
 					syn::Pat::Wild(wild) => Some(Err(syn::Error::new(
 						wild.underscore_token.span(),
 						"Method argument names must be valid Rust identifiers; got `_` instead",
@@ -136,7 +138,7 @@ impl RpcMethod {
 			})
 			.collect::<Result<_, _>>()?;
 
-		let returns = match sig.output {
+		let returns = match method.sig.output.clone() {
 			syn::ReturnType::Default => None,
 			syn::ReturnType::Type(_, output) => Some(*output),
 		};
@@ -171,7 +173,7 @@ pub struct RpcSubscription {
 	pub notif_name_override: Option<String>,
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
-	pub params: Vec<(syn::PatIdent, syn::Type)>,
+	pub params: Vec<RpcFnArg>,
 	pub param_kind: ParamKind,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemFn,
@@ -192,7 +194,6 @@ impl RpcSubscription {
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
-		let sig = sub.sig.clone();
 		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = match parse_subscribe(unsubscribe)? {
 			Some(unsub) => unsub,
@@ -201,17 +202,20 @@ impl RpcSubscription {
 			),
 		};
 
-		let params: Vec<_> = sig
+		let params: Vec<_> = sub
+			.sig
 			.inputs
-			.into_iter()
+			.iter_mut()
 			.filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
-				syn::FnArg::Typed(arg) => match *arg.pat {
-					syn::Pat::Ident(name) => Some((name, *arg.ty)),
+				syn::FnArg::Typed(arg) => match &*arg.pat {
+					syn::Pat::Ident(name) => {
+						Some(RpcFnArg::from_arg_attrs(name.clone(), (*arg.ty).clone(), &mut arg.attrs))
+					}
 					_ => panic!("Identifier in signature must be an ident"),
 				},
 			})
-			.collect();
+			.collect::<Result<_, _>>()?;
 
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
