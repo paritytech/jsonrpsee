@@ -37,6 +37,50 @@ use quote::quote;
 use syn::spanned::Spanned;
 use syn::{punctuated::Punctuated, Attribute, Token};
 
+/// argument to rpc function
+///
+/// stores modifications based on attributes
+#[derive(Debug, Clone)]
+pub struct RpcFnArg {
+	pub arg_pat: syn::PatIdent,
+	pub rename_to: Option<String>,
+	pub ty: syn::Type,
+}
+
+impl RpcFnArg {
+	pub fn from_arg_attrs(arg_pat: syn::PatIdent, ty: syn::Type, attrs: &mut Vec<syn::Attribute>) -> syn::Result<Self> {
+		let mut rename_to = None;
+
+		if let Some(attr) = find_attr(&attrs, "argument") {
+			let [rename] = AttributeMeta::parse(attr.clone())?.retain(["rename"])?;
+
+			let rename = optional(rename, Argument::string)?;
+
+			if let Some(rename) = rename {
+				rename_to = Some(rename);
+			}
+		}
+
+		// remove argument attribute after inspection
+		attrs.retain(|attr| !attr.meta.path().is_ident("argument"));
+
+		Ok(Self { arg_pat, rename_to, ty })
+	}
+
+	/// Return the pattern identifier of the argument.
+	pub fn arg_pat(&self) -> &syn::PatIdent {
+		&self.arg_pat
+	}
+	/// Return the string representation of this argument when (de)serializing.
+	pub fn rename_to(&self) -> &Option<String> {
+		&self.rename_to
+	}
+	/// Return the type of the argument.
+	pub fn ty(&self) -> &syn::Type {
+		&self.ty
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
 	pub name: String,
