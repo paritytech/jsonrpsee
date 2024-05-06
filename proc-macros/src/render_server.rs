@@ -150,25 +150,23 @@ impl RpcDescription {
 							#into_response::into_response(context.as_ref().#rust_method_name(connection_details, #params_seq).await)
 						})
 					})
+				} else if method.signature.sig.asyncness.is_some() {
+					handle_register_result(quote! {
+						rpc.register_async_method(#rpc_method_name, |params, context| async move {
+							#parsing
+							#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
+						})
+					})
 				} else {
-					if method.signature.sig.asyncness.is_some() {
-						handle_register_result(quote! {
-							rpc.register_async_method(#rpc_method_name, |params, context| async move {
-								#parsing
-								#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
-							})
-						})
-					} else {
-						let register_kind =
-							if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
+					let register_kind =
+						if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
 
-						handle_register_result(quote! {
-							rpc.#register_kind(#rpc_method_name, |params, context| {
-								#parsing
-								#into_response::into_response(context.#rust_method_name(#params_seq))
-							})
+					handle_register_result(quote! {
+						rpc.#register_kind(#rpc_method_name, |params, context| {
+							#parsing
+							#into_response::into_response(context.#rust_method_name(#params_seq))
 						})
-					}
+					})
 				}
 			})
 			.collect::<Vec<_>>();

@@ -51,7 +51,7 @@ impl RpcFnArg {
 	pub fn from_arg_attrs(arg_pat: syn::PatIdent, ty: syn::Type, attrs: &mut Vec<syn::Attribute>) -> syn::Result<Self> {
 		let mut rename_to = None;
 
-		if let Some(attr) = find_attr(&attrs, "argument") {
+		if let Some(attr) = find_attr(attrs, "argument") {
 			let [rename] = AttributeMeta::parse(attr.clone())?.retain(["rename"])?;
 
 			let rename = optional(rename, Argument::string)?;
