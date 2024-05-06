@@ -24,6 +24,13 @@ pub trait Rpc {
 	#[method(name = "array_params")]
 	async fn array_params(&self, items: Vec<u64>) -> RpcResult<u64>;
 
+	#[method(name = "rename_params")]
+	async fn rename_params(
+		&self,
+		#[argument(rename = "type")] r#type: u16,
+		#[argument(rename = "halfType")] half_type: bool,
+	) -> RpcResult<u16>;
+
 	#[method(name = "bar")]
 	fn sync_method(&self) -> RpcResult<u16>;
 
@@ -59,6 +66,10 @@ impl RpcServer for RpcServerImpl {
 
 	async fn array_params(&self, items: Vec<u64>) -> RpcResult<u64> {
 		Ok(items.len() as u64)
+	}
+
+	async fn rename_params(&self, r#type: u16, half_type: bool) -> RpcResult<u16> {
+		Ok(half_type.then(|| r#type / 2).unwrap_or(r#type))
 	}
 
 	fn sync_method(&self) -> RpcResult<u16> {
@@ -111,6 +122,8 @@ async fn main() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	assert_eq!(client.async_method(10, "a".into()).await.unwrap(), 42);
+	assert_eq!(client.rename_params(256, true).await.unwrap(), 128);
+	assert_eq!(client.rename_params(256, false).await.unwrap(), 256);
 	assert_eq!(client.sync_method().await.unwrap(), 10);
 	assert_eq!(client.optional_params(None, "a".into()).await.unwrap(), false);
 	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
