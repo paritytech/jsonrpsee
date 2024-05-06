@@ -206,6 +206,16 @@ pub(crate) mod visitor;
 ///
 /// - have input parameters or not.
 ///
+/// ### `argument` attribute
+///
+/// `argument` attribute is used to modify a function argument.
+///
+/// **Arguments:**
+///
+/// - `rename`: rename the generated JSON key.
+///
+/// **Method requirements:**
+///
 /// ## Full workflow example
 ///
 /// ```rust
