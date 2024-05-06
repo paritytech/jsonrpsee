@@ -254,11 +254,11 @@ pub(crate) mod visitor;
 ///     pub trait MyRpc {
 ///         #[method(name = "foo")]
 ///         async fn async_method(
-/// 			&self,
-/// 			param_a: u8,
-/// 			#[argument(rename = "param_c")]
-/// 			param_b: String
-/// 		) -> RpcResult<u16>;
+///             &self,
+///             param_a: u8,
+///             #[argument(rename = "param_c")]
+///             param_b: String
+///         ) -> RpcResult<u16>;
 ///
 ///         #[method(name = "bar")]
 ///         fn sync_method(&self) -> RpcResult<u16>;
