@@ -24,7 +24,7 @@ pub trait Rpc {
 	#[method(name = "array_params")]
 	async fn array_params(&self, items: Vec<u64>) -> RpcResult<u64>;
 
-	#[method(name = "rename_params", param_kind = map)]
+	#[method(name = "rename_params")]
 	async fn rename_params(
 		&self,
 		#[argument(rename = "type")] r#type: u16,
@@ -132,6 +132,10 @@ async fn main() {
 	params.insert("type", 256).unwrap();
 	params.insert("halfType", false).unwrap();
 	assert_eq!(client.request::<u16, ObjectParams>("foo_rename_params", params).await.unwrap(), 256);
+
+	assert_eq!(client.request::<u16, ArrayParams>("foo_rename_params", rpc_params![256, true]).await.unwrap(), 128);
+
+	assert_eq!(client.request::<u16, ArrayParams>("foo_rename_params", rpc_params![256, false]).await.unwrap(), 256);
 
 	assert_eq!(client.sync_method().await.unwrap(), 10);
 	assert_eq!(client.optional_params(None, "a".into()).await.unwrap(), false);
