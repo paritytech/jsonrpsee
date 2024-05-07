@@ -37,7 +37,7 @@ use quote::quote;
 use syn::spanned::Spanned;
 use syn::{punctuated::Punctuated, Attribute, Token};
 
-/// argument to rpc function
+/// Represents a single argument in a RPC call.
 ///
 /// stores modifications based on attributes
 #[derive(Debug, Clone)]
