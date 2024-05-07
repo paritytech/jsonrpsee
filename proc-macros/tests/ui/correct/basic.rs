@@ -122,8 +122,17 @@ async fn main() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	assert_eq!(client.async_method(10, "a".into()).await.unwrap(), 42);
-	assert_eq!(client.rename_params(256, true).await.unwrap(), 128);
-	assert_eq!(client.rename_params(256, false).await.unwrap(), 256);
+
+	let mut params = ObjectParams::new();
+	params.insert("type", 256).unwrap();
+	params.insert("halfType", true).unwrap();
+	assert_eq(client.request::<u16, ObjectParams>("rename_params", params).await.unwrap(), 128);
+
+	let mut params = ObjectParams::new();
+	params.insert("type", 256).unwrap();
+	params.insert("halfType", false).unwrap();
+	assert_eq(client.request::<u16, ObjectParams>("rename_params", params).await.unwrap(), 256);
+
 	assert_eq!(client.sync_method().await.unwrap(), 10);
 	assert_eq!(client.optional_params(None, "a".into()).await.unwrap(), false);
 	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
