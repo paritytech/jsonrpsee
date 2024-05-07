@@ -231,10 +231,10 @@ impl RpcDescription {
 				// Extract parameter names.
 				let param_names = extract_param_names(&signature.sig);
 				// Combine parameter names and values to pass them as parameters.
-				let params_insert = param_names.iter().zip(params).map(|pair| {
+				let params_insert = params.iter().map(|arg| {
 					// Throw away the type.
-					let value = pair.1.arg_pat();
-					let name = pair.1.rename_to().as_ref().unwrap_or(pair.0);
+					let value = arg.arg_pat();
+					let name = arg.name();
 					quote!(#name, #value)
 				});
 

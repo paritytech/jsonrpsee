@@ -43,7 +43,7 @@ use syn::{punctuated::Punctuated, Attribute, Token};
 #[derive(Debug, Clone)]
 pub struct RpcFnArg {
 	pub arg_pat: syn::PatIdent,
-	pub rename_to: Option<String>,
+	rename_to: Option<String>,
 	pub ty: syn::Type,
 }
 
@@ -71,9 +71,9 @@ impl RpcFnArg {
 	pub fn arg_pat(&self) -> &syn::PatIdent {
 		&self.arg_pat
 	}
-	/// Return the string representation of this argument when (de)serializing.
-	pub fn rename_to(&self) -> &Option<String> {
-		&self.rename_to
+	/// Return the string representation of this argument when (de)seriaizing.
+	pub fn name(&self) -> String {
+		self.rename_to.clone().unwrap_or_else(|| self.arg_pat.ident.to_string())
 	}
 	/// Return the type of the argument.
 	pub fn ty(&self) -> &syn::Type {

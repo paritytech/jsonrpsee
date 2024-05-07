@@ -386,27 +386,15 @@ impl RpcDescription {
 
 			let fields = params.iter().zip(generics.clone()).map(|(fn_arg, ty)| {
 				let arg_pat = fn_arg.arg_pat();
-				let rename_to = fn_arg.rename_to();
+				let name = fn_arg.name();
 
 				let mut alias_vals = String::new();
-				alias_vals.push_str(&format!(
-					r#"alias = "{}""#,
-					heck::ToSnakeCase::to_snake_case(
-						rename_to.as_deref().unwrap_or(arg_pat.ident.to_string().as_str())
-					)
-				));
+				alias_vals.push_str(&format!(r#"alias = "{}""#, heck::ToSnakeCase::to_snake_case(name.as_str())));
 				alias_vals.push(',');
-				alias_vals.push_str(&format!(
-					r#"alias = "{}""#,
-					heck::ToLowerCamelCase::to_lower_camel_case(
-						rename_to.as_deref().unwrap_or(arg_pat.ident.to_string().as_str())
-					)
-				));
+				alias_vals
+					.push_str(&format!(r#"alias = "{}""#, heck::ToLowerCamelCase::to_lower_camel_case(name.as_str())));
 
-				let serde_rename = rename_to
-					.as_ref()
-					.map(|rename_to| quote!(#[serde(rename = #rename_to)]))
-					.unwrap_or(TokenStream2::new());
+				let serde_rename = quote!(#[serde(rename = #name)]);
 
 				let alias = TokenStream2::from_str(alias_vals.as_str()).unwrap();
 
