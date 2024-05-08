@@ -44,7 +44,7 @@ use syn::{punctuated::Punctuated, Attribute, Token};
 pub struct RpcFnArg {
 	pub(crate) arg_pat: syn::PatIdent,
 	rename_to: Option<String>,
-	pub ty: syn::Type,
+	pub(crate) ty: syn::Type,
 }
 
 impl RpcFnArg {
