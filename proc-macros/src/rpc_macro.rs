@@ -42,7 +42,7 @@ use syn::{punctuated::Punctuated, Attribute, Token};
 /// stores modifications based on attributes
 #[derive(Debug, Clone)]
 pub struct RpcFnArg {
-	pub arg_pat: syn::PatIdent,
+	pub(crate) arg_pat: syn::PatIdent,
 	rename_to: Option<String>,
 	pub ty: syn::Type,
 }
