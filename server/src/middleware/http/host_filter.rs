@@ -48,7 +48,7 @@ pub struct HostFilterLayer(Option<Arc<WhitelistedHosts>>);
 
 impl HostFilterLayer {
 	/// Enables host filtering and allow only the specified hosts.
-	pub fn new<T: IntoIterator<Item = U>, U: TryInto<Authority>>(allow_only: T) -> Result<Self, AuthorityError>
+	pub fn new<T, U>(allow_only: T) -> Result<Self, AuthorityError>
 	where
 		T: IntoIterator<Item = U>,
 		U: TryInto<Authority, Error = AuthorityError>,

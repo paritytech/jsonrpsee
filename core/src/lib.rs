@@ -75,6 +75,11 @@ pub mod __reexports {
 	pub use async_trait::async_trait;
 	pub use serde;
 	pub use serde_json;
+
+	// Needed for the params parsing in the proc macro API.
+	cfg_client_or_server! {
+		pub use tokio;
+	}
 }
 
 pub use beef::Cow;

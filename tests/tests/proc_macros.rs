@@ -49,6 +49,7 @@ mod rpc_impl {
 	use jsonrpsee::core::{async_trait, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
+	use jsonrpsee::ConnectionDetails;
 
 	pub struct CustomSubscriptionRet;
 
@@ -73,6 +74,9 @@ mod rpc_impl {
 
 		#[method(name = "bar")]
 		fn sync_method(&self) -> Result<u16, ErrorObjectOwned>;
+
+		#[method(name = "syncRaw", raw_method)]
+		async fn async_raw_method(&self) -> Result<usize, ErrorObjectOwned>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
 		async fn sub(&self) -> SubscriptionResult;
@@ -162,6 +166,10 @@ mod rpc_impl {
 			Ok(10)
 		}
 
+		async fn async_raw_method(&self, connection_details: ConnectionDetails) -> Result<usize, ErrorObjectOwned> {
+			Ok(connection_details.id())
+		}
+
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 			let sink = pending.accept().await?;
 			sink.send("Response_A".into()).await?;
@@ -237,6 +245,24 @@ async fn proc_macros_generic_ws_client_api() {
 	assert_eq!(first_recv, 42);
 	let second_recv = sub.next().await.unwrap().unwrap();
 	assert_eq!(second_recv, 42);
+}
+
+#[tokio::test]
+async fn raw_methods_with_different_ws_clients() {
+	init_logger();
+
+	let server_addr = server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Connection ID does not change for the same client.
+	let connection_id = client.async_raw_method().await.unwrap();
+	assert_eq!(connection_id, client.async_raw_method().await.unwrap());
+
+	// Connection ID is different for different clients.
+	let second_client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let second_connection_id = second_client.async_raw_method().await.unwrap();
+	assert_ne!(connection_id, second_connection_id);
 }
 
 #[tokio::test]

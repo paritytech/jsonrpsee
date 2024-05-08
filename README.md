@@ -33,6 +33,7 @@ Designed to be the successor to [ParityTech's JSONRPC crate](https://github.com/
 - [HTTP proxy middleware](./examples/examples/http_proxy_middleware.rs)
 - [jsonrpsee as service](./examples/examples/jsonrpsee_as_service.rs)
 - [low level API](./examples/examples/jsonrpsee_server_low_level_api.rs)
+- [Websocket served over dual-stack (v4/v6) sockets](./examples/examples/ws_dual_stack.rs)
 
 See [this directory](./examples/examples) for more examples
 
@@ -50,7 +51,7 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 - [subwasm](https://github.com/chevdor/subwasm)
 - [subway](https://github.com/AcalaNetwork/subway)
 - [subxt](https://github.com/paritytech/subxt)
-- [Trin](https://github.com/ethereum/trin)   
+- [Trin](https://github.com/ethereum/trin)
 - [Uptest](https://github.com/uptest-sc/uptest)
 - [zkSync Era](https://github.com/matter-labs/zksync-era)
 

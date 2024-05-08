@@ -180,9 +180,9 @@ pub fn server_subscription_id_response(id: Id) -> String {
 }
 
 /// Server response to a hardcoded pending subscription
-pub fn server_subscription_response(result: Value) -> String {
+pub fn server_subscription_response(method: &str, result: Value) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","method":"bar","params":{{"subscription":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","result":{}}}}}"#,
+		r#"{{"jsonrpc":"2.0","method":"{method}","params":{{"subscription":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","result":{}}}}}"#,
 		serde_json::to_string(&result).unwrap()
 	)
 }
