@@ -24,6 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::Infallible;
+use std::error::Error as StdError;
 use std::io;
 use std::net::SocketAddr;
 use std::net::TcpListener;
@@ -342,7 +344,10 @@ pub fn ws_server_with_redirect(other_server: String) -> String {
 					io,
 					hyper::service::service_fn(move |req| {
 						let other_server = other_server.clone();
-						async move { handler(req, other_server).await }
+						async move {
+							let res = handler(req, other_server).await.unwrap();
+							Ok::<_, Infallible>(res)
+						}
 					}),
 				);
 
@@ -357,7 +362,7 @@ pub fn ws_server_with_redirect(other_server: String) -> String {
 async fn handler(
 	req: hyper::Request<hyper::body::Incoming>,
 	other_server: String,
-) -> Result<hyper::Response<EmptyBody>, soketto::BoxedError> {
+) -> Result<hyper::Response<EmptyBody>, Box<dyn StdError + Send + Sync + 'static>> {
 	if is_upgrade_request(&req) {
 		tracing::debug!("{:?}", req);
 

@@ -4,7 +4,7 @@ use std::time::Instant;
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
-use crate::{PingConfig, LOG_TARGET};
+use crate::{FullBody, PingConfig, LOG_TARGET};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -26,8 +26,6 @@ pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<TokioIo<Upgr
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<TokioIo<Upgraded>>>>>;
 
 pub use soketto::handshake::http::is_upgrade_request;
-
-type FullBody = http_body_util::Full<hyper::body::Bytes>;
 
 enum Incoming {
 	Data(Vec<u8>),
@@ -418,7 +416,6 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
-<<<<<<< HEAD
 			let upgraded = match hyper::upgrade::on(req).await {
 				Ok(u) => u,
 				Err(e) => {
@@ -428,8 +425,6 @@ where
 			};
 
 			let io = TokioIo::new(upgraded);
-=======
->>>>>>> origin/master
 			let (tx, rx) = mpsc::channel::<String>(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
@@ -455,19 +450,7 @@ where
 			let rpc_service = rpc_middleware.service(rpc_service);
 
 			let fut = async move {
-<<<<<<< HEAD
 				let stream = BufReader::new(BufWriter::new(io.compat()));
-=======
-				let upgraded = match hyper::upgrade::on(req).await {
-					Ok(u) => u,
-					Err(e) => {
-						tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-						return;
-					}
-				};
-
-				let stream = BufReader::new(BufWriter::new(upgraded.compat()));
->>>>>>> origin/master
 				let mut ws_builder = server.into_builder(stream);
 				ws_builder.set_max_message_size(server_cfg.max_response_body_size as usize);
 				let (sender, receiver) = ws_builder.finish();

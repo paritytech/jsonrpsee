@@ -258,7 +258,7 @@ pub async fn http_server_with_hardcoded_response(response: String) -> SocketAddr
 					}),
 				);
 
-				conn.await;
+				conn.await.unwrap();
 			});
 		}
 	});

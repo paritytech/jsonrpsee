@@ -7,7 +7,6 @@ use std::{fmt, sync::atomic::AtomicUsize};
 use crate::{stop_channel, RpcModule, Server, ServerBuilder, ServerHandle};
 
 use futures_util::FutureExt;
-use hyper::server::conn::AddrStream;
 use jsonrpsee_core::server::Methods;
 use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;

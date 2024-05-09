@@ -28,6 +28,7 @@
 //! RPC method calls.
 
 use crate::transport::http;
+use crate::ResponseBody;
 
 use http_body_util::BodyExt;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
@@ -115,7 +116,7 @@ impl<S> ProxyGetRequest<S> {
 
 impl<S> Service<Request<hyper::body::Incoming>> for ProxyGetRequest<S>
 where
-	S: Service<Request<hyper::body::Incoming>, Response = Response<FullBody>>,
+	S: Service<Request<hyper::body::Incoming>, Response = Response<ResponseBody>>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
