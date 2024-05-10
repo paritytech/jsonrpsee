@@ -37,7 +37,9 @@
 //! This functionality is useful for services which would
 //! like to query a certain `URI` path for statistics.
 
-use hyper::{Body, Client, Request};
+use hyper::Request;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -46,6 +48,8 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{RpcModule, Server};
+
+type EmptyBody = http_body_util::Empty<hyper::body::Bytes>;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -63,17 +67,17 @@ async fn main() -> anyhow::Result<()> {
 	println!("[main]: response: {:?}", response);
 
 	// Use hyper client to manually submit a `GET /health` request.
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}/health", addr);
 
-	let req = Request::builder().method("GET").uri(&uri).body(Body::empty())?;
+	let req = Request::builder().method("GET").uri(&uri).body(EmptyBody::new())?;
 	println!("[main]: Submit proxy request: {:?}", req);
 	let res = http_client.request(req).await?;
 	println!("[main]: Received proxy response: {:?}", res);
 
 	// Interpret the response as String.
-	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
-	let out = String::from_utf8(bytes.to_vec()).unwrap();
+	let collected = http_body_util::BodyExt::collect(res.into_body()).await?;
+	let out = String::from_utf8(collected.to_bytes().to_vec()).unwrap();
 	println!("[main]: Interpret proxy response: {:?}", out);
 	assert_eq!(out.as_str(), "{\"health\":true}");
 

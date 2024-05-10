@@ -26,7 +26,8 @@
 
 //! Utility methods relying on hyper
 
-use hyper::body::{Buf, HttpBody};
+use http_body_util::{BodyExt, Limited};
+use hyper::body::{Body, Buf};
 
 /// Represents error that can when reading with a HTTP body.
 #[derive(Debug, thiserror::Error)]
@@ -39,7 +40,7 @@ pub enum HttpError {
 	Malformed,
 	/// Represents error that can happen when dealing with HTTP streams.
 	#[error("{0}")]
-	Stream(#[from] hyper::Error),
+	Stream(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Read a data from [`hyper::body::HttpBody`] and return the data if it is valid JSON and within the allowed size range.
@@ -49,8 +50,9 @@ pub enum HttpError {
 /// Returns `Err` if the body was too large or the body couldn't be read.
 pub async fn read_body<B>(headers: &hyper::HeaderMap, body: B, max_body_size: u32) -> Result<(Vec<u8>, bool), HttpError>
 where
-	B: HttpBody<Error = hyper::Error> + Send + 'static,
+	B: Body + Send + 'static,
 	B::Data: Send,
+	B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
 {
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in
 	// practice and in that case we fallback to allocating in the while-loop below instead of pre-allocating.
@@ -64,10 +66,15 @@ where
 
 	// Allocate up to 16KB initially.
 	let mut received_data = Vec::with_capacity(std::cmp::min(body_size as usize, 16 * 1024));
+	let mut limited_body = Limited::new(body, max_body_size as usize);
+
 	let mut is_single = None;
 
-	while let Some(d) = body.data().await {
-		let data = d.map_err(HttpError::Stream)?;
+	while let Some(frame_or_err) = limited_body.frame().await {
+		let frame = frame_or_err.map_err(HttpError::Stream)?;
+		let Some(data) = frame.data_ref() else {
+			continue;
+		};
 
 		// If it's the first chunk, trim the whitespaces to determine whether it's valid JSON-RPC call.
 		if received_data.is_empty() {
@@ -86,17 +93,9 @@ where
 				_ => return Err(HttpError::Malformed),
 			};
 
-			if data.chunk().len() - skip > max_body_size as usize {
-				return Err(HttpError::TooLarge);
-			}
-
 			// ignore whitespace as these doesn't matter just makes the JSON decoding slower.
 			received_data.extend_from_slice(&data.chunk()[skip..]);
 		} else {
-			if data.chunk().len() + received_data.len() > max_body_size as usize {
-				return Err(HttpError::TooLarge);
-			}
-
 			received_data.extend_from_slice(data.chunk());
 		}
 	}
@@ -145,12 +144,16 @@ pub fn read_header_values<'a>(
 
 #[cfg(test)]
 mod tests {
-	use super::{read_body, read_header_content_length};
+	use super::{read_body, read_header_content_length, HttpError};
+	use http_body_util::BodyExt;
+
+	type Body = http_body_util::Full<hyper::body::Bytes>;
 
 	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {
 		let headers = hyper::header::HeaderMap::new();
-		let body = hyper::Body::from(vec![0; 128]);
+		let full_body = Body::from(vec![0; 128]);
+		let body = full_body.map_err(|e| HttpError::Stream(e.into()));
 		assert!(read_body(&headers, body, 127).await.is_err());
 	}
 

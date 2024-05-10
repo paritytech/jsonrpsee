@@ -25,6 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::future::{self, Either};
+use hyper_util::rt::TokioIo;
+use hyper_util::service::TowerToHyperService;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::server::{stop_channel, ServerHandle};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -117,7 +119,9 @@ async fn run_server() -> anyhow::Result<(ServerHandle, Addrs)> {
 
 			// Spawn a new task to serve each respective (Hyper) connection.
 			tokio::spawn(async move {
-				let conn = hyper::server::conn::Http::new().serve_connection(stream, svc).with_upgrades();
+				let conn = hyper::server::conn::http1::Builder::new()
+					.serve_connection(TokioIo::new(stream), TowerToHyperService::new(svc))
+					.with_upgrades();
 
 				let stopped = stop_hdl2.shutdown();
 

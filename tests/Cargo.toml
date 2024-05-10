@@ -13,7 +13,9 @@ beef = { version = "0.5.1", features = ["impl_serde"] }
 fast-socks5 = { version = "0.9.1" }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.14", default-features = false, features = ["alloc"]}
-hyper = { version = "0.14", features = ["http1", "client"] }
+http-body-util = "0.1"
+hyper = { version = "1.3" }
+hyper-util = { version = "0.1.3", features = ["http1", "client", "client-legacy"] }
 jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
 jsonrpsee-test-utils = { path = "../test-utils" }
 serde = "1"
@@ -22,7 +24,7 @@ tokio = { version = "1.16", features = ["full"] }
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", features = ["compat"]}
 tower = { version = "0.4.13", features = ["full"] }
-tower-http = { version = "0.4.0", features = ["full"] }
+tower-http = { version = "0.5.2", features = ["full"] }
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 pin-project = "1"

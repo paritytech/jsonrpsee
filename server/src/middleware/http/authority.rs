@@ -27,7 +27,7 @@
 //! Utility and types related to the authority of an URI.
 
 use http::uri::{InvalidUri, Uri};
-use hyper::{Body, Request};
+use hyper::Request;
 use jsonrpsee_core::http_helpers;
 
 /// Represent the http URI scheme that is returned by the HTTP host header
@@ -96,7 +96,7 @@ impl Authority {
 	///
 	/// The `Authority` can be sent by the client in the `Host header` or in the `URI`
 	/// such that both must be checked.
-	pub fn from_http_request(request: &Request<Body>) -> Option<Self> {
+	pub fn from_http_request<T>(request: &Request<T>) -> Option<Self> {
 		// NOTE: we use our own `Authority type` here because an invalid port number would return `None` here
 		// and that should be denied.
 		let host_header =
@@ -161,22 +161,30 @@ fn default_port(scheme: Option<&str>) -> Option<u16> {
 mod tests {
 	use super::{Authority, Port};
 	use hyper::header::HOST;
-	use hyper::Body;
 
 	fn authority(host: &str, port: Port) -> Authority {
 		Authority { host: host.to_owned(), port }
 	}
+
+	type EmptyBody = http_body_util::Empty<hyper::body::Bytes>;
 
 	#[test]
 	fn should_parse_valid_authority() {
 		assert_eq!(Authority::try_from("http://parity.io").unwrap(), authority("parity.io", Port::Default));
 		assert_eq!(Authority::try_from("https://parity.io:8443").unwrap(), authority("parity.io", Port::Fixed(8443)));
 		assert_eq!(Authority::try_from("chrome-extension://124.0.0.1").unwrap(), authority("124.0.0.1", Port::Default));
-		assert_eq!(Authority::try_from("http://*.domain:*/somepath").unwrap(), authority("*.domain", Port::Any));
+		assert_eq!(
+			Authority::try_from(
+				"http://*.domain:*/
+somepath"
+			)
+			.unwrap(),
+			authority("*.domain", Port::Any)
+		);
 		assert_eq!(Authority::try_from("parity.io").unwrap(), authority("parity.io", Port::Default));
 		assert_eq!(Authority::try_from("127.0.0.1:8845").unwrap(), authority("127.0.0.1", Port::Fixed(8845)));
 		assert_eq!(
-			Authority::try_from("http://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:9933/").unwrap(),
+			Authority::try_from("http: //[2001:db8:85a3:8d3:1319:8a2e:370:7348]:9933/").unwrap(),
 			authority("[2001:db8:85a3:8d3:1319:8a2e:370:7348]", Port::Fixed(9933))
 		);
 		assert_eq!(
@@ -200,13 +208,13 @@ mod tests {
 
 	#[test]
 	fn authority_from_http_only_host_works() {
-		let req = hyper::Request::builder().header(HOST, "example.com").body(Body::empty()).unwrap();
+		let req = hyper::Request::builder().header(HOST, "example.com").body(EmptyBody::new()).unwrap();
 		assert!(Authority::from_http_request(&req).is_some());
 	}
 
 	#[test]
 	fn authority_only_uri_works() {
-		let req = hyper::Request::builder().uri("example.com").body(Body::empty()).unwrap();
+		let req = hyper::Request::builder().uri("example.com").body(EmptyBody::new()).unwrap();
 		assert!(Authority::from_http_request(&req).is_some());
 	}
 
@@ -215,21 +223,24 @@ mod tests {
 		let req = hyper::Request::builder()
 			.header(HOST, "example.com:9999")
 			.uri("example.com:9999")
-			.body(Body::empty())
+			.body(EmptyBody::new())
 			.unwrap();
 		assert!(Authority::from_http_request(&req).is_some());
 	}
 
 	#[test]
 	fn authority_host_and_uri_mismatch() {
-		let req =
-			hyper::Request::builder().header(HOST, "example.com:9999").uri("example.com").body(Body::empty()).unwrap();
+		let req = hyper::Request::builder()
+			.header(HOST, "example.com:9999")
+			.uri("example.com")
+			.body(EmptyBody::new())
+			.unwrap();
 		assert!(Authority::from_http_request(&req).is_none());
 	}
 
 	#[test]
 	fn authority_missing_host_and_uri() {
-		let req = hyper::Request::builder().body(Body::empty()).unwrap();
+		let req = hyper::Request::builder().body(EmptyBody::new()).unwrap();
 		assert!(Authority::from_http_request(&req).is_none());
 	}
 }

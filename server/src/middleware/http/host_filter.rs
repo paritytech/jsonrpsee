@@ -28,9 +28,9 @@
 
 use crate::middleware::http::authority::{Authority, AuthorityError, Port};
 use crate::transport::http;
-use crate::LOG_TARGET;
+use crate::{HttpRequest, ResponseBody, LOG_TARGET};
 use futures_util::{Future, FutureExt, TryFutureExt};
-use hyper::{Body, Request, Response};
+use hyper::Response;
 use route_recognizer::Router;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
@@ -92,15 +92,15 @@ impl<S> Layer<S> for HostFilterLayer {
 }
 
 /// Middleware to enable host filtering.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HostFilter<S> {
 	inner: S,
 	filter: Option<Arc<WhitelistedHosts>>,
 }
 
-impl<S> Service<Request<Body>> for HostFilter<S>
+impl<S> Service<HttpRequest> for HostFilter<S>
 where
-	S: Service<Request<Body>, Response = Response<Body>>,
+	S: Service<HttpRequest, Response = Response<ResponseBody>>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn StdError + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
@@ -113,7 +113,7 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, request: Request<Body>) -> Self::Future {
+	fn call(&mut self, request: HttpRequest) -> Self::Future {
 		let Some(authority) = Authority::from_http_request(&request) else {
 			return async { Ok(http::response::malformed()) }.boxed();
 		};

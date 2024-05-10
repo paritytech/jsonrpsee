@@ -27,11 +27,17 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
-use crate::mocks::{Body, HttpResponse, Id, Uri};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Client, Request, Response, Server};
+use crate::mocks::{HttpResponse, Id, Uri};
+use http_body_util::BodyExt;
+use hyper::{service::service_fn, Request, Response};
+use hyper_util::{
+	client::legacy::Client,
+	rt::{TokioExecutor, TokioIo},
+};
 use serde::Serialize;
 use serde_json::Value;
+
+pub type Body = http_body_util::Full<hyper::body::Bytes>;
 
 pub const PARSE_ERROR: &str = "Parse error";
 pub const INTERNAL_ERROR: &str = "Internal error";
@@ -187,18 +193,18 @@ pub fn server_notification(method: &str, params: Value) -> String {
 }
 
 pub async fn http_request(body: Body, uri: Uri) -> Result<HttpResponse, String> {
-	let client = hyper::Client::new();
+	let client = hyper_util::client::legacy::Client::builder(TokioExecutor::new()).build_http();
 	http_post(client, body, uri).await
 }
 
 pub async fn http2_request(body: Body, uri: Uri) -> Result<HttpResponse, String> {
-	let client = hyper::Client::builder().http2_only(true).build_http();
+	let client = hyper_util::client::legacy::Client::builder(TokioExecutor::new()).build_http();
 	http_post(client, body, uri).await
 }
 
 async fn http_post<C>(client: Client<C, Body>, body: Body, uri: Uri) -> Result<HttpResponse, String>
 where
-	C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+	C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
 	let r = hyper::Request::post(uri)
 		.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static("application/json"))
@@ -206,8 +212,14 @@ where
 		.expect("uri and request headers are valid; qed");
 	let res = client.request(r).await.map_err(|e| format!("{e:?}"))?;
 
-	let (parts, body) = res.into_parts();
-	let bytes = hyper::body::to_bytes(body).await.unwrap();
+	let (parts, mut body) = res.into_parts();
+	let mut bytes = Vec::new();
+
+	while let Some(frame) = body.frame().await {
+		let data = frame.unwrap().into_data().unwrap();
+		bytes.extend(data);
+	}
+
 	Ok(HttpResponse { status: parts.status, header: parts.headers, body: String::from_utf8(bytes.to_vec()).unwrap() })
 }
 
@@ -215,27 +227,40 @@ where
 //
 // NOTE: This must be spawned on tokio because hyper only works with tokio.
 pub async fn http_server_with_hardcoded_response(response: String) -> SocketAddr {
-	async fn process_request(_req: Request<Body>, response: String) -> Result<Response<Body>, Infallible> {
-		Ok(Response::new(hyper::Body::from(response)))
+	async fn process_request(
+		_req: Request<hyper::body::Incoming>,
+		response: String,
+	) -> Result<Response<Body>, Infallible> {
+		Ok(Response::new(Body::from(response)))
 	}
-
-	let make_service = make_service_fn(move |_| {
-		let response = response.clone();
-		async move {
-			Ok::<_, Infallible>(service_fn(move |req| {
-				let response = response.clone();
-				async move { Ok::<_, Infallible>(process_request(req, response).await.unwrap()) }
-			}))
-		}
-	});
 
 	let (tx, rx) = futures_channel::oneshot::channel::<SocketAddr>();
 
-	tokio::spawn(async {
+	tokio::spawn(async move {
 		let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-		let server = Server::bind(&addr).serve(make_service);
-		tx.send(server.local_addr()).unwrap();
-		server.await.unwrap()
+		let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+		tx.send(listener.local_addr().unwrap()).unwrap();
+
+		loop {
+			let Ok((sock, _addr)) = listener.accept().await else {
+				continue;
+			};
+
+			let response = response.clone();
+			tokio::spawn(async move {
+				let io = TokioIo::new(sock);
+
+				let conn = hyper::server::conn::http1::Builder::new().serve_connection(
+					io,
+					service_fn(move |req| {
+						let rp = response.clone();
+						async move { Ok::<_, Infallible>(process_request(req, rp).await.unwrap()) }
+					}),
+				);
+
+				conn.await.unwrap();
+			});
+		}
 	});
 
 	rx.await.unwrap()

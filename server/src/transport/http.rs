@@ -1,4 +1,5 @@
 use http::Method;
+use hyper::body::Body;
 use jsonrpsee_core::{
 	http_helpers::{read_body, HttpError},
 	server::Methods,
@@ -7,11 +8,11 @@ use jsonrpsee_core::{
 use crate::{
 	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
 	server::{handle_rpc_call, ServerConfig},
-	BatchRequestConfig, ConnectionState, LOG_TARGET,
+	BatchRequestConfig, ConnectionState, ResponseBody, LOG_TARGET,
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
-pub fn content_type_is_json(request: &hyper::Request<hyper::Body>) -> bool {
+pub fn content_type_is_json<T: Body>(request: &hyper::Request<T>) -> bool {
 	is_json(request.headers().get(hyper::header::CONTENT_TYPE))
 }
 
@@ -31,12 +32,12 @@ pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 ///
 /// Fails if the HTTP request was a malformed JSON-RPC request.
 pub async fn call_with_service_builder<L>(
-	request: hyper::Request<hyper::Body>,
+	request: hyper::Request<hyper::body::Incoming>,
 	server_cfg: ServerConfig,
 	conn: ConnectionState,
 	methods: impl Into<Methods>,
 	rpc_service: RpcServiceBuilder<L>,
-) -> hyper::Response<hyper::Body>
+) -> hyper::Response<ResponseBody>
 where
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -64,12 +65,12 @@ where
 ///
 /// Fails if the HTTP request was a malformed JSON-RPC request.
 pub async fn call_with_service<S>(
-	request: hyper::Request<hyper::Body>,
+	request: hyper::Request<hyper::body::Incoming>,
 	batch_config: BatchRequestConfig,
 	max_request_size: u32,
 	rpc_service: S,
 	max_response_size: u32,
-) -> hyper::Response<hyper::Body>
+) -> hyper::Response<ResponseBody>
 where
 	for<'a> S: RpcServiceT<'a> + Send,
 {
@@ -105,11 +106,13 @@ pub mod response {
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 	use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload};
 
+	use crate::ResponseBody;
+
 	const JSON: &str = "application/json; charset=utf-8";
 	const TEXT: &str = "text/plain";
 
 	/// Create a response for json internal error.
-	pub fn internal_error() -> hyper::Response<hyper::Body> {
+	pub fn internal_error() -> hyper::Response<ResponseBody> {
 		let err = ResponsePayload::<()>::error(ErrorObjectOwned::from(ErrorCode::InternalError));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
@@ -118,21 +121,21 @@ pub mod response {
 	}
 
 	/// Create a text/plain response for not allowed hosts.
-	pub fn host_not_allowed() -> hyper::Response<hyper::Body> {
-		from_template(hyper::StatusCode::FORBIDDEN, "Provided Host header is not whitelisted.\n".to_owned(), TEXT)
+	pub fn host_not_allowed() -> hyper::Response<ResponseBody> {
+		from_template(hyper::StatusCode::FORBIDDEN, "Provided Host header is not whitelisted.\n", TEXT)
 	}
 
 	/// Create a text/plain response for disallowed method used.
-	pub fn method_not_allowed() -> hyper::Response<hyper::Body> {
+	pub fn method_not_allowed() -> hyper::Response<ResponseBody> {
 		from_template(
 			hyper::StatusCode::METHOD_NOT_ALLOWED,
-			"Used HTTP Method is not allowed. POST or OPTIONS is required\n".to_owned(),
+			"Used HTTP Method is not allowed. POST or OPTIONS is required\n",
 			TEXT,
 		)
 	}
 
 	/// Create a json response for oversized requests (413)
-	pub fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
+	pub fn too_large(limit: u32) -> hyper::Response<ResponseBody> {
 		let err = ResponsePayload::<()>::error(reject_too_big_request(limit));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
@@ -141,7 +144,7 @@ pub mod response {
 	}
 
 	/// Create a json response for empty or malformed requests (400)
-	pub fn malformed() -> hyper::Response<hyper::Body> {
+	pub fn malformed() -> hyper::Response<ResponseBody> {
 		let rp = Response::new(ResponsePayload::<()>::error(ErrorCode::ParseError), Id::Null);
 		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
@@ -149,11 +152,11 @@ pub mod response {
 	}
 
 	/// Create a response body.
-	fn from_template<S: Into<hyper::Body>>(
+	fn from_template(
 		status: hyper::StatusCode,
-		body: S,
+		body: impl Into<ResponseBody>,
 		content_type: &'static str,
-	) -> hyper::Response<hyper::Body> {
+	) -> hyper::Response<ResponseBody> {
 		hyper::Response::builder()
 			.status(status)
 			.header("content-type", hyper::header::HeaderValue::from_static(content_type))
@@ -164,30 +167,26 @@ pub mod response {
 	}
 
 	/// Create a valid JSON response.
-	pub fn ok_response(body: String) -> hyper::Response<hyper::Body> {
+	pub fn ok_response(body: impl Into<ResponseBody>) -> hyper::Response<ResponseBody> {
 		from_template(hyper::StatusCode::OK, body, JSON)
 	}
 
 	/// Create a response for unsupported content type.
-	pub fn unsupported_content_type() -> hyper::Response<hyper::Body> {
+	pub fn unsupported_content_type() -> hyper::Response<ResponseBody> {
 		from_template(
 			hyper::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-			"Supplied content type is not allowed. Content-Type: application/json is required\n".to_owned(),
+			"Supplied content type is not allowed. Content-Type: application/json is required\n",
 			TEXT,
 		)
 	}
 
 	/// Create a response for when the server is busy and can't accept more requests.
-	pub fn too_many_requests() -> hyper::Response<hyper::Body> {
-		from_template(
-			hyper::StatusCode::TOO_MANY_REQUESTS,
-			"Too many connections. Please try again later.".to_owned(),
-			TEXT,
-		)
+	pub fn too_many_requests() -> hyper::Response<ResponseBody> {
+		from_template(hyper::StatusCode::TOO_MANY_REQUESTS, "Too many connections. Please try again later.", TEXT)
 	}
 
 	/// Create a response for when the server denied the request.
-	pub fn denied() -> hyper::Response<hyper::Body> {
-		from_template(hyper::StatusCode::FORBIDDEN, "".to_owned(), TEXT)
+	pub fn denied() -> hyper::Response<ResponseBody> {
+		from_template(hyper::StatusCode::FORBIDDEN, ResponseBody::default(), TEXT)
 	}
 }

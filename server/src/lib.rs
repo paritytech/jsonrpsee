@@ -56,3 +56,6 @@ pub use transport::http;
 pub use transport::ws;
 
 pub(crate) const LOG_TARGET: &str = "jsonrpsee-server";
+
+pub(crate) type HttpRequest = hyper::Request<hyper::body::Incoming>;
+pub(crate) type ResponseBody = http_body_util::Full<hyper::body::Bytes>;

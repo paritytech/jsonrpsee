@@ -4,12 +4,13 @@ use std::time::Instant;
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
-use crate::{PingConfig, LOG_TARGET};
+use crate::{PingConfig, ResponseBody, LOG_TARGET};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
+use hyper_util::rt::TokioIo;
 use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
@@ -21,8 +22,8 @@ use tokio::time::{interval, interval_at};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
-pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
+pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<TokioIo<Upgraded>>>>>;
+pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<TokioIo<Upgraded>>>>>;
 
 pub use soketto::handshake::http::is_upgrade_request;
 
@@ -400,12 +401,12 @@ async fn graceful_shutdown<S>(
 /// }
 /// ```
 pub async fn connect<L>(
-	req: hyper::Request<hyper::Body>,
+	req: hyper::Request<hyper::body::Incoming>,
 	server_cfg: ServerConfig,
 	methods: impl Into<Methods>,
 	conn: ConnectionState,
 	rpc_middleware: RpcServiceBuilder<L>,
-) -> Result<(hyper::Response<hyper::Body>, impl Future<Output = ()>), hyper::Response<hyper::Body>>
+) -> Result<(hyper::Response<ResponseBody>, impl Future<Output = ()>), hyper::Response<ResponseBody>>
 where
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -415,6 +416,15 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
+			let upgraded = match hyper::upgrade::on(req).await {
+				Ok(u) => u,
+				Err(e) => {
+					tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
+					return Err(hyper::Response::new(ResponseBody::from(format!("WS upgrade handshake failed {e}"))));
+				}
+			};
+
+			let io = TokioIo::new(upgraded);
 			let (tx, rx) = mpsc::channel::<String>(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
@@ -440,15 +450,7 @@ where
 			let rpc_service = rpc_middleware.service(rpc_service);
 
 			let fut = async move {
-				let upgraded = match hyper::upgrade::on(req).await {
-					Ok(u) => u,
-					Err(e) => {
-						tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-						return;
-					}
-				};
-
-				let stream = BufReader::new(BufWriter::new(upgraded.compat()));
+				let stream = BufReader::new(BufWriter::new(io.compat()));
 				let mut ws_builder = server.into_builder(stream);
 				ws_builder.set_max_message_size(server_cfg.max_response_body_size as usize);
 				let (sender, receiver) = ws_builder.finish();
@@ -468,11 +470,11 @@ where
 				background_task(params).await;
 			};
 
-			Ok((response.map(|()| hyper::Body::empty()), fut))
+			Ok((response.map(|()| ResponseBody::default()), fut)) // empty body here
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-			Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed: {e}"))))
+			Err(hyper::Response::new(ResponseBody::from(format!("WS upgrade handshake failed: {e}"))))
 		}
 	}
 }
