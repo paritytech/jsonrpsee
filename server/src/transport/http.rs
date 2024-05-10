@@ -106,7 +106,7 @@ pub mod response {
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 	use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload};
 
-	use crate::{FullBody, ResponseBody};
+	use crate::ResponseBody;
 
 	const JSON: &str = "application/json; charset=utf-8";
 	const TEXT: &str = "text/plain";
@@ -154,20 +154,20 @@ pub mod response {
 	/// Create a response body.
 	fn from_template(
 		status: hyper::StatusCode,
-		body: impl Into<FullBody>,
+		body: impl Into<ResponseBody>,
 		content_type: &'static str,
 	) -> hyper::Response<ResponseBody> {
 		hyper::Response::builder()
 			.status(status)
 			.header("content-type", hyper::header::HeaderValue::from_static(content_type))
-			.body(Box::new(body.into()))
+			.body(body.into())
 			// Parsing `StatusCode` and `HeaderValue` is infalliable but
 			// parsing body content is not.
 			.expect("Unable to parse response body for type conversion")
 	}
 
 	/// Create a valid JSON response.
-	pub fn ok_response(body: impl Into<FullBody>) -> hyper::Response<ResponseBody> {
+	pub fn ok_response(body: impl Into<ResponseBody>) -> hyper::Response<ResponseBody> {
 		from_template(hyper::StatusCode::OK, body, JSON)
 	}
 
@@ -187,6 +187,6 @@ pub mod response {
 
 	/// Create a response for when the server denied the request.
 	pub fn denied() -> hyper::Response<ResponseBody> {
-		from_template(hyper::StatusCode::FORBIDDEN, FullBody::default(), TEXT)
+		from_template(hyper::StatusCode::FORBIDDEN, ResponseBody::default(), TEXT)
 	}
 }

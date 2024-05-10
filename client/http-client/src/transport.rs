@@ -6,8 +6,12 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use hyper::body::Body;
+use http_body_util::BodyExt;
+use hyper::body::Buf;
 use hyper::http::{HeaderMap, HeaderValue};
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
 use jsonrpsee_core::{
@@ -23,11 +27,13 @@ use tower::layer::util::Identity;
 use tower::{Layer, Service, ServiceExt};
 use url::Url;
 
+use crate::ResponseBody;
+
 const CONTENT_TYPE_JSON: &str = "application/json";
 
 /// Wrapper over HTTP transport and connector.
 #[derive(Debug)]
-pub enum HttpBackend<B = Body> {
+pub enum HttpBackend<B = ResponseBody> {
 	/// Hyper client with https connector.
 	#[cfg(feature = "__tls")]
 	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>, B>),
@@ -35,7 +41,7 @@ pub enum HttpBackend<B = Body> {
 	Http(Client<HttpConnector, B>),
 }
 
-impl Clone for HttpBackend {
+impl<B> Clone for HttpBackend<B> {
 	fn clone(&self) -> Self {
 		match self {
 			Self::Http(inner) => Self::Http(inner.clone()),
@@ -47,11 +53,11 @@ impl Clone for HttpBackend {
 
 impl<B> tower::Service<hyper::Request<B>> for HttpBackend<B>
 where
-	B: HttpBody<Error = hyper::Error> + Send + 'static,
+	B: http_body::Body + Send + 'static + Unpin,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
-	type Response = hyper::Response<Body>;
+	type Response = hyper::Response<hyper::body::Incoming>;
 	type Error = Error;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -61,7 +67,8 @@ where
 			#[cfg(feature = "__tls")]
 			Self::Https(inner) => inner.poll_ready(ctx),
 		}
-		.map_err(|e| Error::Http(e.into()))
+		// todo return proper error.
+		.map_err(|e| Error::Http(HttpError::Malformed))
 	}
 
 	fn call(&mut self, req: hyper::Request<B>) -> Self::Future {
@@ -71,7 +78,8 @@ where
 			Self::Https(inner) => inner.call(req),
 		};
 
-		Box::pin(async move { resp.await.map_err(|e| Error::Http(e.into())) })
+		// todo return proper error.
+		Box::pin(async move { resp.await.map_err(|_| Error::Http(HttpError::Malformed)) })
 	}
 }
 
@@ -176,9 +184,9 @@ impl<L> HttpTransportClientBuilder<L> {
 	/// Build a [`HttpTransportClient`].
 	pub fn build<S, B>(self, target: impl AsRef<str>) -> Result<HttpTransportClient<S>, Error>
 	where
-		L: Layer<HttpBackend<Body>, Service = S>,
-		S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error> + Clone,
-		B: HttpBody + Send + 'static,
+		L: Layer<HttpBackend, Service = S>,
+		S: Service<hyper::Request<ResponseBody>, Response = hyper::Response<B>, Error = Error> + Clone,
+		B: http_body::Body + Send + 'static,
 		B::Data: Send,
 		B::Error: Into<Box<dyn StdError + Send + Sync>>,
 	{
@@ -201,7 +209,7 @@ impl<L> HttpTransportClientBuilder<L> {
 			"http" => {
 				let mut connector = HttpConnector::new();
 				connector.set_nodelay(tcp_no_delay);
-				HttpBackend::Http(Client::builder().build(connector))
+				HttpBackend::Http(Client::builder(TokioExecutor::new()).build(connector))
 			}
 			#[cfg(feature = "__tls")]
 			"https" => {
@@ -213,9 +221,8 @@ impl<L> HttpTransportClientBuilder<L> {
 					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_native_roots()
-						.https_or_http()
-						.enable_all_versions()
-						.wrap_connector(http_conn),
+						.map(|c| c.https_or_http().enable_all_versions().wrap_connector(http_conn))
+						.map_err(|_| Error::InvalidCertficateStore)?,
 					#[cfg(feature = "webpki-tls")]
 					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_webpki_roots()
@@ -225,7 +232,7 @@ impl<L> HttpTransportClientBuilder<L> {
 					_ => return Err(Error::InvalidCertficateStore),
 				};
 
-				HttpBackend::Https(Client::builder().build::<_, hyper::Body>(https_conn))
+				HttpBackend::Https(Client::builder(TokioExecutor::new()).build(https_conn))
 			}
 			_ => {
 				#[cfg(feature = "__tls")]
@@ -280,9 +287,10 @@ pub struct HttpTransportClient<S> {
 
 impl<B, S> HttpTransportClient<S>
 where
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = Error> + Clone,
-	B: HttpBody<Error = hyper::Error> + Send + 'static,
+	S: Service<hyper::Request<ResponseBody>, Response = hyper::Response<B>, Error = Error> + Clone,
+	B: http_body::Body + Send + Unpin + 'static,
 	B::Data: Send,
+	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
 		if body.len() > self.max_request_size as usize {
@@ -293,7 +301,8 @@ where
 		if let Some(headers) = req.headers_mut() {
 			*headers = self.headers.clone();
 		}
-		let req = req.body(From::from(body)).expect("URI and request headers are valid; qed");
+
+		let req = req.body(body.into()).expect("Failed to create request");
 		let response = self.client.clone().ready().await?.call(req).await?;
 
 		if response.status().is_success() {
@@ -308,8 +317,16 @@ where
 		tx_log_from_str(&body, self.max_log_length);
 
 		let response = self.inner_send(body).await?;
-		let (parts, body) = response.into_parts();
-		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_response_size).await?;
+		let (_parts, body) = response.into_parts();
+
+		let mut limit = http_body_util::Limited::new(body, self.max_response_size as usize);
+		let mut body = Vec::new();
+
+		while let Some(chunk) = limit.frame().await {
+			let chunk = chunk.map_err(|e| Error::Http(HttpError::Malformed))?;
+			let data = chunk.into_data().map_err(|_| Error::Http(HttpError::Malformed))?;
+			body.extend_from_slice(data.chunk());
+		}
 
 		rx_log_from_bytes(&body, self.max_log_length);
 

@@ -46,3 +46,6 @@ mod tests;
 pub use client::{HttpClient, HttpClientBuilder};
 pub use hyper::http::{HeaderMap, HeaderValue};
 pub use jsonrpsee_types as types;
+
+pub(crate) type ResponseBody = http_body_util::Full<hyper::body::Bytes>;
+pub(crate) type FullBody = http_body_util::Full<hyper::body::Bytes>;

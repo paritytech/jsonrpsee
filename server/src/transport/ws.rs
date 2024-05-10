@@ -4,7 +4,7 @@ use std::time::Instant;
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
-use crate::{FullBody, PingConfig, LOG_TARGET};
+use crate::{PingConfig, ResponseBody, LOG_TARGET};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -406,7 +406,7 @@ pub async fn connect<L>(
 	methods: impl Into<Methods>,
 	conn: ConnectionState,
 	rpc_middleware: RpcServiceBuilder<L>,
-) -> Result<(hyper::Response<FullBody>, impl Future<Output = ()>), hyper::Response<FullBody>>
+) -> Result<(hyper::Response<ResponseBody>, impl Future<Output = ()>), hyper::Response<ResponseBody>>
 where
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -420,7 +420,7 @@ where
 				Ok(u) => u,
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-					return Err(hyper::Response::new(FullBody::from(format!("WS upgrade handshake failed {e}"))));
+					return Err(hyper::Response::new(ResponseBody::from(format!("WS upgrade handshake failed {e}"))));
 				}
 			};
 
@@ -470,12 +470,12 @@ where
 				background_task(params).await;
 			};
 
-			Ok((response.map(|()| FullBody::default()), fut)) // empty body here
+			Ok((response.map(|()| ResponseBody::default()), fut)) // empty body here
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
 			// full body here:
-			Err(hyper::Response::new(FullBody::from(format!("WS upgrade handshake failed: {e}"))))
+			Err(hyper::Response::new(ResponseBody::from(format!("WS upgrade handshake failed: {e}"))))
 		}
 	}
 }

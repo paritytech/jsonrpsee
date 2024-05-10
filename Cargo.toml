@@ -1,7 +1,7 @@
 [workspace]
 members = [
 	"benches",
-	#"client/http-client",
+	"client/http-client",
 	"client/transport",
 	"client/wasm-client",
 	"client/ws-client",
@@ -35,7 +35,7 @@ jsonrpsee-types = { path = "types", version = "0.22.2" }
 jsonrpsee-core = { path = "core", version = "0.22.2" }
 jsonrpsee-server = { path = "server", version = "0.22.2" }
 jsonrpsee-ws-client = { path = "client/ws-client", version = "0.22.2" }
-#jsonrpsee-http-client = { path = "client/http-client", version = "0.22.2" }
+jsonrpsee-http-client = { path = "client/http-client", version = "0.22.2" }
 jsonrpsee-wasm-client = { path = "client/wasm-client", version = "0.22.2" }
 jsonrpsee-client-transport = { path = "client/transport", version = "0.22.2" }
 jsonrpsee-proc-macros = { path = "proc-macros", version = "0.22.2" }

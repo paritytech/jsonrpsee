@@ -37,7 +37,7 @@ use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, 
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::{FullBody, HttpRequest, ResponseBody, LOG_TARGET};
+use crate::{HttpRequest, ResponseBody, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
@@ -1099,11 +1099,11 @@ where
 						.in_current_span(),
 					);
 
-					response.map(|()| Box::new(FullBody::default()))
+					response.map(|()| ResponseBody::default())
 				}
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
-					hyper::Response::new(Box::new(FullBody::from(format!("Could not upgrade connection: {e}"))))
+					hyper::Response::new(ResponseBody::from(format!("Could not upgrade connection: {e}")))
 				}
 			};
 

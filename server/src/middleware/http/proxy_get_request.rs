@@ -42,8 +42,6 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
-type FullBody = http_body_util::Full<hyper::body::Bytes>;
-
 /// Error that occur if the specified path doesn't start with `/<path>`
 #[derive(Debug, thiserror::Error)]
 #[error("ProxyGetRequestLayer path must start with `/`, got `{0}`")]
@@ -145,12 +143,10 @@ where
 			req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
 
 			// Adjust the body to reflect the method call.
-			let body = FullBody::from(
-				serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
-					.expect("Valid request; qed"),
-			); // full body ?
-			 // TODO doesn't work
-			 //req = req.map(|_| body);
+			let body = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
+				.expect("Valid request; qed");
+
+			req.body_mut().map_frame(|f| f.map_data(|_| body.as_slice()));
 		}
 
 		// Call the inner service and get a future that resolves to the response.

@@ -28,10 +28,9 @@
 
 use crate::middleware::http::authority::{Authority, AuthorityError, Port};
 use crate::transport::http;
-use crate::LOG_TARGET;
+use crate::{HttpRequest, ResponseBody, LOG_TARGET};
 use futures_util::{Future, FutureExt, TryFutureExt};
-use hyper::body::Body;
-use hyper::{Request, Response};
+use hyper::Response;
 use route_recognizer::Router;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
@@ -99,9 +98,9 @@ pub struct HostFilter<S> {
 	filter: Option<Arc<WhitelistedHosts>>,
 }
 
-impl<S> Service<Request<hyper::body::Incoming>> for HostFilter<S>
+impl<S> Service<HttpRequest> for HostFilter<S>
 where
-	S: Service<hyper::body::Incoming>,
+	S: Service<HttpRequest, Response = Response<ResponseBody>>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn StdError + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
@@ -114,10 +113,8 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, request: Request<hyper::body::Incoming>) -> Self::Future {
-		todo!();
-
-		/*let Some(authority) = Authority::from_http_request(&request) else {
+	fn call(&mut self, request: HttpRequest) -> Self::Future {
+		let Some(authority) = Authority::from_http_request(&request) else {
 			return async { Ok(http::response::malformed()) }.boxed();
 		};
 
@@ -126,7 +123,7 @@ where
 		} else {
 			tracing::debug!(target: LOG_TARGET, "Denied request: {:?}", request);
 			async { Ok(http::response::host_not_allowed()) }.boxed()
-		}*/
+		}
 	}
 }
 

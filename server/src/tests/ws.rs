@@ -880,7 +880,7 @@ async fn server_notify_on_conn_close() {
 	init_logger();
 
 	let metrics = Metrics::default();
-	let addr = ws_server_with_stats(metrics.clone());
+	let addr = ws_server_with_stats(metrics.clone()).await;
 
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 

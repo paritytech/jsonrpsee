@@ -1,16 +1,20 @@
 use std::error::Error as StdError;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{fmt, sync::atomic::AtomicUsize};
 
-use crate::{stop_channel, RpcModule, Server, ServerBuilder, ServerHandle};
+use crate::{stop_channel, ResponseBody, RpcModule, Server, ServerBuilder, ServerHandle};
 
-use futures_util::FutureExt;
+use futures_util::future::Either;
+use futures_util::{future, FutureExt};
+use hyper_util::rt::TokioIo;
 use jsonrpsee_core::server::Methods;
 use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::{error::ErrorCode, ErrorObject, ErrorObjectOwned, Response, ResponseSuccess};
+use tokio::net::TcpListener;
 use tower::Service;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
@@ -207,56 +211,89 @@ pub(crate) struct Metrics {
 	pub(crate) ws_sessions_closed: Arc<AtomicUsize>,
 }
 
-pub(crate) fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
-	use hyper::service::{make_service_fn, service_fn};
+pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
+	use hyper::service::service_fn;
 
-	let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+	let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await.unwrap();
+	let addr = listener.local_addr().unwrap();
 	let (stop_handle, server_handle) = stop_channel();
-	let stop_handle2 = stop_handle.clone();
+	let metrics = metrics.clone();
 
-	// And a MakeService to handle each connection...
-	let make_service = make_service_fn(move |_conn: &AddrStream| {
-		let stop_handle = stop_handle2.clone();
-		let metrics = metrics.clone();
-
-		async move {
-			Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
-				let is_websocket = crate::ws::is_upgrade_request(&req);
-				let metrics = metrics.clone();
-				let stop_handle = stop_handle.clone();
-
-				let mut svc =
-					Server::builder().max_connections(33).to_service_builder().build(Methods::new(), stop_handle);
-
-				if is_websocket {
-					// This should work for each callback.
-					let session_close1 = svc.on_session_closed();
-					let session_close2 = svc.on_session_closed();
-
-					tokio::spawn(async move {
-						metrics.ws_sessions_opened.fetch_add(1, Ordering::SeqCst);
-						tokio::join!(session_close2, session_close1);
-						metrics.ws_sessions_closed.fetch_add(1, Ordering::SeqCst);
-					});
-
-					async move { svc.call(req).await }.boxed()
-				} else {
-					// HTTP.
-					async move { svc.call(req).await }.boxed()
+	tokio::spawn(async move {
+		loop {
+			let sock = tokio::select! {
+				res = listener.accept() => {
+					match res {
+						Ok((stream, _remote_addr)) => stream,
+						Err(e) => {
+							tracing::error!("failed to accept v4 connection: {:?}", e);
+							continue;
+						}
+					}
 				}
-			}))
+				_ = stop_handle.clone().shutdown() => break,
+			};
+
+			let stop_handle2 = stop_handle.clone();
+			let metrics = metrics.clone();
+
+			tokio::spawn(async move {
+				let svc = service_fn(move |req| {
+					/*let is_websocket = crate::ws::is_upgrade_request(&req);
+					let metrics = metrics.clone();
+					let stop_handle2 = stop_handle2.clone();
+
+					let mut svc =
+						Server::builder().max_connections(33).to_service_builder().build(Methods::new(), stop_handle2);
+
+					if is_websocket {
+						// This should work for each callback.
+						let session_close1 = svc.on_session_closed();
+						let session_close2 = svc.on_session_closed();
+
+						tokio::spawn(async move {
+							metrics.ws_sessions_opened.fetch_add(1, Ordering::SeqCst);
+							tokio::join!(session_close2, session_close1);
+							metrics.ws_sessions_closed.fetch_add(1, Ordering::SeqCst);
+						});
+
+						async move { svc.call(req).await }.boxed()
+					} else {
+						// HTTP.
+						async move { svc.call(req).await }.boxed()*
+					}*/
+
+					async move { Ok::<_, hyper::Error>(hyper::Response::new(ResponseBody::new("todo".into()))) }
+				});
+
+				let conn = hyper::server::conn::http1::Builder::new()
+					.serve_connection(TokioIo::new(sock), svc)
+					.with_upgrades();
+				let stopped = stop_handle2.shutdown();
+
+				// Pin the future so that it can be polled.
+				tokio::pin!(stopped);
+
+				let res = match future::select(conn, stopped).await {
+					// Return the connection if not stopped.
+					Either::Left((conn, _)) => conn,
+					// If the server is stopped, we should gracefully shutdown
+					// the connection and poll it until it finishes.
+					Either::Right((_, mut conn)) => {
+						Pin::new(&mut conn).graceful_shutdown();
+						conn.await
+					}
+				};
+
+				// Log any errors that might have occurred.
+				if let Err(err) = res {
+					tracing::error!(err=?err, "HTTP connection failed");
+				}
+			});
 		}
 	});
 
-	let server = hyper::Server::bind(&addr).serve(make_service);
-
-	let addr = server.local_addr();
-
-	tokio::spawn(async move {
-		let graceful = server.with_graceful_shutdown(async move { stop_handle.shutdown().await });
-		graceful.await.unwrap();
-		drop(server_handle)
-	});
+	tokio::spawn(server_handle.stopped());
 
 	addr
 }

@@ -36,6 +36,8 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 use tracing_subscriber::util::SubscriberInitExt;
 
+type ResponseBody = http_body_util::Full<hyper::body::Bytes>;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	let filter = tracing_subscriber::EnvFilter::try_from_default_env()?
@@ -49,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
 	.layer(
 		TraceLayer::new_for_http()
 			.on_request(
-				|request: &hyper::Request<hyper::Body>, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
+				|request: &hyper::Request<ResponseBody>, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
 			)
 			.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
 				tracing::info!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")
