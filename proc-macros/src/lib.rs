@@ -214,7 +214,6 @@ pub(crate) mod visitor;
 ///
 /// - `rename`: rename the generated JSON key.
 ///
-/// **Method requirements:**
 ///
 /// ## Full workflow example
 ///
