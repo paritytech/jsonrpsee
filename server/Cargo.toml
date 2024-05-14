@@ -14,6 +14,7 @@ readme.workspace = true
 publish = true
 
 [dependencies]
+anyhow = "1"
 futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
 jsonrpsee-types = { workspace = true }
 jsonrpsee-core = { workspace = true, features = ["server", "http-helpers"] }
@@ -25,7 +26,7 @@ tokio = { version = "1.16", features = ["net", "rt-multi-thread", "macros", "tim
 tokio-util = { version = "0.7", features = ["compat"] }
 tokio-stream = { version = "0.1.7", features = ["sync"] }
 hyper = { version = "1.3", features = ["server", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["tokio", "service"] }
+hyper-util = { version = "0.1", features = ["tokio", "service", "tokio"] }
 http = "1"
 http-body = "1"
 http-body-util = "0.1.0"

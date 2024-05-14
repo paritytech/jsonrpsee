@@ -207,7 +207,7 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 				let stop_handle2 = per_conn.stop_handle.clone();
 				let per_conn = per_conn.clone();
 
-				let svc = service_fn(move |req| {
+				let svc = service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
 					let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
 					let transport_label = if is_websocket { "ws" } else { "http" };
 					let PerConnection { methods, stop_handle, metrics, svc_builder } = per_conn.clone();

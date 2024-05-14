@@ -27,6 +27,7 @@
 //! Middleware that proxies requests at a specified URI to internal
 //! RPC method calls.
 
+use crate::middleware::Body;
 use crate::transport::http;
 use crate::ResponseBody;
 
@@ -112,9 +113,9 @@ impl<S> ProxyGetRequest<S> {
 	}
 }
 
-impl<S> Service<Request<hyper::body::Incoming>> for ProxyGetRequest<S>
+impl<S> Service<Request<Body>> for ProxyGetRequest<S>
 where
-	S: Service<Request<hyper::body::Incoming>, Response = Response<ResponseBody>>,
+	S: Service<Request<Body>, Response = Response<ResponseBody>>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
@@ -128,7 +129,7 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, mut req: Request<hyper::body::Incoming>) -> Self::Future {
+	fn call(&mut self, mut req: Request<Body>) -> Self::Future {
 		let modify = self.path.as_ref() == req.uri() && req.method() == Method::GET;
 
 		// Proxy the request to the appropriate method call.
@@ -143,10 +144,12 @@ where
 			req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
 
 			// Adjust the body to reflect the method call.
-			let body = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
+			let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
 				.expect("Valid request; qed");
 
-			req.body_mut().map_frame(|f| f.map_data(|_| body.as_slice()));
+			let body = Body::new(http_body_util::Full::new(bytes.into()));
+
+			req = req.map(|_| body);
 		}
 
 		// Call the inner service and get a future that resolves to the response.
@@ -165,8 +168,7 @@ where
 			let mut bytes = Vec::new();
 
 			while let Some(frame) = body.frame().await {
-				// TODO error handling
-				let data = frame.unwrap().into_data().unwrap();
+				let data = frame?.into_data().map_err(|e| anyhow::anyhow!("{:?}", e))?;
 				bytes.extend(data);
 			}
 

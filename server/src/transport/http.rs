@@ -1,14 +1,14 @@
+use crate::{
+	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
+	middleware::Request as HttpRequest,
+	server::{handle_rpc_call, ServerConfig},
+	BatchRequestConfig, ConnectionState, ResponseBody, LOG_TARGET,
+};
 use http::Method;
 use hyper::body::Body;
 use jsonrpsee_core::{
 	http_helpers::{read_body, HttpError},
 	server::Methods,
-};
-
-use crate::{
-	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
-	server::{handle_rpc_call, ServerConfig},
-	BatchRequestConfig, ConnectionState, ResponseBody, LOG_TARGET,
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
@@ -32,7 +32,7 @@ pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 ///
 /// Fails if the HTTP request was a malformed JSON-RPC request.
 pub async fn call_with_service_builder<L>(
-	request: hyper::Request<hyper::body::Incoming>,
+	request: HttpRequest,
 	server_cfg: ServerConfig,
 	conn: ConnectionState,
 	methods: impl Into<Methods>,
@@ -65,7 +65,7 @@ where
 ///
 /// Fails if the HTTP request was a malformed JSON-RPC request.
 pub async fn call_with_service<S>(
-	request: hyper::Request<hyper::body::Incoming>,
+	request: HttpRequest,
 	batch_config: BatchRequestConfig,
 	max_request_size: u32,
 	rpc_service: S,

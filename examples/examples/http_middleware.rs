@@ -95,9 +95,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		// Add high level tracing/logging to all requests
 		.layer(
 			TraceLayer::new_for_http()
-				.on_request(
-					|request: &hyper::Request<hyper::body::Incoming>, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
-				)
+				/*.on_request(
+					|request, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
+				)*/
 				.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
 					tracing::info!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")
 				})

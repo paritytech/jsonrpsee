@@ -37,7 +37,6 @@
 //! This functionality is useful for services which would
 //! like to query a certain `URI` path for statistics.
 
-use hyper::Request;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use std::net::SocketAddr;
@@ -70,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
 	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}/health", addr);
 
-	let req = Request::builder().method("GET").uri(&uri).body(EmptyBody::new())?;
+	let req = hyper::Request::builder().method("GET").uri(&uri).body(EmptyBody::new())?;
 	println!("[main]: Submit proxy request: {:?}", req);
 	let res = http_client.request(req).await?;
 	println!("[main]: Received proxy response: {:?}", res);

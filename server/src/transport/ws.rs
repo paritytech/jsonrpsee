@@ -4,7 +4,7 @@ use std::time::Instant;
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
-use crate::{PingConfig, ResponseBody, LOG_TARGET};
+use crate::{HttpRequest, PingConfig, ResponseBody, LOG_TARGET};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -401,7 +401,7 @@ async fn graceful_shutdown<S>(
 /// }
 /// ```
 pub async fn connect<L>(
-	req: hyper::Request<hyper::body::Incoming>,
+	req: HttpRequest,
 	server_cfg: ServerConfig,
 	methods: impl Into<Methods>,
 	conn: ConnectionState,

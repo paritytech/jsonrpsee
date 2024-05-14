@@ -42,11 +42,7 @@ where
 {
 	/// Async method call example.
 	#[method(name = "getKeys")]
-	async fn storage_keys(
-		&self,
-		storage_key: StorageKey,
-		hash: Option<Hash>,
-	) -> Result<Vec<StorageKey>, ErrorObjectOwned>;
+	async fn storage_keys(&self, storage_key: usize, r#type: usize) -> Result<Vec<StorageKey>, ErrorObjectOwned>;
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
