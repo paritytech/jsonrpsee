@@ -3,7 +3,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::params::{ArrayParams, ObjectParams};
+use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{ServerBuilder, SubscriptionMessage};
@@ -24,11 +24,11 @@ pub trait Rpc {
 	#[method(name = "array_params")]
 	async fn array_params(&self, items: Vec<u64>) -> RpcResult<u64>;
 
-	#[method(name = "rename_params")]
+	#[method(name = "rename_params", param_kind= map)]
 	async fn rename_params(
 		&self,
 		#[argument(rename = "type")] r#type: u16,
-		#[argument(rename = "halfType")] half_type: bool,
+		#[argument(rename = "halfType")] ignored_name: bool,
 	) -> RpcResult<u16>;
 
 	#[method(name = "bar")]
@@ -123,18 +123,13 @@ async fn main() {
 
 	assert_eq!(client.async_method(10, "a".into()).await.unwrap(), 42);
 
-	let mut params = ObjectParams::new();
-	params.insert("type", 256).unwrap();
-	params.insert("halfType", true).unwrap();
-	assert_eq!(client.request::<u16, ObjectParams>("foo_rename_params", params).await.unwrap(), 128);
+	// The default param kind is `map` so test that handles renames correctly
+	// both in the client and server.
+	assert_eq!(client.rename_params(256, true).await.unwrap(), 128);
+	assert_eq!(client.rename_params(256, false).await.unwrap(), 256);
 
-	let mut params = ObjectParams::new();
-	params.insert("type", 256).unwrap();
-	params.insert("halfType", false).unwrap();
-	assert_eq!(client.request::<u16, ObjectParams>("foo_rename_params", params).await.unwrap(), 256);
-
+	// Make sure that renames has no impact of ArrayParams.
 	assert_eq!(client.request::<u16, ArrayParams>("foo_rename_params", rpc_params![256, true]).await.unwrap(), 128);
-
 	assert_eq!(client.request::<u16, ArrayParams>("foo_rename_params", rpc_params![256, false]).await.unwrap(), 256);
 
 	assert_eq!(client.sync_method().await.unwrap(), 10);
