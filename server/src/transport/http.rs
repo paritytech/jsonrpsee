@@ -1,8 +1,7 @@
 use crate::{
 	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
-	middleware::Request as HttpRequest,
 	server::{handle_rpc_call, ServerConfig},
-	BatchRequestConfig, ConnectionState, ResponseBody, LOG_TARGET,
+	BatchRequestConfig, ConnectionState, HttpRequest, HttpResponse, LOG_TARGET,
 };
 use http::Method;
 use hyper::body::Body;
@@ -37,7 +36,7 @@ pub async fn call_with_service_builder<L>(
 	conn: ConnectionState,
 	methods: impl Into<Methods>,
 	rpc_service: RpcServiceBuilder<L>,
-) -> hyper::Response<ResponseBody>
+) -> HttpResponse
 where
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -70,7 +69,7 @@ pub async fn call_with_service<S>(
 	max_request_size: u32,
 	rpc_service: S,
 	max_response_size: u32,
-) -> hyper::Response<ResponseBody>
+) -> HttpResponse
 where
 	for<'a> S: RpcServiceT<'a> + Send,
 {
@@ -106,13 +105,13 @@ pub mod response {
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 	use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload};
 
-	use crate::ResponseBody;
+	use crate::{HttpResponse, HttpResponseBody};
 
 	const JSON: &str = "application/json; charset=utf-8";
 	const TEXT: &str = "text/plain";
 
 	/// Create a response for json internal error.
-	pub fn internal_error() -> hyper::Response<ResponseBody> {
+	pub fn internal_error() -> HttpResponse {
 		let err = ResponsePayload::<()>::error(ErrorObjectOwned::from(ErrorCode::InternalError));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
@@ -121,12 +120,12 @@ pub mod response {
 	}
 
 	/// Create a text/plain response for not allowed hosts.
-	pub fn host_not_allowed() -> hyper::Response<ResponseBody> {
+	pub fn host_not_allowed() -> HttpResponse {
 		from_template(hyper::StatusCode::FORBIDDEN, "Provided Host header is not whitelisted.\n", TEXT)
 	}
 
 	/// Create a text/plain response for disallowed method used.
-	pub fn method_not_allowed() -> hyper::Response<ResponseBody> {
+	pub fn method_not_allowed() -> HttpResponse {
 		from_template(
 			hyper::StatusCode::METHOD_NOT_ALLOWED,
 			"Used HTTP Method is not allowed. POST or OPTIONS is required\n",
@@ -135,7 +134,7 @@ pub mod response {
 	}
 
 	/// Create a json response for oversized requests (413)
-	pub fn too_large(limit: u32) -> hyper::Response<ResponseBody> {
+	pub fn too_large(limit: u32) -> HttpResponse {
 		let err = ResponsePayload::<()>::error(reject_too_big_request(limit));
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
@@ -144,7 +143,7 @@ pub mod response {
 	}
 
 	/// Create a json response for empty or malformed requests (400)
-	pub fn malformed() -> hyper::Response<ResponseBody> {
+	pub fn malformed() -> HttpResponse {
 		let rp = Response::new(ResponsePayload::<()>::error(ErrorCode::ParseError), Id::Null);
 		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
@@ -154,10 +153,10 @@ pub mod response {
 	/// Create a response body.
 	fn from_template(
 		status: hyper::StatusCode,
-		body: impl Into<ResponseBody>,
+		body: impl Into<HttpResponseBody>,
 		content_type: &'static str,
-	) -> hyper::Response<ResponseBody> {
-		hyper::Response::builder()
+	) -> HttpResponse {
+		HttpResponse::builder()
 			.status(status)
 			.header("content-type", hyper::header::HeaderValue::from_static(content_type))
 			.body(body.into())
@@ -167,12 +166,12 @@ pub mod response {
 	}
 
 	/// Create a valid JSON response.
-	pub fn ok_response(body: impl Into<ResponseBody>) -> hyper::Response<ResponseBody> {
+	pub fn ok_response(body: impl Into<HttpResponseBody>) -> HttpResponse {
 		from_template(hyper::StatusCode::OK, body, JSON)
 	}
 
 	/// Create a response for unsupported content type.
-	pub fn unsupported_content_type() -> hyper::Response<ResponseBody> {
+	pub fn unsupported_content_type() -> HttpResponse {
 		from_template(
 			hyper::StatusCode::UNSUPPORTED_MEDIA_TYPE,
 			"Supplied content type is not allowed. Content-Type: application/json is required\n",
@@ -181,12 +180,12 @@ pub mod response {
 	}
 
 	/// Create a response for when the server is busy and can't accept more requests.
-	pub fn too_many_requests() -> hyper::Response<ResponseBody> {
+	pub fn too_many_requests() -> HttpResponse {
 		from_template(hyper::StatusCode::TOO_MANY_REQUESTS, "Too many connections. Please try again later.", TEXT)
 	}
 
 	/// Create a response for when the server denied the request.
-	pub fn denied() -> hyper::Response<ResponseBody> {
-		from_template(hyper::StatusCode::FORBIDDEN, ResponseBody::default(), TEXT)
+	pub fn denied() -> HttpResponse {
+		from_template(hyper::StatusCode::FORBIDDEN, HttpResponseBody::default(), TEXT)
 	}
 }

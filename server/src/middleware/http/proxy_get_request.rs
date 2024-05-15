@@ -26,15 +26,14 @@
 
 //! Middleware that proxies requests at a specified URI to internal
 //! RPC method calls.
-
-use crate::middleware::Body;
+//!
 use crate::transport::http;
-use crate::ResponseBody;
+use crate::{HttpBody, HttpRequest, HttpResponse};
 
 use http_body_util::BodyExt;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
-use hyper::{Method, Request, Response, Uri};
+use hyper::{Method, Uri};
 use jsonrpsee_types::{Id, RequestSer};
 use std::error::Error;
 use std::future::Future;
@@ -113,9 +112,9 @@ impl<S> ProxyGetRequest<S> {
 	}
 }
 
-impl<S> Service<Request<Body>> for ProxyGetRequest<S>
+impl<S> Service<HttpRequest> for ProxyGetRequest<S>
 where
-	S: Service<Request<Body>, Response = Response<ResponseBody>>,
+	S: Service<HttpRequest, Response = HttpResponse>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
@@ -129,7 +128,7 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+	fn call(&mut self, mut req: HttpRequest) -> Self::Future {
 		let modify = self.path.as_ref() == req.uri() && req.method() == Method::GET;
 
 		// Proxy the request to the appropriate method call.
@@ -147,7 +146,7 @@ where
 			let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
 				.expect("Valid request; qed");
 
-			let body = Body::new(http_body_util::Full::new(bytes.into()));
+			let body = HttpBody::new(http_body_util::Full::new(bytes.into()));
 
 			req = req.map(|_| body);
 		}

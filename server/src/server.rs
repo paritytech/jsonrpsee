@@ -35,10 +35,9 @@ use std::time::Duration;
 
 use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, SessionClosedFuture, StopHandle};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
-use crate::middleware::{Body, TowerToHyperService};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::{HttpRequest, ResponseBody, LOG_TARGET};
+use crate::{HttpBody, HttpRequest, HttpResponse, HttpResponseBody, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
@@ -103,7 +102,7 @@ where
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
 		+ Clone
-		+ Service<HttpRequest, Response = hyper::Response<B>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+		+ Service<HttpRequest, Response = HttpResponse<B>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future: Send,
 	B: http_body::Body + Send + 'static,
 	<B as http_body::Body>::Error: Send + Sync + StdError,
@@ -956,24 +955,20 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 	}
 }
 
-impl<B, RpcMiddleware, HttpMiddleware> Service<hyper::Request<B>> for TowerService<RpcMiddleware, HttpMiddleware>
+impl<B, RpcMiddleware, HttpMiddleware> Service<HttpRequest<B>> for TowerService<RpcMiddleware, HttpMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
-		+ Service<
-			hyper::Request<B>,
-			Response = hyper::Response<ResponseBody>,
-			Error = Box<(dyn StdError + Send + Sync + 'static)>,
-		>,
-	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<hyper::Request<B>>>::Future:
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
+		Send + Service<HttpRequest<B>, Response = HttpResponse, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<B>>>::Future:
 		Send + 'static,
 	B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
 	B::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
 {
-	type Response = hyper::Response<ResponseBody>;
+	type Response = HttpResponse;
 	type Error = Box<dyn StdError + Send + Sync + 'static>;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -997,7 +992,7 @@ pub struct TowerServiceNoHttp<L> {
 	on_session_close: Option<SessionClose>,
 }
 
-impl<B, RpcMiddleware> Service<hyper::Request<B>> for TowerServiceNoHttp<RpcMiddleware>
+impl<B, RpcMiddleware> Service<HttpRequest<B>> for TowerServiceNoHttp<RpcMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -1005,7 +1000,7 @@ where
 	B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
 	B::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
 {
-	type Response = hyper::Response<ResponseBody>;
+	type Response = HttpResponse;
 
 	// The following associated type is required by the `impl<B, U, M: JsonRpcMiddleware> Server<B, L>` bounds.
 	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B: Identity`).
@@ -1018,7 +1013,7 @@ where
 	}
 
 	fn call(&mut self, request: hyper::Request<B>) -> Self::Future {
-		let request = request.map(Body::new);
+		let request = request.map(HttpBody::new);
 
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
@@ -1106,11 +1101,11 @@ where
 						.in_current_span(),
 					);
 
-					response.map(|()| ResponseBody::default())
+					response.map(|()| HttpResponseBody::default())
 				}
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
-					hyper::Response::new(ResponseBody::from(format!("Could not upgrade connection: {e}")))
+					HttpResponse::new(HttpResponseBody::from(format!("Could not upgrade connection: {e}")))
 				}
 			};
 
@@ -1201,7 +1196,7 @@ where
 
 	tokio::spawn(async {
 		// this requires Clone.
-		let service = TowerToHyperService::new(service);
+		let service = crate::utils::TowerToHyperService::new(service);
 		let io = TokioIo::new(socket);
 		let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 

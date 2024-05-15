@@ -28,7 +28,7 @@
 
 use crate::middleware::http::authority::{Authority, AuthorityError, Port};
 use crate::transport::http;
-use crate::{HttpRequest, ResponseBody, LOG_TARGET};
+use crate::{HttpRequest, HttpResponseBody, LOG_TARGET};
 use futures_util::{Future, FutureExt, TryFutureExt};
 use hyper::Response;
 use route_recognizer::Router;
@@ -100,7 +100,7 @@ pub struct HostFilter<S> {
 
 impl<S> Service<HttpRequest> for HostFilter<S>
 where
-	S: Service<HttpRequest, Response = Response<ResponseBody>>,
+	S: Service<HttpRequest, Response = Response<HttpResponseBody>>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn StdError + Send + Sync>> + 'static,
 	S::Future: Send + 'static,

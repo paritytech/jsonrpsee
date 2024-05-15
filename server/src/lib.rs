@@ -34,6 +34,7 @@
 mod future;
 mod server;
 mod transport;
+mod utils;
 
 pub mod middleware;
 
@@ -52,10 +53,8 @@ pub use server::{
 };
 pub use tracing;
 
+pub use crate::utils::{HttpBody, HttpRequest, HttpResponse, HttpResponseBody};
 pub use transport::http;
 pub use transport::ws;
 
 pub(crate) const LOG_TARGET: &str = "jsonrpsee-server";
-
-pub use crate::middleware::{Body, Request as HttpRequest};
-pub(crate) type ResponseBody = http_body_util::Full<hyper::body::Bytes>;
