@@ -249,8 +249,9 @@ pub async fn http_server_with_hardcoded_response(response: String) -> SocketAddr
 			let response = response.clone();
 			tokio::spawn(async move {
 				let io = TokioIo::new(sock);
+				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-				let conn = hyper::server::conn::http1::Builder::new().serve_connection(
+				let conn = builder.serve_connection_with_upgrades(
 					io,
 					service_fn(move |req| {
 						let rp = response.clone();

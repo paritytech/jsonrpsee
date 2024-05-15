@@ -44,7 +44,7 @@ use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
 use hyper::body::Bytes;
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
@@ -1203,19 +1203,18 @@ where
 		// this requires Clone.
 		let service = TowerToHyperService::new(service);
 		let io = TokioIo::new(socket);
+		let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-		let conn = hyper::server::conn::http1::Builder::new().serve_connection(io, service).with_upgrades();
-
+		let conn = builder.serve_connection_with_upgrades(io, service);
 		let stopped = stop_handle.shutdown();
 
-		tokio::pin!(stopped);
+		tokio::pin!(stopped, conn);
 
 		let res = match future::select(conn, stopped).await {
 			Either::Left((conn, _)) => conn,
-			Either::Right((_, mut conn)) => {
+			Either::Right((_, conn)) => {
 				// NOTE: the connection should continue to be polled until shutdown can finish.
 				// Thus, both lines below are needed and not a nit.
-				Pin::new(&mut conn).graceful_shutdown();
 				conn.await
 			}
 		};

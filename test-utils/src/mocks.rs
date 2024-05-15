@@ -25,10 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::convert::Infallible;
-use std::error::Error as StdError;
 use std::io;
 use std::net::SocketAddr;
-use std::net::TcpListener;
 use std::time::Duration;
 
 use futures_channel::mpsc;
@@ -38,6 +36,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::sink::SinkExt;
 use futures_util::stream::{self, StreamExt};
 use futures_util::{pin_mut, select};
+use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
@@ -323,14 +322,11 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 
 // Run a WebSocket server running on localhost that redirects requests for testing.
 // Requests to any url except for `/myblock/two` will redirect one or two times (HTTP 301) and eventually end up in `/myblock/two`.
-pub fn ws_server_with_redirect(other_server: String) -> String {
-	let addr: SocketAddr = ([127, 0, 0, 1], 0).into();
-	let listener = TcpListener::bind(addr).unwrap();
+pub async fn ws_server_with_redirect(other_server: String) -> String {
+	let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await.unwrap();
 	let addr = listener.local_addr().unwrap();
 
 	tokio::spawn(async move {
-		let listener = tokio::net::TcpListener::from_std(listener).unwrap();
-
 		loop {
 			let Ok((stream, _addr)) = listener.accept().await else {
 				continue;
@@ -339,15 +335,13 @@ pub fn ws_server_with_redirect(other_server: String) -> String {
 			let other_server = other_server.clone();
 			tokio::spawn(async {
 				let io = TokioIo::new(stream);
+				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-				let conn = hyper::server::conn::http1::Builder::new().serve_connection(
+				let conn = builder.serve_connection_with_upgrades(
 					io,
 					hyper::service::service_fn(move |req| {
 						let other_server = other_server.clone();
-						async move {
-							let res = handler(req, other_server).await.unwrap();
-							Ok::<_, Infallible>(res)
-						}
+						handler(req, other_server)
 					}),
 				);
 
@@ -362,7 +356,7 @@ pub fn ws_server_with_redirect(other_server: String) -> String {
 async fn handler(
 	req: hyper::Request<hyper::body::Incoming>,
 	other_server: String,
-) -> Result<hyper::Response<EmptyBody>, Box<dyn StdError + Send + Sync + 'static>> {
+) -> Result<hyper::Response<EmptyBody>, Infallible> {
 	if is_upgrade_request(&req) {
 		tracing::debug!("{:?}", req);
 

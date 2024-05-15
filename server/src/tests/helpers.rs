@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{fmt, sync::atomic::AtomicUsize};
@@ -9,7 +8,7 @@ use crate::{stop_channel, RpcModule, Server, ServerBuilder, ServerHandle};
 
 use futures_util::future::Either;
 use futures_util::{future, FutureExt};
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::server::Methods;
 use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -275,23 +274,19 @@ pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
 					}
 				});
 
-				let conn = hyper::server::conn::http1::Builder::new()
-					.serve_connection(TokioIo::new(sock), svc)
-					.with_upgrades();
+				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+				let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);
 				let stopped = stop_handle.shutdown();
 
 				// Pin the future so that it can be polled.
-				tokio::pin!(stopped);
+				tokio::pin!(stopped, conn);
 
 				let res = match future::select(conn, stopped).await {
 					// Return the connection if not stopped.
 					Either::Left((conn, _)) => conn,
 					// If the server is stopped, we should gracefully shutdown
 					// the connection and poll it until it finishes.
-					Either::Right((_, mut conn)) => {
-						Pin::new(&mut conn).graceful_shutdown();
-						conn.await
-					}
+					Either::Right((_, conn)) => conn.await,
 				};
 
 				// Log any errors that might have occurred.

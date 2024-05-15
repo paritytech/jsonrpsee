@@ -461,6 +461,8 @@ fn assert_error_response(err: Error, exp: ErrorObjectOwned) {
 
 #[tokio::test]
 async fn redirections() {
+	init_logger();
+
 	let expected = "abc 123";
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
@@ -471,10 +473,12 @@ async fn redirections() {
 	.unwrap();
 
 	let server_url = format!("ws://{}", server.local_addr());
-	let redirect_url = jsonrpsee_test_utils::mocks::ws_server_with_redirect(server_url);
+	let redirect_url =
+		jsonrpsee_test_utils::mocks::ws_server_with_redirect(server_url).with_default_timeout().await.unwrap();
 
 	// The client will first connect to a server that only performs re-directions and finally
 	// redirect to another server to complete the handshake.
+	println!("Connecting to {redirect_url}");
 	let client = WsClientBuilder::default().build(&redirect_url).with_default_timeout().await;
 	// It's an ok client
 	let client = match client {

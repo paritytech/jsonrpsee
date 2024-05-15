@@ -25,14 +25,13 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::future::{self, Either};
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::service::TowerToHyperService;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::server::{stop_channel, ServerHandle};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
 use std::net::SocketAddr;
-use std::pin::Pin;
 use tokio::net::TcpListener;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -119,24 +118,19 @@ async fn run_server() -> anyhow::Result<(ServerHandle, Addrs)> {
 
 			// Spawn a new task to serve each respective (Hyper) connection.
 			tokio::spawn(async move {
-				let conn = hyper::server::conn::http1::Builder::new()
-					.serve_connection(TokioIo::new(stream), TowerToHyperService::new(svc))
-					.with_upgrades();
-
+				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+				let conn = builder.serve_connection_with_upgrades(TokioIo::new(stream), TowerToHyperService::new(svc));
 				let stopped = stop_hdl2.shutdown();
 
 				// Pin the future so that it can be polled.
-				tokio::pin!(stopped);
+				tokio::pin!(stopped, conn);
 
 				let res = match future::select(conn, stopped).await {
 					// Return the connection if not stopped.
 					Either::Left((conn, _)) => conn,
 					// If the server is stopped, we should gracefully shutdown
 					// the connection and poll it until it finishes.
-					Either::Right((_, mut conn)) => {
-						Pin::new(&mut conn).graceful_shutdown();
-						conn.await
-					}
+					Either::Right((_, conn)) => conn.await,
 				};
 
 				// Log any errors that might have occurred.
