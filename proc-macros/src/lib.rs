@@ -206,6 +206,15 @@ pub(crate) mod visitor;
 ///
 /// - have input parameters or not.
 ///
+/// ### `argument` attribute
+///
+/// `argument` attribute is used to modify a function argument.
+///
+/// **Arguments:**
+///
+/// - `rename`: rename the generated JSON key.
+///
+///
 /// ## Full workflow example
 ///
 /// ```rust
@@ -243,7 +252,12 @@ pub(crate) mod visitor;
 ///     #[rpc(client, server, namespace = "foo")]
 ///     pub trait MyRpc {
 ///         #[method(name = "foo")]
-///         async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
+///         async fn async_method(
+///             &self,
+///             param_a: u8,
+///             #[argument(rename = "param_c")]
+///             param_b: String
+///         ) -> RpcResult<u16>;
 ///
 ///         #[method(name = "bar")]
 ///         fn sync_method(&self) -> RpcResult<u16>;

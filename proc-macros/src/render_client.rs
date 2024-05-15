@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 use crate::attributes::ParamKind;
 use crate::helpers::generate_where_clause;
-use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
+use crate::rpc_macro::{RpcDescription, RpcFnArg, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
@@ -208,12 +208,7 @@ impl RpcDescription {
 		Ok(method)
 	}
 
-	fn encode_params(
-		&self,
-		params: &[(syn::PatIdent, syn::Type)],
-		param_kind: &ParamKind,
-		signature: &syn::TraitItemFn,
-	) -> TokenStream2 {
+	fn encode_params(&self, params: &[RpcFnArg], param_kind: &ParamKind, signature: &syn::TraitItemFn) -> TokenStream2 {
 		const ILLEGAL_PARAM_NAME: &str = "__RpcParams__";
 
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
@@ -225,7 +220,7 @@ impl RpcDescription {
 			});
 		}
 
-		if params.iter().any(|(param, _)| param.ident == p) {
+		if params.iter().any(|arg| arg.arg_pat().ident == p) {
 			panic!(
 				"Cannot use `{}` as a parameter name because it's overlapping with an internal variable in the generated code. Change it something else to make it work", ILLEGAL_PARAM_NAME
 			);
@@ -236,10 +231,10 @@ impl RpcDescription {
 				// Extract parameter names.
 				let param_names = extract_param_names(&signature.sig);
 				// Combine parameter names and values to pass them as parameters.
-				let params_insert = param_names.iter().zip(params).map(|pair| {
-					let name = pair.0;
+				let params_insert = params.iter().map(|arg| {
 					// Throw away the type.
-					let (value, _value_type) = pair.1;
+					let value = arg.arg_pat();
+					let name = arg.name();
 					quote!(#name, #value)
 				});
 
@@ -263,7 +258,7 @@ impl RpcDescription {
 			}
 			ParamKind::Array => {
 				// Throw away the type.
-				let params = params.iter().map(|(param, _param_type)| param);
+				let params = params.iter().map(RpcFnArg::arg_pat);
 
 				quote!({
 					let mut #p = #jsonrpsee::core::params::ArrayParams::new();
