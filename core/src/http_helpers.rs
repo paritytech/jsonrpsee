@@ -24,10 +24,69 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Utility methods relying on hyper
+//! Shared HTTP utilities.
 
+use bytes::{Buf, Bytes};
+use http_body::Frame;
 use http_body_util::{BodyExt, Limited};
-use hyper::body::{Body, Buf};
+use std::{
+	error::Error as StdError,
+	pin::Pin,
+	task::{Context, Poll},
+};
+
+/// HTTP request type.
+pub type Request<T = Body> = http::Request<T>;
+
+/// HTTP response body.
+pub type ResponseBody = http_body_util::Full<bytes::Bytes>;
+
+/// HTTP response type.
+pub type Response<T = ResponseBody> = http::Response<T>;
+
+/// A HTTP request body.
+#[derive(Debug, Default)]
+pub struct Body(http_body_util::combinators::BoxBody<Bytes, Box<dyn StdError + Send + Sync + 'static>>);
+
+impl Body {
+	/// Create an empty body.
+	pub fn empty() -> Self {
+		Self::default()
+	}
+
+	/// Create a new body.
+	pub fn new<B>(body: B) -> Self
+	where
+		B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+		B::Data: Send + 'static,
+		B::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
+	{
+		Self(body.map_err(|e| e.into()).boxed())
+	}
+}
+
+impl http_body::Body for Body {
+	type Data = Bytes;
+	type Error = Box<dyn StdError + Send + Sync + 'static>;
+
+	#[inline]
+	fn poll_frame(
+		mut self: Pin<&mut Self>,
+		cx: &mut Context<'_>,
+	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+		Pin::new(&mut self.0).poll_frame(cx)
+	}
+
+	#[inline]
+	fn size_hint(&self) -> http_body::SizeHint {
+		self.0.size_hint()
+	}
+
+	#[inline]
+	fn is_end_stream(&self) -> bool {
+		self.0.is_end_stream()
+	}
+}
 
 /// Represents error that can when reading with a HTTP body.
 #[derive(Debug, thiserror::Error)]
@@ -48,9 +107,9 @@ pub enum HttpError {
 /// Returns `Ok((bytes, single))` if the body was in valid size range; and a bool indicating whether the JSON-RPC
 /// request is a single or a batch.
 /// Returns `Err` if the body was too large or the body couldn't be read.
-pub async fn read_body<B>(headers: &hyper::HeaderMap, body: B, max_body_size: u32) -> Result<(Vec<u8>, bool), HttpError>
+pub async fn read_body<B>(headers: &http::HeaderMap, body: B, max_body_size: u32) -> Result<(Vec<u8>, bool), HttpError>
 where
-	B: Body + Send + 'static,
+	B: http_body::Body + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
 {
@@ -117,14 +176,14 @@ where
 ///
 /// NOTE: There's no specific hard limit on `Content_length` in HTTP specification.
 /// Thus this method might reject valid `content_length`
-fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u32> {
-	let length = read_header_value(headers, hyper::header::CONTENT_LENGTH)?;
+fn read_header_content_length(headers: &http::header::HeaderMap) -> Option<u32> {
+	let length = read_header_value(headers, http::header::CONTENT_LENGTH)?;
 	// HTTP Content-Length indicates number of bytes in decimal.
 	length.parse::<u32>().ok()
 }
 
 /// Returns a string value when there is exactly one value for the given header.
-pub fn read_header_value(headers: &hyper::header::HeaderMap, header_name: hyper::header::HeaderName) -> Option<&str> {
+pub fn read_header_value(headers: &http::header::HeaderMap, header_name: http::header::HeaderName) -> Option<&str> {
 	let mut values = headers.get_all(header_name).iter();
 	let val = values.next()?;
 	if values.next().is_none() {
@@ -136,9 +195,9 @@ pub fn read_header_value(headers: &hyper::header::HeaderMap, header_name: hyper:
 
 /// Returns an iterator of all values for a given a header name
 pub fn read_header_values<'a>(
-	headers: &'a hyper::header::HeaderMap,
+	headers: &'a http::header::HeaderMap,
 	header_name: &str,
-) -> hyper::header::GetAll<'a, hyper::header::HeaderValue> {
+) -> http::header::GetAll<'a, http::header::HeaderValue> {
 	headers.get_all(header_name)
 }
 
@@ -147,11 +206,11 @@ mod tests {
 	use super::{read_body, read_header_content_length, HttpError};
 	use http_body_util::BodyExt;
 
-	type Body = http_body_util::Full<hyper::body::Bytes>;
+	type Body = http_body_util::Full<bytes::Bytes>;
 
 	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {
-		let headers = hyper::header::HeaderMap::new();
+		let headers = http::header::HeaderMap::new();
 		let full_body = Body::from(vec![0; 128]);
 		let body = full_body.map_err(|e| HttpError::Stream(e.into()));
 		assert!(read_body(&headers, body, 127).await.is_err());
@@ -159,18 +218,18 @@ mod tests {
 
 	#[test]
 	fn read_content_length_works() {
-		let mut headers = hyper::header::HeaderMap::new();
-		headers.insert(hyper::header::CONTENT_LENGTH, "177".parse().unwrap());
+		let mut headers = http::header::HeaderMap::new();
+		headers.insert(http::header::CONTENT_LENGTH, "177".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), Some(177));
 
-		headers.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
+		headers.append(http::header::CONTENT_LENGTH, "999".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), None);
 	}
 
 	#[test]
 	fn read_content_length_too_big_value() {
-		let mut headers = hyper::header::HeaderMap::new();
-		headers.insert(hyper::header::CONTENT_LENGTH, "18446744073709551616".parse().unwrap());
+		let mut headers = http::header::HeaderMap::new();
+		headers.insert(http::header::CONTENT_LENGTH, "18446744073709551616".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), None);
 	}
 }

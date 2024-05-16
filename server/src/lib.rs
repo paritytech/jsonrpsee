@@ -53,7 +53,9 @@ pub use server::{
 };
 pub use tracing;
 
-pub use crate::utils::{HttpBody, HttpRequest, HttpResponse, HttpResponseBody};
+pub use jsonrpsee_core::http_helpers::{
+	Body as HttpBody, Request as HttpRequest, Response as HttpResponse, ResponseBody as HttpResponseBody,
+};
 pub use transport::http;
 pub use transport::ws;
 

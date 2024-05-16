@@ -25,13 +25,13 @@ use tower::layer::util::Identity;
 use tower::{Layer, Service, ServiceExt};
 use url::Url;
 
-use crate::ResponseBody;
+use crate::{HttpBody, HttpRequest, HttpResponse};
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
 /// Wrapper over HTTP transport and connector.
 #[derive(Debug)]
-pub enum HttpBackend<B = ResponseBody> {
+pub enum HttpBackend<B = HttpBody> {
 	/// Hyper client with https connector.
 	#[cfg(feature = "__tls")]
 	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>, B>),
@@ -49,13 +49,13 @@ impl<B> Clone for HttpBackend<B> {
 	}
 }
 
-impl<B> tower::Service<hyper::Request<B>> for HttpBackend<B>
+impl<B> tower::Service<HttpRequest<B>> for HttpBackend<B>
 where
 	B: http_body::Body + Send + 'static + Unpin,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
-	type Response = hyper::Response<hyper::body::Incoming>;
+	type Response = HttpResponse<hyper::body::Incoming>;
 	type Error = Error;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -68,7 +68,7 @@ where
 		.map_err(|e| Error::Http(HttpError::Stream(e.into())))
 	}
 
-	fn call(&mut self, req: hyper::Request<B>) -> Self::Future {
+	fn call(&mut self, req: HttpRequest<B>) -> Self::Future {
 		let resp = match self {
 			Self::Http(inner) => inner.call(req),
 			#[cfg(feature = "__tls")]
@@ -181,7 +181,7 @@ impl<L> HttpTransportClientBuilder<L> {
 	pub fn build<S, B>(self, target: impl AsRef<str>) -> Result<HttpTransportClient<S>, Error>
 	where
 		L: Layer<HttpBackend, Service = S>,
-		S: Service<hyper::Request<ResponseBody>, Response = hyper::Response<B>, Error = Error> + Clone,
+		S: Service<HttpRequest<HttpBody>, Response = HttpResponse<B>, Error = Error> + Clone,
 		B: http_body::Body + Send + 'static,
 		B::Data: Send,
 		B::Error: Into<Box<dyn StdError + Send + Sync>>,
@@ -283,7 +283,7 @@ pub struct HttpTransportClient<S> {
 
 impl<B, S> HttpTransportClient<S>
 where
-	S: Service<hyper::Request<ResponseBody>, Response = hyper::Response<B>, Error = Error> + Clone,
+	S: Service<HttpRequest, Response = hyper::Response<B>, Error = Error> + Clone,
 	B: http_body::Body + Send + Unpin + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
@@ -293,7 +293,7 @@ where
 			return Err(Error::RequestTooLarge);
 		}
 
-		let mut req = hyper::Request::post(&self.target);
+		let mut req = HttpRequest::post(&self.target);
 		if let Some(headers) = req.headers_mut() {
 			*headers = self.headers.clone();
 		}

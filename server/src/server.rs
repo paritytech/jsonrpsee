@@ -976,7 +976,7 @@ where
 		Poll::Ready(Ok(()))
 	}
 
-	fn call(&mut self, request: hyper::Request<B>) -> Self::Future {
+	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
 		Box::pin(self.http_middleware.service(self.rpc_middleware.clone()).call(request))
 	}
 }

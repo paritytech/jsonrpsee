@@ -32,7 +32,7 @@ use std::time::Duration;
 
 use crate::transport::{self, Error as TransportError, HttpTransportClient, HttpTransportClientBuilder};
 use crate::types::{NotificationSer, RequestSer, Response};
-use crate::ResponseBody;
+use crate::{HttpBody, HttpRequest};
 use async_trait::async_trait;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
@@ -188,7 +188,7 @@ impl<L> HttpClientBuilder<L> {
 impl<B, S, L> HttpClientBuilder<L>
 where
 	L: Layer<transport::HttpBackend, Service = S>,
-	S: Service<hyper::Request<ResponseBody>, Response = hyper::Response<B>, Error = TransportError> + Clone,
+	S: Service<HttpRequest<HttpBody>, Response = hyper::Response<B>, Error = TransportError> + Clone,
 	B: http_body::Body + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
@@ -273,11 +273,8 @@ impl<S> HttpClient<S> {
 #[async_trait]
 impl<B, S> ClientT for HttpClient<S>
 where
-	S: Service<hyper::Request<ResponseBody>, Response = hyper::Response<B>, Error = TransportError>
-		+ Send
-		+ Sync
-		+ Clone,
-	<S as Service<hyper::Request<ResponseBody>>>::Future: Send,
+	S: Service<HttpRequest<HttpBody>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
+	<S as Service<HttpRequest<HttpBody>>>::Future: Send,
 	B: http_body::Body + Send + Unpin + 'static,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 	B::Data: Send,
@@ -409,11 +406,8 @@ where
 #[async_trait]
 impl<B, S> SubscriptionClientT for HttpClient<S>
 where
-	S: Service<hyper::Request<ResponseBody>, Response = hyper::Response<B>, Error = TransportError>
-		+ Send
-		+ Sync
-		+ Clone,
-	<S as Service<hyper::Request<ResponseBody>>>::Future: Send,
+	S: Service<HttpRequest<HttpBody>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
+	<S as Service<HttpRequest<HttpBody>>>::Future: Send,
 	B: http_body::Body + Send + Unpin + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,

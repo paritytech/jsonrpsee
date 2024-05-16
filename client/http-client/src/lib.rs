@@ -47,4 +47,9 @@ pub use client::{HttpClient, HttpClientBuilder};
 pub use hyper::http::{HeaderMap, HeaderValue};
 pub use jsonrpsee_types as types;
 
-pub(crate) type ResponseBody = http_body_util::Full<hyper::body::Bytes>;
+/// Default HTTP body for the client.
+pub type HttpBody = http_body_util::Full<hyper::body::Bytes>;
+/// HTTP request with default body.
+pub type HttpRequest<T = HttpBody> = jsonrpsee_core::http_helpers::Request<T>;
+/// HTTP response with default body.
+pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;

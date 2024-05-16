@@ -11,7 +11,7 @@ use jsonrpsee_core::{
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
-pub fn content_type_is_json<T: Body>(request: &hyper::Request<T>) -> bool {
+pub fn content_type_is_json<T: Body>(request: &HttpRequest<T>) -> bool {
 	is_json(request.headers().get(hyper::header::CONTENT_TYPE))
 }
 
