@@ -17,7 +17,7 @@ publish = true
 async-trait = "0.1"
 hyper = { version = "1.3", features = ["client", "http1", "http2"] }
 hyper-rustls = { version = "0.27.1", optional = true, default-features = false, features = ["http1", "http2", "tls12", "logging"] }
-hyper-util = { version = "*", features = ["client", "client-legacy"] }
+hyper-util = { version = "0.1.1", features = ["client", "client-legacy"] }
 http-body = "1"
 http-body-util = "0.1.1"
 jsonrpsee-types = { workspace = true }
