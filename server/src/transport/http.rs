@@ -4,7 +4,7 @@ use crate::{
 	BatchRequestConfig, ConnectionState, HttpRequest, HttpResponse, LOG_TARGET,
 };
 use http::Method;
-use hyper::body::Body;
+use hyper::body::{Body, Bytes};
 use jsonrpsee_core::{
 	http_helpers::{read_body, HttpError},
 	server::Methods,
@@ -30,14 +30,17 @@ pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 /// Make JSON-RPC HTTP call with a [`RpcServiceBuilder`]
 ///
 /// Fails if the HTTP request was a malformed JSON-RPC request.
-pub async fn call_with_service_builder<L>(
-	request: HttpRequest,
+pub async fn call_with_service_builder<L, B>(
+	request: HttpRequest<B>,
 	server_cfg: ServerConfig,
 	conn: ConnectionState,
 	methods: impl Into<Methods>,
 	rpc_service: RpcServiceBuilder<L>,
 ) -> HttpResponse
 where
+	B: http_body::Body<Data = Bytes> + Send + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
@@ -63,14 +66,17 @@ where
 /// Make JSON-RPC HTTP call with a service [`RpcServiceT`]
 ///
 /// Fails if the HTTP request was a malformed JSON-RPC request.
-pub async fn call_with_service<S>(
-	request: HttpRequest,
+pub async fn call_with_service<S, B>(
+	request: HttpRequest<B>,
 	batch_config: BatchRequestConfig,
 	max_request_size: u32,
 	rpc_service: S,
 	max_response_size: u32,
 ) -> HttpResponse
 where
+	B: http_body::Body<Data = Bytes> + Send + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
 	for<'a> S: RpcServiceT<'a> + Send,
 {
 	// Only the `POST` method is allowed.

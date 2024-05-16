@@ -104,7 +104,7 @@ where
 		+ Clone
 		+ Service<HttpRequest, Response = HttpResponse<B>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future: Send,
-	B: http_body::Body + Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + 'static,
 	<B as http_body::Body>::Error: Send + Sync + StdError,
 	<B as http_body::Body>::Data: Send,
 {
@@ -1012,7 +1012,7 @@ where
 		Poll::Ready(Ok(()))
 	}
 
-	fn call(&mut self, request: hyper::Request<B>) -> Self::Future {
+	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
 		let request = request.map(HttpBody::new);
 
 		let conn_guard = &self.inner.conn_guard;
@@ -1155,7 +1155,7 @@ where
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
 		+ 'static
 		+ Clone
-		+ Service<HttpRequest, Response = hyper::Response<B>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+		+ Service<HttpRequest, Response = HttpResponse<B>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future:
 		Send + 'static,
 	B: http_body::Body + Send + 'static,

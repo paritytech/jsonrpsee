@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use hyper::body::Bytes;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::{HttpClientBuilder, HttpRequest};
+use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 	.layer(
 		TraceLayer::new_for_http()
 			.on_request(
-				|request: &HttpRequest, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
+				|request: &hyper::Request<_>, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
 			)
 			.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
 				tracing::info!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")

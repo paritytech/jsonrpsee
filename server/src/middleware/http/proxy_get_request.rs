@@ -31,6 +31,7 @@ use crate::transport::http;
 use crate::{HttpBody, HttpRequest, HttpResponse};
 
 use http_body_util::BodyExt;
+use hyper::body::Bytes;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Method, Uri};
@@ -112,12 +113,15 @@ impl<S> ProxyGetRequest<S> {
 	}
 }
 
-impl<S> Service<HttpRequest> for ProxyGetRequest<S>
+impl<S, B> Service<HttpRequest<B>> for ProxyGetRequest<S>
 where
 	S: Service<HttpRequest, Response = HttpResponse>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
 {
 	type Response = S::Response;
 	type Error = Box<dyn Error + Send + Sync + 'static>;
@@ -128,11 +132,11 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, mut req: HttpRequest) -> Self::Future {
+	fn call(&mut self, mut req: HttpRequest<B>) -> Self::Future {
 		let modify = self.path.as_ref() == req.uri() && req.method() == Method::GET;
 
 		// Proxy the request to the appropriate method call.
-		if modify {
+		let req = if modify {
 			// RPC methods are accessed with `POST`.
 			*req.method_mut() = Method::POST;
 			// Precautionary remove the URI.
@@ -148,8 +152,10 @@ where
 
 			let body = HttpBody::new(http_body_util::Full::new(bytes.into()));
 
-			req = req.map(|_| body);
-		}
+			req.map(|_| body)
+		} else {
+			req.map(HttpBody::new)
+		};
 
 		// Call the inner service and get a future that resolves to the response.
 		let fut = self.inner.call(req);

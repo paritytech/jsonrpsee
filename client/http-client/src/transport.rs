@@ -6,6 +6,7 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+use hyper::body::Bytes;
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
@@ -51,7 +52,7 @@ impl<B> Clone for HttpBackend<B> {
 
 impl<B> tower::Service<HttpRequest<B>> for HttpBackend<B>
 where
-	B: http_body::Body + Send + 'static + Unpin,
+	B: http_body::Body<Data = Bytes> + Send + 'static + Unpin,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
@@ -181,8 +182,8 @@ impl<L> HttpTransportClientBuilder<L> {
 	pub fn build<S, B>(self, target: impl AsRef<str>) -> Result<HttpTransportClient<S>, Error>
 	where
 		L: Layer<HttpBackend, Service = S>,
-		S: Service<HttpRequest<HttpBody>, Response = HttpResponse<B>, Error = Error> + Clone,
-		B: http_body::Body + Send + 'static,
+		S: Service<HttpRequest, Response = HttpResponse<B>, Error = Error> + Clone,
+		B: http_body::Body<Data = Bytes> + Send + 'static,
 		B::Data: Send,
 		B::Error: Into<Box<dyn StdError + Send + Sync>>,
 	{
@@ -283,12 +284,12 @@ pub struct HttpTransportClient<S> {
 
 impl<B, S> HttpTransportClient<S>
 where
-	S: Service<HttpRequest, Response = hyper::Response<B>, Error = Error> + Clone,
-	B: http_body::Body + Send + Unpin + 'static,
+	S: Service<HttpRequest, Response = HttpResponse<B>, Error = Error> + Clone,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
 	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 {
-	async fn inner_send(&self, body: String) -> Result<hyper::Response<B>, Error> {
+	async fn inner_send(&self, body: String) -> Result<HttpResponse<B>, Error> {
 		if body.len() > self.max_request_size as usize {
 			return Err(Error::RequestTooLarge);
 		}

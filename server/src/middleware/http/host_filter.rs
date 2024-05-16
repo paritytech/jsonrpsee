@@ -30,6 +30,7 @@ use crate::middleware::http::authority::{Authority, AuthorityError, Port};
 use crate::transport::http;
 use crate::{HttpRequest, HttpResponseBody, LOG_TARGET};
 use futures_util::{Future, FutureExt, TryFutureExt};
+use hyper::body::Bytes;
 use hyper::Response;
 use route_recognizer::Router;
 use std::collections::BTreeMap;
@@ -98,12 +99,15 @@ pub struct HostFilter<S> {
 	filter: Option<Arc<WhitelistedHosts>>,
 }
 
-impl<S> Service<HttpRequest> for HostFilter<S>
+impl<S, B> Service<HttpRequest<B>> for HostFilter<S>
 where
-	S: Service<HttpRequest, Response = Response<HttpResponseBody>>,
+	S: Service<HttpRequest<B>, Response = Response<HttpResponseBody>>,
 	S::Response: 'static,
 	S::Error: Into<Box<dyn StdError + Send + Sync>> + 'static,
 	S::Future: Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + std::fmt::Debug + 'static,
+	B::Data: Send,
+	B::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
 {
 	type Response = S::Response;
 	type Error = Box<dyn StdError + Send + Sync + 'static>;
@@ -113,7 +117,7 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, request: HttpRequest) -> Self::Future {
+	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
 		let Some(authority) = Authority::from_http_request(&request) else {
 			return async { Ok(http::response::malformed()) }.boxed();
 		};

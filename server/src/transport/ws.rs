@@ -368,17 +368,17 @@ async fn graceful_shutdown<S>(
 /// to complete the HTTP request.
 ///
 /// ```no_run
-/// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState};
+/// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState, HttpRequest, HttpResponse};
 /// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService};
 ///
 /// async fn handle_websocket_conn<L>(
-///     req: hyper::Request<hyper::Body>,
+///     req: HttpRequest,
 ///     server_cfg: ServerConfig,
 ///     methods: impl Into<Methods> + 'static,
 ///     conn: ConnectionState,
 ///     rpc_middleware: RpcServiceBuilder<L>,
 ///     mut disconnect: tokio::sync::mpsc::Receiver<()>
-/// ) -> hyper::Response<hyper::Body>
+/// ) -> HttpResponse
 /// where
 ///     L: for<'a> tower::Layer<RpcService> + 'static,
 ///     <L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -400,8 +400,8 @@ async fn graceful_shutdown<S>(
 ///   }
 /// }
 /// ```
-pub async fn connect<L>(
-	req: HttpRequest,
+pub async fn connect<L, B>(
+	req: HttpRequest<B>,
 	server_cfg: ServerConfig,
 	methods: impl Into<Methods>,
 	conn: ConnectionState,

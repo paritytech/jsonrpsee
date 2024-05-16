@@ -26,8 +26,8 @@
 
 //! Utility and types related to the authority of an URI.
 
+use crate::HttpRequest;
 use http::uri::{InvalidUri, Uri};
-use hyper::Request;
 use jsonrpsee_core::http_helpers;
 
 /// Represent the http URI scheme that is returned by the HTTP host header
@@ -96,7 +96,7 @@ impl Authority {
 	///
 	/// The `Authority` can be sent by the client in the `Host header` or in the `URI`
 	/// such that both must be checked.
-	pub fn from_http_request<T>(request: &Request<T>) -> Option<Self> {
+	pub fn from_http_request<T>(request: &HttpRequest<T>) -> Option<Self> {
 		// NOTE: we use our own `Authority type` here because an invalid port number would return `None` here
 		// and that should be denied.
 		let host_header =
@@ -159,7 +159,7 @@ fn default_port(scheme: Option<&str>) -> Option<u16> {
 
 #[cfg(test)]
 mod tests {
-	use super::{Authority, Port};
+	use super::{Authority, HttpRequest, Port};
 	use hyper::header::HOST;
 
 	fn authority(host: &str, port: Port) -> Authority {
@@ -201,19 +201,19 @@ mod tests {
 
 	#[test]
 	fn authority_from_http_only_host_works() {
-		let req = hyper::Request::builder().header(HOST, "example.com").body(EmptyBody::new()).unwrap();
+		let req = HttpRequest::builder().header(HOST, "example.com").body(EmptyBody::new()).unwrap();
 		assert!(Authority::from_http_request(&req).is_some());
 	}
 
 	#[test]
 	fn authority_only_uri_works() {
-		let req = hyper::Request::builder().uri("example.com").body(EmptyBody::new()).unwrap();
+		let req = HttpRequest::builder().uri("example.com").body(EmptyBody::new()).unwrap();
 		assert!(Authority::from_http_request(&req).is_some());
 	}
 
 	#[test]
 	fn authority_host_and_uri_works() {
-		let req = hyper::Request::builder()
+		let req = HttpRequest::builder()
 			.header(HOST, "example.com:9999")
 			.uri("example.com:9999")
 			.body(EmptyBody::new())
@@ -223,17 +223,14 @@ mod tests {
 
 	#[test]
 	fn authority_host_and_uri_mismatch() {
-		let req = hyper::Request::builder()
-			.header(HOST, "example.com:9999")
-			.uri("example.com")
-			.body(EmptyBody::new())
-			.unwrap();
+		let req =
+			HttpRequest::builder().header(HOST, "example.com:9999").uri("example.com").body(EmptyBody::new()).unwrap();
 		assert!(Authority::from_http_request(&req).is_none());
 	}
 
 	#[test]
 	fn authority_missing_host_and_uri() {
-		let req = hyper::Request::builder().body(EmptyBody::new()).unwrap();
+		let req = HttpRequest::builder().body(EmptyBody::new()).unwrap();
 		assert!(Authority::from_http_request(&req).is_none());
 	}
 }

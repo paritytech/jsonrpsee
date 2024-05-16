@@ -218,11 +218,11 @@ mod tests {
 
 	#[test]
 	fn read_content_length_works() {
-		let mut headers = http::header::HeaderMap::new();
+		let mut headers = hyper::header::HeaderMap::new();
 		headers.insert(http::header::CONTENT_LENGTH, "177".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), Some(177));
 
-		headers.append(http::header::CONTENT_LENGTH, "999".parse().unwrap());
+		headers.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), None);
 	}
 
