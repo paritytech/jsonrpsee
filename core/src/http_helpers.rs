@@ -102,7 +102,7 @@ pub enum HttpError {
 	Stream(#[from] BoxError),
 }
 
-/// Read a data from [`hyper::body::HttpBody`] and return the data if it is valid JSON and within the allowed size range.
+/// Read data from a HTTP body and return the data if it is valid JSON and within the allowed size range.
 ///
 /// Returns `Ok((bytes, single))` if the body was in valid size range; and a bool indicating whether the JSON-RPC
 /// request is a single or a batch.
