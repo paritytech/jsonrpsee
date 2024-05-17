@@ -37,8 +37,8 @@ tokio = { version = "1.16", features = ["net", "rt-multi-thread", "macros"] }
 
 [features]
 default = ["native-tls"]
-native-tls = ["hyper-rustls/native-tokio", "hyper-rustls/aws-lc-rs", "__tls"]
-webpki-tls = ["hyper-rustls/webpki-tokio", "hyper-rustls/aws-lc-rs", "__tls"]
+native-tls = ["hyper-rustls/native-tokio", "hyper-rustls/ring", "__tls"]
+webpki-tls = ["hyper-rustls/webpki-tokio", "hyper-rustls/ring", "__tls"]
 
 # Internal feature to indicate whether TLS is enabled.
 # Does nothing on its own.
