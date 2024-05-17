@@ -236,7 +236,10 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 							tracing::info!("Opened WebSocket connection");
 							metrics.opened_ws_connections.fetch_add(1, Ordering::Relaxed);
 							// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-							// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type.
+							// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
+							// as workaround.
+							//
+							// You can also write your own wrapper TowerService type to avoid this.
 							svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
 						}
 						.boxed()
@@ -252,9 +255,11 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 							}
 
 							tracing::info!("Closed HTTP connection");
-
 							// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-							// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type.
+							// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
+							// as workaround.
+							//
+							// You can also write your own wrapper TowerService type to avoid this.
 							rp.map_err(|e| anyhow::anyhow!("{:?}", e))
 						}
 						.boxed()
@@ -273,7 +278,10 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 					Either::Left((conn, _)) => conn,
 					// If the server is stopped, we should gracefully shutdown
 					// the connection and poll it until it finishes.
-					Either::Right((_, conn)) => conn.await,
+					Either::Right((_, mut conn)) => {
+						conn.as_mut().graceful_shutdown();
+						conn.await
+					}
 				};
 
 				// Log any errors that might have occurred.

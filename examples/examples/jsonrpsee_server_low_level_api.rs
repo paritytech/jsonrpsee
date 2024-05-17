@@ -222,96 +222,95 @@ async fn run_server() -> anyhow::Result<ServerHandle> {
 			};
 			let per_conn = per_conn.clone();
 
-			tokio::spawn(async move {
-				let stop_handle2 = per_conn.stop_handle.clone();
-				let per_conn = per_conn.clone();
+			// Create a service handler.
+			let stop_handle2 = per_conn.stop_handle.clone();
+			let per_conn = per_conn.clone();
+			let svc = service_fn(move |req| {
+				let req = req.map(HttpBody::new);
 
-				let svc = service_fn(move |req| {
-					let req = req.map(HttpBody::new);
+				let PerConnection {
+					methods,
+					stop_handle,
+					conn_guard,
+					conn_id,
+					blacklisted_peers,
+					global_http_rate_limit,
+				} = per_conn.clone();
 
-					let PerConnection {
-						methods,
-						stop_handle,
-						conn_guard,
-						conn_id,
-						blacklisted_peers,
-						global_http_rate_limit,
-					} = per_conn.clone();
+				// jsonrpsee expects a `conn permit` for each connection.
+				//
+				// This may be omitted if don't want to limit the number of connections
+				// to the server.
+				let Some(conn_permit) = conn_guard.try_acquire() else {
+					return async { Ok::<_, Infallible>(http::response::too_many_requests()) }.boxed();
+				};
 
-					// jsonrpsee expects a `conn permit` for each connection.
+				// The IP addr was blacklisted.
+				if blacklisted_peers.lock().unwrap().get(&remote_addr.ip()).is_some() {
+					return async { Ok(http::response::denied()) }.boxed();
+				}
+
+				if ws::is_upgrade_request(&req) {
+					let (tx, mut disconnect) = mpsc::channel(1);
+					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
+						service,
+						count: Default::default(),
+						state: tx.clone(),
+					});
+
+					let conn = ConnectionState::new(stop_handle, conn_id.fetch_add(1, Ordering::Relaxed), conn_permit);
+
+					// Establishes the websocket connection
+					// and if the `CallLimit` middleware triggers the hard limit
+					// then the connection is closed i.e, the `conn_fut` is dropped.
+					async move {
+						match ws::connect(req, ServerConfig::default(), methods, conn, rpc_service).await {
+							Ok((rp, conn_fut)) => {
+								tokio::spawn(async move {
+									tokio::select! {
+										_ = conn_fut => (),
+										_ = disconnect.recv() => {
+											blacklisted_peers.lock().unwrap().insert(remote_addr.ip());
+										},
+									}
+								});
+								Ok(rp)
+							}
+							Err(rp) => Ok(rp),
+						}
+					}
+					.boxed()
+				} else if !ws::is_upgrade_request(&req) {
+					let (tx, mut disconnect) = mpsc::channel(1);
+
+					let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
+						service,
+						count: global_http_rate_limit.clone(),
+						state: tx.clone(),
+					});
+
+					let server_cfg = ServerConfig::default();
+					let conn = ConnectionState::new(stop_handle, conn_id.fetch_add(1, Ordering::Relaxed), conn_permit);
+
+					// There is another API for making call with just a service as well.
 					//
-					// This may be omitted if don't want to limit the number of connections
-					// to the server.
-					let Some(conn_permit) = conn_guard.try_acquire() else {
-						return async { Ok::<_, Infallible>(http::response::too_many_requests()) }.boxed();
-					};
-
-					// The IP addr was blacklisted.
-					if blacklisted_peers.lock().unwrap().get(&remote_addr.ip()).is_some() {
-						return async { Ok(http::response::denied()) }.boxed();
-					}
-
-					if ws::is_upgrade_request(&req) {
-						let (tx, mut disconnect) = mpsc::channel(1);
-						let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
-							service,
-							count: Default::default(),
-							state: tx.clone(),
-						});
-
-						let conn =
-							ConnectionState::new(stop_handle, conn_id.fetch_add(1, Ordering::Relaxed), conn_permit);
-
-						// Establishes the websocket connection
-						// and if the `CallLimit` middleware triggers the hard limit
-						// then the connection is closed i.e, the `conn_fut` is dropped.
-						async move {
-							match ws::connect(req, ServerConfig::default(), methods, conn, rpc_service).await {
-								Ok((rp, conn_fut)) => {
-									tokio::spawn(async move {
-										tokio::select! {
-											_ = conn_fut => (),
-											_ = disconnect.recv() => {
-												blacklisted_peers.lock().unwrap().insert(remote_addr.ip());
-											},
-										}
-									});
-									Ok(rp)
-								}
-								Err(rp) => Ok(rp),
-							}
+					// See [`jsonrpsee::server::http::call_with_service`]
+					async move {
+						tokio::select! {
+							// Rpc call finished successfully.
+							res = http::call_with_service_builder(req, server_cfg, conn, methods, rpc_service) => Ok(res),
+							// Deny the call if the call limit is exceeded.
+							_ = disconnect.recv() => Ok(http::response::denied()),
 						}
-						.boxed()
-					} else if !ws::is_upgrade_request(&req) {
-						let (tx, mut disconnect) = mpsc::channel(1);
-
-						let rpc_service = RpcServiceBuilder::new().layer_fn(move |service| CallLimit {
-							service,
-							count: global_http_rate_limit.clone(),
-							state: tx.clone(),
-						});
-
-						let server_cfg = ServerConfig::default();
-						let conn =
-							ConnectionState::new(stop_handle, conn_id.fetch_add(1, Ordering::Relaxed), conn_permit);
-
-						// There is another API for making call with just a service as well.
-						//
-						// See [`jsonrpsee::server::http::call_with_service`]
-						async move {
-							tokio::select! {
-								// Rpc call finished successfully.
-								res = http::call_with_service_builder(req, server_cfg, conn, methods, rpc_service) => Ok(res),
-								// Deny the call if the call limit is exceeded.
-								_ = disconnect.recv() => Ok(http::response::denied()),
-							}
-						}
-						.boxed()
-					} else {
-						async { Ok(http::response::denied()) }.boxed()
 					}
-				});
+					.boxed()
+				} else {
+					async { Ok(http::response::denied()) }.boxed()
+				}
+			});
 
+			// Upgrade the connection to a HTTP service.
+			tokio::spawn(async move {
 				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 				let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);
 				let stopped = stop_handle2.shutdown();
@@ -324,7 +323,10 @@ async fn run_server() -> anyhow::Result<ServerHandle> {
 					Either::Left((conn, _)) => conn,
 					// If the server is stopped, we should gracefully shutdown
 					// the connection and poll it until it finishes.
-					Either::Right((_, conn)) => conn.await,
+					Either::Right((_, mut conn)) => {
+						conn.as_mut().graceful_shutdown();
+						conn.await
+					}
 				};
 
 				// Log any errors that might have occurred.

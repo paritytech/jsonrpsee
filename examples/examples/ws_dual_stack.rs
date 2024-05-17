@@ -130,7 +130,10 @@ async fn run_server() -> anyhow::Result<(ServerHandle, Addrs)> {
 					Either::Left((conn, _)) => conn,
 					// If the server is stopped, we should gracefully shutdown
 					// the connection and poll it until it finishes.
-					Either::Right((_, conn)) => conn.await,
+					Either::Right((_, mut conn)) => {
+						conn.as_mut().graceful_shutdown();
+						conn.await
+					}
 				};
 
 				// Log any errors that might have occurred.

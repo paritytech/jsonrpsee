@@ -276,7 +276,10 @@ pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
 					Either::Left((conn, _)) => conn,
 					// If the server is stopped, we should gracefully shutdown
 					// the connection and poll it until it finishes.
-					Either::Right((_, conn)) => conn.await,
+					Either::Right((_, mut conn)) => {
+						conn.as_mut().graceful_shutdown();
+						conn.await
+					}
 				};
 
 				// Log any errors that might have occurred.
