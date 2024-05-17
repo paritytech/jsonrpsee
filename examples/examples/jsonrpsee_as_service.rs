@@ -31,7 +31,6 @@
 //! The typical use-case for this is when one wants to have
 //! access to HTTP related things.
 
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -236,8 +235,9 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 						async move {
 							tracing::info!("Opened WebSocket connection");
 							metrics.opened_ws_connections.fetch_add(1, Ordering::Relaxed);
-							let rp = svc.call(req).await.unwrap();
-							Ok::<_, Infallible>(rp)
+							// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
+							// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type.
+							svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
 						}
 						.boxed()
 					} else {
@@ -252,8 +252,10 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 							}
 
 							tracing::info!("Closed HTTP connection");
-							// TODO: fix weird lifetime error.
-							Ok::<_, Infallible>(rp.unwrap())
+
+							// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
+							// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type.
+							rp.map_err(|e| anyhow::anyhow!("{:?}", e))
 						}
 						.boxed()
 					}

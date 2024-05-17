@@ -1,4 +1,3 @@
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -258,19 +257,10 @@ pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
 							metrics.ws_sessions_closed.fetch_add(1, Ordering::SeqCst);
 						});
 
-						async move {
-							let rp = rpc_svc.call(req).await.unwrap();
-							// TODO: fix the weird lifetime error here.
-							Ok::<_, Infallible>(rp)
-						}
-						.boxed()
+						async move { rpc_svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }.boxed()
 					} else {
 						// HTTP.
-						async move {
-							let rp = rpc_svc.call(req).await.unwrap();
-							Ok::<_, Infallible>(rp)
-						}
-						.boxed()
+						async move { rpc_svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }.boxed()
 					}
 				});
 

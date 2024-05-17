@@ -8,6 +8,7 @@ use hyper::body::{Body, Bytes};
 use jsonrpsee_core::{
 	http_helpers::{read_body, HttpError},
 	server::Methods,
+	BoxError,
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
@@ -40,7 +41,7 @@ pub async fn call_with_service_builder<L, B>(
 where
 	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+	B::Error: Into<BoxError>,
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
@@ -76,7 +77,7 @@ pub async fn call_with_service<S, B>(
 where
 	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+	B::Error: Into<BoxError>,
 	for<'a> S: RpcServiceT<'a> + Send,
 {
 	// Only the `POST` method is allowed.

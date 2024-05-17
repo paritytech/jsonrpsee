@@ -13,11 +13,11 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
+use jsonrpsee_core::BoxError;
 use jsonrpsee_core::{
 	http_helpers::{self, HttpError},
 	TEN_MB_SIZE_BYTES,
 };
-use std::error::Error as StdError;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -54,7 +54,7 @@ impl<B> tower::Service<HttpRequest<B>> for HttpBackend<B>
 where
 	B: http_body::Body<Data = Bytes> + Send + 'static + Unpin,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+	B::Error: Into<BoxError>,
 {
 	type Response = HttpResponse<hyper::body::Incoming>;
 	type Error = Error;
@@ -185,7 +185,7 @@ impl<L> HttpTransportClientBuilder<L> {
 		S: Service<HttpRequest, Response = HttpResponse<B>, Error = Error> + Clone,
 		B: http_body::Body<Data = Bytes> + Send + 'static,
 		B::Data: Send,
-		B::Error: Into<Box<dyn StdError + Send + Sync>>,
+		B::Error: Into<BoxError>,
 	{
 		let Self {
 			certificate_store,
@@ -287,7 +287,7 @@ where
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = Error> + Clone,
 	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+	B::Error: Into<BoxError>,
 {
 	async fn inner_send(&self, body: String) -> Result<HttpResponse<B>, Error> {
 		if body.len() > self.max_request_size as usize {

@@ -48,7 +48,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	reject_too_big_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
@@ -966,7 +966,7 @@ where
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<B>>>::Future:
 		Send + 'static,
 	B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
-	B::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
+	B::Error: Into<BoxError>,
 {
 	type Response = HttpResponse;
 	type Error = Box<dyn StdError + Send + Sync + 'static>;
@@ -998,7 +998,7 @@ where
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
-	B::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
+	B::Error: Into<BoxError>,
 {
 	type Response = HttpResponse;
 

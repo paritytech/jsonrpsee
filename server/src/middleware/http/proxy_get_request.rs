@@ -35,6 +35,7 @@ use hyper::body::Bytes;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Method, Uri};
+use jsonrpsee_core::BoxError;
 use jsonrpsee_types::{Id, RequestSer};
 use std::error::Error;
 use std::future::Future;
@@ -117,11 +118,11 @@ impl<S, B> Service<HttpRequest<B>> for ProxyGetRequest<S>
 where
 	S: Service<HttpRequest, Response = HttpResponse>,
 	S::Response: 'static,
-	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
+	S::Error: Into<BoxError> + 'static,
 	S::Future: Send + 'static,
 	B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+	B::Error: Into<BoxError>,
 {
 	type Response = S::Response;
 	type Error = Box<dyn Error + Send + Sync + 'static>;

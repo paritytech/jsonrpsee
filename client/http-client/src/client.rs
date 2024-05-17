@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::borrow::Cow as StdCow;
-use std::error::Error as StdError;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -42,7 +41,7 @@ use jsonrpsee_core::client::{
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
-use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
@@ -192,7 +191,7 @@ where
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Clone,
 	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+	B::Error: Into<BoxError>,
 {
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient<S>, Error> {
@@ -277,7 +276,7 @@ where
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Send + Sync + Clone,
 	<S as Service<HttpRequest>>::Future: Send,
 	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+	B::Error: Into<BoxError>,
 	B::Data: Send,
 {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
@@ -411,7 +410,7 @@ where
 	<S as Service<HttpRequest>>::Future: Send,
 	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+	B::Error: Into<BoxError>,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].

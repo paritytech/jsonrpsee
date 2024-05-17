@@ -32,6 +32,7 @@ use crate::{HttpRequest, HttpResponseBody, LOG_TARGET};
 use futures_util::{Future, FutureExt, TryFutureExt};
 use hyper::body::Bytes;
 use hyper::Response;
+use jsonrpsee_core::BoxError;
 use route_recognizer::Router;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
@@ -103,11 +104,11 @@ impl<S, B> Service<HttpRequest<B>> for HostFilter<S>
 where
 	S: Service<HttpRequest<B>, Response = Response<HttpResponseBody>>,
 	S::Response: 'static,
-	S::Error: Into<Box<dyn StdError + Send + Sync>> + 'static,
+	S::Error: Into<BoxError> + 'static,
 	S::Future: Send + 'static,
 	B: http_body::Body<Data = Bytes> + Send + std::fmt::Debug + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
+	B::Error: Into<BoxError>,
 {
 	type Response = S::Response;
 	type Error = Box<dyn StdError + Send + Sync + 'static>;

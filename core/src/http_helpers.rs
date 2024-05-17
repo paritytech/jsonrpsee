@@ -35,6 +35,8 @@ use std::{
 	task::{Context, Poll},
 };
 
+use crate::BoxError;
+
 /// HTTP request type.
 pub type Request<T = Body> = http::Request<T>;
 
@@ -46,7 +48,7 @@ pub type Response<T = ResponseBody> = http::Response<T>;
 
 /// A HTTP request body.
 #[derive(Debug, Default)]
-pub struct Body(http_body_util::combinators::BoxBody<Bytes, Box<dyn StdError + Send + Sync + 'static>>);
+pub struct Body(http_body_util::combinators::BoxBody<Bytes, BoxError>);
 
 impl Body {
 	/// Create an empty body.
@@ -59,7 +61,7 @@ impl Body {
 	where
 		B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
 		B::Data: Send + 'static,
-		B::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
+		B::Error: Into<BoxError>,
 	{
 		Self(body.map_err(|e| e.into()).boxed())
 	}
@@ -111,7 +113,7 @@ pub async fn read_body<B>(headers: &http::HeaderMap, body: B, max_body_size: u32
 where
 	B: http_body::Body + Send + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+	B::Error: Into<BoxError>,
 {
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in
 	// practice and in that case we fallback to allocating in the while-loop below instead of pre-allocating.
@@ -218,11 +220,11 @@ mod tests {
 
 	#[test]
 	fn read_content_length_works() {
-		let mut headers = hyper::header::HeaderMap::new();
+		let mut headers = http::header::HeaderMap::new();
 		headers.insert(http::header::CONTENT_LENGTH, "177".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), Some(177));
 
-		headers.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
+		headers.append(http::header::CONTENT_LENGTH, "999".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), None);
 	}
 
