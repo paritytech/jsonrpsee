@@ -969,7 +969,7 @@ where
 	B::Error: Into<BoxError>,
 {
 	type Response = HttpResponse;
-	type Error = Box<dyn StdError + Send + Sync + 'static>;
+	type Error = BoxError;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
 	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -1004,7 +1004,7 @@ where
 
 	// The following associated type is required by the `impl<B, U, M: JsonRpcMiddleware> Server<B, L>` bounds.
 	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B: Identity`).
-	type Error = Box<dyn StdError + Send + Sync + 'static>;
+	type Error = BoxError;
 
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 

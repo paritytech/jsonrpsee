@@ -35,7 +35,6 @@ use hyper::Response;
 use jsonrpsee_core::BoxError;
 use route_recognizer::Router;
 use std::collections::BTreeMap;
-use std::error::Error as StdError;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -111,7 +110,7 @@ where
 	B::Error: Into<BoxError>,
 {
 	type Response = S::Response;
-	type Error = Box<dyn StdError + Send + Sync + 'static>;
+	type Error = BoxError;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
 	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

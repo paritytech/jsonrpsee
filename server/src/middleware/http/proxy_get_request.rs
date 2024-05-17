@@ -37,7 +37,6 @@ use hyper::http::HeaderValue;
 use hyper::{Method, Uri};
 use jsonrpsee_core::BoxError;
 use jsonrpsee_types::{Id, RequestSer};
-use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -125,7 +124,7 @@ where
 	B::Error: Into<BoxError>,
 {
 	type Response = S::Response;
-	type Error = Box<dyn Error + Send + Sync + 'static>;
+	type Error = BoxError;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
 	#[inline]

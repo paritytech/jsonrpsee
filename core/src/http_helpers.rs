@@ -26,16 +26,14 @@
 
 //! Shared HTTP utilities.
 
+use crate::BoxError;
 use bytes::{Buf, Bytes};
 use http_body::Frame;
 use http_body_util::{BodyExt, Limited};
 use std::{
-	error::Error as StdError,
 	pin::Pin,
 	task::{Context, Poll},
 };
-
-use crate::BoxError;
 
 /// HTTP request type.
 pub type Request<T = Body> = http::Request<T>;
@@ -69,7 +67,7 @@ impl Body {
 
 impl http_body::Body for Body {
 	type Data = Bytes;
-	type Error = Box<dyn StdError + Send + Sync + 'static>;
+	type Error = BoxError;
 
 	#[inline]
 	fn poll_frame(
@@ -101,7 +99,7 @@ pub enum HttpError {
 	Malformed,
 	/// Represents error that can happen when dealing with HTTP streams.
 	#[error("{0}")]
-	Stream(#[from] Box<dyn std::error::Error + Send + Sync>),
+	Stream(#[from] BoxError),
 }
 
 /// Read a data from [`hyper::body::HttpBody`] and return the data if it is valid JSON and within the allowed size range.
