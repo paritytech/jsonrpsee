@@ -26,7 +26,6 @@
 
 //! Middleware that proxies requests at a specified URI to internal
 //! RPC method calls.
-//!
 use crate::transport::http;
 use crate::{HttpBody, HttpRequest, HttpResponse};
 
