@@ -227,13 +227,6 @@ where
 //
 // NOTE: This must be spawned on tokio because hyper only works with tokio.
 pub async fn http_server_with_hardcoded_response(response: String) -> SocketAddr {
-	async fn process_request(
-		_req: Request<hyper::body::Incoming>,
-		response: String,
-	) -> Result<Response<Body>, Infallible> {
-		Ok(Response::new(Body::from(response)))
-	}
-
 	let (tx, rx) = futures_channel::oneshot::channel::<SocketAddr>();
 
 	tokio::spawn(async move {
@@ -253,13 +246,13 @@ pub async fn http_server_with_hardcoded_response(response: String) -> SocketAddr
 
 				let conn = builder.serve_connection_with_upgrades(
 					io,
-					service_fn(move |req| {
-						let rp = response.clone();
-						async move { Ok::<_, Infallible>(process_request(req, rp).await.unwrap()) }
+					service_fn(move |_| {
+						let rp = Response::new(Body::from(response.clone()));
+						async move { Ok::<_, Infallible>(rp) }
 					}),
 				);
 
-				conn.await.unwrap();
+				let _ = conn.await;
 			});
 		}
 	});
