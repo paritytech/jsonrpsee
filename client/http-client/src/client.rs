@@ -189,7 +189,7 @@ impl<B, S, L> HttpClientBuilder<L>
 where
 	L: Layer<transport::HttpBackend, Service = S>,
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Clone,
-	B: http_body::Body<Data = Bytes> + Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {

@@ -100,12 +100,11 @@ where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
-		+ Clone
-		+ Service<HttpRequest, Response = HttpResponse<B>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
+		Send + Clone + Service<HttpRequest, Response = HttpResponse<B>, Error = BoxError>,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future: Send,
 	B: http_body::Body<Data = Bytes> + Send + 'static,
-	<B as http_body::Body>::Error: Send + Sync + StdError,
+	<B as http_body::Body>::Error: Into<BoxError>,
 	<B as http_body::Body>::Data: Send,
 {
 	/// Start responding to connections requests.
@@ -1006,7 +1005,7 @@ where
 		Send + Service<HttpRequest<B>, Response = HttpResponse, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<B>>>::Future:
 		Send + 'static,
-	B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Error: Into<BoxError>,
 {
 	type Response = HttpResponse;
@@ -1038,7 +1037,7 @@ where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
-	B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Error: Into<BoxError>,
 {
 	type Response = HttpResponse;
@@ -1193,14 +1192,12 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, B>(params: ProcessConne
 where
 	RpcMiddleware: 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
-		+ 'static
-		+ Clone
-		+ Service<HttpRequest, Response = HttpResponse<B>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
+		Send + 'static + Clone + Service<HttpRequest, Response = HttpResponse<B>, Error = BoxError>,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future:
 		Send + 'static,
-	B: http_body::Body + Send + 'static,
-	<B as http_body::Body>::Error: Send + Sync + StdError,
+	B: http_body::Body<Data = Bytes> + Send + 'static,
+	<B as http_body::Body>::Error: Into<BoxError>,
 	<B as http_body::Body>::Data: Send,
 {
 	let ProcessConnection {

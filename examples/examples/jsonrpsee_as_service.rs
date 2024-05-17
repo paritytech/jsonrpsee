@@ -199,72 +199,72 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 				}
 				_ = per_conn.stop_handle.clone().shutdown() => break,
 			};
-			let per_conn = per_conn.clone();
+			let per_conn2 = per_conn.clone();
 
-			tokio::spawn(async move {
-				let stop_handle2 = per_conn.stop_handle.clone();
-				let per_conn = per_conn.clone();
+			let svc = service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+				let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
+				let transport_label = if is_websocket { "ws" } else { "http" };
+				let PerConnection { methods, stop_handle, metrics, svc_builder } = per_conn2.clone();
 
-				let svc = service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
-					let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
-					let transport_label = if is_websocket { "ws" } else { "http" };
-					let PerConnection { methods, stop_handle, metrics, svc_builder } = per_conn.clone();
+				// NOTE, the rpc middleware must be initialized here to be able to created once per connection
+				// with data from the connection such as the headers in this example
+				let headers = req.headers().clone();
+				let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
+					AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
+				});
 
-					// NOTE, the rpc middleware must be initialized here to be able to created once per connection
-					// with data from the connection such as the headers in this example
-					let headers = req.headers().clone();
-					let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
-						AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
+				let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
+
+				if is_websocket {
+					// Utilize the session close future to know when the actual WebSocket
+					// session was closed.
+					let session_close = svc.on_session_closed();
+
+					// A little bit weird API but the response to HTTP request must be returned below
+					// and we spawn a task to register when the session is closed.
+					tokio::spawn(async move {
+						session_close.await;
+						tracing::info!("Closed WebSocket connection");
+						metrics.closed_ws_connections.fetch_add(1, Ordering::Relaxed);
 					});
 
-					let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
-
-					if is_websocket {
-						// Utilize the session close future to know when the actual WebSocket
-						// session was closed.
-						let session_close = svc.on_session_closed();
-
-						// A little bit weird API but the response to HTTP request must be returned below
-						// and we spawn a task to register when the session is closed.
-						tokio::spawn(async move {
-							session_close.await;
-							tracing::info!("Closed WebSocket connection");
-							metrics.closed_ws_connections.fetch_add(1, Ordering::Relaxed);
-						});
-
-						async move {
-							tracing::info!("Opened WebSocket connection");
-							metrics.opened_ws_connections.fetch_add(1, Ordering::Relaxed);
-							// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-							// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-							// as workaround.
-							//
-							// You can also write your own wrapper TowerService type to avoid this.
-							svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
-						}
-						.boxed()
-					} else {
-						// HTTP.
-						async move {
-							tracing::info!("Opened HTTP connection");
-							metrics.http_calls.fetch_add(1, Ordering::Relaxed);
-							let rp = svc.call(req).await;
-
-							if rp.is_ok() {
-								metrics.success_http_calls.fetch_add(1, Ordering::Relaxed);
-							}
-
-							tracing::info!("Closed HTTP connection");
-							// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-							// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-							// as workaround.
-							//
-							// You can also write your own wrapper TowerService type to avoid this.
-							rp.map_err(|e| anyhow::anyhow!("{:?}", e))
-						}
-						.boxed()
+					async move {
+						tracing::info!("Opened WebSocket connection");
+						metrics.opened_ws_connections.fetch_add(1, Ordering::Relaxed);
+						// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
+						// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
+						// as workaround.
+						//
+						// You can also write your own wrapper TowerService type to avoid this.
+						svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
 					}
-				});
+					.boxed()
+				} else {
+					// HTTP.
+					async move {
+						tracing::info!("Opened HTTP connection");
+						metrics.http_calls.fetch_add(1, Ordering::Relaxed);
+						let rp = svc.call(req).await;
+
+						if rp.is_ok() {
+							metrics.success_http_calls.fetch_add(1, Ordering::Relaxed);
+						}
+
+						tracing::info!("Closed HTTP connection");
+						// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
+						// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
+						// as workaround.
+						//
+						// You can also write your own wrapper TowerService type to avoid this.
+						rp.map_err(|e| anyhow::anyhow!("{:?}", e))
+					}
+					.boxed()
+				}
+			});
+
+			let per_conn = per_conn.clone();
+			tokio::spawn(async move {
+				let stop_handle2 = per_conn.stop_handle.clone();
 
 				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 				let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);

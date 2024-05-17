@@ -46,7 +46,7 @@ pub type Response<T = ResponseBody> = http::Response<T>;
 
 /// A HTTP request body.
 #[derive(Debug, Default)]
-pub struct Body(http_body_util::combinators::BoxBody<Bytes, BoxError>);
+pub struct Body(http_body_util::combinators::UnsyncBoxBody<Bytes, BoxError>);
 
 impl Body {
 	/// Create an empty body.
@@ -57,11 +57,11 @@ impl Body {
 	/// Create a new body.
 	pub fn new<B>(body: B) -> Self
 	where
-		B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+		B: http_body::Body<Data = Bytes> + Send + 'static,
 		B::Data: Send + 'static,
 		B::Error: Into<BoxError>,
 	{
-		Self(body.map_err(|e| e.into()).boxed())
+		Self(body.map_err(|e| e.into()).boxed_unsync())
 	}
 }
 
@@ -109,7 +109,7 @@ pub enum HttpError {
 /// Returns `Err` if the body was too large or the body couldn't be read.
 pub async fn read_body<B>(headers: &http::HeaderMap, body: B, max_body_size: u32) -> Result<(Vec<u8>, bool), HttpError>
 where
-	B: http_body::Body + Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {

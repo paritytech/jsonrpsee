@@ -52,7 +52,7 @@ impl<B> Clone for HttpBackend<B> {
 
 impl<B> tower::Service<HttpRequest<B>> for HttpBackend<B>
 where
-	B: http_body::Body<Data = Bytes> + Send + 'static + Unpin,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {
@@ -285,7 +285,7 @@ pub struct HttpTransportClient<S> {
 impl<B, S> HttpTransportClient<S>
 where
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = Error> + Clone,
-	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
+	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {
