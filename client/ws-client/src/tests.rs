@@ -478,7 +478,6 @@ async fn redirections() {
 
 	// The client will first connect to a server that only performs re-directions and finally
 	// redirect to another server to complete the handshake.
-	println!("Connecting to {redirect_url}");
 	let client = WsClientBuilder::default().build(&redirect_url).with_default_timeout().await;
 	// It's an ok client
 	let client = match client {
