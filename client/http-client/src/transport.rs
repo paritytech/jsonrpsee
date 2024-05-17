@@ -299,7 +299,7 @@ where
 			*headers = self.headers.clone();
 		}
 
-		let req = req.body(body.into()).expect("Failed to create request");
+		let req = req.body(body.into()).expect("URI and request headers are valid; qed");
 		let response = self.client.clone().ready().await?.call(req).await?;
 
 		if response.status().is_success() {
