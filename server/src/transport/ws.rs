@@ -470,7 +470,7 @@ where
 				background_task(params).await;
 			};
 
-			Ok((response.map(|()| HttpResponseBody::default()), fut)) // empty body here
+			Ok((response.map(|()| HttpResponseBody::default()), fut))
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
