@@ -54,7 +54,7 @@ pub struct Request<'a> {
 	pub params: Option<StdCow<'a, RawValue>>,
 	/// The request's extensions.
 	#[serde(skip)]
-	extensions: Extensions,
+	pub extensions: Extensions,
 }
 
 impl<'a> Request<'a> {
