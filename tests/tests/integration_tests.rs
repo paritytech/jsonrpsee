@@ -39,7 +39,9 @@ use helpers::{
 	connect_over_socks_stream, init_logger, pipe_from_stream_and_drop, server, server_with_cors,
 	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
 };
+use http_body_util::BodyExt;
 use hyper::http::HeaderValue;
+use hyper_util::rt::TokioExecutor;
 use jsonrpsee::core::client::SubscriptionCloseReason;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
@@ -57,6 +59,8 @@ use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
 use crate::helpers::server_with_sleeping_subscription;
+
+type HttpBody = http_body_util::Full<hyper::body::Bytes>;
 
 #[tokio::test]
 async fn ws_subscription_works() {
@@ -934,12 +938,13 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 #[tokio::test]
 async fn http_unsupported_methods_dont_work() {
-	use hyper::{Body, Client, Method, Request};
+	use hyper::{Method, Request};
+	use hyper_util::client::legacy::Client;
 
 	init_logger();
 	let server_addr = server().await;
 
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}", server_addr);
 
 	let req_is_client_error = |method| async {
@@ -947,7 +952,7 @@ async fn http_unsupported_methods_dont_work() {
 			.method(method)
 			.uri(&uri)
 			.header("content-type", "application/json")
-			.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+			.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 			.expect("request builder");
 
 		let res = http_client.request(req).await.unwrap();
@@ -962,19 +967,20 @@ async fn http_unsupported_methods_dont_work() {
 
 #[tokio::test]
 async fn http_correct_content_type_required() {
-	use hyper::{Body, Client, Method, Request};
+	use hyper::{Method, Request};
+	use hyper_util::client::legacy::Client;
 
 	init_logger();
 
 	let server_addr = server().await;
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}", server_addr);
 
 	// We don't set content-type at all
 	let req = Request::builder()
 		.method(Method::POST)
 		.uri(&uri)
-		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -985,7 +991,7 @@ async fn http_correct_content_type_required() {
 		.method(Method::POST)
 		.uri(&uri)
 		.header("content-type", "application/text")
-		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -996,7 +1002,7 @@ async fn http_correct_content_type_required() {
 		.method(Method::POST)
 		.uri(&uri)
 		.header("content-type", "application/json")
-		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -1005,7 +1011,8 @@ async fn http_correct_content_type_required() {
 
 #[tokio::test]
 async fn http_cors_preflight_works() {
-	use hyper::{Body, Client, Method, Request};
+	use hyper::{Method, Request};
+	use hyper_util::client::legacy::Client;
 
 	init_logger();
 
@@ -1015,7 +1022,7 @@ async fn http_cors_preflight_works() {
 		.allow_headers([hyper::header::CONTENT_TYPE]);
 	let (server_addr, _handle) = server_with_cors(cors).await;
 
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}", server_addr);
 
 	// First, make a preflight request.
@@ -1028,7 +1035,7 @@ async fn http_cors_preflight_works() {
 		.header("origin", "https://foo.com") // <- where request is being sent _from_
 		.header("access-control-request-method", "POST")
 		.header("access-control-request-headers", "content-type")
-		.body(Body::empty())
+		.body(HttpBody::default())
 		.expect("preflight request builder");
 
 	let has = |v: &[String], s| v.iter().any(|v| v == s);
@@ -1056,7 +1063,7 @@ async fn http_cors_preflight_works() {
 		.header("host", "bar.com")
 		.header("origin", "https://foo.com")
 		.header("content-type", "application/json")
-		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("actual request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -1090,21 +1097,22 @@ async fn ws_subscribe_with_bad_params() {
 
 #[tokio::test]
 async fn http_health_api_works() {
-	use hyper::{Body, Client, Request};
+	use hyper::Request;
+	use hyper_util::client::legacy::Client;
 
 	init_logger();
 
 	let (server_addr, _handle) = server_with_health_api().await;
 
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}/health", server_addr);
 
-	let req = Request::builder().method("GET").uri(&uri).body(Body::empty()).expect("request builder");
+	let req = Request::builder().method("GET").uri(&uri).body(HttpBody::default()).expect("request builder");
 	let res = http_client.request(req).await.unwrap();
 
 	assert!(res.status().is_success());
 
-	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+	let bytes = res.into_body().collect().await.unwrap().to_bytes();
 	let out = String::from_utf8(bytes.to_vec()).unwrap();
 	assert_eq!(out.as_str(), "{\"health\":true}");
 }

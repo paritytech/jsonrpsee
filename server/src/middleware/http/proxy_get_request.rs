@@ -26,13 +26,16 @@
 
 //! Middleware that proxies requests at a specified URI to internal
 //! RPC method calls.
-
 use crate::transport::http;
+use crate::{HttpBody, HttpRequest, HttpResponse};
+
+use http_body_util::BodyExt;
+use hyper::body::Bytes;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
-use hyper::{Body, Method, Request, Response, Uri};
+use hyper::{Method, Uri};
+use jsonrpsee_core::BoxError;
 use jsonrpsee_types::{Id, RequestSer};
-use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -109,15 +112,18 @@ impl<S> ProxyGetRequest<S> {
 	}
 }
 
-impl<S> Service<Request<Body>> for ProxyGetRequest<S>
+impl<S, B> Service<HttpRequest<B>> for ProxyGetRequest<S>
 where
-	S: Service<Request<Body>, Response = Response<Body>>,
+	S: Service<HttpRequest, Response = HttpResponse>,
 	S::Response: 'static,
-	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
+	S::Error: Into<BoxError> + 'static,
 	S::Future: Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + 'static,
+	B::Data: Send,
+	B::Error: Into<BoxError>,
 {
 	type Response = S::Response;
-	type Error = Box<dyn Error + Send + Sync + 'static>;
+	type Error = BoxError;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
 	#[inline]
@@ -125,11 +131,11 @@ where
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+	fn call(&mut self, mut req: HttpRequest<B>) -> Self::Future {
 		let modify = self.path.as_ref() == req.uri() && req.method() == Method::GET;
 
 		// Proxy the request to the appropriate method call.
-		if modify {
+		let req = if modify {
 			// RPC methods are accessed with `POST`.
 			*req.method_mut() = Method::POST;
 			// Precautionary remove the URI.
@@ -140,12 +146,15 @@ where
 			req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
 
 			// Adjust the body to reflect the method call.
-			let body = Body::from(
-				serde_json::to_string(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
-					.expect("Valid request; qed"),
-			);
-			req = req.map(|_| body);
-		}
+			let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
+				.expect("Valid request; qed");
+
+			let body = HttpBody::from(bytes);
+
+			req.map(|_| body)
+		} else {
+			req.map(HttpBody::new)
+		};
 
 		// Call the inner service and get a future that resolves to the response.
 		let fut = self.inner.call(req);
@@ -159,8 +168,13 @@ where
 				return Ok(res);
 			}
 
-			let body = res.into_body();
-			let bytes = hyper::body::to_bytes(body).await?;
+			let mut body = http_body_util::BodyStream::new(res.into_body());
+			let mut bytes = Vec::new();
+
+			while let Some(frame) = body.frame().await {
+				let data = frame?.into_data().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+				bytes.extend(data);
+			}
 
 			#[derive(serde::Deserialize, Debug)]
 			struct RpcPayload<'a> {

@@ -34,6 +34,7 @@
 mod future;
 mod server;
 mod transport;
+mod utils;
 
 pub mod middleware;
 
@@ -52,6 +53,7 @@ pub use server::{
 };
 pub use tracing;
 
+pub use jsonrpsee_core::http_helpers::{Body as HttpBody, Request as HttpRequest, Response as HttpResponse};
 pub use transport::http;
 pub use transport::ws;
 

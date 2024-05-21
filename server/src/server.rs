@@ -37,18 +37,18 @@ use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, 
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::LOG_TARGET;
+use crate::{HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 
-use hyper::body::HttpBody;
-
+use hyper::body::Bytes;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	reject_too_big_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
@@ -95,22 +95,17 @@ impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 	}
 }
 
-impl<HttpMiddleware, RpcMiddleware, B> Server<HttpMiddleware, RpcMiddleware>
+impl<HttpMiddleware, RpcMiddleware, Body> Server<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
-		+ Service<
-			hyper::Request<hyper::Body>,
-			Response = hyper::Response<B>,
-			Error = Box<(dyn StdError + Send + Sync + 'static)>,
-		>,
-	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
-		Send,
-	B: HttpBody + Send + 'static,
-	<B as HttpBody>::Error: Send + Sync + StdError,
-	<B as HttpBody>::Data: Send,
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
+		Send + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future: Send,
+	Body: http_body::Body<Data = Bytes> + Send + 'static,
+	<Body as http_body::Body>::Error: Into<BoxError>,
+	<Body as http_body::Body>::Data: Send,
 {
 	/// Start responding to connections requests.
 	///
@@ -142,7 +137,6 @@ where
 		loop {
 			match try_accept_conn(&listener, stopped).await {
 				AcceptConnection::Established { socket, remote_addr, stop } => {
-
 					process_connection(ProcessConnection {
 						http_middleware: &self.http_middleware,
 						rpc_middleware: self.rpc_middleware.clone(),
@@ -787,54 +781,95 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// # Examples
 	///
 	/// ```no_run
-	/// use hyper::service::{make_service_fn, service_fn};
-	/// use hyper::server::conn::AddrStream;
 	/// use jsonrpsee_server::{Methods, ServerHandle, ws, stop_channel};
 	/// use tower::Service;
 	/// use std::{error::Error as StdError, net::SocketAddr};
+	/// use futures_util::future::{self, Either};
+	/// use hyper_util::rt::{TokioIo, TokioExecutor};
 	///
 	/// fn run_server() -> ServerHandle {
-	///     let addr = SocketAddr::from(([127, 0, 0, 1], 0));
 	///     let (stop_handle, server_handle) = stop_channel();
 	///     let svc_builder = jsonrpsee_server::Server::builder().max_connections(33).to_service_builder();
 	///     let methods = Methods::new();
-	///     let stop_handle2 = stop_handle.clone();
-	///
-	///     let make_service = make_service_fn(move |_conn: &AddrStream| {
-	///         // You may use `conn` or the actual HTTP request to get connection related details.
-	///         let stop_handle = stop_handle2.clone();
-	///         let svc_builder = svc_builder.clone();
-	///         let methods = methods.clone();
-	///
-	///         async move {
-	///             Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
-	///                 let stop_handle = stop_handle.clone();
-	///                 let svc_builder = svc_builder.clone();
-	///                 let methods = methods.clone();
-	///                 let mut svc = svc_builder.build(methods, stop_handle);
-	///
-	///                 // It's not possible to know whether the websocket upgrade handshake failed or not here.
-	///                 let is_websocket = ws::is_upgrade_request(&req);
-	///
-	///                 if is_websocket {
-	///                     println!("websocket")
-	///                 } else {
-	///                     println!("http")
-	///                 }
-	///
-	///                 /// Call the jsonrpsee service which
-	///                 /// may upgrade it to a WebSocket connection
-	///                 /// or treat it as "ordinary HTTP request".
-	///                 svc.call(req)
-	///             }))
-	///         }
-	///     });
-	///
-	///     let server = hyper::Server::bind(&addr).serve(make_service);
+	///     let stop_handle = stop_handle.clone();
 	///
 	///     tokio::spawn(async move {
-	///         let graceful = server.with_graceful_shutdown(async move { stop_handle.shutdown().await });
-	///         graceful.await.unwrap()
+	///         let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await.unwrap();
+	///
+	///         loop {
+	///              // The `tokio::select!` macro is used to wait for either of the
+	///              // listeners to accept a new connection or for the server to be
+	///              // stopped.
+	///              let (sock, remote_addr) = tokio::select! {
+	///                  res = listener.accept() => {
+	///                      match res {
+	///                         Ok(sock) => sock,
+	///                         Err(e) => {
+	///                             tracing::error!("failed to accept v4 connection: {:?}", e);
+	///                             continue;
+	///                         }
+	///                       }
+	///                  }
+	///                  _ = stop_handle.clone().shutdown() => break,
+	///              };
+	///
+	///              let stop_handle2 = stop_handle.clone();
+	///              let svc_builder2 = svc_builder.clone();
+	///              let methods2 = methods.clone();
+	///
+	///              let svc = hyper::service::service_fn(move |req| {
+	///                   let stop_handle = stop_handle2.clone();
+	///                   let svc_builder = svc_builder2.clone();
+	///                   let methods = methods2.clone();
+	///
+	///                   let mut svc = svc_builder.build(methods, stop_handle.clone());
+	///
+	///                   // It's not possible to know whether the websocket upgrade handshake failed or not here.
+	///                   let is_websocket = ws::is_upgrade_request(&req);
+	///
+	///                   if is_websocket {
+	///                       println!("websocket")
+	///                   } else {
+	///                       println!("http")
+	///                   }
+	///
+	///                   // Call the jsonrpsee service which
+	///                   // may upgrade it to a WebSocket connection
+	///                   // or treat it as "ordinary HTTP request".
+	///                   //
+	///                   // https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
+	///                   // to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
+	///                   // as workaround.
+	///                   async move { svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
+	///               });
+	///
+	///               let stop_handle = stop_handle.clone();
+	///               // Upgrade the connection to a HTTP service with graceful shutdown.
+	///               tokio::spawn(async move {
+	///                   let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+	///                   let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);
+	///                   let stopped = stop_handle.shutdown();
+	///
+	///                   // Pin the future so that it can be polled.
+	///                   tokio::pin!(stopped, conn);
+	///
+	///                  let res = match future::select(conn, stopped).await {
+	///                      // Return the connection if not stopped.
+	///                      Either::Left((conn, _)) => conn,
+	///                      // If the server is stopped, we should gracefully shutdown
+	///                      // the connection and poll it until it finishes.
+	///                      Either::Right((_, mut conn)) => {
+	///                          conn.as_mut().graceful_shutdown();
+	///                          conn.await
+	///                      }
+	///                  };
+	///
+	///                  // Log any errors that might have occurred.
+	///                  if let Err(err) = res {
+	///                      tracing::error!(err=?err, "HTTP connection failed");
+	///                  }
+	///             });
+	///          }
 	///     });
 	///
 	///     server_handle
@@ -960,32 +995,28 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 	}
 }
 
-impl<RpcMiddleware, HttpMiddleware> hyper::service::Service<hyper::Request<hyper::Body>>
-	for TowerService<RpcMiddleware, HttpMiddleware>
+impl<Body, RpcMiddleware, HttpMiddleware> Service<HttpRequest<Body>> for TowerService<RpcMiddleware, HttpMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
-		+ Service<
-			hyper::Request<hyper::Body>,
-			Response = hyper::Response<hyper::Body>,
-			Error = Box<(dyn StdError + Send + Sync + 'static)>,
-		>,
-	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
+		Send + Service<HttpRequest<Body>, Response = HttpResponse, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<Body>>>::Future:
 		Send + 'static,
+	Body: http_body::Body<Data = Bytes> + Send + 'static,
+	Body::Error: Into<BoxError>,
 {
-	type Response = hyper::Response<hyper::Body>;
-	type Error = Box<dyn StdError + Send + Sync + 'static>;
+	type Response = HttpResponse;
+	type Error = BoxError;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-	/// Opens door for back pressure implementation.
-	fn poll_ready(&mut self, _: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
+	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
 		Poll::Ready(Ok(()))
 	}
 
-	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
+	fn call(&mut self, request: HttpRequest<Body>) -> Self::Future {
 		Box::pin(self.http_middleware.service(self.rpc_middleware.clone()).call(request))
 	}
 }
@@ -1001,26 +1032,29 @@ pub struct TowerServiceNoHttp<L> {
 	on_session_close: Option<SessionClose>,
 }
 
-impl<RpcMiddleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerServiceNoHttp<RpcMiddleware>
+impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	Body: http_body::Body<Data = Bytes> + Send + 'static,
+	Body::Error: Into<BoxError>,
 {
-	type Response = hyper::Response<hyper::Body>;
+	type Response = HttpResponse;
 
 	// The following associated type is required by the `impl<B, U, M: JsonRpcMiddleware> Server<B, L>` bounds.
 	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B: Identity`).
-	type Error = Box<dyn StdError + Send + Sync + 'static>;
+	type Error = BoxError;
 
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-	/// Opens door for back pressure implementation.
-	fn poll_ready(&mut self, _: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
+	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
 		Poll::Ready(Ok(()))
 	}
 
-	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
+	fn call(&mut self, request: HttpRequest<Body>) -> Self::Future {
+		let request = request.map(HttpBody::new);
+
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
 		let conn_id = self.inner.conn_id;
@@ -1083,7 +1117,9 @@ where
 								}
 							};
 
-							let stream = BufReader::new(BufWriter::new(upgraded.compat()));
+							let io = hyper_util::rt::TokioIo::new(upgraded);
+
+							let stream = BufReader::new(BufWriter::new(io.compat()));
 							let mut ws_builder = server.into_builder(stream);
 							ws_builder.set_max_message_size(this.server_cfg.max_request_body_size as usize);
 							let (sender, receiver) = ws_builder.finish();
@@ -1105,11 +1141,11 @@ where
 						.in_current_span(),
 					);
 
-					response.map(|()| hyper::Body::empty())
+					response.map(|()| HttpBody::empty())
 				}
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
-					hyper::Response::new(hyper::Body::from(format!("Could not upgrade connection: {e}")))
+					HttpResponse::new(HttpBody::from(format!("Could not upgrade connection: {e}")))
 				}
 			};
 
@@ -1152,24 +1188,17 @@ struct ProcessConnection<'a, HttpMiddleware, RpcMiddleware> {
 }
 
 #[instrument(name = "connection", skip_all, fields(remote_addr = %params.remote_addr, conn_id = %params.conn_id), level = "INFO")]
-fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
-	params: ProcessConnection<HttpMiddleware, RpcMiddleware>
-
-) where
+fn process_connection<'a, RpcMiddleware, HttpMiddleware, Body>(params: ProcessConnection<HttpMiddleware, RpcMiddleware>)
+where
 	RpcMiddleware: 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
-	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service: Send
-		+ 'static
-		+ Service<
-			hyper::Request<hyper::Body>,
-			Response = hyper::Response<U>,
-			Error = Box<(dyn StdError + Send + Sync + 'static)>,
-		>,
-	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<hyper::Request<hyper::Body>>>::Future:
+	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
+		Send + 'static + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future:
 		Send + 'static,
-	U: HttpBody + Send + 'static,
-	<U as HttpBody>::Error: Send + Sync + StdError,
-	<U as HttpBody>::Data: Send,
+	Body: http_body::Body<Data = Bytes> + Send + 'static,
+	<Body as http_body::Body>::Error: Into<BoxError>,
+	<Body as http_body::Body>::Data: Send,
 {
 	let ProcessConnection {
 		http_middleware,
@@ -1204,39 +1233,31 @@ fn process_connection<'a, RpcMiddleware, HttpMiddleware, U>(
 	let service = http_middleware.service(tower_service);
 
 	tokio::spawn(async {
-		to_http_service(socket, service, stop_handle).in_current_span().await;
+		// this requires Clone.
+		let service = crate::utils::TowerToHyperService::new(service);
+		let io = TokioIo::new(socket);
+		let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+
+		let conn = builder.serve_connection_with_upgrades(io, service);
+		let stopped = stop_handle.shutdown();
+
+		tokio::pin!(stopped, conn);
+
+		let res = match future::select(conn, stopped).await {
+			Either::Left((conn, _)) => conn,
+			Either::Right((_, mut conn)) => {
+				// NOTE: the connection should continue to be polled until shutdown can finish.
+				// Thus, both lines below are needed and not a nit.
+				conn.as_mut().graceful_shutdown();
+				conn.await
+			}
+		};
+
+		if let Err(e) = res {
+			tracing::debug!(target: LOG_TARGET, "HTTP serve connection failed {:?}", e);
+		}
 		drop(drop_on_completion)
 	});
-}
-
-// Attempts to create a HTTP connection from a socket.
-async fn to_http_service<S, B>(socket: TcpStream, service: S, stop_handle: StopHandle)
-where
-	S: Service<hyper::Request<hyper::Body>, Response = hyper::Response<B>> + Send + 'static,
-	S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
-	S::Future: Send,
-	B: HttpBody + Send + 'static,
-	<B as HttpBody>::Error: Send + Sync + StdError,
-	<B as HttpBody>::Data: Send,
-{
-	let conn = hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
-	let stopped = stop_handle.shutdown();
-
-	tokio::pin!(stopped);
-
-	let res = match future::select(conn, stopped).await {
-		Either::Left((conn, _)) => conn,
-		Either::Right((_, mut conn)) => {
-			// NOTE: the connection should continue to be polled until shutdown can finish.
-			// Thus, both lines below are needed and not a nit.
-			Pin::new(&mut conn).graceful_shutdown();
-			conn.await
-		}
-	};
-
-	if let Err(e) = res {
-		tracing::debug!(target: LOG_TARGET, "HTTP serve connection failed {:?}", e);
-	}
 }
 
 enum AcceptConnection<S> {

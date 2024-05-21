@@ -25,24 +25,23 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::borrow::Cow as StdCow;
-use std::error::Error as StdError;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient, HttpTransportClientBuilder};
+use crate::transport::{self, Error as TransportError, HttpTransportClient, HttpTransportClientBuilder};
 use crate::types::{NotificationSer, RequestSer, Response};
+use crate::{HttpRequest, HttpResponse};
 use async_trait::async_trait;
-use hyper::body::HttpBody;
+use hyper::body::Bytes;
 use hyper::http::HeaderMap;
-use hyper::Body;
 use jsonrpsee_core::client::{
 	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, Error, IdKind, RequestIdManager, Subscription,
 	SubscriptionClientT,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
-use jsonrpsee_core::{JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
@@ -189,10 +188,10 @@ impl<L> HttpClientBuilder<L> {
 impl<B, S, L> HttpClientBuilder<L>
 where
 	L: Layer<transport::HttpBackend, Service = S>,
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Clone,
-	B: HttpBody + Send + 'static,
+	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Clone,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
+	B::Error: Into<BoxError>,
 {
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient<S>, Error> {
@@ -207,6 +206,7 @@ where
 			max_log_length,
 			service_builder,
 			tcp_no_delay,
+			..
 		} = self;
 
 		let transport = HttpTransportClientBuilder::new()
@@ -254,7 +254,7 @@ impl HttpClientBuilder<Identity> {
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
-pub struct HttpClient<S = HttpBackend> {
+pub struct HttpClient<S> {
 	/// HTTP transport client.
 	transport: HttpTransportClient<S>,
 	/// Request timeout. Defaults to 60sec.
@@ -265,7 +265,7 @@ pub struct HttpClient<S = HttpBackend> {
 
 impl<S> HttpClient<S> {
 	/// Create a builder for the HttpClient.
-	pub fn builder() -> HttpClientBuilder {
+	pub fn builder() -> HttpClientBuilder<Identity> {
 		HttpClientBuilder::new()
 	}
 }
@@ -273,9 +273,10 @@ impl<S> HttpClient<S> {
 #[async_trait]
 impl<B, S> ClientT for HttpClient<S>
 where
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
-	<S as Service<hyper::Request<Body>>>::Future: Send,
-	B: HttpBody<Error = hyper::Error> + Send + 'static,
+	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Send + Sync + Clone,
+	<S as Service<HttpRequest>>::Future: Send,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
+	B::Error: Into<BoxError>,
 	B::Data: Send,
 {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
@@ -405,10 +406,11 @@ where
 #[async_trait]
 impl<B, S> SubscriptionClientT for HttpClient<S>
 where
-	S: Service<hyper::Request<Body>, Response = hyper::Response<B>, Error = TransportError> + Send + Sync + Clone,
-	<S as Service<hyper::Request<Body>>>::Future: Send,
-	B: HttpBody<Error = hyper::Error> + Send + 'static,
+	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Send + Sync + Clone,
+	<S as Service<HttpRequest>>::Future: Send,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
+	B::Error: Into<BoxError>,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].

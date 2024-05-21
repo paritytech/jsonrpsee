@@ -94,3 +94,6 @@ pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 
 /// The return type if the subscription wants to return `Result`.
 pub type SubscriptionResult = Result<(), StringError>;
+
+/// Type erased error.
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

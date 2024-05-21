@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -35,14 +36,17 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::sink::SinkExt;
 use futures_util::stream::{self, StreamExt};
 use futures_util::{pin_mut, select};
+use hyper_util::rt::TokioExecutor;
+use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-pub use hyper::{Body, HeaderMap, StatusCode, Uri};
+pub use hyper::{HeaderMap, StatusCode, Uri};
 
-type Error = Box<dyn std::error::Error>;
+type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+type EmptyBody = http_body_util::Empty<hyper::body::Bytes>;
 
 /// Request Id
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
@@ -318,30 +322,41 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 
 // Run a WebSocket server running on localhost that redirects requests for testing.
 // Requests to any url except for `/myblock/two` will redirect one or two times (HTTP 301) and eventually end up in `/myblock/two`.
-pub fn ws_server_with_redirect(other_server: String) -> String {
-	let addr = ([127, 0, 0, 1], 0).into();
+pub async fn ws_server_with_redirect(other_server: String) -> String {
+	let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await.unwrap();
+	let addr = listener.local_addr().unwrap();
 
-	let service = hyper::service::make_service_fn(move |_| {
-		let other_server = other_server.clone();
-		async move {
-			Ok::<_, hyper::Error>(hyper::service::service_fn(move |req| {
-				let other_server = other_server.clone();
-				async move { handler(req, other_server).await }
-			}))
+	tokio::spawn(async move {
+		loop {
+			let Ok((stream, _addr)) = listener.accept().await else {
+				continue;
+			};
+
+			let other_server = other_server.clone();
+			tokio::spawn(async {
+				let io = TokioIo::new(stream);
+				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+
+				let conn = builder.serve_connection_with_upgrades(
+					io,
+					hyper::service::service_fn(move |req| {
+						let other_server = other_server.clone();
+						handler(req, other_server)
+					}),
+				);
+
+				conn.await.unwrap();
+			});
 		}
 	});
-	let server = hyper::Server::bind(&addr).serve(service);
-	let addr = server.local_addr();
-
-	tokio::spawn(server);
 	format!("ws://{addr}")
 }
 
 /// Handle incoming HTTP Requests.
 async fn handler(
-	req: hyper::Request<Body>,
+	req: hyper::Request<hyper::body::Incoming>,
 	other_server: String,
-) -> Result<hyper::Response<Body>, soketto::BoxedError> {
+) -> Result<hyper::Response<EmptyBody>, Infallible> {
 	if is_upgrade_request(&req) {
 		tracing::debug!("{:?}", req);
 
@@ -350,20 +365,20 @@ async fn handler(
 				let response = hyper::Response::builder()
 					.status(301)
 					.header("Location", other_server)
-					.body(Body::empty())
+					.body(EmptyBody::new())
 					.unwrap();
 				Ok(response)
 			}
 			"/myblock/one" => {
 				let response =
-					hyper::Response::builder().status(301).header("Location", "two").body(Body::empty()).unwrap();
+					hyper::Response::builder().status(301).header("Location", "two").body(EmptyBody::new()).unwrap();
 				Ok(response)
 			}
 			_ => {
 				let response = hyper::Response::builder()
 					.status(301)
 					.header("Location", "/myblock/one")
-					.body(Body::empty())
+					.body(EmptyBody::new())
 					.unwrap();
 				Ok(response)
 			}
