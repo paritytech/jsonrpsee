@@ -53,3 +53,14 @@ pub type HttpBody = http_body_util::Full<hyper::body::Bytes>;
 pub type HttpRequest<T = HttpBody> = jsonrpsee_core::http_helpers::Request<T>;
 /// HTTP response with default body.
 pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;
+
+/// Custom TLS configuration.
+#[cfg(feature = "tls")]
+pub type TlsConfig = rustls::ClientConfig;
+
+#[cfg(feature = "tls")]
+#[derive(Debug)]
+pub(crate) enum CertificateStore {
+	Native,
+	Custom(TlsConfig),
+}

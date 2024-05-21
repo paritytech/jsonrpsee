@@ -11,7 +11,6 @@ use hyper::http::{HeaderMap, HeaderValue};
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
-use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
 use jsonrpsee_core::BoxError;
 use jsonrpsee_core::{
@@ -28,13 +27,16 @@ use url::Url;
 
 use crate::{HttpBody, HttpRequest, HttpResponse};
 
+#[cfg(feature = "tls")]
+use crate::CertificateStore;
+
 const CONTENT_TYPE_JSON: &str = "application/json";
 
 /// Wrapper over HTTP transport and connector.
 #[derive(Debug)]
 pub enum HttpBackend<B = HttpBody> {
 	/// Hyper client with https connector.
-	#[cfg(feature = "__tls")]
+	#[cfg(feature = "tls")]
 	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>, B>),
 	/// Hyper client with http connector.
 	Http(Client<HttpConnector, B>),
@@ -44,7 +46,7 @@ impl<B> Clone for HttpBackend<B> {
 	fn clone(&self) -> Self {
 		match self {
 			Self::Http(inner) => Self::Http(inner.clone()),
-			#[cfg(feature = "__tls")]
+			#[cfg(feature = "tls")]
 			Self::Https(inner) => Self::Https(inner.clone()),
 		}
 	}
@@ -63,7 +65,7 @@ where
 	fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		match self {
 			Self::Http(inner) => inner.poll_ready(ctx),
-			#[cfg(feature = "__tls")]
+			#[cfg(feature = "tls")]
 			Self::Https(inner) => inner.poll_ready(ctx),
 		}
 		.map_err(|e| Error::Http(HttpError::Stream(e.into())))
@@ -72,7 +74,7 @@ where
 	fn call(&mut self, req: HttpRequest<B>) -> Self::Future {
 		let resp = match self {
 			Self::Http(inner) => inner.call(req),
-			#[cfg(feature = "__tls")]
+			#[cfg(feature = "tls")]
 			Self::Https(inner) => inner.call(req),
 		};
 
@@ -124,7 +126,8 @@ impl HttpTransportClientBuilder<Identity> {
 
 impl<L> HttpTransportClientBuilder<L> {
 	/// Set the certificate store.
-	pub fn set_certification_store(mut self, cert_store: CertificateStore) -> Self {
+	#[cfg(feature = "tls")]
+	pub(crate) fn set_certification_store(mut self, cert_store: CertificateStore) -> Self {
 		self.certificate_store = cert_store;
 		self
 	}
@@ -208,33 +211,31 @@ impl<L> HttpTransportClientBuilder<L> {
 				connector.set_nodelay(tcp_no_delay);
 				HttpBackend::Http(Client::builder(TokioExecutor::new()).build(connector))
 			}
-			#[cfg(feature = "__tls")]
+			#[cfg(feature = "tls")]
 			"https" => {
 				let mut http_conn = HttpConnector::new();
 				http_conn.set_nodelay(tcp_no_delay);
 				http_conn.enforce_http(false);
 
 				let https_conn = match certificate_store {
-					#[cfg(feature = "native-tls")]
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
-						.with_native_roots()
-						.map(|c| c.https_or_http().enable_all_versions().wrap_connector(http_conn))
-						.map_err(|_| Error::InvalidCertficateStore)?,
-					#[cfg(feature = "webpki-tls")]
-					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
-						.with_webpki_roots()
+						.with_platform_verifier()
 						.https_or_http()
 						.enable_all_versions()
 						.wrap_connector(http_conn),
-					_ => return Err(Error::InvalidCertficateStore),
+					CertificateStore::Custom(tls_config) => hyper_rustls::HttpsConnectorBuilder::new()
+						.with_tls_config(tls_config)
+						.https_or_http()
+						.enable_all_versions()
+						.wrap_connector(http_conn),
 				};
 
 				HttpBackend::Https(Client::builder(TokioExecutor::new()).build(https_conn))
 			}
 			_ => {
-				#[cfg(feature = "__tls")]
+				#[cfg(feature = "tls")]
 				let err = "URL scheme not supported, expects 'http' or 'https'";
-				#[cfg(not(feature = "__tls"))]
+				#[cfg(not(feature = "tls"))]
 				let err = "URL scheme not supported, expects 'http'";
 				return Err(Error::Url(err.into()));
 			}
@@ -368,14 +369,14 @@ mod tests {
 		assert!(matches!(err, Error::Url(_)));
 	}
 
-	#[cfg(feature = "__tls")]
+	#[cfg(feature = "tls")]
 	#[test]
 	fn https_works() {
 		let client = HttpTransportClientBuilder::new().build("https://localhost").unwrap();
 		assert_eq!(&client.target, "https://localhost/");
 	}
 
-	#[cfg(not(feature = "__tls"))]
+	#[cfg(not(feature = "tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
 		let err = HttpTransportClientBuilder::new().build("https://localhost").unwrap_err();
@@ -415,7 +416,7 @@ mod tests {
 		assert_eq!(&client.target, "http://127.0.0.1/");
 	}
 
-	#[cfg(feature = "__tls")]
+	#[cfg(feature = "tls")]
 	#[test]
 	fn https_custom_port_works() {
 		let client = HttpTransportClientBuilder::new().build("https://localhost:9999").unwrap();
