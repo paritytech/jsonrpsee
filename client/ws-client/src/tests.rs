@@ -461,8 +461,6 @@ fn assert_error_response(err: Error, exp: ErrorObjectOwned) {
 
 #[tokio::test]
 async fn redirections() {
-	init_logger();
-
 	let expected = "abc 123";
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),

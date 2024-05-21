@@ -37,7 +37,7 @@ use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, 
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::{HttpBody, HttpBoxBody, HttpRequest, HttpResponse, LOG_TARGET};
+use crate::{HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
@@ -95,17 +95,17 @@ impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 	}
 }
 
-impl<HttpMiddleware, RpcMiddleware, B> Server<HttpMiddleware, RpcMiddleware>
+impl<HttpMiddleware, RpcMiddleware, Body> Server<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
-		Send + Clone + Service<HttpRequest, Response = HttpResponse<B>, Error = BoxError>,
+		Send + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future: Send,
-	B: http_body::Body<Data = Bytes> + Send + 'static,
-	<B as http_body::Body>::Error: Into<BoxError>,
-	<B as http_body::Body>::Data: Send,
+	Body: http_body::Body<Data = Bytes> + Send + 'static,
+	<Body as http_body::Body>::Error: Into<BoxError>,
+	<Body as http_body::Body>::Data: Send,
 {
 	/// Start responding to connections requests.
 	///
@@ -995,18 +995,18 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 	}
 }
 
-impl<B, RpcMiddleware, HttpMiddleware> Service<HttpRequest<B>> for TowerService<RpcMiddleware, HttpMiddleware>
+impl<Body, RpcMiddleware, HttpMiddleware> Service<HttpRequest<Body>> for TowerService<RpcMiddleware, HttpMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
-		Send + Service<HttpRequest<B>, Response = HttpResponse, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
-	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<B>>>::Future:
+		Send + Service<HttpRequest<Body>, Response = HttpResponse, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<Body>>>::Future:
 		Send + 'static,
-	B: http_body::Body<Data = Bytes> + Send + 'static,
-	B::Error: Into<BoxError>,
+	Body: http_body::Body<Data = Bytes> + Send + 'static,
+	Body::Error: Into<BoxError>,
 {
 	type Response = HttpResponse;
 	type Error = BoxError;
@@ -1016,7 +1016,7 @@ where
 		Poll::Ready(Ok(()))
 	}
 
-	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
+	fn call(&mut self, request: HttpRequest<Body>) -> Self::Future {
 		Box::pin(self.http_middleware.service(self.rpc_middleware.clone()).call(request))
 	}
 }
@@ -1032,13 +1032,13 @@ pub struct TowerServiceNoHttp<L> {
 	on_session_close: Option<SessionClose>,
 }
 
-impl<B, RpcMiddleware> Service<HttpRequest<B>> for TowerServiceNoHttp<RpcMiddleware>
+impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
-	B: http_body::Body<Data = Bytes> + Send + 'static,
-	B::Error: Into<BoxError>,
+	Body: http_body::Body<Data = Bytes> + Send + 'static,
+	Body::Error: Into<BoxError>,
 {
 	type Response = HttpResponse;
 
@@ -1052,8 +1052,8 @@ where
 		Poll::Ready(Ok(()))
 	}
 
-	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
-		let request = request.map(HttpBoxBody::new);
+	fn call(&mut self, request: HttpRequest<Body>) -> Self::Future {
+		let request = request.map(HttpBody::new);
 
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
@@ -1141,7 +1141,7 @@ where
 						.in_current_span(),
 					);
 
-					response.map(|()| HttpBody::default())
+					response.map(|()| HttpBody::empty())
 				}
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
@@ -1188,17 +1188,17 @@ struct ProcessConnection<'a, HttpMiddleware, RpcMiddleware> {
 }
 
 #[instrument(name = "connection", skip_all, fields(remote_addr = %params.remote_addr, conn_id = %params.conn_id), level = "INFO")]
-fn process_connection<'a, RpcMiddleware, HttpMiddleware, B>(params: ProcessConnection<HttpMiddleware, RpcMiddleware>)
+fn process_connection<'a, RpcMiddleware, HttpMiddleware, Body>(params: ProcessConnection<HttpMiddleware, RpcMiddleware>)
 where
 	RpcMiddleware: 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
-		Send + 'static + Clone + Service<HttpRequest, Response = HttpResponse<B>, Error = BoxError>,
+		Send + 'static + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future:
 		Send + 'static,
-	B: http_body::Body<Data = Bytes> + Send + 'static,
-	<B as http_body::Body>::Error: Into<BoxError>,
-	<B as http_body::Body>::Data: Send,
+	Body: http_body::Body<Data = Bytes> + Send + 'static,
+	<Body as http_body::Body>::Error: Into<BoxError>,
+	<Body as http_body::Body>::Data: Send,
 {
 	let ProcessConnection {
 		http_middleware,

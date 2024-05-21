@@ -36,19 +36,15 @@ use std::{
 };
 
 /// HTTP request type.
-pub use http::Request;
-
+pub type Request<T = Body> = http::Request<T>;
 /// HTTP response type.
-pub use http::Response;
+pub type Response<T = Body> = http::Response<T>;
 
-/// HTTP response body.
-pub type Body = http_body_util::Full<bytes::Bytes>;
-
-/// A HTTP request body.
+/// Default HTTP body used by jsonrpsee.
 #[derive(Debug, Default)]
-pub struct BoxBody(http_body_util::combinators::UnsyncBoxBody<Bytes, BoxError>);
+pub struct Body(http_body_util::combinators::UnsyncBoxBody<Bytes, BoxError>);
 
-impl BoxBody {
+impl Body {
 	/// Create an empty body.
 	pub fn empty() -> Self {
 		Self::default()
@@ -65,7 +61,28 @@ impl BoxBody {
 	}
 }
 
-impl http_body::Body for BoxBody {
+impl From<String> for Body {
+	fn from(s: String) -> Self {
+		let body = http_body_util::Full::from(s);
+		Self::new(body)
+	}
+}
+
+impl From<&'static str> for Body {
+	fn from(s: &'static str) -> Self {
+		let body = http_body_util::Full::from(s);
+		Self::new(body)
+	}
+}
+
+impl From<Vec<u8>> for Body {
+	fn from(bytes: Vec<u8>) -> Self {
+		let body = http_body_util::Full::from(bytes);
+		Self::new(body)
+	}
+}
+
+impl http_body::Body for Body {
 	type Data = Bytes;
 	type Error = BoxError;
 
