@@ -4,7 +4,7 @@ use std::time::Instant;
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
-use crate::{HttpRequest, HttpResponse, HttpResponseBody, PingConfig, LOG_TARGET};
+use crate::{HttpBody, HttpRequest, HttpResponse, PingConfig, LOG_TARGET};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -420,7 +420,7 @@ where
 				Ok(u) => u,
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-					return Err(HttpResponse::new(HttpResponseBody::from(format!("WS upgrade handshake failed {e}"))));
+					return Err(HttpResponse::new(HttpBody::from(format!("WS upgrade handshake failed {e}"))));
 				}
 			};
 
@@ -449,6 +449,8 @@ where
 
 			let rpc_service = rpc_middleware.service(rpc_service);
 
+			// Note: This can't possibly be fulfilled until the HTTP response
+			// is returned below, so that's why it's a separate async block
 			let fut = async move {
 				let stream = BufReader::new(BufWriter::new(io.compat()));
 				let mut ws_builder = server.into_builder(stream);
@@ -470,11 +472,11 @@ where
 				background_task(params).await;
 			};
 
-			Ok((response.map(|()| HttpResponseBody::default()), fut))
+			Ok((response.map(|()| HttpBody::default()), fut))
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-			Err(HttpResponse::new(HttpResponseBody::from(format!("WS upgrade handshake failed: {e}"))))
+			Err(HttpResponse::new(HttpBody::from(format!("WS upgrade handshake failed: {e}"))))
 		}
 	}
 }

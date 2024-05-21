@@ -36,19 +36,19 @@ use std::{
 };
 
 /// HTTP request type.
-pub type Request<T = Body> = http::Request<T>;
-
-/// HTTP response body.
-pub type ResponseBody = http_body_util::Full<bytes::Bytes>;
+pub use http::Request;
 
 /// HTTP response type.
-pub type Response<T = ResponseBody> = http::Response<T>;
+pub use http::Response;
+
+/// HTTP response body.
+pub type Body = http_body_util::Full<bytes::Bytes>;
 
 /// A HTTP request body.
 #[derive(Debug, Default)]
-pub struct Body(http_body_util::combinators::UnsyncBoxBody<Bytes, BoxError>);
+pub struct BoxBody(http_body_util::combinators::UnsyncBoxBody<Bytes, BoxError>);
 
-impl Body {
+impl BoxBody {
 	/// Create an empty body.
 	pub fn empty() -> Self {
 		Self::default()
@@ -65,7 +65,7 @@ impl Body {
 	}
 }
 
-impl http_body::Body for Body {
+impl http_body::Body for BoxBody {
 	type Data = Bytes;
 	type Error = BoxError;
 

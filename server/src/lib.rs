@@ -53,10 +53,13 @@ pub use server::{
 };
 pub use tracing;
 
-pub use jsonrpsee_core::http_helpers::{
-	Body as HttpBody, Request as HttpRequest, Response as HttpResponse, ResponseBody as HttpResponseBody,
-};
+pub use jsonrpsee_core::http_helpers::{Body as HttpBody, BoxBody as HttpBoxBody};
 pub use transport::http;
 pub use transport::ws;
+
+/// HTTP request with boxed body.
+pub type HttpRequest<T = HttpBoxBody> = jsonrpsee_core::http_helpers::Request<T>;
+/// HTTP response with concrete body.
+pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;
 
 pub(crate) const LOG_TARGET: &str = "jsonrpsee-server";

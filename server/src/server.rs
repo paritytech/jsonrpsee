@@ -37,7 +37,7 @@ use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, 
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::{HttpBody, HttpRequest, HttpResponse, HttpResponseBody, LOG_TARGET};
+use crate::{HttpBody, HttpBoxBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
@@ -787,89 +787,89 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use futures_util::future::{self, Either};
 	/// use hyper_util::rt::{TokioIo, TokioExecutor};
 	///
-	/// async fn run_server() -> ServerHandle {
-	///     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await.unwrap();
+	/// fn run_server() -> ServerHandle {
 	///     let (stop_handle, server_handle) = stop_channel();
 	///     let svc_builder = jsonrpsee_server::Server::builder().max_connections(33).to_service_builder();
 	///     let methods = Methods::new();
 	///     let stop_handle = stop_handle.clone();
 	///
 	///     tokio::spawn(async move {
+	///         let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await.unwrap();
+	///
 	///         loop {
-	///          // The `tokio::select!` macro is used to wait for either of the
-	///          // listeners to accept a new connection or for the server to be
-	///          // stopped.
-	///          let (sock, remote_addr) = tokio::select! {
-	///              res = listener.accept() => {
-	///                  match res {
-	///                     Ok(sock) => sock,
-	///                     Err(e) => {
-	///                         tracing::error!("failed to accept v4 connection: {:?}", e);
-	///                         continue;
-	///                     }
-	///                   }
-	///              }
-	///              _ = stop_handle.clone().shutdown() => break,
-	///          };
-	///
-	///
-	///           let stop_handle2 = stop_handle.clone();
-	///           let svc_builder2 = svc_builder.clone();
-	///           let methods2 = methods.clone();
-	///
-	///           let svc = hyper::service::service_fn(move |req| {
-	///               let stop_handle = stop_handle2.clone();
-	///               let svc_builder = svc_builder2.clone();
-	///               let methods = methods2.clone();
-	///
-	///               let mut svc = svc_builder.build(methods, stop_handle.clone());
-	///
-	///               // It's not possible to know whether the websocket upgrade handshake failed or not here.
-	///               let is_websocket = ws::is_upgrade_request(&req);
-	///
-	///               if is_websocket {
-	///                   println!("websocket")
-	///               } else {
-	///                   println!("http")
-	///               }
-	///
-	///               // Call the jsonrpsee service which
-	///               // may upgrade it to a WebSocket connection
-	///               // or treat it as "ordinary HTTP request".
-	///               //
-	///               // https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-	///               // to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-	///               // as workaround.
-	///               async move { svc.call(req).await.map_err(|e| anyhow::anyhow!("e")) }
-	///           });
-	///
-	///           let stop_handle = stop_handle.clone();
-	///           // Upgrade the connection to a HTTP service with graceful shutdown.
-	///           tokio::spawn(async move {
-	///               let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-	///               let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);
-	///               let stopped = stop_handle.shutdown();
-	///
-	///               // Pin the future so that it can be polled.
-	///               tokio::pin!(stopped, conn);
-	///
-	///              let res = match future::select(conn, stopped).await {
-	///              // Return the connection if not stopped.
-	///                    Either::Left((conn, _)) => conn,
-	///                    // If the server is stopped, we should gracefully shutdown
-	///                    // the connection and poll it until it finishes.
-	///                    Either::Right((_, mut conn)) => {
-	///                       conn.as_mut().graceful_shutdown();
-	///                       conn.await
-	///                    }
+	///              // The `tokio::select!` macro is used to wait for either of the
+	///              // listeners to accept a new connection or for the server to be
+	///              // stopped.
+	///              let (sock, remote_addr) = tokio::select! {
+	///                  res = listener.accept() => {
+	///                      match res {
+	///                         Ok(sock) => sock,
+	///                         Err(e) => {
+	///                             tracing::error!("failed to accept v4 connection: {:?}", e);
+	///                             continue;
+	///                         }
+	///                       }
+	///                  }
+	///                  _ = stop_handle.clone().shutdown() => break,
 	///              };
 	///
-	///               // Log any errors that might have occurred.
-	///               if let Err(err) = res {
-	///                   tracing::error!(err=?err, "HTTP connection failed");
-	///               }
-	///         });
-	///       }
+	///              let stop_handle2 = stop_handle.clone();
+	///              let svc_builder2 = svc_builder.clone();
+	///              let methods2 = methods.clone();
+	///
+	///              let svc = hyper::service::service_fn(move |req| {
+	///                   let stop_handle = stop_handle2.clone();
+	///                   let svc_builder = svc_builder2.clone();
+	///                   let methods = methods2.clone();
+	///
+	///                   let mut svc = svc_builder.build(methods, stop_handle.clone());
+	///
+	///                   // It's not possible to know whether the websocket upgrade handshake failed or not here.
+	///                   let is_websocket = ws::is_upgrade_request(&req);
+	///
+	///                   if is_websocket {
+	///                       println!("websocket")
+	///                   } else {
+	///                       println!("http")
+	///                   }
+	///
+	///                   // Call the jsonrpsee service which
+	///                   // may upgrade it to a WebSocket connection
+	///                   // or treat it as "ordinary HTTP request".
+	///                   //
+	///                   // https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
+	///                   // to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
+	///                   // as workaround.
+	///                   async move { svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
+	///               });
+	///
+	///               let stop_handle = stop_handle.clone();
+	///               // Upgrade the connection to a HTTP service with graceful shutdown.
+	///               tokio::spawn(async move {
+	///                   let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+	///                   let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);
+	///                   let stopped = stop_handle.shutdown();
+	///
+	///                   // Pin the future so that it can be polled.
+	///                   tokio::pin!(stopped, conn);
+	///
+	///                  let res = match future::select(conn, stopped).await {
+	///                      // Return the connection if not stopped.
+	///                      Either::Left((conn, _)) => conn,
+	///                      // If the server is stopped, we should gracefully shutdown
+	///                      // the connection and poll it until it finishes.
+	///                      Either::Right((_, mut conn)) => {
+	///                          conn.as_mut().graceful_shutdown();
+	///                          conn.await
+	///                      }
+	///                  };
+	///
+	///                  // Log any errors that might have occurred.
+	///                  if let Err(err) = res {
+	///                      tracing::error!(err=?err, "HTTP connection failed");
+	///                  }
+	///             });
+	///          }
 	///     });
 	///
 	///     server_handle
@@ -1053,7 +1053,7 @@ where
 	}
 
 	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
-		let request = request.map(HttpBody::new);
+		let request = request.map(HttpBoxBody::new);
 
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
@@ -1141,11 +1141,11 @@ where
 						.in_current_span(),
 					);
 
-					response.map(|()| HttpResponseBody::default())
+					response.map(|()| HttpBody::default())
 				}
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
-					HttpResponse::new(HttpResponseBody::from(format!("Could not upgrade connection: {e}")))
+					HttpResponse::new(HttpBody::from(format!("Could not upgrade connection: {e}")))
 				}
 			};
 

@@ -27,7 +27,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::{HttpBody, HttpRequest};
+use crate::{HttpBoxBody, HttpRequest};
 
 use pin_project::pin_project;
 use tower::util::Oneshot;
@@ -53,7 +53,7 @@ where
 	type Future = TowerToHyperServiceFuture<S, HttpRequest>;
 
 	fn call(&self, req: HttpRequest<hyper::body::Incoming>) -> Self::Future {
-		let req = req.map(HttpBody::new);
+		let req = req.map(HttpBoxBody::new);
 		TowerToHyperServiceFuture { future: self.service.clone().oneshot(req) }
 	}
 }

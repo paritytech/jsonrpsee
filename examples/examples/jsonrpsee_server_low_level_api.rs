@@ -51,7 +51,7 @@ use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
-use jsonrpsee::server::HttpBody;
+use jsonrpsee::server::HttpBoxBody;
 use jsonrpsee::server::{
 	http, stop_channel, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle,
 };
@@ -226,7 +226,7 @@ async fn run_server() -> anyhow::Result<ServerHandle> {
 			let stop_handle2 = per_conn.stop_handle.clone();
 			let per_conn = per_conn.clone();
 			let svc = service_fn(move |req| {
-				let req = req.map(HttpBody::new);
+				let req = req.map(HttpBoxBody::new);
 
 				let PerConnection {
 					methods,

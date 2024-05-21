@@ -27,7 +27,7 @@
 //! Middleware that proxies requests at a specified URI to internal
 //! RPC method calls.
 use crate::transport::http;
-use crate::{HttpBody, HttpRequest, HttpResponse};
+use crate::{HttpBoxBody, HttpRequest, HttpResponse};
 
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
@@ -149,11 +149,11 @@ where
 			let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), &self.method, None))
 				.expect("Valid request; qed");
 
-			let body = HttpBody::new(http_body_util::Full::new(bytes.into()));
+			let body = HttpBoxBody::new(http_body_util::Full::new(bytes.into()));
 
 			req.map(|_| body)
 		} else {
-			req.map(HttpBody::new)
+			req.map(HttpBoxBody::new)
 		};
 
 		// Call the inner service and get a future that resolves to the response.
