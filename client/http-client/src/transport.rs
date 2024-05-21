@@ -86,6 +86,7 @@ where
 #[derive(Debug)]
 pub struct HttpTransportClientBuilder<L> {
 	/// Certificate store.
+	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	/// Configurable max request body size
 	max_request_size: u32,
@@ -113,6 +114,7 @@ impl HttpTransportClientBuilder<Identity> {
 	/// Create a new [`HttpTransportClientBuilder`].
 	pub fn new() -> Self {
 		Self {
+			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
@@ -171,6 +173,7 @@ impl<L> HttpTransportClientBuilder<L> {
 	/// Configure a tower service.
 	pub fn set_service<T>(self, service: tower::ServiceBuilder<T>) -> HttpTransportClientBuilder<T> {
 		HttpTransportClientBuilder {
+			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store,
 			headers: self.headers,
 			max_log_length: self.max_log_length,
@@ -191,6 +194,7 @@ impl<L> HttpTransportClientBuilder<L> {
 		B::Error: Into<BoxError>,
 	{
 		let Self {
+			#[cfg(feature = "tls")]
 			certificate_store,
 			max_request_size,
 			max_response_size,

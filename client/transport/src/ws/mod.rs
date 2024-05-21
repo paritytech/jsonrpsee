@@ -80,6 +80,7 @@ pub struct Receiver<T> {
 /// Builder for a WebSocket transport [`Sender`] and [`Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder {
+	#[cfg(feature = "tls")]
 	/// What certificate store to use
 	pub certificate_store: CertificateStore,
 	/// Timeout for the connection.
@@ -99,6 +100,7 @@ pub struct WsTransportClientBuilder {
 impl Default for WsTransportClientBuilder {
 	fn default() -> Self {
 		Self {
+			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,

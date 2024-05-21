@@ -98,6 +98,7 @@ pub struct WsClientBuilder {
 impl Default for WsClientBuilder {
 	fn default() -> Self {
 		Self {
+			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
@@ -329,6 +330,7 @@ impl WsClientBuilder {
 		T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
 	{
 		let transport_builder = WsTransportClientBuilder {
+			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store.clone(),
 			connection_timeout: self.connection_timeout,
 			headers: self.headers.clone(),
@@ -354,6 +356,7 @@ impl WsClientBuilder {
 	/// Panics if being called outside of `tokio` runtime context.
 	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
 		let transport_builder = WsTransportClientBuilder {
+			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store.clone(),
 			connection_timeout: self.connection_timeout,
 			headers: self.headers.clone(),

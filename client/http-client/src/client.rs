@@ -228,6 +228,7 @@ impl<L> HttpClientBuilder<L> {
 	/// Set custom tower middleware.
 	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
 		HttpClientBuilder {
+			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
 			headers: self.headers,
@@ -257,6 +258,7 @@ where
 			max_response_size,
 			max_concurrent_requests,
 			request_timeout,
+			#[cfg(feature = "tls")]
 			certificate_store,
 			id_kind,
 			headers,
@@ -266,19 +268,21 @@ where
 			..
 		} = self;
 
-		let transport = HttpTransportClientBuilder::new()
+		let mut builder = HttpTransportClientBuilder::new()
 			.max_request_size(max_request_size)
 			.max_response_size(max_response_size)
 			.set_headers(headers)
 			.set_tcp_no_delay(tcp_no_delay)
 			.set_max_logging_length(max_log_length)
-			.set_service(service_builder)
-			.set_certification_store(certificate_store)
-			.build(target)
-			.map_err(|e| Error::Transport(e.into()))?;
+			.set_service(service_builder);
+
+		#[cfg(feature = "tls")]
+		{
+			builder = builder.set_certification_store(certificate_store);
+		}
 
 		Ok(HttpClient {
-			transport,
+			transport: builder.build(target).map_err(|e| Error::Transport(e.into()))?,
 			id_manager: Arc::new(RequestIdManager::new(max_concurrent_requests, id_kind)),
 			request_timeout,
 		})
@@ -292,6 +296,7 @@ impl Default for HttpClientBuilder<Identity> {
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
+			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
