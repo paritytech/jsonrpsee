@@ -36,8 +36,7 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, Error, IdKind, RequestIdManager, Subscription,
-	SubscriptionClientT,
+	generate_batch_id_range, BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
@@ -47,6 +46,9 @@ use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::instrument;
+
+#[cfg(feature = "tls")]
+use crate::{CertificateStore, TlsConfig};
 
 /// HTTP client builder.
 ///
@@ -77,6 +79,7 @@ pub struct HttpClientBuilder<L = Identity> {
 	max_response_size: u32,
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
+	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
 	max_log_length: u32,
@@ -110,31 +113,85 @@ impl<L> HttpClientBuilder<L> {
 		self
 	}
 
-	/// Force to use the rustls native certificate store.
+	/// Force to use rustls-platform-verifier to select which certificate store to use.
 	///
-	/// Since multiple certificate stores can be optionally enabled, this option will
-	/// force the `native certificate store` to be used.
+	///
+	/// This is enabled with the default settings and features.
 	///
 	/// # Optional
 	///
-	/// This requires the optional `native-tls` feature.
-	#[cfg(feature = "native-tls")]
-	pub fn use_native_rustls(mut self) -> Self {
+	/// This requires the optional `tls` feature.
+	#[cfg(feature = "tls")]
+	pub fn with_rustls_platform_verifier(mut self) -> Self {
 		self.certificate_store = CertificateStore::Native;
 		self
 	}
 
-	/// Force to use the rustls webpki certificate store.
-	///
-	/// Since multiple certificate stores can be optionally enabled, this option will
-	/// force the `webpki certificate store` to be used.
+	/// Force to use a custom certificate store.
 	///
 	/// # Optional
 	///
-	/// This requires the optional `webpki-tls` feature.
-	#[cfg(feature = "webpki-tls")]
-	pub fn use_webpki_rustls(mut self) -> Self {
-		self.certificate_store = CertificateStore::WebPki;
+	/// This requires the optional `tls` feature.
+	///
+	/// # Example
+	///
+	/// ```no_run
+	/// use jsonrpsee_ws_client::WsClientBuilder;
+	/// use rustls::{
+	///	    client::danger::{self, HandshakeSignatureValid, ServerCertVerified},
+	///	    pki_types::{CertificateDer, ServerName, UnixTime},
+	///	    Error,
+	/// };
+	///
+	/// #[derive(Debug)]
+	/// struct NoCertificateVerification;
+	///
+	/// impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
+	///	    fn verify_server_cert(
+	///		    &self,
+	///		    _: &CertificateDer<'_>,
+	///		    _: &[CertificateDer<'_>],
+	///		    _: &ServerName<'_>,
+	///		    _: &[u8],
+	///		    _: UnixTime,
+	///	     ) -> Result<ServerCertVerified, Error> {
+	///		    Ok(ServerCertVerified::assertion())
+	///      }
+	///
+	///     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+	///         vec![rustls::SignatureScheme::ECDSA_NISTP256_SHA256]
+	///	     }
+	///
+	///	    fn verify_tls12_signature(
+	///         &self,
+	///		    _: &[u8],
+	///		    _: &CertificateDer<'_>,
+	///		    _: &rustls::DigitallySignedStruct,
+	///	    ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
+	///		    Ok(HandshakeSignatureValid::assertion())
+	///	    }
+	///
+	///	    fn verify_tls13_signature(
+	///		    &self,
+	///		    _: &[u8],
+	///		    _: &CertificateDer<'_>,
+	///		    _: &rustls::DigitallySignedStruct,
+	///	    ) -> Result<HandshakeSignatureValid, Error> {
+	///		    Ok(HandshakeSignatureValid::assertion())
+	///	    }
+	/// }
+	///
+	/// let tls_cfg = rustls::ClientConfig::builder()
+	///    .dangerous()
+	///    .with_custom_certificate_verifier(std::sync::Arc::new(NoCertificateVerification))
+	///    .with_no_client_auth();
+	///
+	/// // client builder with disabled certificate verification.
+	/// let client_builder = WsClientBuilder::default().with_tls_config(tls_cfg);
+	/// ```
+	#[cfg(feature = "tls")]
+	pub fn with_tls_config(mut self, cfg: TlsConfig) -> Self {
+		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}
 

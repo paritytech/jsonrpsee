@@ -522,16 +522,6 @@ impl<T: Clone> RequestIdGuard<T> {
 	}
 }
 
-/// What certificate store to use
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum CertificateStore {
-	/// Use the native system certificate store
-	Native,
-	/// Use WebPKI's certificate store
-	WebPki,
-}
-
 /// JSON-RPC request object id data type.
 #[derive(Debug, Copy, Clone)]
 pub enum IdKind {
