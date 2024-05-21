@@ -46,3 +46,10 @@ mod tests;
 pub use client::{HttpClient, HttpClientBuilder};
 pub use hyper::http::{HeaderMap, HeaderValue};
 pub use jsonrpsee_types as types;
+
+/// Default HTTP body for the client.
+pub type HttpBody = jsonrpsee_core::http_helpers::Body;
+/// HTTP request with default body.
+pub type HttpRequest<T = HttpBody> = jsonrpsee_core::http_helpers::Request<T>;
+/// HTTP response with default body.
+pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;

@@ -25,11 +25,11 @@
 // DEALINGS IN THE SOFTWARE.
 use crate::attributes::ParamKind;
 use crate::helpers::generate_where_clause;
-use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
+use crate::rpc_macro::{RpcDescription, RpcFnArg, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
-use syn::{AngleBracketedGenericArguments, FnArg, Pat, PatIdent, PatType, PathArguments, TypeParam};
+use syn::{AngleBracketedGenericArguments, FnArg, Ident, Pat, PatIdent, PatType, PathArguments, TypeParam};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -163,6 +163,8 @@ impl RpcDescription {
 		let method = quote! {
 			#docs
 			#deprecated
+			#[allow(non_snake_case)]
+			#[allow(clippy::used_underscore_binding)]
 			async fn #rust_method_name(#rust_method_params) -> #returns {
 				let params = { #parameter_builder };
 				self.#called_method(#rpc_method_name, params).await
@@ -196,6 +198,8 @@ impl RpcDescription {
 
 		let method = quote! {
 			#docs
+			#[allow(non_snake_case)]
+			#[allow(clippy::used_underscore_binding)]
 			async fn #rust_method_name(#rust_method_params) -> #returns {
 				let params = #parameter_builder;
 				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name).await
@@ -204,13 +208,11 @@ impl RpcDescription {
 		Ok(method)
 	}
 
-	fn encode_params(
-		&self,
-		params: &[(syn::PatIdent, syn::Type)],
-		param_kind: &ParamKind,
-		signature: &syn::TraitItemFn,
-	) -> TokenStream2 {
+	fn encode_params(&self, params: &[RpcFnArg], param_kind: &ParamKind, signature: &syn::TraitItemFn) -> TokenStream2 {
+		const ILLEGAL_PARAM_NAME: &str = "__RpcParams__";
+
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
+		let p = Ident::new(ILLEGAL_PARAM_NAME, proc_macro2::Span::call_site());
 
 		if params.is_empty() {
 			return quote!({
@@ -218,38 +220,54 @@ impl RpcDescription {
 			});
 		}
 
+		if params.iter().any(|arg| arg.arg_pat().ident == p) {
+			panic!(
+				"Cannot use `{}` as a parameter name because it's overlapping with an internal variable in the generated code. Change it something else to make it work", ILLEGAL_PARAM_NAME
+			);
+		}
+
 		match param_kind {
 			ParamKind::Map => {
 				// Extract parameter names.
 				let param_names = extract_param_names(&signature.sig);
 				// Combine parameter names and values to pass them as parameters.
-				let params_insert = param_names.iter().zip(params).map(|pair| {
-					let name = pair.0;
+				let params_insert = params.iter().map(|arg| {
 					// Throw away the type.
-					let (value, _value_type) = pair.1;
+					let value = arg.arg_pat();
+					let name = arg.name();
 					quote!(#name, #value)
 				});
+
+				// It's possible that the user has a parameter named `ILLEGAL_PARAM_NAME` in there API
+				// which would conflict with our internal parameter name
+				//
+				// We will throw an error if that is the case.
+				if param_names.iter().any(|name| name == ILLEGAL_PARAM_NAME) {
+					panic!("Cannot use `{}` as a parameter name", ILLEGAL_PARAM_NAME);
+				}
+
 				quote!({
-					let mut params = #jsonrpsee::core::params::ObjectParams::new();
+					let mut #p = #jsonrpsee::core::params::ObjectParams::new();
 					#(
-						if let Err(err) = params.insert( #params_insert ) {
+						if let Err(err) = #p.insert( #params_insert ) {
 							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params_insert ), err);
 						}
 					)*
-					params
+					#p
 				})
 			}
 			ParamKind::Array => {
 				// Throw away the type.
-				let params = params.iter().map(|(param, _param_type)| param);
+				let params = params.iter().map(RpcFnArg::arg_pat);
+
 				quote!({
-					let mut params = #jsonrpsee::core::params::ArrayParams::new();
+					let mut #p = #jsonrpsee::core::params::ArrayParams::new();
 					#(
-						if let Err(err) = params.insert( #params ) {
+						if let Err(err) = #p.insert( #params ) {
 							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params ), err);
 						}
 					)*
-					params
+					#p
 				})
 			}
 		}

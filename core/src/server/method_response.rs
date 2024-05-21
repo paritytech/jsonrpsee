@@ -28,7 +28,7 @@ use crate::server::{BoundedWriter, LOG_TARGET};
 use std::task::Poll;
 
 use futures_util::{Future, FutureExt};
-use hyper::http::Extensions;
+use http::Extensions;
 use jsonrpsee_types::error::{
 	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
 };

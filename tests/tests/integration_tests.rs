@@ -39,7 +39,10 @@ use helpers::{
 	connect_over_socks_stream, init_logger, pipe_from_stream_and_drop, server, server_with_cors,
 	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
 };
+use http_body_util::BodyExt;
 use hyper::http::HeaderValue;
+use hyper_util::rt::TokioExecutor;
+use jsonrpsee::core::client::SubscriptionCloseReason;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
@@ -56,6 +59,8 @@ use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
 use crate::helpers::server_with_sleeping_subscription;
+
+type HttpBody = http_body_util::Full<hyper::body::Bytes>;
 
 #[tokio::test]
 async fn ws_subscription_works() {
@@ -112,7 +117,7 @@ async fn ws_unsubscription_works() {
 	let sub: Subscription<usize> =
 		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
 
-	sub.unsubscribe().await.unwrap();
+	sub.unsubscribe().with_default_timeout().await.unwrap().unwrap();
 
 	let res = rx.next().with_default_timeout().await.expect("Test must complete in 1 min");
 	// When the subscription is closed a message is sent out on this channel.
@@ -133,7 +138,7 @@ async fn ws_unsubscription_works_over_proxy_stream() {
 	let sub: Subscription<usize> =
 		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
 
-	sub.unsubscribe().await.unwrap();
+	sub.unsubscribe().with_default_timeout().await.unwrap().unwrap();
 
 	let res = rx.next().with_default_timeout().await.expect("Test must complete in 1 min");
 	// When the subscription is closed a message is sent out on this channel.
@@ -198,6 +203,25 @@ async fn ws_method_call_works_over_proxy_stream() {
 	let client = WsClientBuilder::default().build_with_stream(&server_url, socks_stream).await.unwrap();
 	let response: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "hello");
+}
+
+#[tokio::test]
+async fn raw_methods_with_different_ws_clients() {
+	init_logger();
+
+	let server_addr = server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Connection ID does not change for the same client.
+	let connection_id: usize = client.request("raw_method", rpc_params![]).await.unwrap();
+	let identical_connection_id: usize = client.request("raw_method", rpc_params![]).await.unwrap();
+	assert_eq!(connection_id, identical_connection_id);
+
+	// Connection ID is different for different clients.
+	let second_client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let second_connection_id: usize = second_client.request("raw_method", rpc_params![]).await.unwrap();
+	assert_ne!(connection_id, second_connection_id);
 }
 
 #[tokio::test]
@@ -339,7 +363,7 @@ async fn ws_subscription_several_clients_with_drop() {
 }
 
 #[tokio::test]
-async fn ws_subscription_without_polling_does_not_make_client_unusable() {
+async fn ws_subscription_close_on_lagging() {
 	init_logger();
 
 	let server_addr = server_with_subscription().await;
@@ -349,15 +373,19 @@ async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 	let mut hello_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
-	// don't poll the subscription stream for 2 seconds, should be full now.
+	// Don't poll the subscription stream for 2 seconds, should be full now.
 	tokio::time::sleep(Duration::from_secs(2)).await;
 
+	// Lagged
+	assert!(matches!(hello_sub.close_reason(), Some(SubscriptionCloseReason::Lagged)));
+
+	// Drain the subscription.
 	for _ in 0..4 {
-		assert!(hello_sub.next().await.unwrap().is_ok());
+		assert!(hello_sub.next().with_default_timeout().await.unwrap().is_some());
 	}
 
-	// NOTE: this is now unusable and unregistered.
-	assert!(hello_sub.next().await.is_none());
+	// It should be dropped when lagging.
+	assert!(hello_sub.next().with_default_timeout().await.unwrap().is_none());
 
 	// The client should still be useable => make sure it still works.
 	let _hello_req: JsonValue = client.request("say_hello", rpc_params![]).await.unwrap();
@@ -366,7 +394,8 @@ async fn ws_subscription_without_polling_does_not_make_client_unusable() {
 	let mut other_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
-	other_sub.next().await.unwrap().unwrap();
+	assert!(other_sub.next().with_default_timeout().await.unwrap().is_some());
+	assert!(client.is_connected());
 }
 
 #[tokio::test]
@@ -909,12 +938,13 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 #[tokio::test]
 async fn http_unsupported_methods_dont_work() {
-	use hyper::{Body, Client, Method, Request};
+	use hyper::{Method, Request};
+	use hyper_util::client::legacy::Client;
 
 	init_logger();
 	let server_addr = server().await;
 
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}", server_addr);
 
 	let req_is_client_error = |method| async {
@@ -922,7 +952,7 @@ async fn http_unsupported_methods_dont_work() {
 			.method(method)
 			.uri(&uri)
 			.header("content-type", "application/json")
-			.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+			.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 			.expect("request builder");
 
 		let res = http_client.request(req).await.unwrap();
@@ -937,19 +967,20 @@ async fn http_unsupported_methods_dont_work() {
 
 #[tokio::test]
 async fn http_correct_content_type_required() {
-	use hyper::{Body, Client, Method, Request};
+	use hyper::{Method, Request};
+	use hyper_util::client::legacy::Client;
 
 	init_logger();
 
 	let server_addr = server().await;
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}", server_addr);
 
 	// We don't set content-type at all
 	let req = Request::builder()
 		.method(Method::POST)
 		.uri(&uri)
-		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -960,7 +991,7 @@ async fn http_correct_content_type_required() {
 		.method(Method::POST)
 		.uri(&uri)
 		.header("content-type", "application/text")
-		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -971,7 +1002,7 @@ async fn http_correct_content_type_required() {
 		.method(Method::POST)
 		.uri(&uri)
 		.header("content-type", "application/json")
-		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -980,7 +1011,8 @@ async fn http_correct_content_type_required() {
 
 #[tokio::test]
 async fn http_cors_preflight_works() {
-	use hyper::{Body, Client, Method, Request};
+	use hyper::{Method, Request};
+	use hyper_util::client::legacy::Client;
 
 	init_logger();
 
@@ -990,7 +1022,7 @@ async fn http_cors_preflight_works() {
 		.allow_headers([hyper::header::CONTENT_TYPE]);
 	let (server_addr, _handle) = server_with_cors(cors).await;
 
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}", server_addr);
 
 	// First, make a preflight request.
@@ -1003,7 +1035,7 @@ async fn http_cors_preflight_works() {
 		.header("origin", "https://foo.com") // <- where request is being sent _from_
 		.header("access-control-request-method", "POST")
 		.header("access-control-request-headers", "content-type")
-		.body(Body::empty())
+		.body(HttpBody::default())
 		.expect("preflight request builder");
 
 	let has = |v: &[String], s| v.iter().any(|v| v == s);
@@ -1031,7 +1063,7 @@ async fn http_cors_preflight_works() {
 		.header("host", "bar.com")
 		.header("origin", "https://foo.com")
 		.header("content-type", "application/json")
-		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(HttpBody::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("actual request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -1065,21 +1097,22 @@ async fn ws_subscribe_with_bad_params() {
 
 #[tokio::test]
 async fn http_health_api_works() {
-	use hyper::{Body, Client, Request};
+	use hyper::Request;
+	use hyper_util::client::legacy::Client;
 
 	init_logger();
 
 	let (server_addr, _handle) = server_with_health_api().await;
 
-	let http_client = Client::new();
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
 	let uri = format!("http://{}/health", server_addr);
 
-	let req = Request::builder().method("GET").uri(&uri).body(Body::empty()).expect("request builder");
+	let req = Request::builder().method("GET").uri(&uri).body(HttpBody::default()).expect("request builder");
 	let res = http_client.request(req).await.unwrap();
 
 	assert!(res.status().is_success());
 
-	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+	let bytes = res.into_body().collect().await.unwrap().to_bytes();
 	let out = String::from_utf8(bytes.to_vec()).unwrap();
 	assert_eq!(out.as_str(), "{\"health\":true}");
 }

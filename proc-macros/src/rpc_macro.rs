@@ -37,47 +37,95 @@ use quote::quote;
 use syn::spanned::Spanned;
 use syn::{punctuated::Punctuated, Attribute, Token};
 
+/// Represents a single argument in a RPC call.
+///
+/// stores modifications based on attributes
+#[derive(Debug, Clone)]
+pub struct RpcFnArg {
+	pub(crate) arg_pat: syn::PatIdent,
+	rename_to: Option<String>,
+	pub(crate) ty: syn::Type,
+}
+
+impl RpcFnArg {
+	pub fn from_arg_attrs(arg_pat: syn::PatIdent, ty: syn::Type, attrs: &mut Vec<syn::Attribute>) -> syn::Result<Self> {
+		let mut rename_to = None;
+
+		if let Some(attr) = find_attr(attrs, "argument") {
+			let [rename] = AttributeMeta::parse(attr.clone())?.retain(["rename"])?;
+
+			let rename = optional(rename, Argument::string)?;
+
+			if let Some(rename) = rename {
+				rename_to = Some(rename);
+			}
+		}
+
+		// remove argument attribute after inspection
+		attrs.retain(|attr| !attr.meta.path().is_ident("argument"));
+
+		Ok(Self { arg_pat, rename_to, ty })
+	}
+
+	/// Return the pattern identifier of the argument.
+	pub fn arg_pat(&self) -> &syn::PatIdent {
+		&self.arg_pat
+	}
+	/// Return the string representation of this argument when (de)seriaizing.
+	pub fn name(&self) -> String {
+		self.rename_to.clone().unwrap_or_else(|| self.arg_pat.ident.to_string())
+	}
+	/// Return the type of the argument.
+	pub fn ty(&self) -> &syn::Type {
+		&self.ty
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
 	pub name: String,
 	pub blocking: bool,
 	pub docs: TokenStream2,
 	pub deprecated: TokenStream2,
-	pub params: Vec<(syn::PatIdent, syn::Type)>,
+	pub params: Vec<RpcFnArg>,
 	pub param_kind: ParamKind,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemFn,
 	pub aliases: Vec<String>,
+	pub raw_method: bool,
 }
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemFn) -> syn::Result<Self> {
-		let [aliases, blocking, name, param_kind] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
+		let [aliases, blocking, name, param_kind, raw_method] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "raw_method"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
 		let param_kind = parse_param_kind(param_kind)?;
+		let raw_method = optional(raw_method, Argument::flag)?.is_some();
 
-		let sig = method.sig.clone();
 		let docs = extract_doc_comments(&method.attrs);
 		let deprecated = match find_attr(&method.attrs, "deprecated") {
 			Some(attr) => quote!(#attr),
 			None => quote!(),
 		};
 
-		if blocking && sig.asyncness.is_some() {
-			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
+		if blocking && method.sig.asyncness.is_some() {
+			return Err(syn::Error::new(method.sig.span(), "Blocking method must be synchronous"));
 		}
 
-		let params: Vec<_> = sig
+		let params: Vec<_> = method
+			.sig
 			.inputs
-			.into_iter()
+			.iter_mut()
 			.filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
-				syn::FnArg::Typed(arg) => match *arg.pat {
-					syn::Pat::Ident(name) => Some(Ok((name, *arg.ty))),
+				syn::FnArg::Typed(arg) => match &*arg.pat {
+					syn::Pat::Ident(name) => {
+						Some(RpcFnArg::from_arg_attrs(name.clone(), (*arg.ty).clone(), &mut arg.attrs))
+					}
 					syn::Pat::Wild(wild) => Some(Err(syn::Error::new(
 						wild.underscore_token.span(),
 						"Method argument names must be valid Rust identifiers; got `_` instead",
@@ -90,7 +138,7 @@ impl RpcMethod {
 			})
 			.collect::<Result<_, _>>()?;
 
-		let returns = match sig.output {
+		let returns = match method.sig.output.clone() {
 			syn::ReturnType::Default => None,
 			syn::ReturnType::Type(_, output) => Some(*output),
 		};
@@ -98,7 +146,18 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated })
+		Ok(Self {
+			aliases,
+			blocking,
+			name,
+			params,
+			param_kind,
+			returns,
+			signature: method,
+			docs,
+			deprecated,
+			raw_method,
+		})
 	}
 }
 
@@ -114,7 +173,7 @@ pub struct RpcSubscription {
 	pub notif_name_override: Option<String>,
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
-	pub params: Vec<(syn::PatIdent, syn::Type)>,
+	pub params: Vec<RpcFnArg>,
 	pub param_kind: ParamKind,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemFn,
@@ -135,7 +194,6 @@ impl RpcSubscription {
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
-		let sig = sub.sig.clone();
 		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = match parse_subscribe(unsubscribe)? {
 			Some(unsub) => unsub,
@@ -144,17 +202,20 @@ impl RpcSubscription {
 			),
 		};
 
-		let params: Vec<_> = sig
+		let params: Vec<_> = sub
+			.sig
 			.inputs
-			.into_iter()
+			.iter_mut()
 			.filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
-				syn::FnArg::Typed(arg) => match *arg.pat {
-					syn::Pat::Ident(name) => Some((name, *arg.ty)),
+				syn::FnArg::Typed(arg) => match &*arg.pat {
+					syn::Pat::Ident(name) => {
+						Some(RpcFnArg::from_arg_attrs(name.clone(), (*arg.ty).clone(), &mut arg.attrs))
+					}
 					_ => panic!("Identifier in signature must be an ident"),
 				},
 			})
-			.collect();
+			.collect::<Result<_, _>>()?;
 
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
@@ -212,7 +273,6 @@ impl RpcDescription {
 		let namespace = optional(namespace, Argument::string)?;
 		let client_bounds = optional(client_bounds, Argument::group)?;
 		let server_bounds = optional(server_bounds, Argument::group)?;
-
 		if !needs_server && !needs_client {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
 		}
@@ -260,6 +320,28 @@ impl RpcDescription {
 					is_method = true;
 
 					let method_data = RpcMethod::from_item(attr.clone(), method.clone())?;
+
+					if method_data.blocking && method_data.raw_method {
+						return Err(syn::Error::new_spanned(
+							method,
+							"Methods cannot be blocking when used with `raw_method`; remove `blocking` attribute or `raw_method` attribute",
+						));
+					}
+
+					if !needs_server && method_data.raw_method {
+						return Err(syn::Error::new_spanned(
+							&item.ident,
+							"Attribute 'raw_method' must be specified with 'server'",
+						));
+					}
+
+					if method.sig.asyncness.is_none() && method_data.raw_method {
+						return Err(syn::Error::new_spanned(
+							method,
+							"Methods must be asynchronous when used with `raw_method`; use `async fn` instead of `fn`",
+						));
+					}
+
 					methods.push(method_data);
 				}
 				if let Some(attr) = find_attr(&method.attrs, "subscription") {

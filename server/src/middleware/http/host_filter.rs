@@ -28,12 +28,13 @@
 
 use crate::middleware::http::authority::{Authority, AuthorityError, Port};
 use crate::transport::http;
-use crate::LOG_TARGET;
+use crate::{HttpBody, HttpRequest, LOG_TARGET};
 use futures_util::{Future, FutureExt, TryFutureExt};
-use hyper::{Body, Request, Response};
+use hyper::body::Bytes;
+use hyper::Response;
+use jsonrpsee_core::BoxError;
 use route_recognizer::Router;
 use std::collections::BTreeMap;
-use std::error::Error as StdError;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -47,7 +48,7 @@ pub struct HostFilterLayer(Option<Arc<WhitelistedHosts>>);
 
 impl HostFilterLayer {
 	/// Enables host filtering and allow only the specified hosts.
-	pub fn new<T: IntoIterator<Item = U>, U: TryInto<Authority>>(allow_only: T) -> Result<Self, AuthorityError>
+	pub fn new<T, U>(allow_only: T) -> Result<Self, AuthorityError>
 	where
 		T: IntoIterator<Item = U>,
 		U: TryInto<Authority, Error = AuthorityError>,
@@ -92,28 +93,31 @@ impl<S> Layer<S> for HostFilterLayer {
 }
 
 /// Middleware to enable host filtering.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HostFilter<S> {
 	inner: S,
 	filter: Option<Arc<WhitelistedHosts>>,
 }
 
-impl<S> Service<Request<Body>> for HostFilter<S>
+impl<S, B> Service<HttpRequest<B>> for HostFilter<S>
 where
-	S: Service<Request<Body>, Response = Response<Body>>,
+	S: Service<HttpRequest<B>, Response = Response<HttpBody>>,
 	S::Response: 'static,
-	S::Error: Into<Box<dyn StdError + Send + Sync>> + 'static,
+	S::Error: Into<BoxError> + 'static,
 	S::Future: Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + std::fmt::Debug + 'static,
+	B::Data: Send,
+	B::Error: Into<BoxError>,
 {
 	type Response = S::Response;
-	type Error = Box<dyn StdError + Send + Sync + 'static>;
+	type Error = BoxError;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
 	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
-	fn call(&mut self, request: Request<Body>) -> Self::Future {
+	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
 		let Some(authority) = Authority::from_http_request(&request) else {
 			return async { Ok(http::response::malformed()) }.boxed();
 		};

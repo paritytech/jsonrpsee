@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 	.layer(
 		TraceLayer::new_for_http()
 			.on_request(
-				|request: &hyper::Request<hyper::Body>, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
+				|request: &hyper::Request<_>, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
 			)
 			.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
 				tracing::info!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")

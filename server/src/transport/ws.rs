@@ -4,12 +4,13 @@ use std::time::Instant;
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
-use crate::{PingConfig, LOG_TARGET};
+use crate::{HttpBody, HttpRequest, HttpResponse, PingConfig, LOG_TARGET};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
+use hyper_util::rt::TokioIo;
 use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
 use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
@@ -21,8 +22,8 @@ use tokio::time::{interval, interval_at};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
-pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
+pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<TokioIo<Upgraded>>>>>;
+pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<TokioIo<Upgraded>>>>>;
 
 pub use soketto::handshake::http::is_upgrade_request;
 
@@ -367,17 +368,17 @@ async fn graceful_shutdown<S>(
 /// to complete the HTTP request.
 ///
 /// ```no_run
-/// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState};
+/// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState, HttpRequest, HttpResponse};
 /// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService};
 ///
 /// async fn handle_websocket_conn<L>(
-///     req: hyper::Request<hyper::Body>,
+///     req: HttpRequest,
 ///     server_cfg: ServerConfig,
 ///     methods: impl Into<Methods> + 'static,
 ///     conn: ConnectionState,
 ///     rpc_middleware: RpcServiceBuilder<L>,
 ///     mut disconnect: tokio::sync::mpsc::Receiver<()>
-/// ) -> hyper::Response<hyper::Body>
+/// ) -> HttpResponse
 /// where
 ///     L: for<'a> tower::Layer<RpcService> + 'static,
 ///     <L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -399,13 +400,13 @@ async fn graceful_shutdown<S>(
 ///   }
 /// }
 /// ```
-pub async fn connect<L>(
-	req: hyper::Request<hyper::Body>,
+pub async fn connect<L, B>(
+	req: HttpRequest<B>,
 	server_cfg: ServerConfig,
 	methods: impl Into<Methods>,
 	conn: ConnectionState,
 	rpc_middleware: RpcServiceBuilder<L>,
-) -> Result<(hyper::Response<hyper::Body>, impl Future<Output = ()>), hyper::Response<hyper::Body>>
+) -> Result<(HttpResponse, impl Future<Output = ()>), HttpResponse>
 where
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
@@ -419,10 +420,11 @@ where
 				Ok(u) => u,
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-					return Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed {e}"))));
+					return Err(HttpResponse::new(HttpBody::from(format!("WS upgrade handshake failed {e}"))));
 				}
 			};
 
+			let io = TokioIo::new(upgraded);
 			let (tx, rx) = mpsc::channel::<String>(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
@@ -447,8 +449,10 @@ where
 
 			let rpc_service = rpc_middleware.service(rpc_service);
 
+			// Note: This can't possibly be fulfilled until the HTTP response
+			// is returned below, so that's why it's a separate async block
 			let fut = async move {
-				let stream = BufReader::new(BufWriter::new(upgraded.compat()));
+				let stream = BufReader::new(BufWriter::new(io.compat()));
 				let mut ws_builder = server.into_builder(stream);
 				ws_builder.set_max_message_size(server_cfg.max_response_body_size as usize);
 				let (sender, receiver) = ws_builder.finish();
@@ -468,11 +472,11 @@ where
 				background_task(params).await;
 			};
 
-			Ok((response.map(|()| hyper::Body::empty()), fut))
+			Ok((response.map(|()| HttpBody::default()), fut))
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-			Err(hyper::Response::new(hyper::Body::from(format!("WS upgrade handshake failed: {e}"))))
+			Err(HttpResponse::new(HttpBody::from(format!("WS upgrade handshake failed: {e}"))))
 		}
 	}
 }

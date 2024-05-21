@@ -28,7 +28,10 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use super::RpcDescription;
-use crate::helpers::{generate_where_clause, is_option};
+use crate::{
+	helpers::{generate_where_clause, is_option},
+	rpc_macro::RpcFnArg,
+};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::Attribute;
@@ -61,7 +64,15 @@ impl RpcDescription {
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
 		let methods = self.methods.iter().map(|method| {
 			let docs = &method.docs;
-			let method_sig = &method.signature;
+			let mut method_sig = method.signature.clone();
+
+			if method.raw_method {
+				let context_ty = self.jrps_server_item(quote! { ConnectionDetails });
+				// Add `ConnectionDetails` as the second parameter to the signature.
+				let context: syn::FnArg = syn::parse_quote!(connection_details: #context_ty);
+				method_sig.sig.inputs.insert(1, context);
+			}
+
 			quote! {
 				#docs
 				#method_sig
@@ -132,7 +143,14 @@ impl RpcDescription {
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
-				if method.signature.sig.asyncness.is_some() {
+				if method.raw_method {
+					handle_register_result(quote! {
+						rpc.register_async_method_with_details(#rpc_method_name, |params, connection_details, context| async move {
+							#parsing
+							#into_response::into_response(context.as_ref().#rust_method_name(connection_details, #params_seq).await)
+						})
+					})
+				} else if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
 						rpc.register_async_method(#rpc_method_name, |params, context| async move {
 							#parsing
@@ -287,29 +305,29 @@ impl RpcDescription {
 
 	fn render_params_decoding(
 		&self,
-		params: &[(syn::PatIdent, syn::Type)],
+		params: &[RpcFnArg],
 		sub: Option<proc_macro2::Ident>,
 	) -> (TokenStream2, TokenStream2) {
 		if params.is_empty() {
 			return (TokenStream2::default(), TokenStream2::default());
 		}
 
-		let params_fields_seq = params.iter().map(|(name, _)| name);
+		let params_fields_seq = params.iter().map(RpcFnArg::arg_pat);
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
 		let response_payload = self.jrps_server_item(quote! { ResponsePayload });
-		let tokio = self.jrps_server_item(quote! { tokio });
+		let tokio = self.jrps_server_item(quote! { core::__reexports::tokio });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
-			let decode_fields = params.iter().map(|(name, ty)| match (is_option(ty), sub.as_ref()) {
+			let decode_fields = params.iter().map(|RpcFnArg { arg_pat, ty, .. }| match (is_option(ty), sub.as_ref()) {
 				(true, Some(pending)) => {
 					quote! {
-						let #name: #ty = match seq.optional_next() {
+						let #arg_pat: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#arg_pat), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								#tokio::spawn(#pending.reject(e));
 								return #sub_err::None;
 							}
@@ -318,10 +336,10 @@ impl RpcDescription {
 				}
 				(true, None) => {
 					quote! {
-						let #name: #ty = match seq.optional_next() {
+						let #arg_pat: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#arg_pat), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return #response_payload::error(e);
 							}
 						};
@@ -329,10 +347,10 @@ impl RpcDescription {
 				}
 				(false, Some(pending)) => {
 					quote! {
-						let #name: #ty = match seq.next() {
+						let #arg_pat: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#arg_pat), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								#tokio::spawn(#pending.reject(e));
 								return #sub_err::None;
 							}
@@ -341,10 +359,10 @@ impl RpcDescription {
 				}
 				(false, None) => {
 					quote! {
-						let #name: #ty = match seq.next() {
+						let #arg_pat: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								#tracing::debug!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::debug!(concat!("Error parsing \"", stringify!(#arg_pat), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return #response_payload::error(e);
 							}
 						};
@@ -366,17 +384,17 @@ impl RpcDescription {
 			let serde = self.jrps_server_item(quote! { core::__reexports::serde });
 			let serde_crate = serde.to_string();
 
-			let fields = params.iter().zip(generics.clone()).map(|((name, _), ty)| {
+			let fields = params.iter().zip(generics.clone()).map(|(fn_arg, ty)| {
+				let arg_pat = fn_arg.arg_pat();
+				let name = fn_arg.name();
+
 				let mut alias_vals = String::new();
-				alias_vals.push_str(&format!(
-					r#"alias = "{}""#,
-					heck::ToSnakeCase::to_snake_case(name.ident.to_string().as_str())
-				));
+				alias_vals.push_str(&format!(r#"alias = "{}""#, heck::ToSnakeCase::to_snake_case(name.as_str())));
 				alias_vals.push(',');
-				alias_vals.push_str(&format!(
-					r#"alias = "{}""#,
-					heck::ToLowerCamelCase::to_lower_camel_case(name.ident.to_string().as_str())
-				));
+				alias_vals
+					.push_str(&format!(r#"alias = "{}""#, heck::ToLowerCamelCase::to_lower_camel_case(name.as_str())));
+
+				let serde_rename = quote!(#[serde(rename = #name)]);
 
 				let alias = TokenStream2::from_str(alias_vals.as_str()).unwrap();
 
@@ -386,11 +404,12 @@ impl RpcDescription {
 
 				quote! {
 					#serde_alias
-					#name: #ty,
+					#serde_rename
+					#arg_pat: #ty,
 				}
 			});
-			let destruct = params.iter().map(|(name, _)| quote! { parsed.#name });
-			let types = params.iter().map(|(_, ty)| ty);
+			let destruct = params.iter().map(RpcFnArg::arg_pat).map(|a| quote!(parsed.#a));
+			let types = params.iter().map(RpcFnArg::ty);
 
 			if let Some(pending) = sub {
 				quote! {

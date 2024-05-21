@@ -55,6 +55,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| "lo")?;
 	let addr = server.local_addr()?;
+
 	let handle = server.start(module);
 
 	// In this example we don't care about doing shutdown so let's it run forever.

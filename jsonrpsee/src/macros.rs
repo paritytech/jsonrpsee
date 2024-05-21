@@ -56,6 +56,12 @@ macro_rules! cfg_server {
 	}
 }
 
+macro_rules! cfg_server_core {
+	($($item:item)*) => {
+		cfg_feature!("server-core", $($item)*);
+	}
+}
+
 macro_rules! cfg_proc_macros {
 	($($item:item)*) => {
 		cfg_feature!("jsonrpsee-proc-macros", $($item)*);

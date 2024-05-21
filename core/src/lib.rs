@@ -75,6 +75,11 @@ pub mod __reexports {
 	pub use async_trait::async_trait;
 	pub use serde;
 	pub use serde_json;
+
+	// Needed for the params parsing in the proc macro API.
+	cfg_client_or_server! {
+		pub use tokio;
+	}
 }
 
 pub use beef::Cow;
@@ -89,3 +94,6 @@ pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 
 /// The return type if the subscription wants to return `Result`.
 pub type SubscriptionResult = Result<(), StringError>;
+
+/// Type erased error.
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

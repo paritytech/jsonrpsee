@@ -52,7 +52,6 @@ use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
 use manager::RequestManager;
 use std::sync::Arc;
 
-use async_lock::RwLock as AsyncRwLock;
 use async_trait::async_trait;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
@@ -66,9 +65,10 @@ use tracing::instrument;
 
 use self::utils::{InactivityCheck, IntervalStream};
 
-use super::{generate_batch_id_range, FrontToBack, IdKind, RequestIdManager};
+use super::{generate_batch_id_range, subscription_channel, FrontToBack, IdKind, RequestIdManager};
 
 const LOG_TARGET: &str = "jsonrpsee-client";
+const NOT_POISONED: &str = "Not poisoned; qed";
 
 /// Configuration for WebSocket ping/pong mechanism and it may be used to disconnect
 /// an inactive connection.
@@ -142,65 +142,37 @@ impl ThreadSafeRequestManager {
 	}
 
 	pub(crate) fn lock(&self) -> std::sync::MutexGuard<RequestManager> {
-		self.0.lock().expect("Not poisoned; qed")
+		self.0.lock().expect(NOT_POISONED)
 	}
 }
+
+pub(crate) type SharedDisconnectReason = Arc<std::sync::RwLock<Option<Arc<Error>>>>;
+
 /// If the background thread is terminated, this type
 /// can be used to read the error cause.
 ///
 // NOTE: This is an AsyncRwLock to be &self.
 #[derive(Debug)]
-struct ErrorFromBack(AsyncRwLock<Option<ReadErrorOnce>>);
+struct ErrorFromBack {
+	conn: mpsc::Sender<FrontToBack>,
+	disconnect_reason: SharedDisconnectReason,
+}
 
 impl ErrorFromBack {
-	fn new(unread: oneshot::Receiver<Error>) -> Self {
-		Self(AsyncRwLock::new(Some(ReadErrorOnce::Unread(unread))))
+	fn new(conn: mpsc::Sender<FrontToBack>, disconnect_reason: SharedDisconnectReason) -> Self {
+		Self { conn, disconnect_reason }
 	}
 
 	async fn read_error(&self) -> Error {
-		const PROOF: &str = "Option is only is used to workaround ownership issue and is always Some; qed";
+		// When the background task is closed the error is written to `disconnect_reason`.
+		self.conn.closed().await;
 
-		if let ReadErrorOnce::Read(ref err) = self.0.read().await.as_ref().expect(PROOF) {
-			return Error::RestartNeeded(err.clone());
-		};
-
-		let mut write = self.0.write().await;
-		let state = write.take();
-
-		let err = match state.expect(PROOF) {
-			ReadErrorOnce::Unread(rx) => {
-				let arc_err = Arc::new(match rx.await {
-					Ok(err) => err,
-					// This should never happen because the receiving end is still alive.
-					// Before shutting down the background task a error message should
-					// be emitted.
-					Err(_) => Error::Custom(
-						"Error reason could not be found. This is a bug. Please open an issue.".to_string(),
-					),
-				});
-				*write = Some(ReadErrorOnce::Read(arc_err.clone()));
-				arc_err
-			}
-			ReadErrorOnce::Read(arc_err) => {
-				*write = Some(ReadErrorOnce::Read(arc_err.clone()));
-				arc_err
-			}
-		};
-
-		Error::RestartNeeded(err)
+		if let Some(err) = self.disconnect_reason.read().expect(NOT_POISONED).as_ref() {
+			Error::RestartNeeded(err.clone())
+		} else {
+			Error::Custom("Error reason could not be found. This is a bug. Please open an issue.".to_string())
+		}
 	}
-}
-
-/// Wrapper over a [`oneshot::Receiver`] that reads
-/// the underlying channel once and then stores the result in String.
-/// It is possible that the error is read more than once if several calls are made
-/// when the background thread has been terminated.
-#[derive(Debug)]
-enum ReadErrorOnce {
-	/// Error message is already read.
-	Read(Arc<Error>),
-	/// Error message is unread.
-	Unread(oneshot::Receiver<Error>),
 }
 
 /// Builder for [`Client`].
@@ -259,6 +231,7 @@ impl ClientBuilder {
 	///
 	/// This function panics if `max` is 0.
 	pub fn max_buffer_capacity_per_subscription(mut self, max: usize) -> Self {
+		assert!(max > 0);
 		self.max_buffer_capacity_per_subscription = max;
 		self
 	}
@@ -318,7 +291,7 @@ impl ClientBuilder {
 		R: TransportReceiverT + Send,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
+		let disconnect_reason = SharedDisconnectReason::default();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
@@ -366,12 +339,12 @@ impl ClientBuilder {
 			inactivity_stream,
 		}));
 
-		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, err_to_front));
+		tokio::spawn(wait_for_shutdown(send_receive_task_sync_rx, client_dropped_rx, disconnect_reason.clone()));
 
 		Client {
-			to_back,
+			to_back: to_back.clone(),
 			request_timeout: self.request_timeout,
-			error: ErrorFromBack::new(err_from_back),
+			error: ErrorFromBack::new(to_back, disconnect_reason),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
@@ -391,7 +364,7 @@ impl ClientBuilder {
 		type PendingIntervalStream = IntervalStream<Pending<()>>;
 
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
-		let (err_to_front, err_from_back) = oneshot::channel::<Error>();
+		let disconnect_reason = SharedDisconnectReason::default();
 		let max_buffer_capacity_per_subscription = self.max_buffer_capacity_per_subscription;
 		let (client_dropped_tx, client_dropped_rx) = oneshot::channel();
 		let (send_receive_task_sync_tx, send_receive_task_sync_rx) = mpsc::channel(1);
@@ -423,13 +396,13 @@ impl ClientBuilder {
 		wasm_bindgen_futures::spawn_local(wait_for_shutdown(
 			send_receive_task_sync_rx,
 			client_dropped_rx,
-			err_to_front,
+			disconnect_reason.clone(),
 		));
 
 		Client {
-			to_back,
+			to_back: to_back.clone(),
 			request_timeout: self.request_timeout,
-			error: ErrorFromBack::new(err_from_back),
+			error: ErrorFromBack::new(to_back, disconnect_reason),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
@@ -474,7 +447,7 @@ impl Client {
 	///
 	/// # Cancel-safety
 	///
-	/// This method is not cancel-safe
+	/// This method is cancel-safe
 	pub async fn disconnect_reason(&self) -> Error {
 		self.error.read_error().await
 	}
@@ -707,13 +680,13 @@ impl SubscriptionClientT for Client {
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
-		let (notifs_rx, method) = match res {
+		let (rx, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.disconnect_reason().await),
 		};
 
-		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Method(method)))
+		Ok(Subscription::new(self.to_back.clone(), rx, SubscriptionKind::Method(method)))
 	}
 }
 
@@ -724,14 +697,15 @@ fn handle_backend_messages<R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
 	manager: &ThreadSafeRequestManager,
 	max_buffer_capacity_per_subscription: usize,
-) -> Result<Option<FrontToBack>, Error> {
+) -> Result<Vec<FrontToBack>, Error> {
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
 	fn handle_recv_message(
 		raw: &[u8],
 		manager: &ThreadSafeRequestManager,
 		max_buffer_capacity_per_subscription: usize,
-	) -> Result<Option<FrontToBack>, Error> {
+	) -> Result<Vec<FrontToBack>, Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
+		let mut messages = Vec::new();
 
 		match first_non_whitespace {
 			Some(b'{') => {
@@ -741,13 +715,13 @@ fn handle_backend_messages<R: TransportReceiverT>(
 						process_single_response(&mut manager.lock(), single, max_buffer_capacity_per_subscription)?;
 
 					if let Some(unsub) = maybe_unsub {
-						return Ok(Some(FrontToBack::Request(unsub)));
+						return Ok(vec![FrontToBack::Request(unsub)]);
 					}
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
-					if let Err(Some(sub_id)) = process_subscription_response(&mut manager.lock(), response) {
-						return Ok(Some(FrontToBack::SubscriptionClosed(sub_id)));
+					if let Some(sub_id) = process_subscription_response(&mut manager.lock(), response) {
+						return Ok(vec![FrontToBack::SubscriptionClosed(sub_id)]);
 					}
 				}
 				// Subscription error response.
@@ -767,32 +741,44 @@ fn handle_backend_messages<R: TransportReceiverT>(
 					let mut batch = Vec::with_capacity(raw_responses.len());
 
 					let mut range = None;
+					let mut got_notif = false;
 
 					for r in raw_responses {
-						let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) else {
+						if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
+							let id = response.id.try_parse_inner_as_number()?;
+							let result = ResponseSuccess::try_from(response).map(|s| s.result);
+							batch.push(InnerBatchResponse { id, result });
+
+							let r = range.get_or_insert(id..id);
+
+							if id < r.start {
+								r.start = id;
+							}
+
+							if id > r.end {
+								r.end = id;
+							}
+						} else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(r.get()) {
+							got_notif = true;
+							if let Some(sub_id) = process_subscription_response(&mut manager.lock(), response) {
+								messages.push(FrontToBack::SubscriptionClosed(sub_id));
+							}
+						} else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
+							got_notif = true;
+							process_subscription_close_response(&mut manager.lock(), response);
+						} else if let Ok(notif) = serde_json::from_str::<Notification<_>>(r.get()) {
+							got_notif = true;
+							process_notification(&mut manager.lock(), notif);
+						} else {
 							return Err(unparse_error(raw));
 						};
-
-						let id = response.id.try_parse_inner_as_number()?;
-						let result = ResponseSuccess::try_from(response).map(|s| s.result);
-						batch.push(InnerBatchResponse { id, result });
-
-						let r = range.get_or_insert(id..id);
-
-						if id < r.start {
-							r.start = id;
-						}
-
-						if id > r.end {
-							r.end = id;
-						}
 					}
 
 					if let Some(mut range) = range {
 						// the range is exclusive so need to add one.
 						range.end += 1;
 						process_batch_response(&mut manager.lock(), batch, range)?;
-					} else {
+					} else if !got_notif {
 						return Err(EmptyBatchRequest.into());
 					}
 				} else {
@@ -804,13 +790,13 @@ fn handle_backend_messages<R: TransportReceiverT>(
 			}
 		};
 
-		Ok(None)
+		Ok(messages)
 	}
 
 	match message {
 		Some(Ok(ReceivedMessage::Pong)) => {
 			tracing::debug!(target: LOG_TARGET, "Received pong");
-			Ok(None)
+			Ok(vec![])
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, max_buffer_capacity_per_subscription)
@@ -833,7 +819,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 	match message {
 		FrontToBack::Batch(batch) => {
 			if let Err(send_back) = manager.lock().insert_pending_batch(batch.ids.clone(), batch.send_back) {
-				tracing::warn!(target: LOG_TARGET, "Batch request already pending: {:?}", batch.ids);
+				tracing::debug!(target: LOG_TARGET, "Batch request already pending: {:?}", batch.ids);
 				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!("{:?}", batch.ids)).into()));
 				return Ok(());
 			}
@@ -847,7 +833,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		// User called `request` on the front-end
 		FrontToBack::Request(request) => {
 			if let Err(send_back) = manager.lock().insert_pending_call(request.id.clone(), request.send_back) {
-				tracing::warn!(target: LOG_TARGET, "Denied duplicate method call");
+				tracing::debug!(target: LOG_TARGET, "Denied duplicate method call");
 
 				if let Some(s) = send_back {
 					let _ = s.send(Err(InvalidRequestId::Occupied(request.id.to_string()).into()));
@@ -865,7 +851,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				sub.send_back,
 				sub.unsubscribe_method,
 			) {
-				tracing::warn!(target: LOG_TARGET, "Denied duplicate subscription");
+				tracing::debug!(target: LOG_TARGET, "Denied duplicate subscription");
 
 				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!(
 					"sub_id={}:req_id={}",
@@ -896,7 +882,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `register_notification` on the front-end.
 		FrontToBack::RegisterNotification(reg) => {
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_buffer_capacity_per_subscription);
+			let (subscribe_tx, subscribe_rx) = subscription_channel(max_buffer_capacity_per_subscription);
 
 			if manager.lock().insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
 				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
@@ -961,13 +947,13 @@ where
 				if let Err(e) =
 					handle_frontend_messages(msg, &manager, &mut sender, max_buffer_capacity_per_subscription).await
 				{
-					tracing::error!(target: LOG_TARGET, "ws send failed: {e}");
+					tracing::debug!(target: LOG_TARGET, "ws send failed: {e}");
 					break Err(Error::Transport(e.into()));
 				}
 			}
 			_ = ping_interval.next() => {
 				if let Err(err) = sender.send_ping().await {
-					tracing::error!(target: LOG_TARGET, "Send ws ping failed: {err}");
+					tracing::debug!(target: LOG_TARGET, "Send ws ping failed: {err}");
 					break Err(Error::Transport(err.into()));
 				}
 			}
@@ -1032,14 +1018,15 @@ where
 				let Some(msg) = maybe_msg else { break Ok(()) };
 
 				match handle_backend_messages::<R>(Some(msg), &manager, max_buffer_capacity_per_subscription) {
-					Ok(Some(msg)) => {
-						pending_unsubscribes.push(to_send_task.send(msg));
+					Ok(messages) => {
+						for msg in messages {
+							pending_unsubscribes.push(to_send_task.send(msg));
+						}
 					}
 					Err(e) => {
-						tracing::error!(target: LOG_TARGET, "Failed to read message: {e}");
+						tracing::debug!(target: LOG_TARGET, "Failed to read message: {e}");
 						break Err(e);
 					}
-					Ok(None) => (),
 				}
 			}
 			_ = inactivity_stream.next() => {
@@ -1056,7 +1043,7 @@ where
 async fn wait_for_shutdown(
 	mut close_rx: mpsc::Receiver<Result<(), Error>>,
 	client_dropped: oneshot::Receiver<()>,
-	err_to_front: oneshot::Sender<Error>,
+	err_to_front: SharedDisconnectReason,
 ) {
 	let rx_item = close_rx.recv();
 
@@ -1064,6 +1051,6 @@ async fn wait_for_shutdown(
 
 	// Send an error to the frontend if the send or receive task completed with an error.
 	if let Either::Left((Some(Err(err)), _)) = future::select(rx_item, client_dropped).await {
-		let _ = err_to_front.send(err);
+		*err_to_front.write().expect(NOT_POISONED) = Some(Arc::new(err));
 	}
 }

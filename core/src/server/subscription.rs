@@ -360,7 +360,7 @@ impl SubscriptionSink {
 		self.inner.send(json).await.map_err(Into::into)
 	}
 
-	/// Similar to to `SubscriptionSink::send` but only waits for a limited time.
+	/// Similar to `SubscriptionSink::send` but only waits for a limited time.
 	pub async fn send_timeout(&self, msg: SubscriptionMessage, timeout: Duration) -> Result<(), SendTimeoutError> {
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {

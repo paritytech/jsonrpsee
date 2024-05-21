@@ -60,6 +60,11 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> M
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
+
+/// Similar to [`AsyncMethod`], but represents an asynchronous handler with connection details.
+#[doc(hidden)]
+pub type AsyncMethodWithDetails<'a> =
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionDetails, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
@@ -78,6 +83,27 @@ pub type MaxResponseSize = usize;
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (String, mpsc::Receiver<String>);
+
+/// The connection details exposed to the server methods.
+#[derive(Debug, Clone)]
+#[allow(missing_copy_implementations)]
+#[doc(hidden)]
+pub struct ConnectionDetails {
+	id: ConnectionId,
+}
+
+impl ConnectionDetails {
+	/// Construct a new [`ConnectionDetails`].
+	#[doc(hidden)]
+	pub fn _new(id: ConnectionId) -> ConnectionDetails {
+		Self { id }
+	}
+
+	/// Get the connection ID.
+	pub fn id(&self) -> ConnectionId {
+		self.id
+	}
+}
 
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
@@ -131,6 +157,9 @@ pub enum MethodCallback {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
+	/// Asynchronous method handler with details.
+	#[doc(hidden)]
+	AsyncWithDetails(AsyncMethodWithDetails<'static>),
 	/// Subscription method handler.
 	Subscription(SubscriptionMethod<'static>),
 	/// Unsubscription method handler.
@@ -184,6 +213,7 @@ impl Debug for MethodCallback {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Async(_) => write!(f, "Async"),
+			Self::AsyncWithDetails(_) => write!(f, "AsyncWithDetails"),
 			Self::Sync(_) => write!(f, "Sync"),
 			Self::Subscription(_) => write!(f, "Subscription"),
 			Self::Unsubscription(_) => write!(f, "Unsubscription"),
@@ -355,6 +385,9 @@ impl Methods {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
 			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX),
 			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
+			Some(MethodCallback::AsyncWithDetails(cb)) => {
+				(cb)(id.into_owned(), params.into_owned(), ConnectionDetails::_new(0), usize::MAX).await
+			}
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
@@ -474,7 +507,14 @@ pub struct RpcModule<Context> {
 impl<Context> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		Self { ctx: Arc::new(ctx), methods: Default::default() }
+		Self::from_arc(Arc::new(ctx))
+	}
+
+	/// Create a new module from an already shared `Context`.
+	///
+	/// This is useful if `Context` needs to be shared outside of an [`RpcModule`].
+	pub fn from_arc(ctx: Arc<Context>) -> Self {
+		Self { ctx, methods: Default::default() }
 	}
 
 	/// Transform a module into an `RpcModule<()>` (unit context).
@@ -596,6 +636,43 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		)?;
 
 		Ok(callback)
+	}
+
+	/// Register a new raw RPC method, which computes the response with the given callback.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use jsonrpsee_core::server::RpcModule;
+	///
+	/// let mut module = RpcModule::new(());
+	/// module.register_async_method_with_details("say_hello", |_params, _connection_details, _ctx| async { "lo" }).unwrap();
+	/// ```
+	#[doc(hidden)]
+	pub fn register_async_method_with_details<R, Fun, Fut>(
+		&mut self,
+		method_name: &'static str,
+		callback: Fun,
+	) -> Result<&mut MethodCallback, RegisterMethodError>
+	where
+		R: IntoResponse + 'static,
+		Fut: Future<Output = R> + Send,
+		Fun: (Fn(Params<'static>, ConnectionDetails, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
+	{
+		let ctx = self.ctx.clone();
+		self.methods.verify_and_insert(
+			method_name,
+			MethodCallback::AsyncWithDetails(Arc::new(move |id, params, connection_details, max_response_size| {
+				let ctx = ctx.clone();
+				let callback = callback.clone();
+
+				let future = async move {
+					let rp = callback(params, connection_details, ctx).await.into_response();
+					MethodResponse::response(id, rp, max_response_size)
+				};
+				future.boxed()
+			})),
+		)
 	}
 
 	/// Register a new publish/subscribe interface using JSON-RPC notifications.
