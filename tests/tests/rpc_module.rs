@@ -36,7 +36,7 @@ use helpers::{init_logger, pipe_from_stream_and_drop};
 use jsonrpsee::core::EmptyServerParams;
 use jsonrpsee::core::{server::*, RpcResult};
 use jsonrpsee::types::error::{ErrorCode, ErrorObject, INVALID_PARAMS_MSG, PARSE_ERROR_CODE};
-use jsonrpsee::types::{ErrorObjectOwned, Params, Response, ResponsePayload};
+use jsonrpsee::types::{ErrorObjectOwned, Response, ResponsePayload};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::time::interval;
@@ -54,9 +54,9 @@ macro_rules! assert_type {
 fn rpc_modules_with_different_contexts_can_be_merged() {
 	let cx = Vec::<u8>::new();
 	let mut mod1 = RpcModule::new(cx);
-	mod1.register_method("bla with Vec context", |_: Params, _| ()).unwrap();
+	mod1.register_method("bla with Vec context", |_, _, _| ()).unwrap();
 	let mut mod2 = RpcModule::new(String::new());
-	mod2.register_method("bla with String context", |_: Params, _| ()).unwrap();
+	mod2.register_method("bla with String context", |_, _, _| ()).unwrap();
 
 	mod1.merge(mod2).unwrap();
 
@@ -75,7 +75,7 @@ fn flatten_rpc_modules() {
 #[test]
 fn rpc_context_modules_can_register_subscriptions() {
 	let mut cxmodule = RpcModule::new(());
-	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| async { Ok(()) }).unwrap();
+	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _, _| async { Ok(()) }).unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -85,7 +85,7 @@ fn rpc_context_modules_can_register_subscriptions() {
 fn rpc_register_alias() {
 	let mut module = RpcModule::new(());
 
-	module.register_method("hello_world", |_: Params, _| RpcResult::Ok(())).unwrap();
+	module.register_method("hello_world", |_, _, _| RpcResult::Ok(())).unwrap();
 	module.register_alias("hello_foobar", "hello_world").unwrap();
 
 	assert!(module.method("hello_world").is_some());
@@ -96,14 +96,14 @@ fn rpc_register_alias() {
 async fn calling_method_without_server() {
 	// Call sync method with no params
 	let mut module = RpcModule::new(());
-	module.register_method("boo", |_: Params, _| String::from("boo!")).unwrap();
+	module.register_method("boo", |_, _, _| String::from("boo!")).unwrap();
 
 	let res: String = module.call("boo", EmptyServerParams::new()).await.unwrap();
 	assert_eq!(&res, "boo!");
 
 	// Call sync method with params
 	module
-		.register_method::<Result<u16, ErrorObjectOwned>, _>("foo", |params, _| {
+		.register_method::<Result<u16, ErrorObjectOwned>, _>("foo", |params, _, _| {
 			let n: u16 = params.one()?;
 			Ok(n * 2)
 		})
@@ -127,7 +127,7 @@ async fn calling_method_without_server() {
 	}
 	let mut module = RpcModule::new(MyContext);
 	module
-		.register_async_method("roo", |params, ctx| {
+		.register_async_method("roo", |params, ctx, _| {
 			let ns: Vec<u8> = params.parse().expect("valid params please");
 			async move { ctx.roo(ns) }
 		})
@@ -175,19 +175,24 @@ async fn calling_method_without_server_using_proc_macro() {
 
 	#[async_trait]
 	impl CoolServer for CoolServerImpl {
-		fn rebel_without_cause(&self) -> RpcResult<bool> {
+		fn rebel_without_cause(&self, _ext: &Extensions) -> RpcResult<bool> {
 			Ok(false)
 		}
 
-		fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> RpcResult<String> {
+		fn rebel(&self, _ext: &Extensions, gun: Gun, map: HashMap<u8, u8>) -> RpcResult<String> {
 			Ok(format!("{} {:?}", map.values().len(), gun))
 		}
 
-		async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> RpcResult<String> {
+		async fn can_have_any_name(
+			&self,
+			_ext: &Extensions,
+			beverage: Beverage,
+			some_bytes: Vec<u8>,
+		) -> RpcResult<String> {
 			Ok(format!("drink: {:?}, phases: {:?}", beverage, some_bytes))
 		}
 
-		async fn can_have_options(&self, x: usize) -> RpcResult<Option<String>> {
+		async fn can_have_options(&self, _ext: &Extensions, x: usize) -> RpcResult<Option<String>> {
 			match x {
 				0 => Ok(Some("one".to_string())),
 				1 => Ok(None),
@@ -238,7 +243,7 @@ async fn subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let mut stream_data = vec!['0', '1', '2'];
 
 			let sink = pending.accept().await.unwrap();
@@ -271,7 +276,7 @@ async fn close_test_subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let sink = pending.accept().await?;
 			let msg = SubscriptionMessage::from_json(&"lo")?;
 
@@ -314,7 +319,7 @@ async fn close_test_subscribing_without_server() {
 async fn subscribing_without_server_bad_params() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _, _| async move {
 			let p = match params.one::<String>() {
 				Ok(p) => p,
 				Err(e) => {
@@ -344,7 +349,7 @@ async fn subscribing_without_server_bad_params() {
 async fn subscribing_without_server_indicates_close() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let sink = pending.accept().await?;
 
 			for m in 0..5 {
@@ -368,7 +373,7 @@ async fn subscribing_without_server_indicates_close() {
 async fn subscribe_unsubscribe_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);
 			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
@@ -402,7 +407,7 @@ async fn subscribe_unsubscribe_without_server() {
 async fn rejected_subscription_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, "rejected", None);
 			pending.reject(err.into_owned()).await;
 			Ok(())
@@ -421,7 +426,7 @@ async fn reject_works() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			pending.reject(ErrorObject::owned(PARSE_ERROR_CODE, "rejected", None::<()>)).await;
 			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 			Err("do not send".into())
@@ -441,7 +446,7 @@ async fn bounded_subscription_works() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, mut ctx, _| async move {
 			let mut sink = pending.accept().await?;
 
 			let mut stream = IntervalStream::new(interval(std::time::Duration::from_millis(100)))
@@ -510,7 +515,7 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let _ = pending.accept().await?;
 			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
@@ -546,7 +551,7 @@ async fn subscription_close_response_works() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| async move {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _, _| async move {
 			let x = match params.one::<usize>() {
 				Ok(op) => op,
 				Err(e) => {
@@ -600,7 +605,7 @@ async fn method_response_notify_on_completion() {
 		let mut module = RpcModule::new(tx);
 
 		module
-			.register_method("hey", |params, ctx| {
+			.register_method("hey", |params, ctx, _| {
 				let kind: String = params.one().unwrap();
 				let server_sender = ctx.clone();
 

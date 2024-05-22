@@ -66,12 +66,10 @@ impl RpcDescription {
 			let docs = &method.docs;
 			let mut method_sig = method.signature.clone();
 
-			if method.raw_method {
-				let context_ty = self.jrps_server_item(quote! { ConnectionDetails });
-				// Add `ConnectionDetails` as the second parameter to the signature.
-				let context: syn::FnArg = syn::parse_quote!(connection_details: #context_ty);
-				method_sig.sig.inputs.insert(1, context);
-			}
+			let ext_ty = self.jrps_server_item(quote! { Extensions });
+			// Add `Extension` as the second parameter to the signature.
+			let ext: syn::FnArg = syn::parse_quote!(ext: &#ext_ty);
+			method_sig.sig.inputs.insert(1, ext);
 
 			quote! {
 				#docs
@@ -82,11 +80,17 @@ impl RpcDescription {
 		let subscriptions = self.subscriptions.iter().map(|sub| {
 			let docs = &sub.docs;
 			let subscription_sink_ty = self.jrps_server_item(quote! { PendingSubscriptionSink });
+
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
-
 			sub_sig.sig.inputs.insert(1, subscription_sink);
+
+			let ext_ty = self.jrps_server_item(quote! { Extensions });
+			// Add `Extension` as the third parameter to the signature.
+			let ext: syn::FnArg = syn::parse_quote!(ext: &#ext_ty);
+			sub_sig.sig.inputs.insert(2, ext);
+
 			quote! {
 				#docs
 				#sub_sig
@@ -143,18 +147,11 @@ impl RpcDescription {
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
-				if method.raw_method {
+				if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
-						rpc.register_async_method_with_details(#rpc_method_name, |params, connection_details, context| async move {
+						rpc.register_async_method(#rpc_method_name, |params, context, ext| async move {
 							#parsing
-							#into_response::into_response(context.as_ref().#rust_method_name(connection_details, #params_seq).await)
-						})
-					})
-				} else if method.signature.sig.asyncness.is_some() {
-					handle_register_result(quote! {
-						rpc.register_async_method(#rpc_method_name, |params, context| async move {
-							#parsing
-							#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
+							#into_response::into_response(context.as_ref().#rust_method_name(&ext, #params_seq).await)
 						})
 					})
 				} else {
@@ -162,9 +159,9 @@ impl RpcDescription {
 						if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
 
 					handle_register_result(quote! {
-						rpc.#register_kind(#rpc_method_name, |params, context| {
+						rpc.#register_kind(#rpc_method_name, |params, context, ext| {
 							#parsing
-							#into_response::into_response(context.#rust_method_name(#params_seq))
+							#into_response::into_response(context.#rust_method_name(&ext, #params_seq))
 						})
 					})
 				}
@@ -204,16 +201,16 @@ impl RpcDescription {
 
 				if sub.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
-						rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context| async move {
+						rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, ext| async move {
 							#parsing
-							#into_sub_response::into_response(context.as_ref().#rust_method_name(pending, #params_seq).await)
+							#into_sub_response::into_response(context.as_ref().#rust_method_name(pending, &ext, #params_seq).await)
 						})
 					})
 				} else {
 					handle_register_result(quote! {
-						rpc.register_subscription_raw(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context| {
+						rpc.register_subscription_raw(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, ext| {
 							#parsing
-							let _ = context.as_ref().#rust_method_name(pending, #params_seq);
+							let _ = context.as_ref().#rust_method_name(pending, &ext, #params_seq);
 							#sub_err::None
 						})
 					})

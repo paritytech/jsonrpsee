@@ -88,7 +88,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| {
+	module.register_method("say_hello", |_, _, _| {
 		println!("say_hello method called!");
 		"Hello there!!"
 	})?;

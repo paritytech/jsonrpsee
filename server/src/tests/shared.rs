@@ -46,7 +46,7 @@ async fn http_only_works() {
 		ServerBuilder::default().http_only().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_method("say_hello", |_, _| {
+		.register_method("say_hello", |_, _, _| {
 			tracing::debug!("server respond to hello");
 			"hello"
 		})
@@ -71,7 +71,7 @@ async fn ws_only_works() {
 	let server = ServerBuilder::default().ws_only().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_method("say_hello", |_, _| {
+		.register_method("say_hello", |_, _, _| {
 			tracing::debug!("server respond to hello");
 			"hello"
 		})

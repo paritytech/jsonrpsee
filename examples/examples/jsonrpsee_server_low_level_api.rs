@@ -56,7 +56,7 @@ use jsonrpsee::server::{
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{MethodResponse, Methods};
+use jsonrpsee::{Extensions, MethodResponse, Methods};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex as AsyncMutex;
@@ -108,7 +108,7 @@ pub trait Rpc {
 
 #[async_trait]
 impl RpcServer for () {
-	async fn say_hello(&self) -> Result<String, ErrorObjectOwned> {
+	async fn say_hello(&self, _ext: &Extensions) -> Result<String, ErrorObjectOwned> {
 		Ok("lo".to_string())
 	}
 }

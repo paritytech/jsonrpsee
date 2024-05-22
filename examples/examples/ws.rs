@@ -53,7 +53,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| "lo")?;
+	module.register_method("say_hello", |_, _, _| "lo")?;
 	let addr = server.local_addr()?;
 
 	let handle = server.start(module);

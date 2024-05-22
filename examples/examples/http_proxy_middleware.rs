@@ -96,8 +96,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let addr = server.local_addr()?;
 
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| "lo").unwrap();
-	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
+	module.register_method("say_hello", |_, _, _| "lo").unwrap();
+	module.register_method("system_health", |_, _, _| serde_json::json!({ "health": true })).unwrap();
 
 	let handle = server.start(module);
 

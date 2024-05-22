@@ -25,60 +25,66 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 
-use jsonrpsee::core::{async_trait, client::Subscription};
+use futures::future::{self, Either};
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use jsonrpsee::core::async_trait;
+use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
-use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::server::middleware::rpc::RpcServiceT;
+use jsonrpsee::server::{stop_channel, PendingSubscriptionSink, RpcServiceBuilder, SubscriptionMessage};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ConnectionDetails;
+use jsonrpsee::Extensions;
+use tokio::net::TcpListener;
+use tower::Service;
+
+#[derive(Debug, Clone)]
+struct ConnectionDetails<S> {
+	inner: S,
+	connection_id: u32,
+}
+
+impl<'a, S> RpcServiceT<'a> for ConnectionDetails<S>
+where
+	S: RpcServiceT<'a>,
+{
+	type Future = S::Future;
+
+	fn call(&self, mut request: jsonrpsee::types::Request<'a>) -> Self::Future {
+		request.extensions_mut().insert(self.connection_id);
+		self.inner.call(request)
+	}
+}
 
 #[rpc(server, client)]
 pub trait Rpc {
-	/// Raw method with connection ID.
-	#[method(name = "connectionIdMethod", raw_method)]
-	async fn raw_method(&self, first_param: usize, second_param: u16) -> Result<usize, ErrorObjectOwned>;
+	/// method with connection ID.
+	#[method(name = "connectionIdMethod")]
+	async fn method(&self, first_param: usize, second_param: u16) -> Result<u32, ErrorObjectOwned>;
 
-	/// Normal method call example.
-	#[method(name = "normalMethod")]
-	fn normal_method(&self, first_param: usize, second_param: u16) -> Result<usize, ErrorObjectOwned>;
-
-	/// Subscriptions expose the connection ID on the subscription sink.
-	#[subscription(name = "subscribeSync" => "sync", item = usize)]
-	fn sub(&self, first_param: usize);
+	#[subscription(name = "subscribeConnectionId", item = u32)]
+	async fn sub(&self) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn raw_method(
-		&self,
-		connection_details: ConnectionDetails,
-		_first_param: usize,
-		_second_param: u16,
-	) -> Result<usize, ErrorObjectOwned> {
-		// Return the connection ID from which this method was called.
-		Ok(connection_details.id())
+	async fn method(&self, ext: &Extensions, _first_param: usize, _second_param: u16) -> Result<u32, ErrorObjectOwned> {
+		ext.get::<u32>().cloned().ok_or_else(|| ErrorObject::owned(0, "No connection details found", None::<()>))
 	}
 
-	fn normal_method(&self, _first_param: usize, _second_param: u16) -> Result<usize, ErrorObjectOwned> {
-		// The normal method does not have access to the connection ID.
-		Ok(usize::MAX)
-	}
-
-	fn sub(&self, pending: PendingSubscriptionSink, _first_param: usize) {
-		tokio::spawn(async move {
-			// The connection ID can be obtained before or after accepting the subscription
-			let pending_connection_id = pending.connection_id();
-			let sink = pending.accept().await.unwrap();
-			let sink_connection_id = sink.connection_id();
-
-			assert_eq!(pending_connection_id, sink_connection_id);
-
-			let msg = SubscriptionMessage::from_json(&sink_connection_id).unwrap();
-			sink.send(msg).await.unwrap();
-		});
+	async fn sub(&self, pending: PendingSubscriptionSink, ext: &Extensions) -> SubscriptionResult {
+		let sink = pending.accept().await?;
+		let conn_id = ext
+			.get::<u32>()
+			.cloned()
+			.ok_or_else(|| ErrorObject::owned(0, "No connection details found", None::<()>))?;
+		sink.send(SubscriptionMessage::from_json(&conn_id).unwrap()).await?;
+		Ok(())
 	}
 }
 
@@ -93,34 +99,101 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let connection_id_first = client.raw_method(1, 2).await.unwrap();
+	let connection_id_first = client.method(1, 2).await.unwrap();
 
 	// Second call from the same connection ID.
-	assert_eq!(client.raw_method(1, 2).await.unwrap(), connection_id_first);
+	assert_eq!(client.method(1, 2).await.unwrap(), connection_id_first);
 
 	// Second client will increment the connection ID.
-	let client_second = WsClientBuilder::default().build(&url).await?;
-	let connection_id_second = client_second.raw_method(1, 2).await.unwrap();
+	let client2 = WsClientBuilder::default().build(&url).await?;
+	let connection_id_second = client2.method(1, 2).await.unwrap();
 	assert_ne!(connection_id_first, connection_id_second);
 
-	let mut sub: Subscription<usize> = RpcClient::sub(&client, 0).await.unwrap();
+	let mut sub = client.sub().await.unwrap();
 	assert_eq!(connection_id_first, sub.next().await.transpose().unwrap().unwrap());
 
-	let mut sub: Subscription<usize> = RpcClient::sub(&client_second, 0).await.unwrap();
+	let mut sub = client2.sub().await.unwrap();
 	assert_eq!(connection_id_second, sub.next().await.transpose().unwrap().unwrap());
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = Server::builder().build("127.0.0.1:0").await?;
+	let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await?;
+	let addr = listener.local_addr()?;
 
-	let addr = server.local_addr()?;
-	let handle = server.start(RpcServerImpl.into_rpc());
+	let (stop_hdl, server_hdl) = stop_channel();
 
-	// In this example we don't care about doing shutdown so let's it run forever.
-	// You may use the `ServerHandle` to shut it down or manage it yourself.
-	tokio::spawn(handle.stopped());
+	tokio::spawn(async move {
+		let conn_id = Arc::new(AtomicU32::new(0));
+		// Create and finalize a server configuration from a TowerServiceBuilder
+		// given an RpcModule and the stop handle.
+		let svc_builder = jsonrpsee::server::Server::builder().to_service_builder();
+		let methods = RpcServerImpl.into_rpc();
+
+		loop {
+			let stream = tokio::select! {
+				res = listener.accept() => {
+					match res {
+						Ok((stream, _remote_addr)) => stream,
+						Err(e) => {
+							tracing::error!("failed to accept v4 connection: {:?}", e);
+							continue;
+						}
+					}
+				}
+				_ = stop_hdl.clone().shutdown() => break,
+			};
+
+			let methods2 = methods.clone();
+			let stop_hdl2 = stop_hdl.clone();
+			let svc_builder2 = svc_builder.clone();
+			let conn_id2 = conn_id.clone();
+			let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+				let connection_id = conn_id2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+				let rpc_middleware = RpcServiceBuilder::default()
+					.layer_fn(move |service| ConnectionDetails { inner: service, connection_id });
+
+				// Start a new service with our own connection ID.
+				let mut tower_service = svc_builder2
+					.clone()
+					.set_rpc_middleware(rpc_middleware)
+					.connection_id(connection_id as u32)
+					.build(methods2.clone(), stop_hdl2.clone());
+
+				async move { tower_service.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
+			});
+
+			let stop_hdl2 = stop_hdl.clone();
+			// Spawn a new task to serve each respective (Hyper) connection.
+			tokio::spawn(async move {
+				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+				let conn = builder.serve_connection_with_upgrades(TokioIo::new(stream), svc);
+				let stopped = stop_hdl2.shutdown();
+
+				// Pin the future so that it can be polled.
+				tokio::pin!(stopped, conn);
+
+				let res = match future::select(conn, stopped).await {
+					// Return the connection if not stopped.
+					Either::Left((conn, _)) => conn,
+					// If the server is stopped, we should gracefully shutdown
+					// the connection and poll it until it finishes.
+					Either::Right((_, mut conn)) => {
+						conn.as_mut().graceful_shutdown();
+						conn.await
+					}
+				};
+
+				// Log any errors that might have occurred.
+				if let Err(err) = res {
+					tracing::error!(err=?err, "HTTP connection failed");
+				}
+			});
+		}
+	});
+
+	tokio::spawn(server_hdl.stopped());
 
 	Ok(addr)
 }

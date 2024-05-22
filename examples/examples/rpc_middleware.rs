@@ -157,8 +157,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone() });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| "lo")?;
-	module.register_method("thready", |params, _| {
+	module.register_method("say_hello", |_, _, _| "lo")?;
+	module.register_method("thready", |params, _, _| {
 		let thread_count: usize = params.one().unwrap();
 		for _ in 0..thread_count {
 			std::thread::spawn(|| std::thread::sleep(std::time::Duration::from_secs(1)));
