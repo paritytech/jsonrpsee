@@ -150,7 +150,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let svc_builder2 = svc_builder.clone();
 			let conn_id2 = conn_id.clone();
 			let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
-				let connection_id = conn_id2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+				let connection_id = conn_id2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 				let rpc_middleware = RpcServiceBuilder::default()
 					.layer_fn(move |service| ConnectionDetails { inner: service, connection_id });
 
@@ -158,7 +158,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 				let mut tower_service = svc_builder2
 					.clone()
 					.set_rpc_middleware(rpc_middleware)
-					.connection_id(connection_id as u32)
+					.connection_id(connection_id)
 					.build(methods2.clone(), stop_hdl2.clone());
 
 				async move { tower_service.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
