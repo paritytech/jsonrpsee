@@ -4,7 +4,7 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::ErrorObjectOwned};
 
 #[rpc(server)]
 pub trait Rpc {
-	#[method(name = "foo", raw_method)]
+	#[method(name = "foo")]
 	async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
 	#[method(name = "bar")]

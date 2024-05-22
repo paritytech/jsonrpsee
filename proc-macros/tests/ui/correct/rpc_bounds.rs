@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::{Extensions, ServerBuilder};
 use jsonrpsee::ws_client::*;
 
 pub trait Config {
@@ -105,7 +105,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 pub struct ServerOnlyImpl;
 #[async_trait]
 impl MyRpcSServer<ExampleHash> for ServerOnlyImpl {
-	fn method(&self) -> RpcResult<<ExampleHash as Config>::Hash> {
+	fn method(&self, _ext: &Extensions) -> RpcResult<<ExampleHash as Config>::Hash> {
 		Ok([0u8; 32])
 	}
 }
@@ -114,7 +114,7 @@ impl MyRpcSServer<ExampleHash> for ServerOnlyImpl {
 pub struct ServerClientServerImpl;
 #[async_trait]
 impl MyRpcSCServer<ExampleHash> for ServerClientServerImpl {
-	fn method(&self) -> RpcResult<<ExampleHash as Config>::Hash> {
+	fn method(&self, _ext: &Extensions) -> RpcResult<<ExampleHash as Config>::Hash> {
 		Ok([0u8; 32])
 	}
 }

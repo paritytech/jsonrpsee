@@ -6,7 +6,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{ServerBuilder, SubscriptionMessage};
+use jsonrpsee::server::{Extensions, ServerBuilder, SubscriptionMessage};
 use jsonrpsee::ws_client::*;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 
@@ -50,33 +50,33 @@ pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
+	async fn async_method(&self, _ext: &Extensions, _param_a: u8, _param_b: String) -> RpcResult<u16> {
 		Ok(42u16)
 	}
 
-	async fn optional_params(&self, a: core::option::Option<u8>, _b: String) -> RpcResult<bool> {
+	async fn optional_params(&self, _ext: &Extensions, a: core::option::Option<u8>, _b: String) -> RpcResult<bool> {
 		let res = if a.is_some() { true } else { false };
 		Ok(res)
 	}
 
-	async fn optional_param(&self, a: Option<u8>) -> RpcResult<bool> {
+	async fn optional_param(&self, _ext: &Extensions, a: Option<u8>) -> RpcResult<bool> {
 		let res = if a.is_some() { true } else { false };
 		Ok(res)
 	}
 
-	async fn array_params(&self, items: Vec<u64>) -> RpcResult<u64> {
+	async fn array_params(&self, _ext: &Extensions, items: Vec<u64>) -> RpcResult<u64> {
 		Ok(items.len() as u64)
 	}
 
-	async fn rename_params(&self, r#type: u16, half_type: bool) -> RpcResult<u16> {
+	async fn rename_params(&self, _ext: &Extensions, r#type: u16, half_type: bool) -> RpcResult<u16> {
 		Ok(half_type.then(|| r#type / 2).unwrap_or(r#type))
 	}
 
-	fn sync_method(&self) -> RpcResult<u16> {
+	fn sync_method(&self, _ext: &Extensions) -> RpcResult<u16> {
 		Ok(10u16)
 	}
 
-	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+	async fn sub(&self, pending: PendingSubscriptionSink, _ext: &Extensions) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
 		sink.send("Response_A".into()).await?;
@@ -85,7 +85,12 @@ impl RpcServer for RpcServerImpl {
 		Ok(())
 	}
 
-	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
+	async fn sub_with_params(
+		&self,
+		pending: PendingSubscriptionSink,
+		_ext: &Extensions,
+		val: u32,
+	) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 		let msg = SubscriptionMessage::from_json(&val)?;
 
@@ -95,7 +100,11 @@ impl RpcServer for RpcServerImpl {
 		Ok(())
 	}
 
-	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+	async fn sub_with_override_notif_method(
+		&self,
+		pending: PendingSubscriptionSink,
+		_ext: &Extensions,
+	) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
 		let msg = SubscriptionMessage::from_json(&1)?;
