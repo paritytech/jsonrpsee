@@ -206,7 +206,7 @@ async fn ws_method_call_works_over_proxy_stream() {
 }
 
 #[tokio::test]
-async fn raw_methods_with_different_ws_clients() {
+async fn extensions_with_different_ws_clients() {
 	init_logger();
 
 	let server_addr = server().await;

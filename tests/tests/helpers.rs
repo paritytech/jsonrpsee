@@ -28,22 +28,29 @@
 #![allow(dead_code)]
 
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use std::time::Duration;
 
 use fast_socks5::client::Socks5Stream;
 use fast_socks5::server;
+use futures::future::{self, Either};
 use futures::{SinkExt, Stream, StreamExt};
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 
+use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
-	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
+	stop_channel, PendingSubscriptionSink, RpcModule, RpcServiceBuilder, Server, ServerBuilder, ServerHandle,
+	SubscriptionMessage, TrySendError,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
-use jsonrpsee::SubscriptionCloseResponse;
+use jsonrpsee::{Methods, SubscriptionCloseResponse};
 use serde::Serialize;
 use tokio::net::TcpStream;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
+use tower::Service;
 use tower_http::cors::CorsLayer;
 
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
@@ -139,9 +146,27 @@ pub async fn server_with_subscription() -> SocketAddr {
 }
 
 pub async fn server() -> SocketAddr {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	#[derive(Debug, Clone)]
+	struct ConnectionDetails<S> {
+		inner: S,
+		connection_id: u32,
+	}
+
+	impl<'a, S> RpcServiceT<'a> for ConnectionDetails<S>
+	where
+		S: RpcServiceT<'a>,
+	{
+		type Future = S::Future;
+
+		fn call(&self, mut request: jsonrpsee::types::Request<'a>) -> Self::Future {
+			request.extensions_mut().insert(self.connection_id);
+			self.inner.call(request)
+		}
+	}
+
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _, _| "hello").unwrap();
+	module.register_method("raw_method", |_, _, ext| ext.get::<u32>().unwrap().clone()).unwrap();
 
 	module
 		.register_async_method("slow_hello", |_, _, _| async {
@@ -160,10 +185,81 @@ pub async fn server() -> SocketAddr {
 
 	module.register_async_method::<Result<(), CustomError>, _, _>("err", |_, _, _| async { Err(CustomError) }).unwrap();
 
-	let addr = server.local_addr().unwrap();
-	let server_handle = server.start(module);
-	tokio::spawn(server_handle.stopped());
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let (stop_hdl, server_hdl) = stop_channel();
+	let methods: Methods = module.into();
 
+	let methods2 = methods.clone();
+	tokio::spawn(async move {
+		let conn_id = Arc::new(AtomicU32::new(0));
+		// Create and finalize a server configuration from a TowerServiceBuilder
+		// given an RpcModule and the stop handle.
+		let svc_builder = jsonrpsee::server::Server::builder().to_service_builder();
+
+		loop {
+			let stream = tokio::select! {
+				res = listener.accept() => {
+					match res {
+						Ok((stream, _remote_addr)) => stream,
+						Err(e) => {
+							tracing::error!("failed to accept v4 connection: {:?}", e);
+							continue;
+						}
+					}
+				}
+				_ = stop_hdl.clone().shutdown() => break,
+			};
+
+			let methods2 = methods2.clone();
+			let stop_hdl2 = stop_hdl.clone();
+			let svc_builder2 = svc_builder.clone();
+			let conn_id2 = conn_id.clone();
+			let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+				let connection_id = conn_id2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+				let rpc_middleware = RpcServiceBuilder::default()
+					.layer_fn(move |service| ConnectionDetails { inner: service, connection_id });
+
+				// Start a new service with our own connection ID.
+				let mut tower_service = svc_builder2
+					.clone()
+					.set_rpc_middleware(rpc_middleware)
+					.connection_id(connection_id)
+					.build(methods2.clone(), stop_hdl2.clone());
+
+				async move { tower_service.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
+			});
+
+			let stop_hdl2 = stop_hdl.clone();
+			// Spawn a new task to serve each respective (Hyper) connection.
+			tokio::spawn(async move {
+				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+				let conn = builder.serve_connection_with_upgrades(TokioIo::new(stream), svc);
+				let stopped = stop_hdl2.shutdown();
+
+				// Pin the future so that it can be polled.
+				tokio::pin!(stopped, conn);
+
+				let res = match future::select(conn, stopped).await {
+					// Return the connection if not stopped.
+					Either::Left((conn, _)) => conn,
+					// If the server is stopped, we should gracefully shutdown
+					// the connection and poll it until it finishes.
+					Either::Right((_, mut conn)) => {
+						conn.as_mut().graceful_shutdown();
+						conn.await
+					}
+				};
+
+				// Log any errors that might have occurred.
+				if let Err(err) = res {
+					tracing::error!(err=?err, "HTTP connection failed");
+				}
+			});
+		}
+	});
+
+	tokio::spawn(server_hdl.stopped());
 	addr
 }
 

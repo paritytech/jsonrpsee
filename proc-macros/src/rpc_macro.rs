@@ -92,19 +92,17 @@ pub struct RpcMethod {
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemFn,
 	pub aliases: Vec<String>,
-	pub raw_method: bool,
 }
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemFn) -> syn::Result<Self> {
-		let [aliases, blocking, name, param_kind, raw_method] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "raw_method"])?;
+		let [aliases, blocking, name, param_kind] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
 		let param_kind = parse_param_kind(param_kind)?;
-		let raw_method = optional(raw_method, Argument::flag)?.is_some();
 
 		let docs = extract_doc_comments(&method.attrs);
 		let deprecated = match find_attr(&method.attrs, "deprecated") {
@@ -146,18 +144,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self {
-			aliases,
-			blocking,
-			name,
-			params,
-			param_kind,
-			returns,
-			signature: method,
-			docs,
-			deprecated,
-			raw_method,
-		})
+		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated })
 	}
 }
 
@@ -320,27 +307,6 @@ impl RpcDescription {
 					is_method = true;
 
 					let method_data = RpcMethod::from_item(attr.clone(), method.clone())?;
-
-					if method_data.blocking && method_data.raw_method {
-						return Err(syn::Error::new_spanned(
-							method,
-							"Methods cannot be blocking when used with `raw_method`; remove `blocking` attribute or `raw_method` attribute",
-						));
-					}
-
-					if !needs_server && method_data.raw_method {
-						return Err(syn::Error::new_spanned(
-							&item.ident,
-							"Attribute 'raw_method' must be specified with 'server'",
-						));
-					}
-
-					if method.sig.asyncness.is_none() && method_data.raw_method {
-						return Err(syn::Error::new_spanned(
-							method,
-							"Methods must be asynchronous when used with `raw_method`; use `async fn` instead of `fn`",
-						));
-					}
 
 					methods.push(method_data);
 				}
