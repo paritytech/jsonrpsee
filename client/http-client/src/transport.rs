@@ -223,7 +223,7 @@ impl<L> HttpTransportClientBuilder<L> {
 
 				let https_conn = match certificate_store {
 					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
-						.with_platform_verifier()
+						.with_tls_config(rustls_platform_verifier::tls_config())
 						.https_or_http()
 						.enable_all_versions()
 						.wrap_connector(http_conn),
