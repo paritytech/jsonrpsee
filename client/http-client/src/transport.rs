@@ -227,6 +227,7 @@ impl<L> HttpTransportClientBuilder<L> {
 						.https_or_http()
 						.enable_all_versions()
 						.wrap_connector(http_conn),
+
 					CertificateStore::Custom(tls_config) => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_tls_config(tls_config)
 						.https_or_http()
