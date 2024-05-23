@@ -28,7 +28,7 @@ use url::Url;
 use crate::{HttpBody, HttpRequest, HttpResponse};
 
 #[cfg(feature = "tls")]
-use crate::CertificateStore;
+use crate::{CertificateStore, TlsConfig};
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
@@ -87,21 +87,21 @@ where
 pub struct HttpTransportClientBuilder<L> {
 	/// Certificate store.
 	#[cfg(feature = "tls")]
-	certificate_store: CertificateStore,
+	pub(crate) certificate_store: CertificateStore,
 	/// Configurable max request body size
-	max_request_size: u32,
+	pub(crate) max_request_size: u32,
 	/// Configurable max response body size
-	max_response_size: u32,
+	pub(crate) max_response_size: u32,
 	/// Max length for logging for requests and responses
 	///
 	/// Logs bigger than this limit will be truncated.
-	max_log_length: u32,
+	pub(crate) max_log_length: u32,
 	/// Custom headers to pass with every request.
-	headers: HeaderMap,
+	pub(crate) headers: HeaderMap,
 	/// Service builder
-	service_builder: tower::ServiceBuilder<L>,
+	pub(crate) service_builder: tower::ServiceBuilder<L>,
 	/// TCP_NODELAY
-	tcp_no_delay: bool,
+	pub(crate) tcp_no_delay: bool,
 }
 
 impl Default for HttpTransportClientBuilder<Identity> {
@@ -127,10 +127,17 @@ impl HttpTransportClientBuilder<Identity> {
 }
 
 impl<L> HttpTransportClientBuilder<L> {
-	/// Set the certificate store.
+	/// See docs [`crate::HttpClientBuilder::with_rustls_platform_verifier`] for more information.
 	#[cfg(feature = "tls")]
-	pub(crate) fn set_certification_store(mut self, cert_store: CertificateStore) -> Self {
-		self.certificate_store = cert_store;
+	pub fn with_rustls_platform_verifier(mut self) -> Self {
+		self.certificate_store = CertificateStore::Native;
+		self
+	}
+
+	/// See docs [`crate::HttpClientBuilder::with_tls_config`] for more information.
+	#[cfg(feature = "tls")]
+	pub fn with_tls_config(mut self, cfg: TlsConfig) -> Self {
+		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}
 

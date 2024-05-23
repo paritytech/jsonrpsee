@@ -267,22 +267,21 @@ where
 			..
 		} = self;
 
-		#[allow(unused_mut)]
-		let mut builder = HttpTransportClientBuilder::new()
-			.max_request_size(max_request_size)
-			.max_response_size(max_response_size)
-			.set_headers(headers)
-			.set_tcp_no_delay(tcp_no_delay)
-			.set_max_logging_length(max_log_length)
-			.set_service(service_builder);
-
-		#[cfg(feature = "tls")]
-		{
-			builder = builder.set_certification_store(certificate_store);
+		let transport = HttpTransportClientBuilder {
+			max_request_size,
+			max_response_size,
+			headers,
+			max_log_length,
+			tcp_no_delay,
+			service_builder,
+			#[cfg(feature = "tls")]
+			certificate_store,
 		}
+		.build(target)
+		.map_err(|e| Error::Transport(e.into()))?;
 
 		Ok(HttpClient {
-			transport: builder.build(target).map_err(|e| Error::Transport(e.into()))?,
+			transport,
 			id_manager: Arc::new(RequestIdManager::new(max_concurrent_requests, id_kind)),
 			request_timeout,
 		})
