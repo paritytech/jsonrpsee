@@ -113,9 +113,8 @@ impl<L> HttpClientBuilder<L> {
 		self
 	}
 
-	/// Force to use rustls-platform-verifier to select which certificate store to use.
-	///
-	///
+	/// Force to use rustls-platform-verifier as certification store.
+	/// If you want to use a custom certificate store, use [`HttpClientBuilder::with_tls_config`] instead.
 	/// This is enabled with the default settings and features.
 	///
 	/// # Optional
@@ -136,49 +135,49 @@ impl<L> HttpClientBuilder<L> {
 	/// # Example
 	///
 	/// ```no_run
-	/// use jsonrpsee_ws_client::WsClientBuilder;
+	/// use jsonrpsee_http_client::HttpClientBuilder;
 	/// use rustls::{
-	///	    client::danger::{self, HandshakeSignatureValid, ServerCertVerified},
-	///	    pki_types::{CertificateDer, ServerName, UnixTime},
-	///	    Error,
+	///     client::danger::{self, HandshakeSignatureValid, ServerCertVerified},
+	///     pki_types::{CertificateDer, ServerName, UnixTime},
+	///     Error,
 	/// };
 	///
 	/// #[derive(Debug)]
 	/// struct NoCertificateVerification;
 	///
 	/// impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
-	///	    fn verify_server_cert(
-	///		    &self,
-	///		    _: &CertificateDer<'_>,
-	///		    _: &[CertificateDer<'_>],
-	///		    _: &ServerName<'_>,
-	///		    _: &[u8],
-	///		    _: UnixTime,
-	///	     ) -> Result<ServerCertVerified, Error> {
-	///		    Ok(ServerCertVerified::assertion())
-	///      }
+	///     fn verify_server_cert(
+	///         &self,
+	///         _: &CertificateDer<'_>,
+	///         _: &[CertificateDer<'_>],
+	///         _: &ServerName<'_>,
+	///         _: &[u8],
+	///         _: UnixTime,
+	///     ) -> Result<ServerCertVerified, Error> {
+	///         Ok(ServerCertVerified::assertion())
+	///     }
 	///
 	///     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
 	///         vec![rustls::SignatureScheme::ECDSA_NISTP256_SHA256]
-	///	     }
+	///     }
 	///
-	///	    fn verify_tls12_signature(
+	///     fn verify_tls12_signature(
 	///         &self,
-	///		    _: &[u8],
-	///		    _: &CertificateDer<'_>,
-	///		    _: &rustls::DigitallySignedStruct,
-	///	    ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
-	///		    Ok(HandshakeSignatureValid::assertion())
-	///	    }
+	///         _: &[u8],
+	///         _: &CertificateDer<'_>,
+	///         _: &rustls::DigitallySignedStruct,
+	///     ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
+	///         Ok(HandshakeSignatureValid::assertion())
+	///     }
 	///
-	///	    fn verify_tls13_signature(
-	///		    &self,
-	///		    _: &[u8],
-	///		    _: &CertificateDer<'_>,
-	///		    _: &rustls::DigitallySignedStruct,
-	///	    ) -> Result<HandshakeSignatureValid, Error> {
-	///		    Ok(HandshakeSignatureValid::assertion())
-	///	    }
+	///     fn verify_tls13_signature(
+	///         &self,
+	///         _: &[u8],
+	///         _: &CertificateDer<'_>,
+	///         _: &rustls::DigitallySignedStruct,
+	///     ) -> Result<HandshakeSignatureValid, Error> {
+	///         Ok(HandshakeSignatureValid::assertion())
+	///     }
 	/// }
 	///
 	/// let tls_cfg = rustls::ClientConfig::builder()
@@ -187,7 +186,7 @@ impl<L> HttpClientBuilder<L> {
 	///    .with_no_client_auth();
 	///
 	/// // client builder with disabled certificate verification.
-	/// let client_builder = WsClientBuilder::default().with_tls_config(tls_cfg);
+	/// let client_builder = HttpClientBuilder::new().with_tls_config(tls_cfg);
 	/// ```
 	#[cfg(feature = "tls")]
 	pub fn with_tls_config(mut self, cfg: TlsConfig) -> Self {
@@ -268,6 +267,7 @@ where
 			..
 		} = self;
 
+		#[allow(unused_mut)]
 		let mut builder = HttpTransportClientBuilder::new()
 			.max_request_size(max_request_size)
 			.max_response_size(max_response_size)
