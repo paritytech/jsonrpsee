@@ -455,10 +455,6 @@ impl<Notif> Drop for Subscription<Notif> {
 #[derive(Debug)]
 /// Keep track of request IDs.
 pub struct RequestIdManager {
-	// Current pending requests.
-	current_pending: Arc<()>,
-	/// Max concurrent pending requests allowed.
-	max_concurrent_requests: usize,
 	/// Get the next request ID.
 	current_id: CurrentId,
 	/// Request ID type.
@@ -467,58 +463,20 @@ pub struct RequestIdManager {
 
 impl RequestIdManager {
 	/// Create a new `RequestIdGuard` with the provided concurrency limit.
-	pub fn new(limit: usize, id_kind: IdKind) -> Self {
-		Self { current_pending: Arc::new(()), max_concurrent_requests: limit, current_id: CurrentId::new(), id_kind }
-	}
-
-	fn get_slot(&self) -> Result<Arc<()>, Error> {
-		// Strong count is 1 at start, so that's why we use `>` and not `>=`.
-		if Arc::strong_count(&self.current_pending) > self.max_concurrent_requests {
-			Err(Error::MaxSlotsExceeded)
-		} else {
-			Ok(self.current_pending.clone())
-		}
+	pub fn new(id_kind: IdKind) -> Self {
+		Self { current_id: CurrentId::new(), id_kind }
 	}
 
 	/// Attempts to get the next request ID.
 	///
 	/// Fails if request limit has been exceeded.
-	pub fn next_request_id(&self) -> Result<RequestIdGuard<Id<'static>>, Error> {
-		let rc = self.get_slot()?;
-		let id = self.id_kind.into_id(self.current_id.next());
-
-		Ok(RequestIdGuard { _rc: rc, id })
-	}
-
-	/// Attempts to get fetch two ids (used for subscriptions) but only
-	/// occupy one slot in the request guard.
-	///
-	/// Fails if request limit has been exceeded.
-	pub fn next_request_two_ids(&self) -> Result<RequestIdGuard<(Id<'static>, Id<'static>)>, Error> {
-		let rc = self.get_slot()?;
-		let id1 = self.id_kind.into_id(self.current_id.next());
-		let id2 = self.id_kind.into_id(self.current_id.next());
-		Ok(RequestIdGuard { _rc: rc, id: (id1, id2) })
+	pub fn next_request_id(&self) -> Id<'static> {
+		self.id_kind.into_id(self.current_id.next())
 	}
 
 	/// Get a handle to the `IdKind`.
 	pub fn as_id_kind(&self) -> IdKind {
 		self.id_kind
-	}
-}
-
-/// Reference counted request ID.
-#[derive(Debug)]
-pub struct RequestIdGuard<T: Clone> {
-	id: T,
-	/// Reference count decreased when dropped.
-	_rc: Arc<()>,
-}
-
-impl<T: Clone> RequestIdGuard<T> {
-	/// Get the actual ID or IDs.
-	pub fn inner(&self) -> T {
-		self.id.clone()
 	}
 }
 
@@ -568,8 +526,8 @@ impl CurrentId {
 }
 
 /// Generate a range of IDs to be used in a batch request.
-pub fn generate_batch_id_range(guard: &RequestIdGuard<Id>, len: u64) -> Result<Range<u64>, Error> {
-	let id_start = guard.inner().try_parse_inner_as_number()?;
+pub fn generate_batch_id_range(id: Id, len: u64) -> Result<Range<u64>, Error> {
+	let id_start = id.try_parse_inner_as_number()?;
 	let id_end = id_start
 		.checked_add(len)
 		.ok_or_else(|| Error::Custom("BatchID range wrapped; restart the client or try again later".to_string()))?;
@@ -703,23 +661,4 @@ fn subscription_channel(max_buf_size: usize) -> (SubscriptionSender, Subscriptio
 	let lagged_rx = lagged_tx.clone();
 
 	(SubscriptionSender { inner: tx, lagged: lagged_tx }, SubscriptionReceiver { inner: rx, lagged: lagged_rx })
-}
-
-#[cfg(test)]
-mod tests {
-	use super::{IdKind, RequestIdManager};
-
-	#[test]
-	fn request_id_guard_works() {
-		let manager = RequestIdManager::new(2, IdKind::Number);
-		let _first = manager.next_request_id().unwrap();
-
-		{
-			let _second = manager.next_request_two_ids().unwrap();
-			assert!(manager.next_request_id().is_err());
-			// second dropped here.
-		}
-
-		assert!(manager.next_request_id().is_ok());
-	}
 }

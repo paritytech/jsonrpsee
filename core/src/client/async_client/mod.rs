@@ -345,7 +345,7 @@ impl ClientBuilder {
 			to_back: to_back.clone(),
 			request_timeout: self.request_timeout,
 			error: ErrorFromBack::new(to_back, disconnect_reason),
-			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
+			id_manager: RequestIdManager::new(self.id_kind),
 			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
 		}
@@ -479,7 +479,7 @@ impl ClientT for Client {
 		Params: ToRpcParams + Send,
 	{
 		// NOTE: we use this to guard against max number of concurrent requests.
-		let _req_id = self.id_manager.next_request_id()?;
+		let _req_id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 		let notif = NotificationSer::borrowed(&method, params.as_deref());
 
@@ -505,8 +505,7 @@ impl ClientT for Client {
 		Params: ToRpcParams + Send,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let guard = self.id_manager.next_request_id()?;
-		let id = guard.inner();
+		let id = self.id_manager.next_request_id();
 
 		let params = params.to_rpc_params()?;
 		let raw =
@@ -540,8 +539,8 @@ impl ClientT for Client {
 		R: DeserializeOwned,
 	{
 		let batch = batch.build()?;
-		let guard = self.id_manager.next_request_id()?;
-		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
+		let id = self.id_manager.next_request_id();
+		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
 
 		let mut batches = Vec::with_capacity(batch.len());
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
@@ -621,8 +620,8 @@ impl SubscriptionClientT for Client {
 			return Err(RegisterMethodError::SubscriptionNameConflict(unsubscribe_method.to_owned()).into());
 		}
 
-		let guard = self.id_manager.next_request_two_ids()?;
-		let (id_sub, id_unsub) = guard.inner();
+		let id_sub = self.id_manager.next_request_id();
+		let id_unsub = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
 		let raw = serde_json::to_string(&RequestSer::borrowed(&id_sub, &subscribe_method, params.as_deref()))
