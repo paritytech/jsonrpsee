@@ -403,7 +403,7 @@ impl ClientBuilder {
 			to_back: to_back.clone(),
 			request_timeout: self.request_timeout,
 			error: ErrorFromBack::new(to_back, disconnect_reason),
-			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
+			id_manager: RequestIdManager::new(self.id_kind),
 			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
 		}
