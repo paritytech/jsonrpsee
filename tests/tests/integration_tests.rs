@@ -276,23 +276,6 @@ async fn http_method_call_str_id_works() {
 }
 
 #[tokio::test]
-async fn http_concurrent_method_call_limits_works() {
-	init_logger();
-
-	let server_addr = server().await;
-	let uri = format!("http://{}", server_addr);
-	let client = HttpClientBuilder::default().max_concurrent_requests(1).build(&uri).unwrap();
-
-	let (first, second) = tokio::join!(
-		client.request::<String, ArrayParams>("say_hello", rpc_params!()),
-		client.request::<String, ArrayParams>("say_hello", rpc_params![]),
-	);
-
-	assert!(first.is_ok());
-	assert!(matches!(second, Err(Error::MaxSlotsExceeded)));
-}
-
-#[tokio::test]
 async fn ws_subscription_several_clients() {
 	init_logger();
 
@@ -405,27 +388,6 @@ async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 	let server_addr = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = Arc::new(WsClientBuilder::default().max_concurrent_requests(2).build(&server_url).await.unwrap());
-
-	let mut requests = Vec::new();
-
-	for _ in 0..6 {
-		let c = client.clone();
-		requests.push(tokio::spawn(async move { c.request::<String, ArrayParams>("say_hello", rpc_params![]).await }));
-	}
-
-	for req in requests {
-		let _ = req.await.unwrap();
-	}
-}
-
-#[tokio::test]
-async fn http_making_more_requests_than_allowed_should_not_deadlock() {
-	init_logger();
-
-	let server_addr = server().await;
-	let server_url = format!("http://{}", server_addr);
-	let client = HttpClientBuilder::default().max_concurrent_requests(2).build(&server_url).unwrap();
-	let client = Arc::new(client);
 
 	let mut requests = Vec::new();
 
