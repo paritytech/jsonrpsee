@@ -127,7 +127,7 @@ impl HttpTransportClientBuilder<Identity> {
 }
 
 impl<L> HttpTransportClientBuilder<L> {
-	/// See docs [`crate::HttpClientBuilder::with_tls_config`] for more information.
+	/// See docs [`crate::HttpClientBuilder::with_custom_cert_store`] for more information.
 	#[cfg(feature = "tls")]
 	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
 		self.certificate_store = CertificateStore::Custom(cfg);
