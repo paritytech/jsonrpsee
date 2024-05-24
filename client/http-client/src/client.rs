@@ -48,7 +48,7 @@ use tower::{Layer, Service};
 use tracing::instrument;
 
 #[cfg(feature = "tls")]
-use crate::{CertificateStore, TlsConfig};
+use crate::{CertificateStore, CustomCertStore};
 
 /// HTTP client builder.
 ///
@@ -113,19 +113,6 @@ impl<L> HttpClientBuilder<L> {
 		self
 	}
 
-	/// Force to use rustls-platform-verifier as certification store.
-	/// If you want to use a custom certificate store, use [`HttpClientBuilder::with_tls_config`] instead.
-	/// This is enabled with the default settings and features.
-	///
-	/// # Optional
-	///
-	/// This requires the optional `tls` feature.
-	#[cfg(feature = "tls")]
-	pub fn with_rustls_platform_verifier(mut self) -> Self {
-		self.certificate_store = CertificateStore::Native;
-		self
-	}
-
 	/// Force to use a custom certificate store.
 	///
 	/// # Optional
@@ -135,7 +122,7 @@ impl<L> HttpClientBuilder<L> {
 	/// # Example
 	///
 	/// ```no_run
-	/// use jsonrpsee_http_client::HttpClientBuilder;
+	/// use jsonrpsee_http_client::{HttpClientBuilder, CustomCertStore};
 	/// use rustls::{
 	///     client::danger::{self, HandshakeSignatureValid, ServerCertVerified},
 	///     pki_types::{CertificateDer, ServerName, UnixTime},
@@ -180,16 +167,16 @@ impl<L> HttpClientBuilder<L> {
 	///     }
 	/// }
 	///
-	/// let tls_cfg = rustls::ClientConfig::builder()
+	/// let tls_cfg = CustomCertStore::builder()
 	///    .dangerous()
 	///    .with_custom_certificate_verifier(std::sync::Arc::new(NoCertificateVerification))
 	///    .with_no_client_auth();
 	///
 	/// // client builder with disabled certificate verification.
-	/// let client_builder = HttpClientBuilder::new().with_tls_config(tls_cfg);
+	/// let client_builder = HttpClientBuilder::new().with_custom_cert_store(tls_cfg);
 	/// ```
 	#[cfg(feature = "tls")]
-	pub fn with_tls_config(mut self, cfg: TlsConfig) -> Self {
+	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
 		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}

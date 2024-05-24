@@ -50,7 +50,10 @@ use std::time::Duration;
 use url::Url;
 
 #[cfg(feature = "tls")]
-use jsonrpsee_client_transport::ws::{CertificateStore, TlsConfig};
+pub use jsonrpsee_client_transport::ws::CustomCertStore;
+
+#[cfg(feature = "tls")]
+use jsonrpsee_client_transport::ws::CertificateStore;
 
 /// Builder for [`WsClient`].
 ///
@@ -122,19 +125,6 @@ impl WsClientBuilder {
 		WsClientBuilder::default()
 	}
 
-	/// Force to use rustls-platform-verifier as certification store.
-	/// If you want to use a custom certificate store, use [`WsClientBuilder::with_tls_config`] instead.
-	/// This is enabled with the default settings and features.
-	///
-	/// # Optional
-	///
-	/// This requires the optional `tls` feature.
-	#[cfg(feature = "tls")]
-	pub fn with_rustls_platform_verifier(mut self) -> Self {
-		self.certificate_store = CertificateStore::Native;
-		self
-	}
-
 	/// Force to use a custom certificate store.
 	///
 	/// # Optional
@@ -144,7 +134,7 @@ impl WsClientBuilder {
 	/// # Example
 	///
 	/// ```no_run
-	/// use jsonrpsee_ws_client::WsClientBuilder;
+	/// use jsonrpsee_ws_client::{WsClientBuilder, CustomCertStore};
 	/// use rustls::{
 	///     client::danger::{self, HandshakeSignatureValid, ServerCertVerified},
 	///     pki_types::{CertificateDer, ServerName, UnixTime},
@@ -189,16 +179,16 @@ impl WsClientBuilder {
 	///     }
 	/// }
 	///
-	/// let tls_cfg = rustls::ClientConfig::builder()
+	/// let tls_cfg = CustomCertStore::builder()
 	///    .dangerous()
 	///    .with_custom_certificate_verifier(std::sync::Arc::new(NoCertificateVerification))
 	///    .with_no_client_auth();
 	///
 	/// // client builder with disabled certificate verification.
-	/// let client_builder = WsClientBuilder::new().with_tls_config(tls_cfg);
+	/// let client_builder = WsClientBuilder::new().with_custom_cert_store(tls_cfg);
 	/// ```
 	#[cfg(feature = "tls")]
-	pub fn with_tls_config(mut self, cfg: TlsConfig) -> Self {
+	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
 		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}

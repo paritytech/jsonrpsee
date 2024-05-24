@@ -28,7 +28,7 @@ use url::Url;
 use crate::{HttpBody, HttpRequest, HttpResponse};
 
 #[cfg(feature = "tls")]
-use crate::{CertificateStore, TlsConfig};
+use crate::{CertificateStore, CustomCertStore};
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
@@ -127,16 +127,9 @@ impl HttpTransportClientBuilder<Identity> {
 }
 
 impl<L> HttpTransportClientBuilder<L> {
-	/// See docs [`crate::HttpClientBuilder::with_rustls_platform_verifier`] for more information.
-	#[cfg(feature = "tls")]
-	pub fn with_rustls_platform_verifier(mut self) -> Self {
-		self.certificate_store = CertificateStore::Native;
-		self
-	}
-
 	/// See docs [`crate::HttpClientBuilder::with_tls_config`] for more information.
 	#[cfg(feature = "tls")]
-	pub fn with_tls_config(mut self, cfg: TlsConfig) -> Self {
+	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
 		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}

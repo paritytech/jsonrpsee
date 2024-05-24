@@ -52,7 +52,7 @@ const LOG_TARGET: &str = "jsonrpsee-client";
 
 /// Custom TLS configuration.
 #[cfg(feature = "tls")]
-pub type TlsConfig = rustls::ClientConfig;
+pub type CustomCertStore = rustls::ClientConfig;
 
 /// Certificate store to use for TLS connections.
 #[cfg(feature = "tls")]
@@ -61,7 +61,7 @@ pub enum CertificateStore {
 	/// Native.
 	Native,
 	/// Custom certificate store.
-	Custom(TlsConfig),
+	Custom(CustomCertStore),
 }
 
 /// Sending end of WebSocket transport.
@@ -113,27 +113,13 @@ impl Default for WsTransportClientBuilder {
 }
 
 impl WsTransportClientBuilder {
-	/// Force to use rustls-platform-verifier to select which certificate store to use.
-	///
-	///
-	/// This is enabled with the default settings and features.
-	///
-	/// # Optional
-	///
-	/// This requires the optional `tls` feature.
-	#[cfg(feature = "tls")]
-	pub fn with_rustls_platform_verifier(mut self) -> Self {
-		self.certificate_store = CertificateStore::Native;
-		self
-	}
-
 	/// Force to use a custom certificate store.
 	///
 	/// # Optional
 	///
 	/// This requires the optional `tls` feature.
 	#[cfg(feature = "tls")]
-	pub fn with_tls_config(mut self, cfg: TlsConfig) -> Self {
+	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
 		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}

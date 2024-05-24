@@ -56,11 +56,11 @@ pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;
 
 /// Custom TLS configuration.
 #[cfg(feature = "tls")]
-pub type TlsConfig = rustls::ClientConfig;
+pub type CustomCertStore = rustls::ClientConfig;
 
 #[cfg(feature = "tls")]
 #[derive(Debug)]
 pub(crate) enum CertificateStore {
 	Native,
-	Custom(TlsConfig),
+	Custom(CustomCertStore),
 }
