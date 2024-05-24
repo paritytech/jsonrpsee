@@ -107,13 +107,10 @@ impl<L> HttpClientBuilder<L> {
 		self
 	}
 
-	/// Set max concurrent requests.
-	pub fn max_concurrent_requests(mut self, max: usize) -> Self {
-		self.max_concurrent_requests = max;
-		self
-	}
-
-	/// Force to use a custom certificate store.
+	/// Force to use the rustls native certificate store.
+	///
+	/// Since multiple certificate stores can be optionally enabled, this option will
+	/// force the `native certificate store` to be used.
 	///
 	/// # Optional
 	///
@@ -242,7 +239,6 @@ where
 		let Self {
 			max_request_size,
 			max_response_size,
-			max_concurrent_requests,
 			request_timeout,
 			#[cfg(feature = "tls")]
 			certificate_store,
@@ -267,11 +263,7 @@ where
 		.build(target)
 		.map_err(|e| Error::Transport(e.into()))?;
 
-		Ok(HttpClient {
-			transport,
-			id_manager: Arc::new(RequestIdManager::new(max_concurrent_requests, id_kind)),
-			request_timeout,
-		})
+		Ok(HttpClient { transport, id_manager: Arc::new(RequestIdManager::new(id_kind)), request_timeout })
 	}
 }
 
@@ -351,8 +343,7 @@ where
 		R: DeserializeOwned,
 		Params: ToRpcParams + Send,
 	{
-		let guard = self.id_manager.next_request_id()?;
-		let id = guard.inner();
+		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
 		let request = RequestSer::borrowed(&id, &method, params.as_deref());
@@ -388,8 +379,8 @@ where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
 		let batch = batch.build()?;
-		let guard = self.id_manager.next_request_id()?;
-		let id_range = generate_batch_id_range(&guard, batch.len() as u64)?;
+		let id = self.id_manager.next_request_id();
+		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
 
 		let mut batch_request = Vec::with_capacity(batch.len());
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
