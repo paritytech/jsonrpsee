@@ -44,12 +44,16 @@ pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
 
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
-use jsonrpsee_core::client::{
-	CertificateStore, ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT,
-};
+use jsonrpsee_core::client::{ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use std::time::Duration;
 use url::Url;
+
+#[cfg(feature = "tls")]
+pub use jsonrpsee_client_transport::ws::CustomCertStore;
+
+#[cfg(feature = "tls")]
+use jsonrpsee_client_transport::ws::CertificateStore;
 
 /// Builder for [`WsClient`].
 ///
@@ -78,6 +82,7 @@ use url::Url;
 /// ```
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder {
+	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	max_request_size: u32,
 	max_response_size: u32,
@@ -96,6 +101,7 @@ pub struct WsClientBuilder {
 impl Default for WsClientBuilder {
 	fn default() -> Self {
 		Self {
+			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
@@ -119,33 +125,71 @@ impl WsClientBuilder {
 		WsClientBuilder::default()
 	}
 
-	/// Force to use the rustls native certificate store.
-	///
-	/// Since multiple certificate stores can be optionally enabled, this option will
-	/// force the `native certificate store` to be used.
-	///
-	/// This is enabled with the default settings and features.
+	/// Force to use a custom certificate store.
 	///
 	/// # Optional
 	///
-	/// This requires the optional `native-tls` feature.
-	#[cfg(feature = "native-tls")]
-	pub fn use_native_rustls(mut self) -> Self {
-		self.certificate_store = CertificateStore::Native;
-		self
-	}
-
-	/// Force to use the rustls webpki certificate store.
+	/// This requires the optional `tls` feature.
 	///
-	/// Since multiple certificate stores can be optionally enabled, this option will
-	/// force the `webpki certificate store` to be used.
+	/// # Example
 	///
-	/// # Optional
+	/// ```no_run
+	/// use jsonrpsee_ws_client::{WsClientBuilder, CustomCertStore};
+	/// use rustls::{
+	///     client::danger::{self, HandshakeSignatureValid, ServerCertVerified},
+	///     pki_types::{CertificateDer, ServerName, UnixTime},
+	///     Error,
+	/// };
 	///
-	/// This requires the optional `webpki-tls` feature.
-	#[cfg(feature = "webpki-tls")]
-	pub fn use_webpki_rustls(mut self) -> Self {
-		self.certificate_store = CertificateStore::WebPki;
+	/// #[derive(Debug)]
+	/// struct NoCertificateVerification;
+	///
+	/// impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
+	///     fn verify_server_cert(
+	///         &self,
+	///         _: &CertificateDer<'_>,
+	///         _: &[CertificateDer<'_>],
+	///         _: &ServerName<'_>,
+	///         _: &[u8],
+	///         _: UnixTime,
+	///     ) -> Result<ServerCertVerified, Error> {
+	///         Ok(ServerCertVerified::assertion())
+	///     }
+	///
+	///     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+	///         vec![rustls::SignatureScheme::ECDSA_NISTP256_SHA256]
+	///     }
+	///
+	///     fn verify_tls12_signature(
+	///         &self,
+	///         _: &[u8],
+	///         _: &CertificateDer<'_>,
+	///         _: &rustls::DigitallySignedStruct,
+	///     ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
+	///         Ok(HandshakeSignatureValid::assertion())
+	///     }
+	///
+	///     fn verify_tls13_signature(
+	///         &self,
+	///         _: &[u8],
+	///         _: &CertificateDer<'_>,
+	///         _: &rustls::DigitallySignedStruct,
+	///     ) -> Result<HandshakeSignatureValid, Error> {
+	///         Ok(HandshakeSignatureValid::assertion())
+	///     }
+	/// }
+	///
+	/// let tls_cfg = CustomCertStore::builder()
+	///    .dangerous()
+	///    .with_custom_certificate_verifier(std::sync::Arc::new(NoCertificateVerification))
+	///    .with_no_client_auth();
+	///
+	/// // client builder with disabled certificate verification.
+	/// let client_builder = WsClientBuilder::new().with_custom_cert_store(tls_cfg);
+	/// ```
+	#[cfg(feature = "tls")]
+	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
+		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}
 
@@ -275,7 +319,8 @@ impl WsClientBuilder {
 		T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
 	{
 		let transport_builder = WsTransportClientBuilder {
-			certificate_store: self.certificate_store,
+			#[cfg(feature = "tls")]
+			certificate_store: self.certificate_store.clone(),
 			connection_timeout: self.connection_timeout,
 			headers: self.headers.clone(),
 			max_request_size: self.max_request_size,
@@ -300,7 +345,8 @@ impl WsClientBuilder {
 	/// Panics if being called outside of `tokio` runtime context.
 	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
 		let transport_builder = WsTransportClientBuilder {
-			certificate_store: self.certificate_store,
+			#[cfg(feature = "tls")]
+			certificate_store: self.certificate_store.clone(),
 			connection_timeout: self.connection_timeout,
 			headers: self.headers.clone(),
 			max_request_size: self.max_request_size,

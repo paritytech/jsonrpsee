@@ -36,8 +36,7 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponse, CertificateStore, ClientT, Error, IdKind, RequestIdManager, Subscription,
-	SubscriptionClientT,
+	generate_batch_id_range, BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
@@ -47,6 +46,9 @@ use serde::de::DeserializeOwned;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::instrument;
+
+#[cfg(feature = "tls")]
+use crate::{CertificateStore, CustomCertStore};
 
 /// HTTP client builder.
 ///
@@ -77,6 +79,7 @@ pub struct HttpClientBuilder<L = Identity> {
 	max_response_size: u32,
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
+	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
 	max_log_length: u32,
@@ -111,24 +114,67 @@ impl<L> HttpClientBuilder<L> {
 	///
 	/// # Optional
 	///
-	/// This requires the optional `native-tls` feature.
-	#[cfg(feature = "native-tls")]
-	pub fn use_native_rustls(mut self) -> Self {
-		self.certificate_store = CertificateStore::Native;
-		self
-	}
-
-	/// Force to use the rustls webpki certificate store.
+	/// This requires the optional `tls` feature.
 	///
-	/// Since multiple certificate stores can be optionally enabled, this option will
-	/// force the `webpki certificate store` to be used.
+	/// # Example
 	///
-	/// # Optional
+	/// ```no_run
+	/// use jsonrpsee_http_client::{HttpClientBuilder, CustomCertStore};
+	/// use rustls::{
+	///     client::danger::{self, HandshakeSignatureValid, ServerCertVerified},
+	///     pki_types::{CertificateDer, ServerName, UnixTime},
+	///     Error,
+	/// };
 	///
-	/// This requires the optional `webpki-tls` feature.
-	#[cfg(feature = "webpki-tls")]
-	pub fn use_webpki_rustls(mut self) -> Self {
-		self.certificate_store = CertificateStore::WebPki;
+	/// #[derive(Debug)]
+	/// struct NoCertificateVerification;
+	///
+	/// impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
+	///     fn verify_server_cert(
+	///         &self,
+	///         _: &CertificateDer<'_>,
+	///         _: &[CertificateDer<'_>],
+	///         _: &ServerName<'_>,
+	///         _: &[u8],
+	///         _: UnixTime,
+	///     ) -> Result<ServerCertVerified, Error> {
+	///         Ok(ServerCertVerified::assertion())
+	///     }
+	///
+	///     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+	///         vec![rustls::SignatureScheme::ECDSA_NISTP256_SHA256]
+	///     }
+	///
+	///     fn verify_tls12_signature(
+	///         &self,
+	///         _: &[u8],
+	///         _: &CertificateDer<'_>,
+	///         _: &rustls::DigitallySignedStruct,
+	///     ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
+	///         Ok(HandshakeSignatureValid::assertion())
+	///     }
+	///
+	///     fn verify_tls13_signature(
+	///         &self,
+	///         _: &[u8],
+	///         _: &CertificateDer<'_>,
+	///         _: &rustls::DigitallySignedStruct,
+	///     ) -> Result<HandshakeSignatureValid, Error> {
+	///         Ok(HandshakeSignatureValid::assertion())
+	///     }
+	/// }
+	///
+	/// let tls_cfg = CustomCertStore::builder()
+	///    .dangerous()
+	///    .with_custom_certificate_verifier(std::sync::Arc::new(NoCertificateVerification))
+	///    .with_no_client_auth();
+	///
+	/// // client builder with disabled certificate verification.
+	/// let client_builder = HttpClientBuilder::new().with_custom_cert_store(tls_cfg);
+	/// ```
+	#[cfg(feature = "tls")]
+	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
+		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}
 
@@ -165,6 +211,7 @@ impl<L> HttpClientBuilder<L> {
 	/// Set custom tower middleware.
 	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
 		HttpClientBuilder {
+			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
 			headers: self.headers,
@@ -193,6 +240,7 @@ where
 			max_request_size,
 			max_response_size,
 			request_timeout,
+			#[cfg(feature = "tls")]
 			certificate_store,
 			id_kind,
 			headers,
@@ -202,16 +250,18 @@ where
 			..
 		} = self;
 
-		let transport = HttpTransportClientBuilder::new()
-			.max_request_size(max_request_size)
-			.max_response_size(max_response_size)
-			.set_headers(headers)
-			.set_tcp_no_delay(tcp_no_delay)
-			.set_max_logging_length(max_log_length)
-			.set_service(service_builder)
-			.set_certification_store(certificate_store)
-			.build(target)
-			.map_err(|e| Error::Transport(e.into()))?;
+		let transport = HttpTransportClientBuilder {
+			max_request_size,
+			max_response_size,
+			headers,
+			max_log_length,
+			tcp_no_delay,
+			service_builder,
+			#[cfg(feature = "tls")]
+			certificate_store,
+		}
+		.build(target)
+		.map_err(|e| Error::Transport(e.into()))?;
 
 		Ok(HttpClient { transport, id_manager: Arc::new(RequestIdManager::new(id_kind)), request_timeout })
 	}
@@ -224,6 +274,7 @@ impl Default for HttpClientBuilder<Identity> {
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
+			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,

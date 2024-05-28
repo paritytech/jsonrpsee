@@ -31,7 +31,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures_util::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{CertificateStore, MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
+use jsonrpsee_core::client::{MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
 use soketto::connection::Error::Utf8;
@@ -50,6 +50,20 @@ pub use url::Url;
 
 const LOG_TARGET: &str = "jsonrpsee-client";
 
+/// Custom TLS configuration.
+#[cfg(feature = "tls")]
+pub type CustomCertStore = rustls::ClientConfig;
+
+/// Certificate store to use for TLS connections.
+#[cfg(feature = "tls")]
+#[derive(Debug, Clone)]
+pub enum CertificateStore {
+	/// Native.
+	Native,
+	/// Custom certificate store.
+	Custom(CustomCertStore),
+}
+
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
 pub struct Sender<T> {
@@ -66,6 +80,7 @@ pub struct Receiver<T> {
 /// Builder for a WebSocket transport [`Sender`] and [`Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder {
+	#[cfg(feature = "tls")]
 	/// What certificate store to use
 	pub certificate_store: CertificateStore,
 	/// Timeout for the connection.
@@ -85,6 +100,7 @@ pub struct WsTransportClientBuilder {
 impl Default for WsTransportClientBuilder {
 	fn default() -> Self {
 		Self {
+			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
@@ -97,31 +113,14 @@ impl Default for WsTransportClientBuilder {
 }
 
 impl WsTransportClientBuilder {
-	/// Force to use the rustls native certificate store.
-	///
-	/// Since multiple certificate stores can be optionally enabled, this option will
-	/// force the `native certificate store` to be used.
+	/// Force to use a custom certificate store.
 	///
 	/// # Optional
 	///
-	/// This requires the optional `native-tls` feature.
-	#[cfg(feature = "native-tls")]
-	pub fn use_native_rustls(mut self) -> Self {
-		self.certificate_store = CertificateStore::Native;
-		self
-	}
-
-	/// Force to use the rustls webpki certificate store.
-	///
-	/// Since multiple certificate stores can be optionally enabled, this option will
-	/// force the `webpki certificate store` to be used.
-	///
-	/// # Optional
-	///
-	/// This requires the optional `webpki-tls` feature.
-	#[cfg(feature = "webpki-tls")]
-	pub fn use_webpki_rustls(mut self) -> Self {
-		self.certificate_store = CertificateStore::WebPki;
+	/// This requires the optional `tls` feature.
+	#[cfg(feature = "tls")]
+	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
+		self.certificate_store = CertificateStore::Custom(cfg);
 		self
 	}
 
@@ -328,7 +327,7 @@ impl WsTransportClientBuilder {
 		let mut err = None;
 
 		// Only build TLS connector if `wss` in URL.
-		#[cfg(feature = "__tls")]
+		#[cfg(feature = "tls")]
 		let mut connector = match target._mode {
 			Mode::Tls => Some(build_tls_config(&self.certificate_store)?),
 			Mode::Plain => None,
@@ -340,7 +339,7 @@ impl WsTransportClientBuilder {
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
-				#[cfg(feature = "__tls")]
+				#[cfg(feature = "tls")]
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref(), self.tcp_no_delay)
 					.await
 				{
@@ -352,7 +351,7 @@ impl WsTransportClientBuilder {
 					}
 				};
 
-				#[cfg(not(feature = "__tls"))]
+				#[cfg(not(feature = "tls"))]
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout).await {
 					Ok(stream) => stream,
 					Err(e) => {
@@ -377,7 +376,7 @@ impl WsTransportClientBuilder {
 								})?;
 
 								// Only build TLS connector if `wss` in redirection URL.
-								#[cfg(feature = "__tls")]
+								#[cfg(feature = "tls")]
 								match target._mode {
 									Mode::Tls if connector.is_none() => {
 										connector = Some(build_tls_config(&self.certificate_store)?);
@@ -468,7 +467,7 @@ impl WsTransportClientBuilder {
 	}
 }
 
-#[cfg(feature = "__tls")]
+#[cfg(feature = "tls")]
 async fn connect(
 	sockaddr: SocketAddr,
 	timeout_dur: Duration,
@@ -497,7 +496,7 @@ async fn connect(
 	}
 }
 
-#[cfg(not(feature = "__tls"))]
+#[cfg(not(feature = "tls"))]
 async fn connect(sockaddr: SocketAddr, timeout_dur: Duration) -> Result<EitherStream, WsHandshakeError> {
 	let socket = TcpStream::connect(sockaddr);
 	let timeout = tokio::time::sleep(timeout_dur);
@@ -552,12 +551,12 @@ impl TryFrom<url::Url> for Target {
 	fn try_from(url: Url) -> Result<Self, Self::Error> {
 		let _mode = match url.scheme() {
 			"ws" => Mode::Plain,
-			#[cfg(feature = "__tls")]
+			#[cfg(feature = "tls")]
 			"wss" => Mode::Tls,
 			invalid_scheme => {
-				#[cfg(feature = "__tls")]
+				#[cfg(feature = "tls")]
 				let err = format!("`{invalid_scheme}` not supported, expects 'ws' or 'wss'");
-				#[cfg(not(feature = "__tls"))]
+				#[cfg(not(feature = "tls"))]
 				let err = format!("`{invalid_scheme}` not supported, expects 'ws' ('wss' requires the tls feature)");
 				return Err(WsHandshakeError::Url(err.into()));
 			}
@@ -582,39 +581,12 @@ impl TryFrom<url::Url> for Target {
 }
 
 // NOTE: this is slow and should be used sparingly.
-#[cfg(feature = "__tls")]
+#[cfg(feature = "tls")]
 fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsConnector, WsHandshakeError> {
-	use tokio_rustls::rustls;
-
-	let mut roots = rustls::RootCertStore::empty();
-
-	match cert_store {
-		#[cfg(feature = "native-tls")]
-		CertificateStore::Native => {
-			let mut first_error = None;
-			let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
-			for cert in certs {
-				if let Err(err) = roots.add(cert) {
-					first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
-				}
-			}
-			if roots.is_empty() {
-				let err = first_error
-					.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No valid certificate found"));
-				return Err(WsHandshakeError::CertificateStore(err));
-			}
-		}
-		#[cfg(feature = "webpki-tls")]
-		CertificateStore::WebPki => {
-			roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-		}
-		_ => {
-			let err = io::Error::new(io::ErrorKind::NotFound, "Invalid certificate store");
-			return Err(WsHandshakeError::CertificateStore(err));
-		}
+	let config = match cert_store {
+		CertificateStore::Native => rustls_platform_verifier::tls_config(),
+		CertificateStore::Custom(cfg) => cfg.clone(),
 	};
-
-	let config = rustls::ClientConfig::builder().with_root_certificates(roots).with_no_client_auth();
 
 	Ok(std::sync::Arc::new(config).into())
 }
@@ -640,14 +612,14 @@ mod tests {
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
 	}
 
-	#[cfg(feature = "__tls")]
+	#[cfg(feature = "tls")]
 	#[test]
 	fn wss_works_with_port() {
 		let target = parse_target("wss://kusama-rpc.polkadot.io:9999").unwrap();
 		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:9999", Mode::Tls, "/");
 	}
 
-	#[cfg(not(feature = "__tls"))]
+	#[cfg(not(feature = "tls"))]
 	#[test]
 	fn wss_fails_with_tls_feature() {
 		let err = parse_target("wss://kusama-rpc.polkadot.io").unwrap_err();
@@ -686,7 +658,7 @@ mod tests {
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my.htm");
 	}
 
-	#[cfg(feature = "__tls")]
+	#[cfg(feature = "tls")]
 	#[test]
 	fn wss_default_port_is_omitted() {
 		let target = parse_target("wss://127.0.0.1:443").unwrap();
