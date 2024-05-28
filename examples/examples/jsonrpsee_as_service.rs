@@ -44,7 +44,7 @@ use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
-use jsonrpsee::server::{stop_channel, Extensions, ServerHandle, StopHandle, TowerServiceBuilder};
+use jsonrpsee::server::{stop_channel, ServerHandle, StopHandle, TowerServiceBuilder};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};
 use jsonrpsee::{MethodResponse, Methods};
@@ -100,7 +100,7 @@ pub trait Rpc {
 
 #[async_trait]
 impl RpcServer for () {
-	async fn trusted_call(&self, _ext: &Extensions) -> Result<String, ErrorObjectOwned> {
+	async fn trusted_call(&self) -> Result<String, ErrorObjectOwned> {
 		Ok("mysecret".to_string())
 	}
 }

@@ -3,7 +3,7 @@
 use jsonrpsee::core::{async_trait, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::{Extensions, PendingSubscriptionSink, SubscriptionMessage};
+use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,31 +42,25 @@ pub trait Api {
 
 #[async_trait]
 impl ApiServer for () {
-	fn sync_call(&self, _ext: &Extensions, _: String) -> Result<String, ErrorObjectOwned> {
+	fn sync_call(&self, _: String) -> Result<String, ErrorObjectOwned> {
 		Ok("sync_call".to_string())
 	}
 
-	async fn async_call(&self, _ext: &Extensions, _: String) -> Result<String, ErrorObjectOwned> {
+	async fn async_call(&self, _: String) -> Result<String, ErrorObjectOwned> {
 		Ok("async_call".to_string())
 	}
 
-	async fn sub(
-		&self,
-		pending: PendingSubscriptionSink,
-		_ext: &Extensions,
-		_: PubSubKind,
-		_: PubSubParams,
-	) -> SubscriptionResult {
+	async fn sub(&self, pending: PendingSubscriptionSink, _: PubSubKind, _: PubSubParams) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 		sink.send(SubscriptionMessage::from("msg")).await?;
 		Ok(())
 	}
 
-	fn sync_sub(&self, _: PendingSubscriptionSink, _ext: &Extensions, _: String) -> SubscriptionResult {
+	fn sync_sub(&self, _: PendingSubscriptionSink, _: String) -> SubscriptionResult {
 		Ok(())
 	}
 
-	fn blocking_method(&self, _ext: &Extensions, _: String) -> Result<u16, ErrorObjectOwned> {
+	fn blocking_method(&self, _: String) -> Result<u16, ErrorObjectOwned> {
 		Ok(42)
 	}
 }

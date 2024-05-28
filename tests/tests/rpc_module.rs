@@ -175,24 +175,19 @@ async fn calling_method_without_server_using_proc_macro() {
 
 	#[async_trait]
 	impl CoolServer for CoolServerImpl {
-		fn rebel_without_cause(&self, _ext: &Extensions) -> RpcResult<bool> {
+		fn rebel_without_cause(&self) -> RpcResult<bool> {
 			Ok(false)
 		}
 
-		fn rebel(&self, _ext: &Extensions, gun: Gun, map: HashMap<u8, u8>) -> RpcResult<String> {
+		fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> RpcResult<String> {
 			Ok(format!("{} {:?}", map.values().len(), gun))
 		}
 
-		async fn can_have_any_name(
-			&self,
-			_ext: &Extensions,
-			beverage: Beverage,
-			some_bytes: Vec<u8>,
-		) -> RpcResult<String> {
+		async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> RpcResult<String> {
 			Ok(format!("drink: {:?}, phases: {:?}", beverage, some_bytes))
 		}
 
-		async fn can_have_options(&self, _ext: &Extensions, x: usize) -> RpcResult<Option<String>> {
+		async fn can_have_options(&self, x: usize) -> RpcResult<Option<String>> {
 			match x {
 				0 => Ok(Some("one".to_string())),
 				1 => Ok(None),

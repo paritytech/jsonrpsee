@@ -62,10 +62,10 @@ where
 #[rpc(server, client)]
 pub trait Rpc {
 	/// method with connection ID.
-	#[method(name = "connectionIdMethod")]
+	#[method(name = "connectionIdMethod", with_extensions)]
 	async fn method(&self, first_param: usize, second_param: u16) -> Result<u32, ErrorObjectOwned>;
 
-	#[subscription(name = "subscribeConnectionId", item = u32)]
+	#[subscription(name = "subscribeConnectionId", item = u32, with_extensions)]
 	async fn sub(&self) -> SubscriptionResult;
 }
 

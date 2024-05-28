@@ -92,17 +92,19 @@ pub struct RpcMethod {
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemFn,
 	pub aliases: Vec<String>,
+	pub with_extensions: bool,
 }
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemFn) -> syn::Result<Self> {
-		let [aliases, blocking, name, param_kind] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind"])?;
+		let [aliases, blocking, name, param_kind, with_extensions] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "with_extensions"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
 		let param_kind = parse_param_kind(param_kind)?;
+		let with_extensions = optional(with_extensions, Argument::flag)?.is_some();
 
 		let docs = extract_doc_comments(&method.attrs);
 		let deprecated = match find_attr(&method.attrs, "deprecated") {
@@ -144,7 +146,18 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, deprecated })
+		Ok(Self {
+			aliases,
+			blocking,
+			name,
+			params,
+			param_kind,
+			returns,
+			signature: method,
+			docs,
+			deprecated,
+			with_extensions,
+		})
 	}
 }
 
@@ -166,12 +179,21 @@ pub struct RpcSubscription {
 	pub signature: syn::TraitItemFn,
 	pub aliases: Vec<String>,
 	pub unsubscribe_aliases: Vec<String>,
+	pub with_extensions: bool,
 }
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemFn) -> syn::Result<Self> {
-		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases] = AttributeMeta::parse(attr)?
-			.retain(["aliases", "item", "name", "param_kind", "unsubscribe", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases, with_extensions] =
+			AttributeMeta::parse(attr)?.retain([
+				"aliases",
+				"item",
+				"name",
+				"param_kind",
+				"unsubscribe",
+				"unsubscribe_aliases",
+				"with_extensions",
+			])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let map = name?.value::<NameMapping>()?;
@@ -180,6 +202,7 @@ impl RpcSubscription {
 		let item = item?.value()?;
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
+		let with_extensions = optional(with_extensions, Argument::flag)?.is_some();
 
 		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = match parse_subscribe(unsubscribe)? {
@@ -218,6 +241,7 @@ impl RpcSubscription {
 			signature: sub,
 			aliases,
 			docs,
+			with_extensions,
 		})
 	}
 }

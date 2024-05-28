@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{Extensions, ServerBuilder};
+use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::ws_client::*;
 
 #[rpc(client, server, namespace = "foo")]
@@ -21,19 +21,19 @@ pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn method_with_array_param(&self, _ext: &Extensions, param_a: u8, param_b: String) -> RpcResult<u16> {
+	async fn method_with_array_param(&self, param_a: u8, param_b: String) -> RpcResult<u16> {
 		assert_eq!(param_a, 0);
 		assert_eq!(&param_b, "a");
 		Ok(42u16)
 	}
 
-	async fn method_with_map_param(&self, _ext: &Extensions, param_a: u8, param_b: String) -> RpcResult<u16> {
+	async fn method_with_map_param(&self, param_a: u8, param_b: String) -> RpcResult<u16> {
 		assert_eq!(param_a, 0);
 		assert_eq!(&param_b, "a");
 		Ok(42u16)
 	}
 
-	async fn method_with_default_param(&self, _ext: &Extensions, param_a: u8, param_b: String) -> RpcResult<u16> {
+	async fn method_with_default_param(&self, param_a: u8, param_b: String) -> RpcResult<u16> {
 		assert_eq!(param_a, 0);
 		assert_eq!(&param_b, "a");
 		Ok(42u16)
