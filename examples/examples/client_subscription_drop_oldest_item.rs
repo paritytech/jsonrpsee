@@ -103,7 +103,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = Server::builder().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, pending, _| async move {
+		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, pending, _, _| async move {
 			let sub = pending.accept().await.unwrap();
 
 			for i in 0..usize::MAX {

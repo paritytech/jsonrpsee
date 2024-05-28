@@ -1,6 +1,0 @@
-error: Methods must be asynchronous when used with `raw_method`; use `async fn` instead of `fn`
- --> tests/ui/incorrect/method/method_sync_raw_incompatible.rs:5:2
-  |
-5 | /     #[method(name = "a", raw_method)]
-6 | |     fn a(&self, param: Vec<u8>) -> RpcResult<u16>;
-  | |__________________________________________________^

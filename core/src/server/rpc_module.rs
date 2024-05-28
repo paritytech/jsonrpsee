@@ -42,6 +42,7 @@ use crate::server::subscription::{
 use crate::server::{ResponsePayload, LOG_TARGET};
 use crate::traits::ToRpcParams;
 use futures_util::{future::BoxFuture, FutureExt};
+use http::Extensions;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
 	ErrorObjectOwned, Id, Params, Request, Response, ResponseSuccess, SubscriptionId as RpcSubscriptionId,
@@ -56,20 +57,20 @@ use super::IntoResponse;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> MethodResponse>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize, Extensions) -> MethodResponse>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
-pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
+pub type AsyncMethod<'a> = Arc<
+	dyn Send
+		+ Sync
+		+ Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize, Extensions) -> BoxFuture<'a, MethodResponse>,
+>;
 
-/// Similar to [`AsyncMethod`], but represents an asynchronous handler with connection details.
-#[doc(hidden)]
-pub type AsyncMethodWithDetails<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, ConnectionDetails, MaxResponseSize) -> BoxFuture<'a, MethodResponse>>;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState) -> BoxFuture<'a, MethodResponse>>;
+	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, SubscriptionState, Extensions) -> BoxFuture<'a, MethodResponse>>;
 // Method callback to unsubscribe.
-type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
+type UnsubscriptionMethod =
+	Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize, Extensions) -> MethodResponse>;
 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -83,27 +84,6 @@ pub type MaxResponseSize = usize;
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 pub type RawRpcResponse = (String, mpsc::Receiver<String>);
-
-/// The connection details exposed to the server methods.
-#[derive(Debug, Clone)]
-#[allow(missing_copy_implementations)]
-#[doc(hidden)]
-pub struct ConnectionDetails {
-	id: ConnectionId,
-}
-
-impl ConnectionDetails {
-	/// Construct a new [`ConnectionDetails`].
-	#[doc(hidden)]
-	pub fn _new(id: ConnectionId) -> ConnectionDetails {
-		Self { id }
-	}
-
-	/// Get the connection ID.
-	pub fn id(&self) -> ConnectionId {
-		self.id
-	}
-}
 
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
@@ -157,9 +137,6 @@ pub enum MethodCallback {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
-	/// Asynchronous method handler with details.
-	#[doc(hidden)]
-	AsyncWithDetails(AsyncMethodWithDetails<'static>),
 	/// Subscription method handler.
 	Subscription(SubscriptionMethod<'static>),
 	/// Unsubscription method handler.
@@ -213,7 +190,6 @@ impl Debug for MethodCallback {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Async(_) => write!(f, "Async"),
-			Self::AsyncWithDetails(_) => write!(f, "AsyncWithDetails"),
 			Self::Sync(_) => write!(f, "Sync"),
 			Self::Subscription(_) => write!(f, "Subscription"),
 			Self::Unsubscription(_) => write!(f, "Unsubscription"),
@@ -304,7 +280,7 @@ impl Methods {
 	///     use jsonrpsee::core::RpcResult;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_method::<RpcResult<u64>, _>("echo_call", |params, _| {
+	///     module.register_method::<RpcResult<u64>, _>("echo_call", |params, _, _| {
 	///         params.one::<u64>().map_err(Into::into)
 	///     }).unwrap();
 	///
@@ -340,7 +316,7 @@ impl Methods {
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async {
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _, _| async {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
@@ -378,20 +354,19 @@ impl Methods {
 		subscription_permit: SubscriptionPermit,
 	) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::channel(buf_size);
-		let id = req.id.clone();
-		let params = Params::new(req.params.as_ref().map(|params| params.as_ref().get()));
+		let Request { id, method, params, extensions, .. } = req;
+		let params = Params::new(params.as_ref().map(|params| params.as_ref().get()));
 
-		let response = match self.method(&req.method) {
-			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
-			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX),
-			Some(MethodCallback::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX).await,
-			Some(MethodCallback::AsyncWithDetails(cb)) => {
-				(cb)(id.into_owned(), params.into_owned(), ConnectionDetails::_new(0), usize::MAX).await
+		let response = match self.method(&method) {
+			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
+			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX, extensions),
+			Some(MethodCallback::Async(cb)) => {
+				(cb)(id.into_owned(), params.into_owned(), 0, usize::MAX, extensions).await
 			}
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
-				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state).await;
+				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state, extensions).await;
 
 				// This message is not used because it's used for metrics so we discard in other to
 				// not read once this is used for subscriptions.
@@ -401,7 +376,7 @@ impl Methods {
 
 				res
 			}
-			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
+			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX, extensions),
 		};
 
 		let is_success = response.is_success();
@@ -411,7 +386,7 @@ impl Methods {
 			n.notify(is_success);
 		}
 
-		tracing::trace!(target: LOG_TARGET, "[Methods::inner_call] Method: {}, response: {}", req.method, rp);
+		tracing::trace!(target: LOG_TARGET, "[Methods::inner_call] Method: {}, response: {}", method, rp);
 
 		(rp, rx)
 	}
@@ -431,7 +406,7 @@ impl Methods {
 	///     use jsonrpsee::core::{EmptyServerParams, RpcResult};
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| async move {
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _, _| async move {
 	///         let sink = pending.accept().await?;
 	///         sink.send("one answer".into()).await?;
 	///         Ok(())
@@ -540,7 +515,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_core::server::RpcModule;
 	///
 	/// let mut module = RpcModule::new(());
-	/// module.register_method("say_hello", |_params, _ctx| "lo").unwrap();
+	/// module.register_method("say_hello", |_params, _ctx, _| "lo").unwrap();
 	/// ```
 	pub fn register_method<R, F>(
 		&mut self,
@@ -550,14 +525,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
-		F: Fn(Params, &Context) -> R + Send + Sync + 'static,
+		F: Fn(Params, &Context, &Extensions) -> R + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Sync(Arc::new(move |id, params, max_response_size| {
-				let rp = callback(params, &*ctx).into_response();
-				MethodResponse::response(id, rp, max_response_size)
+			MethodCallback::Sync(Arc::new(move |id, params, max_response_size, extensions| {
+				let rp = callback(params, &*ctx, &extensions).into_response();
+				MethodResponse::response_with_extensions(id, rp, max_response_size, extensions)
 			})),
 		)
 	}
@@ -570,7 +545,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_core::server::RpcModule;
 	///
 	/// let mut module = RpcModule::new(());
-	/// module.register_async_method("say_hello", |_params, _ctx| async { "lo" }).unwrap();
+	/// module.register_async_method("say_hello", |_params, _ctx, _| async { "lo" }).unwrap();
 	///
 	/// ```
 	///
@@ -582,18 +557,18 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		R: IntoResponse + 'static,
 		Fut: Future<Output = R> + Send,
-		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
+		Fun: (Fn(Params<'static>, Arc<Context>, Extensions) -> Fut) + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size| {
+			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size, extensions| {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
 				let future = async move {
-					let rp = callback(params, ctx).await.into_response();
-					MethodResponse::response(id, rp, max_response_size)
+					let rp = callback(params, ctx, extensions.clone()).await.into_response();
+					MethodResponse::response_with_extensions(id, rp, max_response_size, extensions)
 				};
 				future.boxed()
 			})),
@@ -611,24 +586,29 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
-		F: Fn(Params, Arc<Context>) -> R + Clone + Send + Sync + 'static,
+		F: Fn(Params, Arc<Context>, &Extensions) -> R + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size| {
+			MethodCallback::Async(Arc::new(move |id, params, _, max_response_size, extensions| {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
+				let extensions2 = extensions.clone();
 				tokio::task::spawn_blocking(move || {
-					let rp = callback(params, ctx).into_response();
-					MethodResponse::response(id, rp, max_response_size)
+					let rp = callback(params, ctx, &extensions2).into_response();
+					MethodResponse::response_with_extensions(id, rp, max_response_size, extensions2)
 				})
 				.map(|result| match result {
 					Ok(r) => r,
 					Err(err) => {
 						tracing::error!(target: LOG_TARGET, "Join error for blocking RPC method: {:?}", err);
-						MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
+						MethodResponse::error_with_extensions(
+							Id::Null,
+							ErrorObject::from(ErrorCode::InternalError),
+							extensions,
+						)
 					}
 				})
 				.boxed()
@@ -636,43 +616,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		)?;
 
 		Ok(callback)
-	}
-
-	/// Register a new raw RPC method, which computes the response with the given callback.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use jsonrpsee_core::server::RpcModule;
-	///
-	/// let mut module = RpcModule::new(());
-	/// module.register_async_method_with_details("say_hello", |_params, _connection_details, _ctx| async { "lo" }).unwrap();
-	/// ```
-	#[doc(hidden)]
-	pub fn register_async_method_with_details<R, Fun, Fut>(
-		&mut self,
-		method_name: &'static str,
-		callback: Fun,
-	) -> Result<&mut MethodCallback, RegisterMethodError>
-	where
-		R: IntoResponse + 'static,
-		Fut: Future<Output = R> + Send,
-		Fun: (Fn(Params<'static>, ConnectionDetails, Arc<Context>) -> Fut) + Clone + Send + Sync + 'static,
-	{
-		let ctx = self.ctx.clone();
-		self.methods.verify_and_insert(
-			method_name,
-			MethodCallback::AsyncWithDetails(Arc::new(move |id, params, connection_details, max_response_size| {
-				let ctx = ctx.clone();
-				let callback = callback.clone();
-
-				let future = async move {
-					let rp = callback(params, connection_details, ctx).await.into_response();
-					MethodResponse::response(id, rp, max_response_size)
-				};
-				future.boxed()
-			})),
-		)
 	}
 
 	/// Register a new publish/subscribe interface using JSON-RPC notifications.
@@ -737,7 +680,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| async move {
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx, _| async move {
 	///
 	///     let x = match params.one::<usize>() {
 	///         Ok(x) => x,
@@ -778,7 +721,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
 		Context: Send + Sync + 'static,
-		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>) -> Fut) + Send + Sync + Clone + 'static,
+		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>, Extensions) -> Fut)
+			+ Send
+			+ Sync
+			+ Clone
+			+ 'static,
 		Fut: Future<Output = R> + Send + 'static,
 		R: IntoSubscriptionCloseResponse + Send,
 	{
@@ -789,7 +736,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let callback = {
 			self.methods.verify_and_insert(
 				subscribe_method_name,
-				MethodCallback::Subscription(Arc::new(move |id, params, method_sink, conn| {
+				MethodCallback::Subscription(Arc::new(move |id, params, method_sink, conn, extensions| {
 					let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: conn.id_provider.next_id() };
 
 					// response to the subscription call.
@@ -813,7 +760,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					// definition and not the as same when the subscription call has been completed.
 					//
 					// This runs until the subscription callback has completed.
-					let sub_fut = callback(params.into_owned(), sink, ctx.clone());
+					let sub_fut = callback(params.into_owned(), sink, ctx.clone(), extensions.clone());
 
 					tokio::spawn(async move {
 						// This will wait for the subscription future to be resolved
@@ -840,15 +787,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					Box::pin(async move {
 						match rx.await {
-							Ok(rp) => {
+							Ok(mut rp) => {
 								// If the subscription was accepted then send a message
 								// to subscription task otherwise rely on the drop impl.
 								if rp.is_success() {
 									let _ = accepted_tx.send(());
 								}
+								*rp.extensions_mut() = extensions;
 								rp
 							}
-							Err(_) => MethodResponse::error(id, ErrorCode::InternalError),
+							Err(_) => MethodResponse::error_with_extensions(id, ErrorCode::InternalError, extensions),
 						}
 					})
 				})),
@@ -873,7 +821,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription_raw("sub", "notif_name", "unsub", |params, pending, ctx| {
+	/// ctx.register_subscription_raw("sub", "notif_name", "unsub", |params, pending, ctx, _| {
 	///
 	///     // The params are parsed outside the async block below to avoid cloning the bytes.
 	///     let val = match params.one::<usize>() {
@@ -912,7 +860,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
 		Context: Send + Sync + 'static,
-		F: (Fn(Params, PendingSubscriptionSink, Arc<Context>) -> R) + Send + Sync + Clone + 'static,
+		F: (Fn(Params, PendingSubscriptionSink, Arc<Context>, &Extensions) -> R) + Send + Sync + Clone + 'static,
 		R: IntoSubscriptionCloseResponse,
 	{
 		let subscribers = self.verify_and_register_unsubscribe(subscribe_method_name, unsubscribe_method_name)?;
@@ -922,7 +870,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let callback = {
 			self.methods.verify_and_insert(
 				subscribe_method_name,
-				MethodCallback::Subscription(Arc::new(move |id, params, method_sink, conn| {
+				MethodCallback::Subscription(Arc::new(move |id, params, method_sink, conn, extensions| {
 					let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: conn.id_provider.next_id() };
 
 					// response to the subscription call.
@@ -938,14 +886,17 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						permit: conn.subscription_permit,
 					};
 
-					callback(params, sink, ctx.clone());
+					callback(params, sink, ctx.clone(), &extensions);
 
 					let id = id.clone().into_owned();
 
 					Box::pin(async move {
 						match rx.await {
-							Ok(rp) => rp,
-							Err(_) => MethodResponse::error(id, ErrorCode::InternalError),
+							Ok(mut rp) => {
+								*rp.extensions_mut() = extensions;
+								rp
+							}
+							Err(_) => MethodResponse::error_with_extensions(id, ErrorCode::InternalError, extensions),
 						}
 					})
 				})),
@@ -976,7 +927,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::Unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
+				MethodCallback::Unsubscription(Arc::new(move |id, params, conn_id, max_response_size, extensions| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -988,7 +939,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response(id, ResponsePayload::success(false), max_response_size);
+							return MethodResponse::response_with_extensions(
+								id,
+								ResponsePayload::success(false),
+								max_response_size,
+								extensions,
+							);
 						}
 					};
 

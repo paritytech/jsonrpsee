@@ -206,7 +206,7 @@ async fn ws_method_call_works_over_proxy_stream() {
 }
 
 #[tokio::test]
-async fn raw_methods_with_different_ws_clients() {
+async fn extensions_with_different_ws_clients() {
 	init_logger();
 
 	let server_addr = server().await;
@@ -214,13 +214,13 @@ async fn raw_methods_with_different_ws_clients() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	// Connection ID does not change for the same client.
-	let connection_id: usize = client.request("raw_method", rpc_params![]).await.unwrap();
-	let identical_connection_id: usize = client.request("raw_method", rpc_params![]).await.unwrap();
+	let connection_id: usize = client.request("get_connection_id", rpc_params![]).await.unwrap();
+	let identical_connection_id: usize = client.request("get_connection_id", rpc_params![]).await.unwrap();
 	assert_eq!(connection_id, identical_connection_id);
 
 	// Connection ID is different for different clients.
 	let second_client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let second_connection_id: usize = second_client.request("raw_method", rpc_params![]).await.unwrap();
+	let second_connection_id: usize = second_client.request("get_connection_id", rpc_params![]).await.unwrap();
 	assert_ne!(connection_id, second_connection_id);
 }
 
@@ -504,7 +504,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",
-			|_, pending, mut tx| async move {
+			|_, pending, mut tx, _| async move {
 				let sink = pending.accept().await?;
 				let msg = SubscriptionMessage::from_json(&1)?;
 				sink.send(msg).await?;
@@ -546,7 +546,7 @@ async fn ws_server_stop_subscription_when_dropped() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx| async { Ok(()) })
+		.register_subscription("subscribe_nop", "h", "unsubscribe_nop", |_params, _pending, _ctx, _| async { Ok(()) })
 		.unwrap();
 
 	let _handle = server.start(module);
@@ -806,7 +806,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| async move {
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
@@ -861,7 +861,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| async {
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _, _| async {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
@@ -1091,7 +1091,7 @@ async fn ws_host_filtering_wildcard_works() {
 	let server = ServerBuilder::default().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	let _handle = server.start(module);
 
@@ -1113,7 +1113,7 @@ async fn http_host_filtering_wildcard_works() {
 	let server = ServerBuilder::default().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	let _handle = server.start(module);
 
@@ -1134,7 +1134,7 @@ async fn deny_invalid_host() {
 	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	let _handle = server.start(module);
 
@@ -1166,7 +1166,7 @@ async fn disable_host_filter_works() {
 	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	let _handle = server.start(module);
 
@@ -1311,7 +1311,7 @@ async fn response_payload_async_api_works() {
 
 		let mut module = RpcModule::new(state);
 		module
-			.register_method("get", |_params, ctx| {
+			.register_method("get", |_params, ctx, _| {
 				let ctx = ctx.clone();
 				let (rp, rp_future) = ResponsePayload::success(1).notify_on_completion();
 
@@ -1340,13 +1340,18 @@ async fn response_payload_async_api_works() {
 			.unwrap();
 
 		module
-			.register_subscription::<Result<(), StringError>, _, _>("sub", "s", "unsub", |_, pending, ctx| async move {
-				let sink = pending.accept().await?;
-				let (tx, rx) = tokio::sync::oneshot::channel();
-				*ctx.lock().await = Some((sink, tx));
-				let _ = rx.await;
-				Err("Dropped".into())
-			})
+			.register_subscription::<Result<(), StringError>, _, _>(
+				"sub",
+				"s",
+				"unsub",
+				|_, pending, ctx, _| async move {
+					let sink = pending.accept().await?;
+					let (tx, rx) = tokio::sync::oneshot::channel();
+					*ctx.lock().await = Some((sink, tx));
+					let _ = rx.await;
+					Err("Dropped".into())
+				},
+			)
 			.unwrap();
 
 		let server = Server::builder().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
@@ -1398,7 +1403,7 @@ async fn run_shutdown_test(transport: &str) {
 		let mut module = RpcModule::new((tx, call_answered.clone()));
 
 		module
-			.register_async_method("sleep_20s", |_, mut ctx| async move {
+			.register_async_method("sleep_20s", |_, mut ctx, _| async move {
 				let ctx = Arc::make_mut(&mut ctx);
 				let _ = ctx.0.send(());
 				tokio::time::sleep(Duration::from_secs(20)).await;

@@ -30,7 +30,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::Server;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, ResponsePayload};
+use jsonrpsee::{rpc_params, Extensions, ResponsePayload};
 
 #[rpc(client, server, namespace = "state")]
 pub trait Rpc {
@@ -42,7 +42,7 @@ pub trait Rpc {
 pub struct RpcServerImpl;
 
 impl RpcServer for RpcServerImpl {
-	fn storage_keys(&self) -> ResponsePayload<'static, String> {
+	fn storage_keys(&self, _ext: &Extensions) -> ResponsePayload<'static, String> {
 		let (rp, rp_future) = ResponsePayload::success("ehheeheh".to_string()).notify_on_completion();
 
 		tokio::spawn(async move {

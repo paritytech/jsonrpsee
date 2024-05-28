@@ -41,7 +41,7 @@ pin-project = { version = "1", optional = true }
 [features]
 default = []
 http-helpers = ["bytes", "futures-util", "http-body", "http-body-util", "http"]
-server = ["futures-util/alloc", "rustc-hash/std", "parking_lot", "rand", "tokio/rt", "tokio/sync", "tokio/macros", "tokio/time"]
+server = ["futures-util/alloc", "rustc-hash/std", "parking_lot", "rand", "tokio/rt", "tokio/sync", "tokio/macros", "tokio/time", "http"]
 client = ["futures-util/sink", "tokio/sync"]
 async-client = [
 	"client",

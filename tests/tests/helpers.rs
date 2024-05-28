@@ -28,39 +28,52 @@
 #![allow(dead_code)]
 
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use std::time::Duration;
 
 use fast_socks5::client::Socks5Stream;
 use fast_socks5::server;
+use futures::future::{self, Either};
 use futures::{SinkExt, Stream, StreamExt};
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
+
+use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
-	PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
+	stop_channel, PendingSubscriptionSink, RpcModule, RpcServiceBuilder, Server, ServerBuilder, ServerHandle,
+	SubscriptionMessage, TrySendError,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
-use jsonrpsee::SubscriptionCloseResponse;
+use jsonrpsee::{Methods, SubscriptionCloseResponse};
 use serde::Serialize;
 use tokio::net::TcpStream;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
+use tower::Service;
 use tower_http::cors::CorsLayer;
 
 pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| async move {
-			let interval = interval(Duration::from_millis(50));
-			let stream = IntervalStream::new(interval).map(move |_| &"hello from subscription");
-			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
-		})
+		.register_subscription(
+			"subscribe_hello",
+			"subscribe_hello",
+			"unsubscribe_hello",
+			|_, pending, _, _| async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).map(move |_| &"hello from subscription");
+				pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
+			},
+		)
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| async {
+		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _, _| async {
 			let interval = interval(Duration::from_millis(100));
 			let stream = IntervalStream::new(interval).map(move |_| 1337_usize);
 			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
@@ -72,7 +85,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 			"subscribe_add_one",
 			"subscribe_add_one",
 			"unsubscribe_add_one",
-			|params, pending, _| async move {
+			|params, pending, _, _| async move {
 				let count = match params.one::<usize>().map(|c| c.wrapping_add(1)) {
 					Ok(count) => count,
 					Err(e) => {
@@ -90,7 +103,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| async {
+		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _, _| async {
 			let _sink = pending.accept().await?;
 			tokio::time::sleep(Duration::from_secs(1)).await;
 			Err("Server closed the stream because it was lazy".to_string().into())
@@ -98,7 +111,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| async move {
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _, _| async move {
 			let interval = interval(Duration::from_millis(50));
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 			pipe_from_stream_and_drop(pending, stream).await.map_err(Into::into)
@@ -106,14 +119,14 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_option", "n", "unsubscribe_option", |_, pending, _| async move {
+		.register_subscription("subscribe_option", "n", "unsubscribe_option", |_, pending, _, _| async move {
 			let _ = pending.accept().await;
 			SubscriptionCloseResponse::None
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_unit", "n", "unubscribe_unit", |_, pending, _| async move {
+		.register_subscription("subscribe_unit", "n", "unubscribe_unit", |_, pending, _, _| async move {
 			let _sink = pending.accept().await?;
 			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 			Ok(())
@@ -133,19 +146,30 @@ pub async fn server_with_subscription() -> SocketAddr {
 }
 
 pub async fn server() -> SocketAddr {
-	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	#[derive(Debug, Clone)]
+	struct ConnectionDetails<S> {
+		inner: S,
+		connection_id: u32,
+	}
+
+	impl<'a, S> RpcServiceT<'a> for ConnectionDetails<S>
+	where
+		S: RpcServiceT<'a>,
+	{
+		type Future = S::Future;
+
+		fn call(&self, mut request: jsonrpsee::types::Request<'a>) -> Self::Future {
+			request.extensions_mut().insert(self.connection_id);
+			self.inner.call(request)
+		}
+	}
+
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| "hello").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
+	module.register_method("get_connection_id", |_, _, ext| *ext.get::<u32>().unwrap()).unwrap();
 
 	module
-		.register_async_method_with_details(
-			"raw_method",
-			|_, connection_details, _| async move { connection_details.id() },
-		)
-		.unwrap();
-
-	module
-		.register_async_method("slow_hello", |_, _| async {
+		.register_async_method("slow_hello", |_, _, _| async {
 			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 			"hello"
 		})
@@ -159,14 +183,83 @@ pub async fn server() -> SocketAddr {
 		}
 	}
 
-	module.register_async_method::<Result<(), CustomError>, _, _>("err", |_, _| async { Err(CustomError) }).unwrap();
+	module.register_async_method::<Result<(), CustomError>, _, _>("err", |_, _, _| async { Err(CustomError) }).unwrap();
 
-	let addr = server.local_addr().unwrap();
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let (stop_hdl, server_hdl) = stop_channel();
+	let methods: Methods = module.into();
 
-	let server_handle = server.start(module);
+	let methods2 = methods.clone();
+	tokio::spawn(async move {
+		let conn_id = Arc::new(AtomicU32::new(0));
+		// Create and finalize a server configuration from a TowerServiceBuilder
+		// given an RpcModule and the stop handle.
+		let svc_builder = jsonrpsee::server::Server::builder().to_service_builder();
 
-	tokio::spawn(server_handle.stopped());
+		loop {
+			let stream = tokio::select! {
+				res = listener.accept() => {
+					match res {
+						Ok((stream, _remote_addr)) => stream,
+						Err(e) => {
+							tracing::error!("failed to accept v4 connection: {:?}", e);
+							continue;
+						}
+					}
+				}
+				_ = stop_hdl.clone().shutdown() => break,
+			};
 
+			let methods2 = methods2.clone();
+			let stop_hdl2 = stop_hdl.clone();
+			let svc_builder2 = svc_builder.clone();
+			let conn_id2 = conn_id.clone();
+			let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+				let connection_id = conn_id2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+				let rpc_middleware = RpcServiceBuilder::default()
+					.layer_fn(move |service| ConnectionDetails { inner: service, connection_id });
+
+				// Start a new service with our own connection ID.
+				let mut tower_service = svc_builder2
+					.clone()
+					.set_rpc_middleware(rpc_middleware)
+					.connection_id(connection_id)
+					.build(methods2.clone(), stop_hdl2.clone());
+
+				async move { tower_service.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
+			});
+
+			let stop_hdl2 = stop_hdl.clone();
+			// Spawn a new task to serve each respective (Hyper) connection.
+			tokio::spawn(async move {
+				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+				let conn = builder.serve_connection_with_upgrades(TokioIo::new(stream), svc);
+				let stopped = stop_hdl2.shutdown();
+
+				// Pin the future so that it can be polled.
+				tokio::pin!(stopped, conn);
+
+				let res = match future::select(conn, stopped).await {
+					// Return the connection if not stopped.
+					Either::Left((conn, _)) => conn,
+					// If the server is stopped, we should gracefully shutdown
+					// the connection and poll it until it finishes.
+					Either::Right((_, mut conn)) => {
+						conn.as_mut().graceful_shutdown();
+						conn.await
+					}
+				};
+
+				// Log any errors that might have occurred.
+				if let Err(err) = res {
+					tracing::error!(err=?err, "HTTP connection failed");
+				}
+			});
+		}
+	});
+
+	tokio::spawn(server_hdl.stopped());
 	addr
 }
 
@@ -178,7 +271,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, pending, mut tx| async move {
+		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, pending, mut tx, _| async move {
 			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
@@ -211,10 +304,10 @@ pub async fn server_with_cors(cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 	let server = Server::builder().set_http_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	module.register_method("say_hello", |_, _| "hello").unwrap();
-	module.register_method("notif", |_, _| "").unwrap();
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
+	module.register_method("notif", |_, _, _| "").unwrap();
 
-	module.register_method("system_health", |_, _| serde_json::json!({ "health": true })).unwrap();
+	module.register_method("system_health", |_, _, _| serde_json::json!({ "health": true })).unwrap();
 
 	let handle = server.start(module);
 	(addr, handle)

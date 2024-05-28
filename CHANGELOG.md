@@ -450,7 +450,7 @@ After this release one must do something like:
 
 
 	module
-		.register_subscription("sub", "s", "unsub", |_, pending, _| async move {
+		.register_subscription("sub", "s", "unsub", |_, pending, _, _| async move {
 			let stream = stream();
 			pipe_from_stream(sink, stream).await
 		})
@@ -493,7 +493,7 @@ Example:
 
 ```rust
 	module
-		.register_subscription::<RpcResult<(), _, _>::("sub", "s", "unsub", |_, pending, _| async move {
+		.register_subscription::<RpcResult<(), _, _>::("sub", "s", "unsub", |_, pending, _, _| async move {
 			// This just answers the RPC call and if this fails => no close notification is sent out.
 			pending.accept().await?;
 			// This is sent out as a `close notification/message`.

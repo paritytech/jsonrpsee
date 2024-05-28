@@ -227,7 +227,7 @@ pub(crate) mod visitor;
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc};
+///     use jsonrpsee::{proc_macros::rpc, Extensions};
 ///     use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage, IntoSubscriptionCloseResponse, SubscriptionCloseResponse};
 ///     use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
 ///
@@ -309,15 +309,15 @@ pub(crate) mod visitor;
 ///     // Note that the trait name we use is `MyRpcServer`, not `MyRpc`!
 ///     #[async_trait]
 ///     impl MyRpcServer for RpcServerImpl {
-///         async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
+///         async fn async_method(&self, _ext: &Extensions, _param_a: u8, _param_b: String) -> RpcResult<u16> {
 ///             Ok(42)
 ///         }
 ///
-///         fn sync_method(&self) -> RpcResult<u16> {
+///         fn sync_method(&self, _ext: &Extensions) -> RpcResult<u16> {
 ///             Ok(10)
 ///         }
 ///
-///         fn blocking_method(&self) -> RpcResult<u16> {
+///         fn blocking_method(&self, _ext: &Extensions) -> RpcResult<u16> {
 ///             // This will block current thread for 1 second, which is fine since we marked
 ///             // this method as `blocking` above.
 ///             std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -326,14 +326,14 @@ pub(crate) mod visitor;
 ///
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
-///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink, _ext: &Extensions) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
 ///             sink.send("Response_A".into()).await?;
 ///             Ok(())
 ///         }
 ///
 ///         // Send out two values on the subscription.
-///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+///         async fn sub(&self, pending: PendingSubscriptionSink, _ext: &Extensions) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
 ///             let msg1 = SubscriptionMessage::from("Response_A");
@@ -348,7 +348,7 @@ pub(crate) mod visitor;
 ///         // If one doesn't want sent out a close message when a subscription terminates or treat
 ///         // errors as subscription error notifications then it's possible to implement
 ///         // `IntoSubscriptionCloseResponse` for customized behavior.
-///         async fn sub_custom_close_msg(&self, pending: PendingSubscriptionSink) -> CloseResponse {
+///         async fn sub_custom_close_msg(&self, pending: PendingSubscriptionSink, _ext: &Extensions) -> CloseResponse {
 ///             let Ok(sink) = pending.accept().await else {
 ///                 return CloseResponse::None;
 ///             };

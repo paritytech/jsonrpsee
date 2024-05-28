@@ -67,7 +67,7 @@ async fn run_server() -> anyhow::Result<(ServerHandle, Addrs)> {
 	let v6_addr = SocketAddr::new("::1".parse().unwrap(), port);
 
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| "lo")?;
+	module.register_method("say_hello", |_, _, _| "lo")?;
 
 	// Bind to both IPv4 and IPv6 addresses.
 	let listener_v4 = TcpListener::bind(&v4_addr).await?;

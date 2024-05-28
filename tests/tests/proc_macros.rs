@@ -49,7 +49,7 @@ mod rpc_impl {
 	use jsonrpsee::core::{async_trait, SubscriptionResult};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
-	use jsonrpsee::ConnectionDetails;
+	use jsonrpsee::Extensions;
 
 	pub struct CustomSubscriptionRet;
 
@@ -74,9 +74,6 @@ mod rpc_impl {
 
 		#[method(name = "bar")]
 		fn sync_method(&self) -> Result<u16, ErrorObjectOwned>;
-
-		#[method(name = "syncRaw", raw_method)]
-		async fn async_raw_method(&self) -> Result<usize, ErrorObjectOwned>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
 		async fn sub(&self) -> SubscriptionResult;
@@ -158,19 +155,20 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl RpcServer for RpcServerImpl {
-		async fn async_method(&self, _param_a: u8, _param_b: String) -> Result<u16, ErrorObjectOwned> {
+		async fn async_method(
+			&self,
+			_ext: &Extensions,
+			_param_a: u8,
+			_param_b: String,
+		) -> Result<u16, ErrorObjectOwned> {
 			Ok(42)
 		}
 
-		fn sync_method(&self) -> Result<u16, ErrorObjectOwned> {
+		fn sync_method(&self, _ext: &Extensions) -> Result<u16, ErrorObjectOwned> {
 			Ok(10)
 		}
 
-		async fn async_raw_method(&self, connection_details: ConnectionDetails) -> Result<usize, ErrorObjectOwned> {
-			Ok(connection_details.id())
-		}
-
-		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+		async fn sub(&self, pending: PendingSubscriptionSink, _ext: &Extensions) -> SubscriptionResult {
 			let sink = pending.accept().await?;
 			sink.send("Response_A".into()).await?;
 			sink.send("Response_B".into()).await?;
@@ -178,7 +176,12 @@ mod rpc_impl {
 			Ok(())
 		}
 
-		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
+		async fn sub_with_params(
+			&self,
+			pending: PendingSubscriptionSink,
+			_ext: &Extensions,
+			val: u32,
+		) -> SubscriptionResult {
 			let sink = pending.accept().await?;
 			let msg = SubscriptionMessage::from_json(&val)?;
 			sink.send(msg.clone()).await?;
@@ -187,23 +190,28 @@ mod rpc_impl {
 			Ok(())
 		}
 
-		async fn sub_not_result(&self, pending: PendingSubscriptionSink) {
+		async fn sub_not_result(&self, pending: PendingSubscriptionSink, _ext: &Extensions) {
 			let sink = pending.accept().await.unwrap();
 			sink.send("lo".into()).await.unwrap();
 		}
 
-		async fn sub_custom_ret(&self, _pending: PendingSubscriptionSink, _x: usize) -> CustomSubscriptionRet {
+		async fn sub_custom_ret(
+			&self,
+			_pending: PendingSubscriptionSink,
+			_ext: &Extensions,
+			_x: usize,
+		) -> CustomSubscriptionRet {
 			CustomSubscriptionRet
 		}
 
-		fn sync_sub(&self, pending: PendingSubscriptionSink) {
+		fn sync_sub(&self, pending: PendingSubscriptionSink, _ext: &Extensions) {
 			tokio::spawn(async move {
 				let sink = pending.accept().await.unwrap();
 				sink.send("hello".into()).await.unwrap();
 			});
 		}
 
-		async fn sub_unit_type(&self, _pending: PendingSubscriptionSink, _x: usize) {}
+		async fn sub_unit_type(&self, _pending: PendingSubscriptionSink, _ext: &Extensions, _x: usize) {}
 	}
 }
 
@@ -245,24 +253,6 @@ async fn proc_macros_generic_ws_client_api() {
 	assert_eq!(first_recv, 42);
 	let second_recv = sub.next().await.unwrap().unwrap();
 	assert_eq!(second_recv, 42);
-}
-
-#[tokio::test]
-async fn raw_methods_with_different_ws_clients() {
-	init_logger();
-
-	let server_addr = server().await;
-	let server_url = format!("ws://{}", server_addr);
-	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-
-	// Connection ID does not change for the same client.
-	let connection_id = client.async_raw_method().await.unwrap();
-	assert_eq!(connection_id, client.async_raw_method().await.unwrap());
-
-	// Connection ID is different for different clients.
-	let second_client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let second_connection_id = second_client.async_raw_method().await.unwrap();
-	assert_ne!(connection_id, second_connection_id);
 }
 
 #[tokio::test]

@@ -39,6 +39,7 @@ mod subscription;
 
 pub use error::*;
 pub use helpers::*;
+pub use http::Extensions;
 pub use method_response::*;
 pub use rpc_module::*;
 pub use subscription::*;

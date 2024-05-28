@@ -32,7 +32,7 @@ use std::sync::Arc;
 use crate::middleware::rpc::RpcServiceT;
 use futures_util::future::BoxFuture;
 use jsonrpsee_core::server::{
-	BoundedSubscriptions, ConnectionDetails, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
+	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
@@ -77,13 +77,13 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		let conn_id = self.conn_id;
 		let max_response_body_size = self.max_response_body_size;
 
-		let params = req.params();
-		let name = req.method_name();
-		let id = req.id().clone();
+		let Request { id, method, params, extensions, .. } = req;
+		let params = jsonrpsee_types::Params::new(params.as_ref().map(|p| serde_json::value::RawValue::get(p)));
 
-		match self.methods.method_with_name(name) {
+		match self.methods.method_with_name(&method) {
 			None => {
-				let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
+				let mut rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
+				*rp.extensions_mut() = extensions;
 				ResponseFuture::ready(rp)
 			}
 			Some((_name, method)) => match method {
@@ -91,19 +91,11 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					let params = params.into_owned();
 					let id = id.into_owned();
 
-					let fut = (callback)(id, params, conn_id, max_response_body_size);
-					ResponseFuture::future(fut)
-				}
-				MethodCallback::AsyncWithDetails(callback) => {
-					let params = params.into_owned();
-					let id = id.into_owned();
-
-					// Note: Add the `Request::extensions` to the connection details when available here.
-					let fut = (callback)(id, params, ConnectionDetails::_new(conn_id), max_response_body_size);
+					let fut = (callback)(id, params, conn_id, max_response_body_size, extensions);
 					ResponseFuture::future(fut)
 				}
 				MethodCallback::Sync(callback) => {
-					let rp = (callback)(id, params, max_response_body_size);
+					let rp = (callback)(id, params, max_response_body_size, extensions);
 					ResponseFuture::ready(rp)
 				}
 				MethodCallback::Subscription(callback) => {
@@ -123,7 +115,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 						let conn_state =
 							SubscriptionState { conn_id, id_provider: &*id_provider.clone(), subscription_permit: p };
 
-						let fut = callback(id.clone(), params, sink, conn_state);
+						let fut = callback(id.clone(), params, sink, conn_state, extensions);
 						ResponseFuture::future(fut)
 					} else {
 						let max = bounded_subscriptions.max();
@@ -140,7 +132,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 						return ResponseFuture::ready(rp);
 					};
 
-					let rp = callback(id, params, conn_id, max_response_body_size);
+					let rp = callback(id, params, conn_id, max_response_body_size, extensions);
 					ResponseFuture::ready(rp)
 				}
 			},

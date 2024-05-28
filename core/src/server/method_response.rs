@@ -28,6 +28,7 @@ use crate::server::{BoundedWriter, LOG_TARGET};
 use std::task::Poll;
 
 use futures_util::{Future, FutureExt};
+use http::Extensions;
 use jsonrpsee_types::error::{
 	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
 };
@@ -59,6 +60,8 @@ pub struct MethodResponse {
 	/// Optional callback that may be utilized to notif
 	/// that the method response has been processed
 	on_close: Option<MethodResponseNotifyTx>,
+	/// The response's extensions.
+	extensions: Extensions,
 }
 
 impl MethodResponse {
@@ -121,6 +124,7 @@ impl MethodResponse {
 			success_or_error: MethodResponseResult::Success,
 			kind: ResponseKind::Batch,
 			on_close: None,
+			extensions: Extensions::new(),
 		}
 	}
 
@@ -143,6 +147,19 @@ impl MethodResponse {
 	where
 		T: Serialize + Clone,
 	{
+		Self::response_with_extensions(id, rp, max_response_size, Extensions::new())
+	}
+
+	/// Similar to [`MethodResponse::response`] but with extensions.
+	pub fn response_with_extensions<T>(
+		id: Id,
+		rp: ResponsePayload<T>,
+		max_response_size: usize,
+		extensions: Extensions,
+	) -> Self
+	where
+		T: Serialize + Clone,
+	{
 		let mut writer = BoundedWriter::new(max_response_size);
 
 		let success_or_error = if let InnerResponsePayload::Error(ref e) = rp.inner {
@@ -158,7 +175,7 @@ impl MethodResponse {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
 
-				Self { result, success_or_error, kind, on_close: rp.on_exit }
+				Self { result, success_or_error, kind, on_close: rp.on_exit, extensions: Extensions::new() }
 			}
 			Err(err) => {
 				tracing::error!(target: LOG_TARGET, "Error serializing response: {:?}", err);
@@ -180,6 +197,7 @@ impl MethodResponse {
 						success_or_error: MethodResponseResult::Failed(err_code),
 						kind,
 						on_close: rp.on_exit,
+						extensions: Extensions::new(),
 					}
 				} else {
 					let err = ErrorCode::InternalError;
@@ -191,6 +209,7 @@ impl MethodResponse {
 						success_or_error: MethodResponseResult::Failed(err.code()),
 						kind,
 						on_close: rp.on_exit,
+						extensions,
 					}
 				}
 			}
@@ -205,8 +224,8 @@ impl MethodResponse {
 		rp
 	}
 
-	/// Create a [`MethodResponse`] from a JSON-RPC error.
-	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
+	/// Similar to [`MethodResponse::error`] but with extensions.
+	pub fn error_with_extensions<'a>(id: Id, err: impl Into<ErrorObject<'a>>, extensions: Extensions) -> Self {
 		let err: ErrorObject = err.into();
 		let err_code = err.code();
 		let err = InnerResponsePayload::<()>::error_borrowed(err);
@@ -216,7 +235,23 @@ impl MethodResponse {
 			success_or_error: MethodResponseResult::Failed(err_code),
 			kind: ResponseKind::MethodCall,
 			on_close: None,
+			extensions,
 		}
+	}
+
+	/// Create a [`MethodResponse`] from a JSON-RPC error.
+	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
+		Self::error_with_extensions(id, err, Extensions::new())
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 
