@@ -166,7 +166,7 @@ pub async fn server() -> SocketAddr {
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _, _| "hello").unwrap();
-	module.register_method("raw_method", |_, _, ext| *ext.get::<u32>().unwrap()).unwrap();
+	module.register_method("get_connection_id", |_, _, ext| *ext.get::<u32>().unwrap()).unwrap();
 
 	module
 		.register_async_method("slow_hello", |_, _, _| async {
