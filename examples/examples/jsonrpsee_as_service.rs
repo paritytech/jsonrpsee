@@ -35,16 +35,16 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use futures::future::{self, Either};
 use futures::FutureExt;
 use hyper::header::AUTHORIZATION;
 use hyper::HeaderMap;
-use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
-use jsonrpsee::server::{stop_channel, Extensions, ServerHandle, StopHandle, TowerServiceBuilder};
+use jsonrpsee::server::{
+	serve_with_graceful_shutdown, stop_channel, Extensions, ServerHandle, StopHandle, TowerServiceBuilder,
+};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};
 use jsonrpsee::{MethodResponse, Methods};
@@ -147,8 +147,6 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
-	use hyper::service::service_fn;
-
 	let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 9944))).await?;
 
 	// This state is cloned for every connection
@@ -201,7 +199,7 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 			};
 			let per_conn2 = per_conn.clone();
 
-			let svc = service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+			let svc = tower::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
 				let is_websocket = jsonrpsee::server::ws::is_upgrade_request(&req);
 				let transport_label = if is_websocket { "ws" } else { "http" };
 				let PerConnection { methods, stop_handle, metrics, svc_builder } = per_conn2.clone();
@@ -262,33 +260,7 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 				}
 			});
 
-			let per_conn = per_conn.clone();
-			tokio::spawn(async move {
-				let stop_handle2 = per_conn.stop_handle.clone();
-
-				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-				let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);
-				let stopped = stop_handle2.shutdown();
-
-				// Pin the future so that it can be polled.
-				tokio::pin!(stopped, conn);
-
-				let res = match future::select(conn, stopped).await {
-					// Return the connection if not stopped.
-					Either::Left((conn, _)) => conn,
-					// If the server is stopped, we should gracefully shutdown
-					// the connection and poll it until it finishes.
-					Either::Right((_, mut conn)) => {
-						conn.as_mut().graceful_shutdown();
-						conn.await
-					}
-				};
-
-				// Log any errors that might have occurred.
-				if let Err(err) = res {
-					tracing::error!(err=?err, "HTTP connection failed");
-				}
-			});
+			tokio::spawn(serve_with_graceful_shutdown(sock, svc, stop_handle.clone().shutdown()));
 		}
 	});
 

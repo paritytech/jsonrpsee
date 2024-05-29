@@ -44,15 +44,15 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
-use futures::future::{self, BoxFuture, Either};
+use futures::future::BoxFuture;
 use futures::FutureExt;
-use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
-	http, stop_channel, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle,
+	http, serve_with_graceful_shutdown, stop_channel, ws, ConnectionGuard, ConnectionState, RpcServiceBuilder,
+	ServerConfig, ServerHandle, StopHandle,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -158,8 +158,6 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<ServerHandle> {
-	use hyper::service::service_fn;
-
 	// Construct our SocketAddr to listen on...
 	let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 9944))).await?;
 
@@ -224,7 +222,7 @@ async fn run_server() -> anyhow::Result<ServerHandle> {
 			// Create a service handler.
 			let stop_handle2 = per_conn.stop_handle.clone();
 			let per_conn = per_conn.clone();
-			let svc = service_fn(move |req| {
+			let svc = tower::service_fn(move |req| {
 				let PerConnection {
 					methods,
 					stop_handle,
@@ -307,30 +305,7 @@ async fn run_server() -> anyhow::Result<ServerHandle> {
 			});
 
 			// Upgrade the connection to a HTTP service.
-			tokio::spawn(async move {
-				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-				let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);
-				let stopped = stop_handle2.shutdown();
-
-				// Pin the future so that it can be polled.
-				tokio::pin!(stopped, conn);
-
-				let res = match future::select(conn, stopped).await {
-					// Return the connection if not stopped.
-					Either::Left((conn, _)) => conn,
-					// If the server is stopped, we should gracefully shutdown
-					// the connection and poll it until it finishes.
-					Either::Right((_, mut conn)) => {
-						conn.as_mut().graceful_shutdown();
-						conn.await
-					}
-				};
-
-				// Log any errors that might have occurred.
-				if let Err(err) = res {
-					tracing::error!(err=?err, "HTTP connection failed");
-				}
-			});
+			tokio::spawn(serve_with_graceful_shutdown(sock, svc, stop_handle2.shutdown()));
 		}
 	});
 
