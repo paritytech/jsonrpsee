@@ -73,7 +73,7 @@ type UnsubscriptionMethod =
 	Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize, Extensions) -> MethodResponse>;
 
 /// Connection ID.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default, serde::Deserialize, serde::Serialize)]
 pub struct ConnectionId(pub usize);
 
 impl From<u32> for ConnectionId {
