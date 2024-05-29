@@ -51,7 +51,7 @@ where
 	let rpc_service = rpc_service.service(RpcService::new(
 		methods.into(),
 		max_response_body_size as usize,
-		conn.conn_id as usize,
+		conn.conn_id.into(),
 		RpcServiceCfg::OnlyCalls,
 	));
 

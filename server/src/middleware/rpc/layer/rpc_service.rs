@@ -30,6 +30,7 @@ use super::ResponseFuture;
 use std::sync::Arc;
 
 use crate::middleware::rpc::RpcServiceT;
+use crate::ConnectionId;
 use futures_util::future::BoxFuture;
 use jsonrpsee_core::server::{
 	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
@@ -41,7 +42,7 @@ use jsonrpsee_types::{ErrorObject, Request};
 /// JSON-RPC service middleware.
 #[derive(Clone, Debug)]
 pub struct RpcService {
-	conn_id: usize,
+	conn_id: ConnectionId,
 	methods: Methods,
 	max_response_body_size: usize,
 	cfg: RpcServiceCfg,
@@ -63,7 +64,12 @@ pub(crate) enum RpcServiceCfg {
 
 impl RpcService {
 	/// Create a new service.
-	pub(crate) fn new(methods: Methods, max_response_body_size: usize, conn_id: usize, cfg: RpcServiceCfg) -> Self {
+	pub(crate) fn new(
+		methods: Methods,
+		max_response_body_size: usize,
+		conn_id: ConnectionId,
+		cfg: RpcServiceCfg,
+	) -> Self {
 		Self { methods, max_response_body_size, conn_id, cfg }
 	}
 }
@@ -77,7 +83,9 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		let conn_id = self.conn_id;
 		let max_response_body_size = self.max_response_body_size;
 
-		let Request { id, method, params, extensions, .. } = req;
+		let Request { id, method, params, mut extensions, .. } = req;
+		extensions.insert(conn_id);
+
 		let params = jsonrpsee_types::Params::new(params.as_ref().map(|p| serde_json::value::RawValue::get(p)));
 
 		match self.methods.method_with_name(&method) {
