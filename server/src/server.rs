@@ -1101,7 +1101,7 @@ where
 					let rpc_service = RpcService::new(
 						this.methods.clone(),
 						this.server_cfg.max_response_body_size as usize,
-						this.conn_id as usize,
+						this.conn_id.into(),
 						cfg,
 					);
 
@@ -1160,7 +1160,7 @@ where
 			let rpc_service = self.rpc_middleware.service(RpcService::new(
 				methods,
 				max_response_size as usize,
-				this.conn_id as usize,
+				this.conn_id.into(),
 				RpcServiceCfg::OnlyCalls,
 			));
 

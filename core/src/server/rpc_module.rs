@@ -72,9 +72,21 @@ pub type SubscriptionMethod<'a> =
 type UnsubscriptionMethod =
 	Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize, Extensions) -> MethodResponse>;
 
-/// Connection ID, used for stateful protocol such as WebSockets.
-/// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
-pub type ConnectionId = usize;
+/// Connection ID.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+pub struct ConnectionId(pub usize);
+
+impl From<u32> for ConnectionId {
+	fn from(id: u32) -> Self {
+		Self(id as usize)
+	}
+}
+
+impl From<usize> for ConnectionId {
+	fn from(id: usize) -> Self {
+		Self(id)
+	}
+}
 
 /// Max response size.
 pub type MaxResponseSize = usize;
@@ -356,16 +368,18 @@ impl Methods {
 		let (tx, mut rx) = mpsc::channel(buf_size);
 		let Request { id, method, params, extensions, .. } = req;
 		let params = Params::new(params.as_ref().map(|params| params.as_ref().get()));
+		let max_response_size = usize::MAX;
+		let conn_id = ConnectionId(0);
 
 		let response = match self.method(&method) {
 			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
-			Some(MethodCallback::Sync(cb)) => (cb)(id, params, usize::MAX, extensions),
+			Some(MethodCallback::Sync(cb)) => (cb)(id, params, max_response_size, extensions),
 			Some(MethodCallback::Async(cb)) => {
-				(cb)(id.into_owned(), params.into_owned(), 0, usize::MAX, extensions).await
+				(cb)(id.into_owned(), params.into_owned(), conn_id, max_response_size, extensions).await
 			}
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
-					SubscriptionState { conn_id: 0, id_provider: &RandomIntegerIdProvider, subscription_permit };
+					SubscriptionState { conn_id, id_provider: &RandomIntegerIdProvider, subscription_permit };
 				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state, extensions).await;
 
 				// This message is not used because it's used for metrics so we discard in other to
@@ -376,7 +390,7 @@ impl Methods {
 
 				res
 			}
-			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX, extensions),
+			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, conn_id, max_response_size, extensions),
 		};
 
 		let is_success = response.is_success();
