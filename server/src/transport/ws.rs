@@ -443,7 +443,7 @@ where
 			let rpc_service = RpcService::new(
 				methods.into(),
 				server_cfg.max_response_body_size as usize,
-				conn.conn_id as usize,
+				conn.conn_id.into(),
 				rpc_service_cfg,
 			);
 
