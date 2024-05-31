@@ -399,7 +399,7 @@ async fn invalid_request_object() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-	let req = r#"{"method":"bar","id":1}"#;
+	let req = r#"{"nethod":"bar","id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, invalid_request(Id::Num(1)));
 }

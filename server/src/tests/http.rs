@@ -398,7 +398,7 @@ async fn invalid_request_object() {
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
-	let req = r#"{"method":"bar","id":1}"#;
+	let req = r#"{"nethod":"bar","id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, invalid_request(Id::Num(1)));
