@@ -306,7 +306,7 @@ where
 						*missed_pings += 1;
 
 						if *missed_pings >= p.max_failures {
-							tracing::debug!(target: LOG_TARGET, "WS ping/pong inactivity limit reached");
+							tracing::debug!(target: LOG_TARGET, "WS ping/pong inactivity limit reached; closing connection);
 							break Receive::ConnectionClosed;
 						}
 					}
