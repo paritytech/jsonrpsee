@@ -311,7 +311,7 @@ impl Methods {
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other`
 	/// into `self`, removing and returning any existing methods with the same
 	/// name.
-	pub fn merge_replacing(&mut self, other: impl Into<Methods>) -> Vec<(&'static str, MethodCallback)> {
+	pub fn merge_replace(&mut self, other: impl Into<Methods>) -> Vec<(&'static str, MethodCallback)> {
 		let mut other = other.into();
 		let callbacks = self.mut_callbacks();
 
@@ -336,7 +336,7 @@ impl Methods {
 	/// Note: If a conflict exists, and `cond` evaluates to false, the method
 	/// will not be replaced and the new method will be dropped. Methods
 	/// dropped this way will **not** be included in the returned list.
-	pub fn merge_replacing_if(
+	pub fn merge_replace_if(
 		&mut self,
 		other: impl Into<Methods>,
 		cond: impl Fn(&'static str) -> bool,
