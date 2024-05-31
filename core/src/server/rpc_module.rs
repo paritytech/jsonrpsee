@@ -980,6 +980,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		R: IntoSubscriptionCloseResponse + Send,
 	{
 		let prev = self.methods.remove(subscribe_method_name);
+		// This method is auto-generated within the `register_subscription`
+		// method. As such we can safely remove it without returning it.
 		self.methods.remove(unsubscribe_method_name);
 
 		// Errors here can be ignored, as we know the method is not already
