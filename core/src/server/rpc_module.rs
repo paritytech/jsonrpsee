@@ -250,10 +250,8 @@ impl Methods {
 
 	/// Inserts the method callback for a given name, replacing any existing
 	/// method with the same name.
-	pub fn insert_replacing(&mut self, name: &'static str, callback: MethodCallback) -> Option<MethodCallback> {
-		let prev = self.remove(name);
-		let _ = self.verify_and_insert(name, callback);
-		prev
+	pub fn insert(&mut self, name: &'static str, callback: MethodCallback) -> Option<MethodCallback> {
+		self.mut_callbacks().insert(name, callback)
 	}
 
 	/// Inserts the method callback for a given name. If a method with the same
@@ -264,7 +262,7 @@ impl Methods {
 	///
 	/// Note: If a conflict exists, and `cond` evaluates to false, the method
 	/// will not be replaced and the new method will be dropped.
-	pub fn insert_or_replace_if(
+	pub fn replace_if(
 		&mut self,
 		name: &'static str,
 		callback: MethodCallback,
@@ -328,7 +326,7 @@ impl Methods {
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other`
 	/// into `self`. If a method with the same name already exists, evaluates
 	/// the provided `cond` with the method name to determine whether to
-	/// replace the existing method. Uses [`Self::insert_or_replace_if`]
+	/// replace the existing method. Uses [`Self::replace_if`]
 	/// internally.
 	///
 	/// Returns a list of removed methods.
@@ -345,7 +343,7 @@ impl Methods {
 
 		let mut removed = Vec::with_capacity(other.callbacks.len());
 		for (name, callback) in other.mut_callbacks().drain() {
-			if let Some(prev) = self.insert_or_replace_if(name, callback, &cond) {
+			if let Some(prev) = self.replace_if(name, callback, &cond) {
 				removed.push((name, prev));
 			}
 		}
