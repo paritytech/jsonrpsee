@@ -300,7 +300,7 @@ mod test {
 			// Without params field
 			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(id), None, method, Some(TwoPointZero)),
 			// Without params and ID.
-			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, None, method, Some(TwoPointZero)),
+			(r#"{"id":null,"method":"subtract"}"#, None, None, method, None),
 		];
 
 		for (ser, id, params, method, version) in test_vector.iter().cloned() {
