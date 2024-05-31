@@ -256,6 +256,32 @@ impl Methods {
 		prev
 	}
 
+	/// Inserts the method callback for a given name. If a method with the same
+	/// name already exists, evaluates the provided closure to determine whether
+	/// to replace the existing method.
+	///
+	/// Returns the previous method callback if it was replaced.
+	pub fn insert_or_replace_if(
+		&mut self,
+		name: &'static str,
+		callback: MethodCallback,
+		cond: impl Fn(&'static str) -> bool,
+	) -> Option<MethodCallback> {
+		match self.mut_callbacks().entry(name) {
+			Entry::Occupied(mut entry) => {
+				if cond(name) {
+					Some(entry.insert(callback))
+				} else {
+					None
+				}
+			}
+			Entry::Vacant(vacant) => {
+				vacant.insert(callback);
+				None
+			}
+		}
+	}
+
 	/// Helper for obtaining a mut ref to the callbacks HashMap.
 	fn mut_callbacks(&mut self) -> &mut FxHashMap<&'static str, MethodCallback> {
 		Arc::make_mut(&mut self.callbacks)
@@ -292,6 +318,26 @@ impl Methods {
 				removed.push((name, prev));
 			}
 			callbacks.insert(name, callback);
+		}
+		removed
+	}
+
+	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other`
+	/// into `self`. If a method with the same name already exists, evaluates
+	/// the provided `cond` to determine whether to replace the existing
+	/// method. Returns a list of removed methods.
+	pub fn merge_replacing_if(
+		&mut self,
+		other: impl Into<Methods>,
+		cond: impl Fn(&'static str) -> bool,
+	) -> Vec<(&'static str, MethodCallback)> {
+		let mut other = other.into();
+
+		let mut removed = Vec::with_capacity(other.callbacks.len());
+		for (name, callback) in other.mut_callbacks().drain() {
+			if let Some(prev) = self.insert_or_replace_if(name, callback, &cond) {
+				removed.push((name, prev));
+			}
 		}
 		removed
 	}
