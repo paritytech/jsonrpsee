@@ -257,8 +257,8 @@ impl Methods {
 	}
 
 	/// Inserts the method callback for a given name. If a method with the same
-	/// name already exists, evaluates the provided closure to determine whether
-	/// to replace the existing method.
+	/// name already exists, evaluates the provided `cond` with the method name
+	/// to determine whether to replace the existing method.
 	///
 	/// Returns the previous method callback if it was replaced.
 	pub fn insert_or_replace_if(
@@ -324,8 +324,8 @@ impl Methods {
 
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other`
 	/// into `self`. If a method with the same name already exists, evaluates
-	/// the provided `cond` to determine whether to replace the existing
-	/// method. Returns a list of removed methods.
+	/// the provided `cond` with the method name to determine whether to
+	/// replace the existing method. Returns a list of removed methods.
 	pub fn merge_replacing_if(
 		&mut self,
 		other: impl Into<Methods>,
