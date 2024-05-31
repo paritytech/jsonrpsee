@@ -243,6 +243,19 @@ impl Methods {
 		}
 	}
 
+	/// Remove a method by name.
+	pub fn remove(&mut self, name: &'static str) -> Option<MethodCallback> {
+		self.mut_callbacks().remove(name)
+	}
+
+	/// Inserts the method callback for a given name, replacing any existing
+	/// method with the same name.
+	pub fn insert_replacing(&mut self, name: &'static str, callback: MethodCallback) -> Option<MethodCallback> {
+		let prev = self.remove(name);
+		let _ = self.verify_and_insert(name, callback);
+		prev
+	}
+
 	/// Helper for obtaining a mut ref to the callbacks HashMap.
 	fn mut_callbacks(&mut self) -> &mut FxHashMap<&'static str, MethodCallback> {
 		Arc::make_mut(&mut self.callbacks)
@@ -264,6 +277,23 @@ impl Methods {
 		}
 
 		Ok(())
+	}
+
+	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other`
+	/// into `self`, removing and returning any existing methods with the same
+	/// name.
+	pub fn merge_replacing(&mut self, other: impl Into<Methods>) -> Vec<(&'static str, MethodCallback)> {
+		let mut other = other.into();
+		let callbacks = self.mut_callbacks();
+
+		let mut removed = Vec::with_capacity(other.callbacks.len());
+		for (name, callback) in other.mut_callbacks().drain() {
+			if let Some(prev) = callbacks.remove(name) {
+				removed.push((name, prev));
+			}
+			callbacks.insert(name, callback);
+		}
+		removed
 	}
 
 	/// Returns the method callback.
@@ -551,6 +581,18 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		)
 	}
 
+	/// As [`Self::register_method`], but replaces and returns the method if
+	/// it already exists.
+	pub fn replace_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Option<MethodCallback>
+	where
+		R: IntoResponse + 'static,
+		F: Fn(Params, &Context, &Extensions) -> R + Send + Sync + 'static,
+	{
+		let prev = self.methods.remove(method_name);
+		let _ = self.register_method(method_name, callback);
+		prev
+	}
+
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
 	///
 	/// ## Examples
@@ -587,6 +629,23 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				future.boxed()
 			})),
 		)
+	}
+
+	/// As [`Self::register_async_method`], but replaces and returns the method
+	/// if it already exists.
+	pub fn replace_async_method<R, Fun, Fut>(
+		&mut self,
+		method_name: &'static str,
+		callback: Fun,
+	) -> Option<MethodCallback>
+	where
+		R: IntoResponse + 'static,
+		Fut: Future<Output = R> + Send,
+		Fun: (Fn(Params<'static>, Arc<Context>, Extensions) -> Fut) + Clone + Send + Sync + 'static,
+	{
+		let prev = self.methods.remove(method_name);
+		let _ = self.register_async_method(method_name, callback);
+		prev
 	}
 
 	/// Register a new **blocking** synchronous RPC method, which computes the response with the given callback.
@@ -630,6 +689,17 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		)?;
 
 		Ok(callback)
+	}
+
+	/// As [`Self::register_blocking_method`], but replaces and returns the method if it already exists.
+	pub fn replace_blocking_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Option<MethodCallback>
+	where
+		R: IntoResponse + 'static,
+		F: Fn(Params, Arc<Context>, &Extensions) -> R + Clone + Send + Sync + 'static,
+	{
+		let prev = self.methods.remove(method_name);
+		let _ = self.register_blocking_method(method_name, callback);
+		prev
 	}
 
 	/// Register a new publish/subscribe interface using JSON-RPC notifications.
@@ -818,6 +888,32 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		};
 
 		Ok(callback)
+	}
+
+	/// As [`Self::register_subscription`] but replaces and returns the method
+	/// if it already exists.
+	pub fn replace_subscription<R, F, Fut>(
+		&mut self,
+		subscribe_method_name: &'static str,
+		notif_method_name: &'static str,
+		unsubscribe_method_name: &'static str,
+		callback: F,
+	) -> Option<MethodCallback>
+	where
+		Context: Send + Sync + 'static,
+		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>, Extensions) -> Fut)
+			+ Send
+			+ Sync
+			+ Clone
+			+ 'static,
+		Fut: Future<Output = R> + Send + 'static,
+		R: IntoSubscriptionCloseResponse + Send,
+	{
+		let prev = self.methods.remove(subscribe_method_name);
+		self.methods.remove(unsubscribe_method_name);
+
+		let _ = self.register_subscription(subscribe_method_name, notif_method_name, unsubscribe_method_name, callback);
+		prev
 	}
 
 	/// Similar to [`RpcModule::register_subscription`] but a little lower-level API
