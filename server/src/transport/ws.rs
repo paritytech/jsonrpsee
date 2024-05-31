@@ -84,6 +84,7 @@ where
 
 	let stopped = conn.stop_handle.clone().shutdown();
 	let rpc_service = Arc::new(rpc_service);
+	let mut missed_pings = 0;
 
 	tokio::pin!(stopped);
 
@@ -103,7 +104,7 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
-		let data = match try_recv(&mut ws_stream, stopped, ping_config).await {
+		let data = match try_recv(&mut ws_stream, stopped, ping_config, &mut missed_pings).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
 			Receive::Ok(data, stop) => {
@@ -264,7 +265,12 @@ enum Receive<S> {
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.
-async fn try_recv<T, S>(ws_stream: &mut T, mut stopped: S, ping_config: Option<PingConfig>) -> Receive<S>
+async fn try_recv<T, S>(
+	ws_stream: &mut T,
+	mut stopped: S,
+	ping_config: Option<PingConfig>,
+	missed_pings: &mut usize,
+) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
 	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
@@ -274,7 +280,6 @@ where
 		Some(p) => IntervalStream::new(interval_at(tokio::time::Instant::now() + p.ping_interval, p.ping_interval)),
 		None => IntervalStream::pending(),
 	};
-	let mut missed = 0;
 
 	tokio::pin!(inactivity_check);
 
@@ -298,9 +303,10 @@ where
 			Either::Left((Either::Right((_instant, rcv)), s)) => {
 				if let Some(p) = ping_config {
 					if last_active.elapsed() > p.inactive_limit {
-						missed += 1;
+						*missed_pings += 1;
 
-						if missed >= p.max_failures {
+						if *missed_pings >= p.max_failures {
+							tracing::debug!(target: LOG_TARGET, "WS ping/pong inactivity limit reached");
 							break Receive::ConnectionClosed;
 						}
 					}
