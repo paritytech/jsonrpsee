@@ -440,7 +440,7 @@ impl WsTransportClientBuilder {
 		);
 
 		let headers: Vec<_> = match &target.basic_auth {
-			Some(basic_auth) if self.headers.contains_key(http::header::AUTHORIZATION) => {
+			Some(basic_auth) if !self.headers.contains_key(http::header::AUTHORIZATION) => {
 				let it1 =
 					self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() });
 				let it2 = std::iter::once(Header {
