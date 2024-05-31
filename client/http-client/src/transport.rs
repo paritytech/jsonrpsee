@@ -263,7 +263,7 @@ impl<L> HttpTransportClientBuilder<L> {
 		if let Some(pwd) = url.password() {
 			if !cached_headers.contains_key(hyper::header::AUTHORIZATION) {
 				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{pwd}", url.username()));
-				cached_headers.append(
+				cached_headers.insert(
 					hyper::header::AUTHORIZATION,
 					HeaderValue::from_str(&format!("Basic {digest}"))
 						.map_err(|_| Error::Url("Header value `authorization basic user:pwd` invalid".into()))?,
