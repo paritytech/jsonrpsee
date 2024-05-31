@@ -41,14 +41,13 @@ use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::tracing::client::{rx_log_from_json, tx_log_from_str};
 use crate::traits::ToRpcParams;
 use crate::JsonRawValue;
-use std::borrow::Cow as StdCow;
 
 use core::time::Duration;
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
-use jsonrpsee_types::{InvalidRequestId, ResponseSuccess, TwoPointZero};
+use jsonrpsee_types::{InvalidRequestId, ResponseSuccess};
 use manager::RequestManager;
 use std::sync::Arc;
 
