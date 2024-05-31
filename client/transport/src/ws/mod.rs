@@ -439,8 +439,8 @@ impl WsTransportClientBuilder {
 			&target.path_and_query,
 		);
 
-		let headers: Vec<_> = if let Some(basic_auth) = &target.basic_auth {
-			if !self.headers.contains_key(http::header::AUTHORIZATION) {
+		let headers: Vec<_> = match &target.basic_auth {
+			Some(basic_auth) if self.headers.contains_key(http::header::AUTHORIZATION) => {
 				let it1 =
 					self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() });
 				let it2 = std::iter::once(Header {
@@ -449,11 +449,10 @@ impl WsTransportClientBuilder {
 				});
 
 				it1.chain(it2).collect()
-			} else {
+			}
+			_ => {
 				self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() }).collect()
 			}
-		} else {
-			self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() }).collect()
 		};
 
 		client.set_headers(&headers);
@@ -587,16 +586,16 @@ impl TryFrom<url::Url> for Target {
 			path_and_query.push_str(query);
 		}
 
-		let basic_auth = match url.password() {
-			Some(pwd) if !url.username().is_empty() => {
-				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", url.username(), pwd));
-				let val = HeaderValue::from_str(&format!("Basic {digest}"))
-					.map_err(|_| WsHandshakeError::Url("Header value `authorization basic user:pwd` invalid".into()))?;
+		let basic_auth = if let Some(pwd) = url.password() {
+			let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", url.username(), pwd));
+			let val = HeaderValue::from_str(&format!("Basic {digest}"))
+				.map_err(|_| WsHandshakeError::Url("Header value `authorization basic user:pwd` invalid".into()))?;
 
-				Some(val)
-			}
-			_ => None,
+			Some(val)
+		} else {
+			None
 		};
+
 		let host_header = if let Some(port) = url.port() { format!("{host}:{port}") } else { host.to_string() };
 
 		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;

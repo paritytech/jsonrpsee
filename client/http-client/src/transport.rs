@@ -260,19 +260,16 @@ impl<L> HttpTransportClientBuilder<L> {
 			}
 		}
 
-		match url.password() {
-			Some(pwd) if !url.username().is_empty() => {
-				if !cached_headers.contains_key(hyper::header::AUTHORIZATION) {
-					let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{pwd}", url.username()));
-					cached_headers.append(
-						hyper::header::AUTHORIZATION,
-						HeaderValue::from_str(&format!("Basic {digest}"))
-							.map_err(|_| Error::Url("Header value `authorization basic user:pwd` invalid".into()))?,
-					);
-				}
+		if let Some(pwd) = url.password() {
+			if !cached_headers.contains_key(hyper::header::AUTHORIZATION) {
+				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{pwd}", url.username()));
+				cached_headers.append(
+					hyper::header::AUTHORIZATION,
+					HeaderValue::from_str(&format!("Basic {digest}"))
+						.map_err(|_| Error::Url("Header value `authorization basic user:pwd` invalid".into()))?,
+				);
 			}
-			_ => (),
-		};
+		}
 
 		Ok(HttpTransportClient {
 			target: url.as_str().to_owned(),
