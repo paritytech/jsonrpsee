@@ -551,6 +551,16 @@ impl<Context> From<RpcModule<Context>> for Methods {
 }
 
 impl<Context: Send + Sync + 'static> RpcModule<Context> {
+	/// Return a mutable reference to the currently registered methods.
+	pub fn methods_mut(&mut self) -> &mut Methods {
+		&mut self.methods
+	}
+
+	/// Remove a method by name.
+	pub fn remove_method(&mut self, method_name: &'static str) -> Option<MethodCallback> {
+		self.methods.remove(method_name)
+	}
+
 	/// Register a new synchronous RPC method, which computes the response with the given callback.
 	///
 	/// ## Examples
@@ -588,7 +598,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		R: IntoResponse + 'static,
 		F: Fn(Params, &Context, &Extensions) -> R + Send + Sync + 'static,
 	{
-		let prev = self.methods.remove(method_name);
+		let prev = self.remove_method(method_name);
+		// Errors here can be ignored, as we know the method is not already
+		// registered (we just removed it).
 		let _ = self.register_method(method_name, callback);
 		prev
 	}
@@ -643,7 +655,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Fut: Future<Output = R> + Send,
 		Fun: (Fn(Params<'static>, Arc<Context>, Extensions) -> Fut) + Clone + Send + Sync + 'static,
 	{
-		let prev = self.methods.remove(method_name);
+		let prev = self.remove_method(method_name);
+		// Errors here can be ignored, as we know the method is not already
+		// registered (we just removed it).
 		let _ = self.register_async_method(method_name, callback);
 		prev
 	}
@@ -697,7 +711,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		R: IntoResponse + 'static,
 		F: Fn(Params, Arc<Context>, &Extensions) -> R + Clone + Send + Sync + 'static,
 	{
-		let prev = self.methods.remove(method_name);
+		let prev = self.remove_method(method_name);
+		// Errors here can be ignored, as we know the method is not already
+		// registered (we just removed it).
 		let _ = self.register_blocking_method(method_name, callback);
 		prev
 	}
@@ -912,6 +928,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let prev = self.methods.remove(subscribe_method_name);
 		self.methods.remove(unsubscribe_method_name);
 
+		// Errors here can be ignored, as we know the method is not already
+		// registered (we just removed it).
 		let _ = self.register_subscription(subscribe_method_name, notif_method_name, unsubscribe_method_name, callback);
 		prev
 	}
