@@ -385,12 +385,7 @@ where
 		let mut batch_request = Vec::with_capacity(batch.len());
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
 			let id = self.id_manager.as_id_kind().into_id(id);
-			batch_request.push(RequestSer {
-				jsonrpc: TwoPointZero,
-				id,
-				method: method.into(),
-				params: params.map(StdCow::Owned),
-			});
+			batch_request.push(RequestSer::owned(id, method, params));
 		}
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);

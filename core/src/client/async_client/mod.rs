@@ -545,12 +545,7 @@ impl ClientT for Client {
 		let mut batches = Vec::with_capacity(batch.len());
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
 			let id = self.id_manager.as_id_kind().into_id(id);
-			batches.push(RequestSer {
-				jsonrpc: TwoPointZero,
-				id,
-				method: method.into(),
-				params: params.map(StdCow::Owned),
-			});
+			batches.push(RequestSer::owned(id, method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
