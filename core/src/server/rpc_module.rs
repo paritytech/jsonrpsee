@@ -261,6 +261,9 @@ impl Methods {
 	/// to determine whether to replace the existing method.
 	///
 	/// Returns the previous method callback if it was replaced.
+	///
+	/// Note: If a conflict exists, and `cond` evaluates to false, the method
+	/// will not be replaced and the new method will be dropped.
 	pub fn insert_or_replace_if(
 		&mut self,
 		name: &'static str,
@@ -325,7 +328,14 @@ impl Methods {
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other`
 	/// into `self`. If a method with the same name already exists, evaluates
 	/// the provided `cond` with the method name to determine whether to
-	/// replace the existing method. Returns a list of removed methods.
+	/// replace the existing method. Uses [`Self::insert_or_replace_if`]
+	/// internally.
+	///
+	/// Returns a list of removed methods.
+	///
+	/// Note: If a conflict exists, and `cond` evaluates to false, the method
+	/// will not be replaced and the new method will be dropped. Methods
+	/// dropped this way will **not** be included in the returned list.
 	pub fn merge_replacing_if(
 		&mut self,
 		other: impl Into<Methods>,
