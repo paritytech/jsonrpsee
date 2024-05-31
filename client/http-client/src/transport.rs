@@ -6,6 +6,7 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+use base64::Engine;
 use hyper::body::Bytes;
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -204,6 +205,7 @@ impl<L> HttpTransportClientBuilder<L> {
 			tcp_no_delay,
 		} = self;
 		let mut url = Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
+
 		if url.host_str().is_none() {
 			return Err(Error::Url("Invalid host".into()));
 		}
@@ -255,6 +257,17 @@ impl<L> HttpTransportClientBuilder<L> {
 		for (key, value) in headers.into_iter() {
 			if let Some(key) = key {
 				cached_headers.insert(key, value);
+			}
+		}
+
+		if let Some(pwd) = url.password() {
+			if !cached_headers.contains_key(hyper::header::AUTHORIZATION) {
+				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{pwd}", url.username()));
+				cached_headers.insert(
+					hyper::header::AUTHORIZATION,
+					HeaderValue::from_str(&format!("Basic {digest}"))
+						.map_err(|_| Error::Url("Header value `authorization basic user:pwd` invalid".into()))?,
+				);
 			}
 		}
 
