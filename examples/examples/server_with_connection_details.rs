@@ -38,10 +38,10 @@ use jsonrpsee::Extensions;
 #[rpc(server, client)]
 pub trait Rpc {
 	/// method with connection ID.
-	#[method(name = "connectionIdMethod")]
+	#[method(name = "connectionIdMethod", with_extensions)]
 	async fn method(&self) -> Result<usize, ErrorObjectOwned>;
 
-	#[subscription(name = "subscribeConnectionId", item = usize)]
+	#[subscription(name = "subscribeConnectionId", item = usize, with_extensions)]
 	async fn sub(&self) -> SubscriptionResult;
 }
 
