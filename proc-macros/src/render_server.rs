@@ -237,16 +237,15 @@ impl RpcDescription {
 							})
 						})
 					}
-				} else {
-					if sub.with_extensions {
-						handle_register_result(quote! {
+				} else if sub.with_extensions {
+					handle_register_result(quote! {
 							rpc.register_subscription_raw(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, ext| {
 								#parsing
 								let _ = context.as_ref().#rust_method_name(pending, &ext, #params_seq);
 								#sub_err::None
 							})
 						})
-					} else {
+				} else {
 						handle_register_result(quote! {
 							rpc.register_subscription_raw(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, _| {
 								#parsing
@@ -255,7 +254,6 @@ impl RpcDescription {
 							})
 						})
 					}
-				}
 			})
 			.collect::<Vec<_>>();
 
