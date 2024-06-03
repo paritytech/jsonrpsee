@@ -106,7 +106,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					let rp = (callback)(id, params, max_response_body_size, extensions);
 					ResponseFuture::ready(rp)
 				}
-				MethodCallback::Subscription(callback) => {
+				MethodCallback::Subscription { method: callback, .. } => {
 					let RpcServiceCfg::CallsAndSubscriptions {
 						bounded_subscriptions,
 						sink,
@@ -131,7 +131,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 						ResponseFuture::ready(rp)
 					}
 				}
-				MethodCallback::Unsubscription(callback) => {
+				MethodCallback::Unsubscription { method: callback, .. } => {
 					// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 
 					let RpcServiceCfg::CallsAndSubscriptions { .. } = self.cfg else {
@@ -143,6 +143,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					let rp = callback(id, params, conn_id, max_response_body_size, extensions);
 					ResponseFuture::ready(rp)
 				}
+				MethodCallback::Alias(_) => unreachable!("alias resolved in `method_with_name"),
 			},
 		}
 	}
