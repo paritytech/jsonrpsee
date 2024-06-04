@@ -54,7 +54,7 @@ pub(crate) mod visitor;
 ///   implements the server trait into an `RpcModule`.
 /// - For subscription methods:
 ///   - There will be one additional argument inserted right after `&self`: `subscription_sink: SubscriptionSink`.
-///   It should be used to accept or reject a subscription and send data back to subscribers.
+///     It should be used to accept or reject a subscription and send data back to the subscribers.
 ///   - The return type of the subscription method must implement `IntoSubscriptionCloseResponse`.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have

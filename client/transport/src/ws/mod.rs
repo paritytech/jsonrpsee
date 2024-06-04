@@ -56,6 +56,8 @@ const LOG_TARGET: &str = "jsonrpsee-client";
 pub type CustomCertStore = rustls::ClientConfig;
 
 /// Certificate store to use for TLS connections.
+// rustls needs the concrete `ClientConfig` type so we can't Box it here.
+#[clippy::allow(lint::large_enum_variant)]
 #[cfg(feature = "tls")]
 #[derive(Debug, Clone)]
 pub enum CertificateStore {
