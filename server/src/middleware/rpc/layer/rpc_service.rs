@@ -89,7 +89,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		match self.methods.method_with_name(&method) {
 			None => {
 				let rp =
-					MethodResponse::error_with_extensions(id, ErrorObject::from(ErrorCode::MethodNotFound), extensions);
+					MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)).with_extensions(extensions);
 				ResponseFuture::ready(rp)
 			}
 			Some((_name, method)) => match method {
@@ -113,11 +113,8 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					} = self.cfg.clone()
 					else {
 						tracing::warn!("Subscriptions not supported");
-						let rp = MethodResponse::error_with_extensions(
-							id,
-							ErrorObject::from(ErrorCode::InternalError),
-							extensions,
-						);
+						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
+							.with_extensions(extensions);
 						return ResponseFuture::ready(rp);
 					};
 
@@ -130,7 +127,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					} else {
 						let max = bounded_subscriptions.max();
 						let rp =
-							MethodResponse::error_with_extensions(id, reject_too_many_subscriptions(max), extensions);
+							MethodResponse::error(id, reject_too_many_subscriptions(max)).with_extensions(extensions);
 						ResponseFuture::ready(rp)
 					}
 				}
@@ -139,11 +136,8 @@ impl<'a> RpcServiceT<'a> for RpcService {
 
 					let RpcServiceCfg::CallsAndSubscriptions { .. } = self.cfg else {
 						tracing::warn!("Subscriptions not supported");
-						let rp = MethodResponse::error_with_extensions(
-							id,
-							ErrorObject::from(ErrorCode::InternalError),
-							extensions,
-						);
+						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
+							.with_extensions(extensions);
 						return ResponseFuture::ready(rp);
 					};
 

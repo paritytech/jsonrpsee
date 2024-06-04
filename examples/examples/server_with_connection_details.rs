@@ -114,8 +114,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let rpc_middleware =
-		jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new().layer_fn(|service| LoggingMiddleware(service));
+	let rpc_middleware = jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new().layer_fn(LoggingMiddleware);
 
 	let server = jsonrpsee::server::Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let addr = server.local_addr()?;
