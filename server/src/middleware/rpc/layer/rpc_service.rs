@@ -83,15 +83,13 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		let conn_id = self.conn_id;
 		let max_response_body_size = self.max_response_body_size;
 
-		let Request { id, method, params, mut extensions, .. } = req;
-		extensions.insert(conn_id);
-
+		let Request { id, method, params, extensions, .. } = req;
 		let params = jsonrpsee_types::Params::new(params.as_ref().map(|p| serde_json::value::RawValue::get(p)));
 
 		match self.methods.method_with_name(&method) {
 			None => {
-				let mut rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
-				*rp.extensions_mut() = extensions;
+				let rp =
+					MethodResponse::error_with_extensions(id, ErrorObject::from(ErrorCode::MethodNotFound), extensions);
 				ResponseFuture::ready(rp)
 			}
 			Some((_name, method)) => match method {
@@ -115,7 +113,11 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					} = self.cfg.clone()
 					else {
 						tracing::warn!("Subscriptions not supported");
-						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+						let rp = MethodResponse::error_with_extensions(
+							id,
+							ErrorObject::from(ErrorCode::InternalError),
+							extensions,
+						);
 						return ResponseFuture::ready(rp);
 					};
 
@@ -127,7 +129,8 @@ impl<'a> RpcServiceT<'a> for RpcService {
 						ResponseFuture::future(fut)
 					} else {
 						let max = bounded_subscriptions.max();
-						let rp = MethodResponse::error(id, reject_too_many_subscriptions(max));
+						let rp =
+							MethodResponse::error_with_extensions(id, reject_too_many_subscriptions(max), extensions);
 						ResponseFuture::ready(rp)
 					}
 				}
@@ -136,7 +139,11 @@ impl<'a> RpcServiceT<'a> for RpcService {
 
 					let RpcServiceCfg::CallsAndSubscriptions { .. } = self.cfg else {
 						tracing::warn!("Subscriptions not supported");
-						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError));
+						let rp = MethodResponse::error_with_extensions(
+							id,
+							ErrorObject::from(ErrorCode::InternalError),
+							extensions,
+						);
 						return ResponseFuture::ready(rp);
 					};
 
