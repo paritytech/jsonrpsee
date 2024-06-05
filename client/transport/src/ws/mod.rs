@@ -30,6 +30,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use base64::Engine;
 use futures_util::io::{BufReader, BufWriter};
 use jsonrpsee_core::client::{MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
@@ -55,6 +56,8 @@ const LOG_TARGET: &str = "jsonrpsee-client";
 pub type CustomCertStore = rustls::ClientConfig;
 
 /// Certificate store to use for TLS connections.
+// rustls needs the concrete `ClientConfig` type so we can't Box it here.
+#[allow(clippy::large_enum_variant)]
 #[cfg(feature = "tls")]
 #[derive(Debug, Clone)]
 pub enum CertificateStore {
@@ -438,8 +441,22 @@ impl WsTransportClientBuilder {
 			&target.path_and_query,
 		);
 
-		let headers: Vec<_> =
-			self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() }).collect();
+		let headers: Vec<_> = match &target.basic_auth {
+			Some(basic_auth) if !self.headers.contains_key(http::header::AUTHORIZATION) => {
+				let it1 =
+					self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() });
+				let it2 = std::iter::once(Header {
+					name: http::header::AUTHORIZATION.as_str(),
+					value: basic_auth.as_bytes(),
+				});
+
+				it1.chain(it2).collect()
+			}
+			_ => {
+				self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() }).collect()
+			}
+		};
+
 		client.set_headers(&headers);
 
 		// Perform the initial handshake.
@@ -531,8 +548,8 @@ impl From<soketto::connection::Error> for WsError {
 }
 
 /// Represents a verified remote WebSocket address.
-#[derive(Debug, Clone)]
-pub struct Target {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Target {
 	/// Socket addresses resolved the host name.
 	sockaddrs: Vec<SocketAddr>,
 	/// The host name (domain or IP address).
@@ -543,6 +560,8 @@ pub struct Target {
 	_mode: Mode,
 	/// The path and query parts from an URL.
 	path_and_query: String,
+	/// Optional <username:password> from an URL.
+	basic_auth: Option<HeaderValue>,
 }
 
 impl TryFrom<url::Url> for Target {
@@ -569,14 +588,20 @@ impl TryFrom<url::Url> for Target {
 			path_and_query.push_str(query);
 		}
 
+		let basic_auth = if let Some(pwd) = url.password() {
+			let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", url.username(), pwd));
+			let val = HeaderValue::from_str(&format!("Basic {digest}"))
+				.map_err(|_| WsHandshakeError::Url("Header value `authorization basic user:pwd` invalid".into()))?;
+
+			Some(val)
+		} else {
+			None
+		};
+
+		let host_header = if let Some(port) = url.port() { format!("{host}:{port}") } else { host.to_string() };
+
 		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self {
-			sockaddrs,
-			host,
-			host_header: url.authority().to_string(),
-			_mode,
-			path_and_query: path_and_query.to_string(),
-		})
+		Ok(Self { sockaddrs, host, host_header, _mode, path_and_query: path_and_query.to_string(), basic_auth })
 	}
 }
 
@@ -593,13 +618,23 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 
 #[cfg(test)]
 mod tests {
+	use http::HeaderValue;
+
 	use super::{Mode, Target, Url, WsHandshakeError};
 
-	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
+	fn assert_ws_target(
+		target: Target,
+		host: &str,
+		host_header: &str,
+		mode: Mode,
+		path_and_query: &str,
+		basic_auth: Option<HeaderValue>,
+	) {
 		assert_eq!(&target.host, host);
 		assert_eq!(&target.host_header, host_header);
 		assert_eq!(target._mode, mode);
 		assert_eq!(&target.path_and_query, path_and_query);
+		assert_eq!(target.basic_auth, basic_auth);
 	}
 
 	fn parse_target(uri: &str) -> Result<Target, WsHandshakeError> {
@@ -609,14 +644,14 @@ mod tests {
 	#[test]
 	fn ws_works_with_port() {
 		let target = parse_target("ws://127.0.0.1:9933").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/", None);
 	}
 
 	#[cfg(feature = "tls")]
 	#[test]
 	fn wss_works_with_port() {
 		let target = parse_target("wss://kusama-rpc.polkadot.io:9999").unwrap();
-		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:9999", Mode::Tls, "/");
+		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:9999", Mode::Tls, "/", None);
 	}
 
 	#[cfg(not(feature = "tls"))]
@@ -643,31 +678,42 @@ mod tests {
 	#[test]
 	fn url_with_path_works() {
 		let target = parse_target("ws://127.0.0.1/my-special-path").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my-special-path");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my-special-path", None);
 	}
 
 	#[test]
 	fn url_with_query_works() {
 		let target = parse_target("ws://127.0.0.1/my?name1=value1&name2=value2").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my?name1=value1&name2=value2");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my?name1=value1&name2=value2", None);
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
 		let target = parse_target("ws://127.0.0.1:/my.htm#ignore").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my.htm");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/my.htm", None);
 	}
 
 	#[cfg(feature = "tls")]
 	#[test]
 	fn wss_default_port_is_omitted() {
 		let target = parse_target("wss://127.0.0.1:443").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Tls, "/");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Tls, "/", None);
 	}
 
 	#[test]
 	fn ws_default_port_is_omitted() {
 		let target = parse_target("ws://127.0.0.1:80").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/");
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", None);
+	}
+
+	#[test]
+	fn ws_with_username_and_password() {
+		use base64::Engine;
+
+		let target = parse_target("ws://user:pwd@127.0.0.1").unwrap();
+		let digest = base64::engine::general_purpose::STANDARD.encode("user:pwd");
+		let basic_auth = HeaderValue::from_str(&format!("Basic {digest}")).unwrap();
+
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
 	}
 }

@@ -135,3 +135,26 @@ where
 		}
 	}
 }
+
+/// Helpers to deserialize a request with extensions.
+pub(crate) mod deserialize {
+	/// Helper to deserialize a request with extensions.
+	pub(crate) fn from_slice_with_extensions(
+		data: &[u8],
+		extensions: http::Extensions,
+	) -> Result<jsonrpsee_types::Request, serde_json::Error> {
+		let mut req: jsonrpsee_types::Request = serde_json::from_slice(data)?;
+		*req.extensions_mut() = extensions;
+		Ok(req)
+	}
+
+	/// Helper to deserialize a request with extensions.
+	pub(crate) fn from_str_with_extensions(
+		data: &str,
+		extensions: http::Extensions,
+	) -> Result<jsonrpsee_types::Request, serde_json::Error> {
+		let mut req: jsonrpsee_types::Request = serde_json::from_str(data)?;
+		*req.extensions_mut() = extensions;
+		Ok(req)
+	}
+}

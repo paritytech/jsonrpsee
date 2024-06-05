@@ -31,7 +31,6 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::Extensions;
 
 type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;
@@ -63,7 +62,6 @@ pub struct RpcServerImpl;
 impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 	async fn storage_keys(
 		&self,
-		_ext: &Extensions,
 		storage_key: ExampleStorageKey,
 		_hash: Option<ExampleHash>,
 	) -> Result<Vec<ExampleStorageKey>, ErrorObjectOwned> {
@@ -73,7 +71,6 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 	async fn subscribe_storage(
 		&self,
 		pending: PendingSubscriptionSink,
-		_ext: &Extensions,
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> SubscriptionResult {
 		let sink = pending.accept().await?;
@@ -83,7 +80,7 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		Ok(())
 	}
 
-	fn s(&self, pending: PendingSubscriptionSink, _ext: &Extensions, _keys: Option<Vec<ExampleStorageKey>>) {
+	fn s(&self, pending: PendingSubscriptionSink, _keys: Option<Vec<ExampleStorageKey>>) {
 		tokio::spawn(async move {
 			let sink = pending.accept().await.unwrap();
 			let msg = SubscriptionMessage::from_json(&vec![[0; 32]]).unwrap();

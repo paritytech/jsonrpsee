@@ -57,6 +57,7 @@ pub(crate) struct BackgroundTaskParams<S> {
 	pub(crate) rx: mpsc::Receiver<String>,
 	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
 	pub(crate) on_session_close: Option<SessionClose>,
+	pub(crate) extensions: http::Extensions,
 }
 
 pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
@@ -73,6 +74,7 @@ where
 		rx,
 		pending_calls_completed,
 		mut on_session_close,
+		extensions,
 	} = params;
 	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
 		server_cfg;
@@ -84,6 +86,7 @@ where
 
 	let stopped = conn.stop_handle.clone().shutdown();
 	let rpc_service = Arc::new(rpc_service);
+	let mut missed_pings = 0;
 
 	tokio::pin!(stopped);
 
@@ -103,7 +106,7 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
-		let data = match try_recv(&mut ws_stream, stopped, ping_config).await {
+		let data = match try_recv(&mut ws_stream, stopped, ping_config, &mut missed_pings).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
 			Receive::Ok(data, stop) => {
@@ -140,6 +143,7 @@ where
 
 		let rpc_service = rpc_service.clone();
 		let sink = sink.clone();
+		let extensions = extensions.clone();
 
 		tokio::spawn(async move {
 			let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
@@ -153,9 +157,15 @@ where
 				}
 			};
 
-			if let Some(rp) =
-				handle_rpc_call(&data[idx..], is_single, batch_requests_config, max_response_body_size, &*rpc_service)
-					.await
+			if let Some(rp) = handle_rpc_call(
+				&data[idx..],
+				is_single,
+				batch_requests_config,
+				max_response_body_size,
+				&*rpc_service,
+				extensions,
+			)
+			.await
 			{
 				if !rp.is_subscription() {
 					let is_success = rp.is_success();
@@ -264,7 +274,12 @@ enum Receive<S> {
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.
-async fn try_recv<T, S>(ws_stream: &mut T, mut stopped: S, ping_config: Option<PingConfig>) -> Receive<S>
+async fn try_recv<T, S>(
+	ws_stream: &mut T,
+	mut stopped: S,
+	ping_config: Option<PingConfig>,
+	missed_pings: &mut usize,
+) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
 	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
@@ -274,7 +289,6 @@ where
 		Some(p) => IntervalStream::new(interval_at(tokio::time::Instant::now() + p.ping_interval, p.ping_interval)),
 		None => IntervalStream::pending(),
 	};
-	let mut missed = 0;
 
 	tokio::pin!(inactivity_check);
 
@@ -298,9 +312,14 @@ where
 			Either::Left((Either::Right((_instant, rcv)), s)) => {
 				if let Some(p) = ping_config {
 					if last_active.elapsed() > p.inactive_limit {
-						missed += 1;
+						*missed_pings += 1;
 
-						if missed >= p.max_failures {
+						if *missed_pings >= p.max_failures {
+							tracing::debug!(
+								target: LOG_TARGET,
+								"WS ping/pong inactivity limit `{}` exceeded; closing connection",
+								p.max_failures,
+							);
 							break Receive::ConnectionClosed;
 						}
 					}
@@ -416,6 +435,8 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
+			let extensions = req.extensions().clone();
+
 			let upgraded = match hyper::upgrade::on(req).await {
 				Ok(u) => u,
 				Err(e) => {
@@ -467,6 +488,7 @@ where
 					rx,
 					pending_calls_completed,
 					on_session_close: None,
+					extensions,
 				};
 
 				background_task(params).await;

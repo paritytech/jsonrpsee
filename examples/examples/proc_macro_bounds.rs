@@ -31,8 +31,6 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::Server;
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::Extensions;
-
 type ExampleHash = [u8; 32];
 
 pub trait Config {
@@ -62,7 +60,7 @@ pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer<ExampleHash> for RpcServerImpl {
-	fn method(&self, _ext: &Extensions) -> Result<<ExampleHash as Config>::Hash, ErrorObjectOwned> {
+	fn method(&self) -> Result<<ExampleHash as Config>::Hash, ErrorObjectOwned> {
 		Ok([0u8; 32])
 	}
 }

@@ -546,7 +546,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			method_name,
 			MethodCallback::Sync(Arc::new(move |id, params, max_response_size, extensions| {
 				let rp = callback(params, &*ctx, &extensions).into_response();
-				MethodResponse::response_with_extensions(id, rp, max_response_size, extensions)
+				MethodResponse::response(id, rp, max_response_size).with_extensions(extensions)
 			})),
 		)
 	}
@@ -580,9 +580,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
+				// NOTE: the extensions can't be mutated at this point so
+				// it's safe to clone it.
 				let future = async move {
 					let rp = callback(params, ctx, extensions.clone()).await.into_response();
-					MethodResponse::response_with_extensions(id, rp, max_response_size, extensions)
+					MethodResponse::response(id, rp, max_response_size).with_extensions(extensions)
 				};
 				future.boxed()
 			})),
@@ -600,7 +602,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
-		F: Fn(Params, Arc<Context>, &Extensions) -> R + Clone + Send + Sync + 'static,
+		F: Fn(Params, Arc<Context>, Extensions) -> R + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
@@ -609,20 +611,20 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
+				// NOTE: the extensions can't be mutated at this point so
+				// it's safe to clone it.
 				let extensions2 = extensions.clone();
+
 				tokio::task::spawn_blocking(move || {
-					let rp = callback(params, ctx, &extensions2).into_response();
-					MethodResponse::response_with_extensions(id, rp, max_response_size, extensions2)
+					let rp = callback(params, ctx, extensions2.clone()).into_response();
+					MethodResponse::response(id, rp, max_response_size).with_extensions(extensions2)
 				})
 				.map(|result| match result {
 					Ok(r) => r,
 					Err(err) => {
 						tracing::error!(target: LOG_TARGET, "Join error for blocking RPC method: {:?}", err);
-						MethodResponse::error_with_extensions(
-							Id::Null,
-							ErrorObject::from(ErrorCode::InternalError),
-							extensions,
-						)
+						MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
+							.with_extensions(extensions)
 					}
 				})
 				.boxed()
@@ -774,6 +776,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					// definition and not the as same when the subscription call has been completed.
 					//
 					// This runs until the subscription callback has completed.
+					//
+					// NOTE: the extensions can't be mutated at this point so
+					// it's safe to clone it.
 					let sub_fut = callback(params.into_owned(), sink, ctx.clone(), extensions.clone());
 
 					tokio::spawn(async move {
@@ -800,18 +805,19 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let id = id.clone().into_owned();
 
 					Box::pin(async move {
-						match rx.await {
-							Ok(mut rp) => {
+						let rp = match rx.await {
+							Ok(rp) => {
 								// If the subscription was accepted then send a message
 								// to subscription task otherwise rely on the drop impl.
 								if rp.is_success() {
 									let _ = accepted_tx.send(());
 								}
-								*rp.extensions_mut() = extensions;
 								rp
 							}
-							Err(_) => MethodResponse::error_with_extensions(id, ErrorCode::InternalError, extensions),
-						}
+							Err(_) => MethodResponse::error(id, ErrorCode::InternalError),
+						};
+
+						rp.with_extensions(extensions)
 					})
 				})),
 			)?
@@ -905,13 +911,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let id = id.clone().into_owned();
 
 					Box::pin(async move {
-						match rx.await {
-							Ok(mut rp) => {
-								*rp.extensions_mut() = extensions;
-								rp
-							}
-							Err(_) => MethodResponse::error_with_extensions(id, ErrorCode::InternalError, extensions),
-						}
+						let rp = match rx.await {
+							Ok(rp) => rp,
+							Err(_) => MethodResponse::error(id, ErrorCode::InternalError),
+						};
+
+						rp.with_extensions(extensions)
 					})
 				})),
 			)?
@@ -953,12 +958,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 
-							return MethodResponse::response_with_extensions(
-								id,
-								ResponsePayload::success(false),
-								max_response_size,
-								extensions,
-							);
+							return MethodResponse::response(id, ResponsePayload::success(false), max_response_size)
+								.with_extensions(extensions);
 						}
 					};
 

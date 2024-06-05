@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{Extensions, ServerBuilder};
+use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::ws_client::*;
 
 #[rpc(client, server)]
@@ -31,15 +31,15 @@ pub struct DeprecatedServerImpl;
 
 #[async_trait]
 impl DeprecatedServer for DeprecatedServerImpl {
-	async fn async_method(&self, _ext: &Extensions) -> RpcResult<u8> {
+	async fn async_method(&self) -> RpcResult<u8> {
 		Ok(16u8)
 	}
 
-	async fn async_method_unused(&self, _ext: &Extensions) -> RpcResult<u8> {
+	async fn async_method_unused(&self) -> RpcResult<u8> {
 		Ok(32u8)
 	}
 
-	fn sync_method(&self, _ext: &Extensions) -> RpcResult<u8> {
+	fn sync_method(&self) -> RpcResult<u8> {
 		Ok(64u8)
 	}
 }

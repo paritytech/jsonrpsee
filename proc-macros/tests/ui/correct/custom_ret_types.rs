@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, ClientError, Serialize};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{Extensions, IntoResponse, ResponsePayload, ServerBuilder};
+use jsonrpsee::server::{IntoResponse, ResponsePayload, ServerBuilder};
 use jsonrpsee::ws_client::*;
 
 // Serialize impl is not used as the responses are sent out as error.
@@ -59,27 +59,27 @@ pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn async_method1(&self, _ext: &Extensions) -> CustomError {
+	async fn async_method1(&self) -> CustomError {
 		CustomError::One
 	}
 
-	async fn async_method2(&self, _ext: &Extensions, x: u32) -> CustomError {
+	async fn async_method2(&self, x: u32) -> CustomError {
 		CustomError::Two { custom_data: x }
 	}
 
-	fn method1(&self, _ext: &Extensions) -> CustomError {
+	fn method1(&self) -> CustomError {
 		CustomError::One
 	}
 
-	fn method2(&self, _ext: &Extensions, x: u32) -> CustomError {
+	fn method2(&self, x: u32) -> CustomError {
 		CustomError::Two { custom_data: x }
 	}
 
-	fn blocking_method1(&self, _ext: &Extensions) -> CustomError {
+	fn blocking_method1(&self) -> CustomError {
 		CustomError::One
 	}
 
-	fn blocking_method2(&self, _ext: &Extensions, x: u32) -> CustomError {
+	fn blocking_method2(&self, x: u32) -> CustomError {
 		CustomError::Two { custom_data: x }
 	}
 }
