@@ -59,6 +59,8 @@ pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;
 pub type CustomCertStore = rustls::ClientConfig;
 
 #[cfg(feature = "tls")]
+// rustls needs the concrete `ClientConfig` type so we can't Box it here.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum CertificateStore {
 	Native,
