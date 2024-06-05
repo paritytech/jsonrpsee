@@ -24,8 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![cfg(test)]
-
 use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
 
@@ -197,9 +195,9 @@ async fn batched_notifs_works() {
 	init_logger();
 
 	let notifs = vec![
-		serde_json::to_value(&Notification::new("test".into(), "method_notif".to_string())).unwrap(),
-		serde_json::to_value(&Notification::new("sub".into(), "method_notif".to_string())).unwrap(),
-		serde_json::to_value(&SubscriptionResponse::new(
+		serde_json::to_value(Notification::new("test".into(), "method_notif".to_string())).unwrap(),
+		serde_json::to_value(Notification::new("sub".into(), "method_notif".to_string())).unwrap(),
+		serde_json::to_value(SubscriptionResponse::new(
 			"sub".into(),
 			SubscriptionPayload {
 				subscription: SubscriptionId::Str("D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o".into()),
