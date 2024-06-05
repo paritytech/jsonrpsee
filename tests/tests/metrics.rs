@@ -37,7 +37,7 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use helpers::init_logger;
-use jsonrpsee::core::{async_trait, client::ClientT, ClientError};
+use jsonrpsee::core::{client::ClientT, ClientError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
@@ -62,7 +62,6 @@ pub struct CounterMiddleware<S> {
 	counter: Arc<Mutex<Counter>>,
 }
 
-#[async_trait]
 impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
