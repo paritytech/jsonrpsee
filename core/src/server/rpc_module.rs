@@ -571,7 +571,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		R: IntoResponse + 'static,
 		Fut: Future<Output = R> + Send,
-		Fun: (Fn(Params<'static>, Arc<Context>, &Extensions) -> Fut) + Clone + Send + Sync + 'static,
+		Fun: (Fn(Params<'static>, Arc<Context>, Extensions) -> Fut) + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		self.methods.verify_and_insert(
@@ -580,8 +580,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let ctx = ctx.clone();
 				let callback = callback.clone();
 
+				// NOTE: the extensions can't be mutated at this point so
+				// it's safe to clone it.
 				let future = async move {
-					let rp = callback(params, ctx, &extensions).await.into_response();
+					let rp = callback(params, ctx, extensions.clone()).await.into_response();
 					MethodResponse::response(id, rp, max_response_size).with_extensions(extensions)
 				};
 				future.boxed()
@@ -600,7 +602,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: IntoResponse + 'static,
-		F: Fn(Params, Arc<Context>, &Extensions) -> R + Clone + Send + Sync + 'static,
+		F: Fn(Params, Arc<Context>, Extensions) -> R + Clone + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
@@ -614,7 +616,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let extensions2 = extensions.clone();
 
 				tokio::task::spawn_blocking(move || {
-					let rp = callback(params, ctx, &extensions2).into_response();
+					let rp = callback(params, ctx, extensions2.clone()).into_response();
 					MethodResponse::response(id, rp, max_response_size).with_extensions(extensions2)
 				})
 				.map(|result| match result {
@@ -735,7 +737,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
 		Context: Send + Sync + 'static,
-		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>, &Extensions) -> Fut)
+		F: (Fn(Params<'static>, PendingSubscriptionSink, Arc<Context>, Extensions) -> Fut)
 			+ Send
 			+ Sync
 			+ Clone
@@ -774,7 +776,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					// definition and not the as same when the subscription call has been completed.
 					//
 					// This runs until the subscription callback has completed.
-					let sub_fut = callback(params.into_owned(), sink, ctx.clone(), &extensions);
+					//
+					// NOTE: the extensions can't be mutated at this point so
+					// it's safe to clone it.
+					let sub_fut = callback(params.into_owned(), sink, ctx.clone(), extensions.clone());
 
 					tokio::spawn(async move {
 						// This will wait for the subscription future to be resolved

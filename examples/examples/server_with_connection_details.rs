@@ -44,6 +44,9 @@ pub trait Rpc {
 
 	#[subscription(name = "subscribeConnectionId", item = usize, with_extensions)]
 	async fn sub(&self) -> SubscriptionResult;
+
+	#[subscription(name = "subscribeSyncConnectionId", item = usize, with_extensions)]
+	fn sub2(&self) -> SubscriptionResult;
 }
 
 struct LoggingMiddleware<S>(S);
@@ -79,6 +82,16 @@ impl RpcServer for RpcServerImpl {
 			.cloned()
 			.ok_or_else(|| ErrorObject::owned(0, "No connection details found", None::<()>))?;
 		sink.send(SubscriptionMessage::from_json(&conn_id).unwrap()).await?;
+		Ok(())
+	}
+
+	fn sub2(&self, pending: PendingSubscriptionSink, ext: &Extensions) -> SubscriptionResult {
+		let conn_id = ext.get::<ConnectionId>().cloned().unwrap();
+
+		tokio::spawn(async move {
+			let sink = pending.accept().await.unwrap();
+			sink.send(SubscriptionMessage::from_json(&conn_id).unwrap()).await.unwrap();
+		});
 		Ok(())
 	}
 }
