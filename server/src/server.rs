@@ -37,7 +37,8 @@ use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, 
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::{HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
+use crate::utils::deserialize;
+use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
@@ -46,14 +47,16 @@ use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::server::helpers::prepare_error;
-use jsonrpsee_core::server::{BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink, Methods};
+use jsonrpsee_core::server::{
+	BatchResponseBuilder, BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods,
+};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	reject_too_big_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
 };
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification, Request};
+use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification};
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{mpsc, watch, OwnedSemaphorePermit};
@@ -1053,7 +1056,7 @@ where
 	}
 
 	fn call(&mut self, request: HttpRequest<Body>) -> Self::Future {
-		let request = request.map(HttpBody::new);
+		let mut request = request.map(HttpBody::new);
 
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
@@ -1071,6 +1074,8 @@ where
 		let max_conns = conn_guard.max_connections();
 		let curr_conns = max_conns - conn_guard.available_connections();
 		tracing::debug!(target: LOG_TARGET, "Accepting new connection {}/{}", curr_conns, max_conns);
+
+		request.extensions_mut().insert::<ConnectionId>(conn.conn_id.into());
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
@@ -1109,6 +1114,8 @@ where
 
 					tokio::spawn(
 						async move {
+							let extensions = request.extensions().clone();
+
 							let upgraded = match hyper::upgrade::on(request).await {
 								Ok(u) => u,
 								Err(e) => {
@@ -1134,6 +1141,7 @@ where
 								rx,
 								pending_calls_completed,
 								on_session_close,
+								extensions,
 							};
 
 							ws::background_task(params).await;
@@ -1288,13 +1296,14 @@ pub(crate) async fn handle_rpc_call<S>(
 	batch_config: BatchRequestConfig,
 	max_response_size: u32,
 	rpc_service: &S,
+	extensions: Extensions,
 ) -> Option<MethodResponse>
 where
 	for<'a> S: RpcServiceT<'a> + Send,
 {
 	// Single request or notification
 	if is_single {
-		if let Ok(req) = serde_json::from_slice(body) {
+		if let Ok(req) = deserialize::from_slice_with_extensions(body, extensions) {
 			Some(rpc_service.call(req).await)
 		} else if let Ok(_notif) = serde_json::from_slice::<Notif>(body) {
 			None
@@ -1326,7 +1335,7 @@ where
 			let mut batch_response = BatchResponseBuilder::new_with_limit(max_response_size as usize);
 
 			for call in batch {
-				if let Ok(req) = serde_json::from_str::<Request>(call.get()) {
+				if let Ok(req) = deserialize::from_str_with_extensions(call.get(), extensions.clone()) {
 					let rp = rpc_service.call(req).await;
 
 					if let Err(too_large) = batch_response.append(&rp) {

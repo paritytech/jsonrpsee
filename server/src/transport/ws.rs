@@ -57,6 +57,7 @@ pub(crate) struct BackgroundTaskParams<S> {
 	pub(crate) rx: mpsc::Receiver<String>,
 	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
 	pub(crate) on_session_close: Option<SessionClose>,
+	pub(crate) extensions: http::Extensions,
 }
 
 pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
@@ -73,6 +74,7 @@ where
 		rx,
 		pending_calls_completed,
 		mut on_session_close,
+		extensions,
 	} = params;
 	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
 		server_cfg;
@@ -141,6 +143,7 @@ where
 
 		let rpc_service = rpc_service.clone();
 		let sink = sink.clone();
+		let extensions = extensions.clone();
 
 		tokio::spawn(async move {
 			let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
@@ -154,9 +157,15 @@ where
 				}
 			};
 
-			if let Some(rp) =
-				handle_rpc_call(&data[idx..], is_single, batch_requests_config, max_response_body_size, &*rpc_service)
-					.await
+			if let Some(rp) = handle_rpc_call(
+				&data[idx..],
+				is_single,
+				batch_requests_config,
+				max_response_body_size,
+				&*rpc_service,
+				extensions,
+			)
+			.await
 			{
 				if !rp.is_subscription() {
 					let is_success = rp.is_success();
@@ -426,6 +435,8 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
+			let extensions = req.extensions().clone();
+
 			let upgraded = match hyper::upgrade::on(req).await {
 				Ok(u) => u,
 				Err(e) => {
@@ -477,6 +488,7 @@ where
 					rx,
 					pending_calls_completed,
 					on_session_close: None,
+					extensions,
 				};
 
 				background_task(params).await;

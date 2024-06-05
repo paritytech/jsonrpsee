@@ -95,7 +95,8 @@ where
 				}
 			};
 
-			let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service).await;
+			let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, parts.extensions)
+				.await;
 
 			// If the response is empty it means that it was a notification or empty batch.
 			// For HTTP these are just ACK:ed with a empty body.
