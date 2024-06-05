@@ -34,7 +34,6 @@ use futures_util::future::{self, Either};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::BoxError;
 use pin_project::pin_project;
-use tokio::net::TcpStream;
 use tower::util::Oneshot;
 use tower::ServiceExt;
 
@@ -85,7 +84,7 @@ where
 }
 
 /// Serve a service over a TCP connection.
-pub async fn serve<S, B>(stream: TcpStream, service: S) -> Result<(), BoxError>
+pub async fn serve<S, B, I>(io: I, service: S) -> Result<(), BoxError>
 where
 	S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>> + Clone + Send + 'static,
 	S::Future: Send,
@@ -93,9 +92,10 @@ where
 	S::Error: Into<BoxError>,
 	B: http_body::Body<Data = hyper::body::Bytes> + Send + 'static,
 	B::Error: Into<BoxError>,
+	I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
 {
 	let service = hyper_util::service::TowerToHyperService::new(service);
-	let io = TokioIo::new(stream);
+	let io = TokioIo::new(io);
 
 	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 	let conn = builder.serve_connection_with_upgrades(io, service);
@@ -103,8 +103,8 @@ where
 }
 
 /// Serve a service over a TCP connection with graceful shutdown.
-pub async fn serve_with_graceful_shutdown<S, B>(
-	stream: TcpStream,
+pub async fn serve_with_graceful_shutdown<S, B, I>(
+	io: I,
 	service: S,
 	stopped: impl Future<Output = ()>,
 ) -> Result<(), BoxError>
@@ -115,9 +115,10 @@ where
 	S::Error: Into<BoxError>,
 	B: http_body::Body<Data = hyper::body::Bytes> + Send + 'static,
 	B::Error: Into<BoxError>,
+	I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
 {
 	let service = hyper_util::service::TowerToHyperService::new(service);
-	let io = TokioIo::new(stream);
+	let io = TokioIo::new(io);
 
 	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 	let conn = builder.serve_connection_with_upgrades(io, service);
