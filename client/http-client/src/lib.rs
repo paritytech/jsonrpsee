@@ -60,7 +60,7 @@ pub type CustomCertStore = rustls::ClientConfig;
 
 #[cfg(feature = "tls")]
 // rustls needs the concrete `ClientConfig` type so we can't Box it here.
-#[clippy::allow(lint::large_enum_variant)]
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum CertificateStore {
 	Native,
