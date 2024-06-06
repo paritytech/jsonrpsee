@@ -8,12 +8,11 @@ The format is based on [Keep a Changelog].
 
 This is a new breaking release, and let's go through the changes.
 
-
 ### hyper v1.0
+
 jsonrpsee has been upgraded to use hyper v1.0 and this mainly impacts users that are using
 the low-level API and rely on the `hyper::service::make_service_fn`
 which has been removed, and for now on you need to manage the socket yourself.
-
 
 The `hyper::service::make_service_fn` can be replaced by the following example template:
 
@@ -93,24 +92,24 @@ one has to enable `with_extensions` attr for that to be available:
 ```rust
 #[rpc(client, server)]
 pub trait Rpc {
-  // legacy
+	// legacy
 	#[method(name = "foo"])
 	async fn async_method(&self) -> u16>;
 
-  // with extensions
+	// with extensions
 	#[method(name = "with_ext", with_extensions)]
 	async fn f(&self) -> bool;
 }
 
 impl RpcServer for () {
 	async fn async_method(&self) -> u16 {
-    12
-  }
+		12
+	}
 
 	// NOTE: ext is injected here in the API
-  async fn f(&self, ext: &Extensions: b: String) -> {
-    ext.get::<u32>().is_ok()
-  }
+	async fn f(&self, ext: &Extensions: b: String) -> {
+		ext.get::<u32>().is_ok()
+	}
 }
 ```
 
