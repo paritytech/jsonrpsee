@@ -32,5 +32,5 @@ futures-util = { version = "0.3.14", default-features = false }
 serde_json = "1"
 serde = "1"
 trybuild = "1.0"
-tokio = { version = "1.16", features = ["rt", "macros"] }
+tokio = { version = "1.23.1", features = ["rt", "macros"] }
 tower = "0.4"
