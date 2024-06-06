@@ -23,7 +23,7 @@ url = "2.4.0"
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 jsonrpsee-test-utils = { path = "../../test-utils" }
-tokio = { version = "1.16", features = ["macros"] }
+tokio = { version = "1.23.1", features = ["macros"] }
 serde_json = "1"
 serde = "1"
 rustls = { version = "0.23.7", default-features = false, features = ["logging", "std", "tls12", "ring"] }

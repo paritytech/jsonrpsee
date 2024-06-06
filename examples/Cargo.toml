@@ -15,7 +15,7 @@ futures = "0.3"
 jsonrpsee = { path = "../jsonrpsee", features = ["server", "http-client", "ws-client", "macros", "client-ws-transport-tls"] }
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
-tokio = { version = "1.16", features = ["full"] }
+tokio = { version = "1.23.1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 serde_json = { version = "1" }
 tower-http = { version = "0.5.2", features = ["full"] }
