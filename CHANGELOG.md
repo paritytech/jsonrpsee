@@ -4,6 +4,49 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+
+## [v0.22.5] - 2024-04-29
+
+A small bug-fix release, see each commit below for further information.
+
+### [Fixed]
+- proc macros: collision between generated code name and proc macro API ([#1363](https://github.com/paritytech/jsonrpsee/pull/1363))
+- proc-macros: `feature server-core` compiles without `feature server` ([#1360](https://github.com/paritytech/jsonrpsee/pull/1360))
+- client: add check in `max_buffer_capacity_per_subscription` that the buffer size > ([#1358](https://github.com/paritytech/jsonrpsee/pull/1358))
+- types: Response type ignore unknown fields ([#1353](https://github.com/paritytech/jsonrpsee/pull/1353))
+
+## [v0.22.4] - 2024-04-08
+
+Yet another rather small release that fixes a cancel-safety issue that
+could cause an unexpected panic when reading disconnect reason from the background task.
+
+Also this makes the API `Client::disconnect_reason` cancel-safe.
+
+### [Added]
+- client: support batched notifications ([#1327](https://github.com/paritytech/jsonrpsee/pull/1327))
+- client: support batched subscription notifs ([#1332](https://github.com/paritytech/jsonrpsee/pull/1332))
+
+### [Changed]
+- client: downgrade logs from error/warn -> debug ([#1343](https://github.com/paritytech/jsonrpsee/pull/1343))
+
+### [Fixed]
+- Update MSRV to 1.74.1 in Cargo.toml ([#1338](https://github.com/paritytech/jsonrpsee/pull/1338))
+- client: disconnect_reason/read_error is now cancel-safe ([#1347](https://github.com/paritytech/jsonrpsee/pull/1347))
+
+## [v0.22.3] - 2024-03-20
+
+Another small release that adds a new API for RpcModule if one already has the state in an `Arc`
+and a couple of bug fixes.
+
+### [Added]
+- add `RpcModule::from_arc` ([#1324](https://github.com/paritytech/jsonrpsee/pull/1324))
+
+### [Fixed]
+- Revert "fix(server): return err on WS handshake err (#1288)" ([#1326](https://github.com/paritytech/jsonrpsee/pull/1326))
+- export `AlreadyStoppedError` ([#1325](https://github.com/paritytech/jsonrpsee/pull/1325))
+
+Thanks to the external contributors [@mattsse](https://github.com/mattsse) and [@aatifsyed](https://github.com/mattsse) who contributed to this release.
+
 ## [v0.22.2] - 2024-03-05
 
 This is a small patch release that exposes the connection details in server method implementations without breaking changes.
