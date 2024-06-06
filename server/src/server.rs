@@ -841,8 +841,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///                   // or treat it as "ordinary HTTP request".
 	///                   //
 	///                   // https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-	///                   // to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-	///                   // as workaround.
 	///                   async move { svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
 	///               });
 	///

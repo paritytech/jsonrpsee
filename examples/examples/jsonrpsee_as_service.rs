@@ -230,8 +230,6 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 						// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
 						// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
 						// as workaround.
-						//
-						// You can also write your own wrapper TowerService type to avoid this.
 						svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
 					}
 					.boxed()
@@ -250,8 +248,6 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 						// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
 						// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
 						// as workaround.
-						//
-						// You can also write your own wrapper TowerService type to avoid this.
 						rp.map_err(|e| anyhow::anyhow!("{:?}", e))
 					}
 					.boxed()
