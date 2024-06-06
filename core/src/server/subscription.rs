@@ -302,8 +302,8 @@ impl PendingSubscriptionSink {
 	}
 
 	/// Returns connection identifier, which was used to perform pending subscription request
-	pub fn connection_id(&self) -> usize {
-		self.uniq_sub.conn_id.0
+	pub fn connection_id(&self) -> ConnectionId {
+		self.uniq_sub.conn_id
 	}
 }
 
@@ -336,8 +336,8 @@ impl SubscriptionSink {
 	}
 
 	/// Get the connection ID.
-	pub fn connection_id(&self) -> usize {
-		self.uniq_sub.conn_id.0
+	pub fn connection_id(&self) -> ConnectionId {
+		self.uniq_sub.conn_id
 	}
 
 	/// Send out a response on the subscription and wait until there is capacity.
