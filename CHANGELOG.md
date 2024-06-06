@@ -60,7 +60,7 @@ Also, beware that `tower::service_fn` and `hyper::service::service_fn` are diffe
 
 ### Extensions
 
-Because it was not possible or easy to state between RPC middleware layers
+Because it was not possible/easy to share state between RPC middleware layers
 jsonrpsee has added `Extensions` to the Request and Response.
 To allow users to inject arbitrary data that can be accessed in the RPC middleware
 and RPC handlers.
