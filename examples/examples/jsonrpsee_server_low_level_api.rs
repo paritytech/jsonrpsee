@@ -48,7 +48,7 @@ use futures::future::{self, BoxFuture, Either};
 use futures::FutureExt;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee::core::async_trait;
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
@@ -144,7 +144,7 @@ async fn main() -> anyhow::Result<()> {
 		let mut i = 0;
 		let handle = run_server().await?;
 
-		let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
+		let client = HttpClient::builder().build("http://127.0.0.1:9944").unwrap();
 		while client.say_hello().await.is_ok() {
 			i += 1;
 		}

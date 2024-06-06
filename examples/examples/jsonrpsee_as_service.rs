@@ -41,7 +41,7 @@ use hyper::header::AUTHORIZATION;
 use hyper::HeaderMap;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee::core::async_trait;
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{stop_channel, ServerHandle, StopHandle, TowerServiceBuilder};
@@ -116,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
 	tokio::spawn(handle.stopped());
 
 	{
-		let client = HttpClientBuilder::default().build("http://127.0.0.1:9944").unwrap();
+		let client = HttpClient::builder().build("http://127.0.0.1:9944").unwrap();
 
 		// Fails because the authorization header is missing.
 		let x = client.trusted_call().await.unwrap_err();
@@ -135,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
 		let mut headers = HeaderMap::new();
 		headers.insert(AUTHORIZATION, HeaderValue::from_static("don't care in this example"));
 
-		let client = HttpClientBuilder::default().set_headers(headers).build("http://127.0.0.1:9944").unwrap();
+		let client = HttpClient::builder().set_headers(headers).build("http://127.0.0.1:9944").unwrap();
 
 		let x = client.trusted_call().await.unwrap();
 		tracing::info!("response: {x}");
