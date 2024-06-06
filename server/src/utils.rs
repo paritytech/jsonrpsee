@@ -24,11 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::{HttpBody, HttpRequest};
 
+use futures_util::future::{self, Either};
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use jsonrpsee_core::BoxError;
 use pin_project::pin_project;
 use tower::util::Oneshot;
 use tower::ServiceExt;
@@ -76,6 +80,64 @@ where
 	#[inline]
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		self.project().future.poll(cx)
+	}
+}
+
+/// Serve a service over a TCP connection without graceful shutdown.
+/// This means that pending requests will be dropped when the server is stopped.
+///
+/// If you want to gracefully shutdown the server, use [`serve_with_graceful_shutdown`] instead.
+pub async fn serve<S, B, I>(io: I, service: S) -> Result<(), BoxError>
+where
+	S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>> + Clone + Send + 'static,
+	S::Future: Send,
+	S::Response: Send,
+	S::Error: Into<BoxError>,
+	B: http_body::Body<Data = hyper::body::Bytes> + Send + 'static,
+	B::Error: Into<BoxError>,
+	I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
+{
+	let service = hyper_util::service::TowerToHyperService::new(service);
+	let io = TokioIo::new(io);
+
+	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+	let conn = builder.serve_connection_with_upgrades(io, service);
+	conn.await
+}
+
+/// Serve a service over a TCP connection with graceful shutdown.
+/// This means that pending requests will be completed before the server is stopped.
+pub async fn serve_with_graceful_shutdown<S, B, I>(
+	io: I,
+	service: S,
+	stopped: impl Future<Output = ()>,
+) -> Result<(), BoxError>
+where
+	S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>> + Clone + Send + 'static,
+	S::Future: Send,
+	S::Response: Send,
+	S::Error: Into<BoxError>,
+	B: http_body::Body<Data = hyper::body::Bytes> + Send + 'static,
+	B::Error: Into<BoxError>,
+	I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
+{
+	let service = hyper_util::service::TowerToHyperService::new(service);
+	let io = TokioIo::new(io);
+
+	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+	let conn = builder.serve_connection_with_upgrades(io, service);
+
+	tokio::pin!(stopped, conn);
+
+	match future::select(conn, stopped).await {
+		// Return if the connection was completed.
+		Either::Left((conn, _)) => conn,
+		// If the server is stopped, we should gracefully shutdown
+		// the connection and poll it until it finishes.
+		Either::Right((_, mut conn)) => {
+			conn.as_mut().graceful_shutdown();
+			conn.await
+		}
 	}
 }
 

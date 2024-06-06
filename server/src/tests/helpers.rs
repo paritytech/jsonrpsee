@@ -3,11 +3,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{fmt, sync::atomic::AtomicUsize};
 
-use crate::{stop_channel, RpcModule, Server, ServerBuilder, ServerHandle};
+use crate::{serve_with_graceful_shutdown, stop_channel, RpcModule, Server, ServerBuilder, ServerHandle};
 
-use futures_util::future::Either;
-use futures_util::{future, FutureExt};
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use futures_util::FutureExt;
 use jsonrpsee_core::server::Methods;
 use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -210,8 +208,6 @@ pub(crate) struct Metrics {
 }
 
 pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
-	use hyper::service::service_fn;
-
 	let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await.unwrap();
 	let addr = listener.local_addr().unwrap();
 	let (stop_handle, server_handle) = stop_channel();
@@ -241,7 +237,7 @@ pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
 			tokio::spawn(async move {
 				let rpc_svc = rpc_svc.clone();
 
-				let svc = service_fn(move |req| {
+				let svc = tower::service_fn(move |req| {
 					let is_websocket = crate::ws::is_upgrade_request(&req);
 					let metrics = metrics.clone();
 					let mut rpc_svc = rpc_svc.clone();
@@ -264,28 +260,7 @@ pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
 					}
 				});
 
-				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-				let conn = builder.serve_connection_with_upgrades(TokioIo::new(sock), svc);
-				let stopped = stop_handle.shutdown();
-
-				// Pin the future so that it can be polled.
-				tokio::pin!(stopped, conn);
-
-				let res = match future::select(conn, stopped).await {
-					// Return the connection if not stopped.
-					Either::Left((conn, _)) => conn,
-					// If the server is stopped, we should gracefully shutdown
-					// the connection and poll it until it finishes.
-					Either::Right((_, mut conn)) => {
-						conn.as_mut().graceful_shutdown();
-						conn.await
-					}
-				};
-
-				// Log any errors that might have occurred.
-				if let Err(err) = res {
-					tracing::error!(err=?err, "HTTP connection failed");
-				}
+				tokio::spawn(serve_with_graceful_shutdown(sock, svc, stop_handle.clone().shutdown()));
 			});
 		}
 	});

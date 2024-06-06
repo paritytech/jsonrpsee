@@ -24,11 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::future::{self, Either};
-use hyper_util::rt::{TokioExecutor, TokioIo};
-use hyper_util::service::TowerToHyperService;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::{stop_channel, ServerHandle};
+use jsonrpsee::server::{serve_with_graceful_shutdown, stop_channel, ServerHandle};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
 use std::net::SocketAddr;
@@ -111,36 +108,8 @@ async fn run_server() -> anyhow::Result<(ServerHandle, Addrs)> {
 				_ = stop_hdl.clone().shutdown() => break,
 			};
 
-			// Clone the service and stop handle to be moved into the spawn
-			// below.
-			let svc = svc.clone();
-			let stop_hdl2 = stop_hdl.clone();
-
 			// Spawn a new task to serve each respective (Hyper) connection.
-			tokio::spawn(async move {
-				let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-				let conn = builder.serve_connection_with_upgrades(TokioIo::new(stream), TowerToHyperService::new(svc));
-				let stopped = stop_hdl2.shutdown();
-
-				// Pin the future so that it can be polled.
-				tokio::pin!(stopped, conn);
-
-				let res = match future::select(conn, stopped).await {
-					// Return the connection if not stopped.
-					Either::Left((conn, _)) => conn,
-					// If the server is stopped, we should gracefully shutdown
-					// the connection and poll it until it finishes.
-					Either::Right((_, mut conn)) => {
-						conn.as_mut().graceful_shutdown();
-						conn.await
-					}
-				};
-
-				// Log any errors that might have occurred.
-				if let Err(err) = res {
-					tracing::error!(err=?err, "HTTP connection failed");
-				}
-			});
+			tokio::spawn(serve_with_graceful_shutdown(stream, svc.clone(), stop_hdl.clone().shutdown()));
 		}
 	});
 
