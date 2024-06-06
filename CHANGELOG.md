@@ -6,15 +6,16 @@ The format is based on [Keep a Changelog].
 
 ## [v0.23.0] - 2024-06-06
 
-This is a new breaking release and let's go through the changes.
+This is a new breaking release, and let's go through the changes.
+
 
 ### hyper v1.0
-
-jsonrpsee has been upgraded to use hyper v1.0 and this mainly impact users that are using 
+jsonrpsee has been upgraded to use hyper v1.0 and this mainly impacts users that are using
 the low-level API and rely on the `hyper::service::make_service_fn`
-which has been removed and for now on you need to manage the socket yourself.
+which has been removed, and for now on you need to manage the socket yourself.
 
-The `hyper::service::make_service_fn` can replaced by the following example template:
+
+The `hyper::service::make_service_fn` can be replaced by the following example template:
 
 ```rust
 async fn start_server() {
@@ -56,20 +57,20 @@ async fn start_server() {
 }
 ```
 
-Also beware that `tower::service_fn` and `hyper::service::service_fn` are different and it's recommended to use `tower::service_fn` from on.
+Also, beware that `tower::service_fn` and `hyper::service::service_fn` are different and it's recommended to use `tower::service_fn` from now.
 
 ### Extensions
 
-Because it was not possible/easy to state between rpc middleware layers
+Because it was not possible or easy to state between RPC middleware layers
 jsonrpsee has added `Extensions` to the Request and Response.
-To allow users to inject arbitrary data which can be accessed in the rpc middleware
-and rpc handlers.
+To allow users to inject arbitrary data that can be accessed in the RPC middleware
+and RPC handlers.
 
-Please be careful when injecting large amount of data in the extensions because
-it's cloned for each rpc call which can increase memory usage significantly.
+Please be careful when injecting large amounts of data into the extensions because
+It's cloned for each RPC call, which can increase memory usage significantly.
 
-The connection ID from the jsonrpsee-server is injected in the extensions by default
-and it possble to fetch it as follows:
+The connection ID from the jsonrpsee-server is injected in the extensions by default.
+and it is possible to fetch it as follows:
 
 ```rust
 struct LogConnectionId<S>(S);
@@ -125,11 +126,10 @@ if one wants need some special certificate store.
 ### client - Subscription API modified
 
 The subscription API has been modified:
-	- The error type has been changed to `serde_json::Error`
-	to indicate that error can only occur if the decoding of T fails.
-	- It's been some confusion when the subscription is closed which
-	can occur if the client "lagged" or the connection is closed.
-	Now it's possible to call `Subscription::close_reason` to know why.
+- The error type has been changed to `serde_json::Error`
+  to indicate that error can only occur if the decoding of T fails.
+- It has been some confusion when the subscription is closed which can occur if the client "lagged" or the connection is closed.
+  Now it's possible to call `Subscription::close_reason` after the subscription closed to know why.
 
 ### [Added]
 - server: add `serve` and `serve_with_graceful_shutdown` helpers ([#1382](https://github.com/paritytech/jsonrpsee/pull/1382))
