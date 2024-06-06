@@ -83,7 +83,10 @@ where
 	}
 }
 
-/// Serve a service over a TCP connection.
+/// Serve a service over a TCP connection without graceful shutdown.
+/// This means that pending requests will be dropped when the server is stopped.
+///
+/// If you want to gracefully shutdown the server, use [`serve_with_graceful_shutdown`] instead.
 pub async fn serve<S, B, I>(io: I, service: S) -> Result<(), BoxError>
 where
 	S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>> + Clone + Send + 'static,
@@ -103,6 +106,7 @@ where
 }
 
 /// Serve a service over a TCP connection with graceful shutdown.
+/// This means that pending requests will be completed before the server is stopped.
 pub async fn serve_with_graceful_shutdown<S, B, I>(
 	io: I,
 	service: S,
