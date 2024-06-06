@@ -294,7 +294,7 @@ impl HttpClientBuilder<Identity> {
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
-pub struct HttpClient<S> {
+pub struct HttpClient<S = Identity> {
 	/// HTTP transport client.
 	transport: HttpTransportClient<S>,
 	/// Request timeout. Defaults to 60sec.
@@ -303,7 +303,7 @@ pub struct HttpClient<S> {
 	id_manager: Arc<RequestIdManager>,
 }
 
-impl<S> HttpClient<S> {
+impl HttpClient<Identity> {
 	/// Create a builder for the HttpClient.
 	pub fn builder() -> HttpClientBuilder<Identity> {
 		HttpClientBuilder::new()

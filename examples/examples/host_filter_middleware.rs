@@ -32,7 +32,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{RpcModule, Server};
@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("http://{}", addr);
 
 	// Use RPC client to get the response of `say_hello` method.
-	let client = HttpClientBuilder::default().build(&url)?;
+	let client = HttpClient::builder().build(&url)?;
 	// This call will be denied because only `example.com` URIs/hosts are allowed by the host filter.
 	let response = client.request::<String, _>("say_hello", rpc_params![]).await.unwrap_err();
 	println!("[main]: response: {}", response);

@@ -43,7 +43,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{RpcModule, Server};
@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("http://{}", addr);
 
 	// Use RPC client to get the response of `say_hello` method.
-	let client = HttpClientBuilder::default().build(&url)?;
+	let client = HttpClient::builder().build(&url)?;
 	let response: String = client.request("say_hello", rpc_params![]).await?;
 	println!("[main]: response: {:?}", response);
 

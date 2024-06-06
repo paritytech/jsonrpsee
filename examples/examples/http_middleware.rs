@@ -46,7 +46,7 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
 
 	// HTTP.
 	{
-		let client = HttpClientBuilder::default().build(format!("http://{}", addr))?;
+		let client = HttpClient::builder().build(format!("http://{}", addr))?;
 		let response: String = client.request("say_hello", rpc_params![]).await?;
 		println!("[main]: http response: {:?}", response);
 		let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
