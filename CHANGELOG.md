@@ -4,6 +4,223 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.23.0] - 2024-06-07
+
+This is a new breaking release, and let's go through the changes.
+
+### hyper v1.0
+
+jsonrpsee has been upgraded to use hyper v1.0 and this mainly impacts users that are using
+the low-level API and rely on the `hyper::service::make_service_fn`
+which has been removed, and from now on you need to manage the socket yourself.
+
+The `hyper::service::make_service_fn` can be replaced by the following example template:
+
+```rust
+async fn start_server() {
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+
+  loop {
+    let sock = tokio::select! {
+    res = listener.accept() => {
+        match res {
+          Ok((stream, _remote_addr)) => stream,
+          Err(e) => {
+            tracing::error!("failed to accept v4 connection: {:?}", e);
+            continue;
+          }
+        }
+      }
+      _ = per_conn.stop_handle.clone().shutdown() => break,
+    };
+
+    let svc = tower::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+      let mut jsonrpsee_svc = svc_builder
+        .set_rpc_middleware(rpc_middleware)
+        .build(methods, stop_handle);
+      // https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
+      // to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
+      // as workaround.
+      jsonrpsee_svc
+        .call(req)
+        .await
+        .map_err(|e| anyhow::anyhow!("{:?}", e))
+    });
+
+    tokio::spawn(jsonrpsee::server::serve_with_graceful_shutdown(
+      sock,
+      svc,
+      stop_handle.clone().shutdown(),
+    ));
+  }
+}
+```
+
+Also, be aware that `tower::service_fn` and `hyper::service::service_fn` are different and it's recommended to use `tower::service_fn` from now.
+
+### Extensions
+
+Because it was not possible/easy to share state between RPC middleware layers
+jsonrpsee has added `Extensions` to the Request and Response.
+To allow users to inject arbitrary data that can be accessed in the RPC middleware
+and RPC handlers.
+
+Please be careful when injecting large amounts of data into the extensions because
+It's cloned for each RPC call, which can increase memory usage significantly.
+
+The connection ID from the jsonrpsee-server is injected in the extensions by default.
+and it is possible to fetch it as follows:
+
+```rust
+struct LogConnectionId<S>(S);
+
+impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LogConnectionId<S> {
+	type Future = S::Future;
+
+	fn call(&self, request: jsonrpsee::types::Request<'a>) -> Self::Future {
+		let conn_id = request.extensions().get::<ConnectionId>().unwrap();
+		tracing::info!("Connection ID {}", conn_id.0);
+
+		self.0.call(request)
+	}
+}
+```
+
+In addition the `Extensions` is not added in the proc-macro API by default and
+one has to enable `with_extensions` attr for that to be available:
+
+```rust
+#[rpc(client, server)]
+pub trait Rpc {
+	// legacy
+	#[method(name = "foo"])
+	async fn async_method(&self) -> u16>;
+
+	// with extensions
+	#[method(name = "with_ext", with_extensions)]
+	async fn f(&self) -> bool;
+}
+
+impl RpcServer for () {
+	async fn async_method(&self) -> u16 {
+		12
+	}
+
+	// NOTE: ext is injected just after self in the API
+	async fn f(&self, ext: &Extensions: b: String) -> {
+		ext.get::<u32>().is_ok()
+	}
+}
+```
+
+### client - TLS certificate store changed
+
+The default TLS certificate store has been changed to
+`rustls-platform-verifier` to decide the best certificate
+store for each platform.
+
+In addition it's now possible to inject a custom certificate store
+if one wants need some special certificate store.
+
+### client - Subscription API modified
+
+The subscription API has been modified:
+- The error type has been changed to `serde_json::Error`
+  to indicate that error can only occur if the decoding of T fails.
+- It has been some confusion when the subscription is closed which can occur if the client "lagged" or the connection is closed.
+  Now it's possible to call `Subscription::close_reason` after the subscription closed (i.e. has return None) to know why.
+
+If one wants to replace old messages in case of lagging it is recommended to write your own adaptor on top of the subscription:
+
+```rust
+fn drop_oldest_when_lagging<T: Clone + DeserializeOwned + Send + Sync + 'static>(
+    mut sub: Subscription<T>,
+    buffer_size: usize,
+) -> impl Stream<Item = Result<T, BroadcastStreamRecvError>> {
+    let (tx, rx) = tokio::sync::broadcast::channel(buffer_size);
+
+    tokio::spawn(async move {
+        // Poll the subscription which ignores errors
+        while let Some(n) = sub.next().await {
+            let msg = match n {
+                Ok(msg) => msg,
+                Err(e) => {
+                    tracing::error!("Failed to decode the subscription message: {e}");
+                    continue;
+                }
+            };
+
+            // Only fails if the receiver has been dropped
+            if tx.send(msg).is_err() {
+                return;
+            }
+        }
+    });
+
+    BroadcastStream::new(rx)
+}
+```
+
+### [Added]
+- server: add `serve` and `serve_with_graceful_shutdown` helpers ([#1382](https://github.com/paritytech/jsonrpsee/pull/1382))
+- server: pass `extensions` from http layer ([#1389](https://github.com/paritytech/jsonrpsee/pull/1389))
+- macros: add macro attr `with_extensions` ([#1380](https://github.com/paritytech/jsonrpsee/pull/1380))
+- server: inject connection id in extensions ([#1381](https://github.com/paritytech/jsonrpsee/pull/1381))
+- feat: add `Extensions` to Request/MethodResponse ([#1306](https://github.com/paritytech/jsonrpsee/pull/1306))
+- proc-macros: rename parameter names ([#1365](https://github.com/paritytech/jsonrpsee/pull/1365))
+- client: add `Subscription::close_reason` ([#1320](https://github.com/paritytech/jsonrpsee/pull/1320))
+
+### [Changed]
+- chore(deps): tokio ^1.23.1 ([#1393](https://github.com/paritytech/jsonrpsee/pull/1393))
+- server: use `ConnectionId` in subscription APIs ([#1392](https://github.com/paritytech/jsonrpsee/pull/1392))
+- server: add logs when connection closed by `ws ping/pong` ([#1386](https://github.com/paritytech/jsonrpsee/pull/1386))
+- client: set `authorization header` from the URL ([#1384](https://github.com/paritytech/jsonrpsee/pull/1384))
+- client: use rustls-platform-verifier cert store ([#1373](https://github.com/paritytech/jsonrpsee/pull/1373))
+- client: remove MaxSlots limit ([#1377](https://github.com/paritytech/jsonrpsee/pull/1377))
+- upgrade to hyper v1.0 ([#1368](https://github.com/paritytech/jsonrpsee/pull/1368))
+
+## [v0.22.5] - 2024-04-29
+
+A small bug-fix release, see each commit below for further information.
+
+### [Fixed]
+- proc macros: collision between generated code name and proc macro API ([#1363](https://github.com/paritytech/jsonrpsee/pull/1363))
+- proc-macros: `feature server-core` compiles without `feature server` ([#1360](https://github.com/paritytech/jsonrpsee/pull/1360))
+- client: add check in `max_buffer_capacity_per_subscription` that the buffer size > ([#1358](https://github.com/paritytech/jsonrpsee/pull/1358))
+- types: Response type ignore unknown fields ([#1353](https://github.com/paritytech/jsonrpsee/pull/1353))
+
+## [v0.22.4] - 2024-04-08
+
+Yet another rather small release that fixes a cancel-safety issue that
+could cause an unexpected panic when reading disconnect reason from the background task.
+
+Also this makes the API `Client::disconnect_reason` cancel-safe.
+
+### [Added]
+- client: support batched notifications ([#1327](https://github.com/paritytech/jsonrpsee/pull/1327))
+- client: support batched subscription notifs ([#1332](https://github.com/paritytech/jsonrpsee/pull/1332))
+
+### [Changed]
+- client: downgrade logs from error/warn -> debug ([#1343](https://github.com/paritytech/jsonrpsee/pull/1343))
+
+### [Fixed]
+- Update MSRV to 1.74.1 in Cargo.toml ([#1338](https://github.com/paritytech/jsonrpsee/pull/1338))
+- client: disconnect_reason/read_error is now cancel-safe ([#1347](https://github.com/paritytech/jsonrpsee/pull/1347))
+
+## [v0.22.3] - 2024-03-20
+
+Another small release that adds a new API for RpcModule if one already has the state in an `Arc`
+and a couple of bug fixes.
+
+### [Added]
+- add `RpcModule::from_arc` ([#1324](https://github.com/paritytech/jsonrpsee/pull/1324))
+
+### [Fixed]
+- Revert "fix(server): return err on WS handshake err (#1288)" ([#1326](https://github.com/paritytech/jsonrpsee/pull/1326))
+- export `AlreadyStoppedError` ([#1325](https://github.com/paritytech/jsonrpsee/pull/1325))
+
+Thanks to the external contributors [@mattsse](https://github.com/mattsse) and [@aatifsyed](https://github.com/mattsse) who contributed to this release.
+
 ## [v0.22.2] - 2024-03-05
 
 This is a small patch release that exposes the connection details in server method implementations without breaking changes.
@@ -165,13 +382,13 @@ and [@venugopv](https://github.com/venugopv) who contributed to this release.
 ### [Changed]
 - chore(deps): update tokio-rustls requirement from 0.24 to 0.25 ([#1256](https://github.com/paritytech/jsonrpsee/pull/1256))
 - chore(deps): update gloo-net requirement from 0.4.0 to 0.5.0 ([#1260](https://github.com/paritytech/jsonrpsee/pull/1260))
-- chore(deps): update async-lock requirement from 2.4 to 3.0  ([#1226](https://github.com/paritytech/jsonrpsee/pull/1226))
-- chore(deps): update proc-macro-crate requirement from 1 to 2  ([#1211](https://github.com/paritytech/jsonrpsee/pull/1211))
-- chore(deps): update console-subscriber requirement from 0.1.8 to 0.2.0  ([#1210](https://github.com/paritytech/jsonrpsee/pull/1210))
+- chore(deps): update async-lock requirement from 2.4 to 3.0 ([#1226](https://github.com/paritytech/jsonrpsee/pull/1226))
+- chore(deps): update proc-macro-crate requirement from 1 to 2 ([#1211](https://github.com/paritytech/jsonrpsee/pull/1211))
+- chore(deps): update console-subscriber requirement from 0.1.8 to 0.2.0 ([#1210](https://github.com/paritytech/jsonrpsee/pull/1210))
 - refactor: split client and server errors ([#1122](https://github.com/paritytech/jsonrpsee/pull/1122))
 - refactor(ws client): impl tokio:{AsyncRead, AsyncWrite} for EitherStream ([#1249](https://github.com/paritytech/jsonrpsee/pull/1249))
 - refactor(http client): enable all http versions ([#1252](https://github.com/paritytech/jsonrpsee/pull/1252))
-- refactor(server): change ws ping API  ([#1248](https://github.com/paritytech/jsonrpsee/pull/1248))
+- refactor(server): change ws ping API ([#1248](https://github.com/paritytech/jsonrpsee/pull/1248))
 - refactor(ws client): generic over data stream ([#1168](https://github.com/paritytech/jsonrpsee/pull/1168))
 - refactor(client): unify ws ping/pong API with the server ([#1258](https://github.com/paritytech/jsonrpsee/pull/1258)
 - refactor: set `tcp_nodelay == true` by default ([#1263])(https://github.com/paritytech/jsonrpsee/pull/1263)
@@ -211,18 +428,18 @@ This release adds support for `synchronous subscriptions` and fixes a leak in We
 where FuturesUnordered was not getting polled until shutdown, so it was accumulating tasks forever.
 
 ### [Changed]
-- client: downgrade log for unknown subscription to DEBUG  ([#1185](https://github.com/paritytech/jsonrpsee/pull/1185))
-- refactor(http client): use HTTP connector on http URLs  ([#1187](https://github.com/paritytech/jsonrpsee/pull/1187))
-- refactor(server): less alloc per method call  ([#1188](https://github.com/paritytech/jsonrpsee/pull/1188))
+- client: downgrade log for unknown subscription to DEBUG ([#1185](https://github.com/paritytech/jsonrpsee/pull/1185))
+- refactor(http client): use HTTP connector on http URLs ([#1187](https://github.com/paritytech/jsonrpsee/pull/1187))
+- refactor(server): less alloc per method call ([#1188](https://github.com/paritytech/jsonrpsee/pull/1188))
 
 ### [Fixed]
-- fix: remove needless clone in ws background task  ([#1203](https://github.com/paritytech/jsonrpsee/pull/1203))
-- async client: save latest Waker  ([#1198](https://github.com/paritytech/jsonrpsee/pull/1198))
-- chore(deps): bump actions/checkout from 3.6.0 to 4.0.0  ([#1197](https://github.com/paritytech/jsonrpsee/pull/1197))
+- fix: remove needless clone in ws background task ([#1203](https://github.com/paritytech/jsonrpsee/pull/1203))
+- async client: save latest Waker ([#1198](https://github.com/paritytech/jsonrpsee/pull/1198))
+- chore(deps): bump actions/checkout from 3.6.0 to 4.0.0 ([#1197](https://github.com/paritytech/jsonrpsee/pull/1197))
 - fix(server): fix leak in FuturesUnordered ([#1204](https://github.com/paritytech/jsonrpsee/pull/1204))
 
 ### [Added]
-- feat(server): add sync subscription API `register_subscription_raw`  ([#1182](https://github.com/paritytech/jsonrpsee/pull/1182))
+- feat(server): add sync subscription API `register_subscription_raw` ([#1182](https://github.com/paritytech/jsonrpsee/pull/1182))
 
 ## [v0.20.0] - 2023-08-11
 
@@ -257,29 +474,29 @@ Thanks to the external contributors [@polachok](https://github.com/polachok), [@
 - fix(server): host filtering URI read authority ([#1178](https://github.com/paritytech/jsonrpsee/pull/1178))
 
 ### [Changed]
-- refactor: make ErrorObject::borrowed accept `&str`  ([#1160](https://github.com/paritytech/jsonrpsee/pull/1160))
-- refactor(client): support default port number  ([#1172](https://github.com/paritytech/jsonrpsee/pull/1172))
-- refactor(server): server host filtering  ([#1174](https://github.com/paritytech/jsonrpsee/pull/1174))
-- refactor(client): refactor background task  ([#1145](https://github.com/paritytech/jsonrpsee/pull/1145))
-- refactor: use `RootCertStore::add_trust_anchors`  ([#1165](https://github.com/paritytech/jsonrpsee/pull/1165))
-- chore(deps): update criterion v0.5 and pprof 0.12  ([#1161](https://github.com/paritytech/jsonrpsee/pull/1161))
-- chore(deps): update webpki-roots requirement from 0.24 to 0.25  ([#1158](https://github.com/paritytech/jsonrpsee/pull/1158))
-- refactor(server): move host filtering to tower middleware  ([#1179](https://github.com/paritytech/jsonrpsee/pull/1179))
+- refactor: make ErrorObject::borrowed accept `&str` ([#1160](https://github.com/paritytech/jsonrpsee/pull/1160))
+- refactor(client): support default port number ([#1172](https://github.com/paritytech/jsonrpsee/pull/1172))
+- refactor(server): server host filtering ([#1174](https://github.com/paritytech/jsonrpsee/pull/1174))
+- refactor(client): refactor background task ([#1145](https://github.com/paritytech/jsonrpsee/pull/1145))
+- refactor: use `RootCertStore::add_trust_anchors` ([#1165](https://github.com/paritytech/jsonrpsee/pull/1165))
+- chore(deps): update criterion v0.5 and pprof 0.12 ([#1161](https://github.com/paritytech/jsonrpsee/pull/1161))
+- chore(deps): update webpki-roots requirement from 0.24 to 0.25 ([#1158](https://github.com/paritytech/jsonrpsee/pull/1158))
+- refactor(server): move host filtering to tower middleware ([#1179](https://github.com/paritytech/jsonrpsee/pull/1179))
 
 ## [v0.19.0] - 2023-07-20
 
 ### [Fixed]
 
-- Fixed connections processing await on server shutdown  ([#1153](https://github.com/paritytech/jsonrpsee/pull/1153))
-- fix: include error code in RpcLogger  ([#1135](https://github.com/paritytech/jsonrpsee/pull/1135))
-- fix: downgrade more logs to `debug`  ([#1127](https://github.com/paritytech/jsonrpsee/pull/1127))
-- fix(server): remove `MethodSinkPermit` to fix backpressure issue on concurrent subscriptions  ([#1126](https://github.com/paritytech/jsonrpsee/pull/1126))
-- fix readme links  ([#1152](https://github.com/paritytech/jsonrpsee/pull/1152))
+- Fixed connections processing await on server shutdown ([#1153](https://github.com/paritytech/jsonrpsee/pull/1153))
+- fix: include error code in RpcLogger ([#1135](https://github.com/paritytech/jsonrpsee/pull/1135))
+- fix: downgrade more logs to `debug` ([#1127](https://github.com/paritytech/jsonrpsee/pull/1127))
+- fix(server): remove `MethodSinkPermit` to fix backpressure issue on concurrent subscriptions ([#1126](https://github.com/paritytech/jsonrpsee/pull/1126))
+- fix readme links ([#1152](https://github.com/paritytech/jsonrpsee/pull/1152))
 
 ### [Changed]
 
-- server: downgrade connection logs to debug  ([#1123](https://github.com/paritytech/jsonrpsee/pull/1123))
-- refactor(server): make `Server::start` infallible and add `fn builder()`  ([#1137](https://github.com/paritytech/jsonrpsee/pull/1137))
+- server: downgrade connection logs to debug ([#1123](https://github.com/paritytech/jsonrpsee/pull/1123))
+- refactor(server): make `Server::start` infallible and add `fn builder()` ([#1137](https://github.com/paritytech/jsonrpsee/pull/1137))
 
 ## [v0.18.2] - 2023-05-10
 
@@ -287,8 +504,8 @@ This release improves error message for `too big batch response` and exposes the
 
 ### [Fixed]
 
-- server: export BatchRequestConfig  ([#1112](https://github.com/paritytech/jsonrpsee/pull/1112))
-- fix(server): improve too big batch response msg  ([#1107](https://github.com/paritytech/jsonrpsee/pull/1107))
+- server: export BatchRequestConfig ([#1112](https://github.com/paritytech/jsonrpsee/pull/1112))
+- fix(server): improve too big batch response msg ([#1107](https://github.com/paritytech/jsonrpsee/pull/1107))
 
 ## [v0.18.1] - 2023-04-26
 
@@ -301,9 +518,9 @@ when no tower middleware is enabled.
 
 ### [Fixed]
 
-- rpc module: fix race in subscription close callback  ([#1098](https://github.com/paritytech/jsonrpsee/pull/1098))
-- client: add missing batch request tracing span  ([#1097](https://github.com/paritytech/jsonrpsee/pull/1097))
-- ws server: don't wait for graceful shutdown when connection already closed  ([#1103](https://github.com/paritytech/jsonrpsee/pull/1103))
+- rpc module: fix race in subscription close callback ([#1098](https://github.com/paritytech/jsonrpsee/pull/1098))
+- client: add missing batch request tracing span ([#1097](https://github.com/paritytech/jsonrpsee/pull/1097))
+- ws server: don't wait for graceful shutdown when connection already closed ([#1103](https://github.com/paritytech/jsonrpsee/pull/1103))
 
 ## [v0.18.0] - 2023-04-21
 
@@ -373,17 +590,17 @@ pub trait Rpc {
 ```
 
 ### [Changed]
-- remove `CallError`  ([#1087](https://github.com/paritytech/jsonrpsee/pull/1087))
+- remove `CallError` ([#1087](https://github.com/paritytech/jsonrpsee/pull/1087))
 
 ### [Fixed]
-- fix(proc macros): support parsing params !Result  ([#1094](https://github.com/paritytech/jsonrpsee/pull/1094))
+- fix(proc macros): support parsing params !Result ([#1094](https://github.com/paritytech/jsonrpsee/pull/1094))
 
 ## [v0.17.1] - 2023-04-21
 
 This release fixes HTTP graceful shutdown for the server.
 
 ### [Fixed]
-- server: fix http graceful shutdown  ([#1090](https://github.com/paritytech/jsonrpsee/pull/1090))
+- server: fix http graceful shutdown ([#1090](https://github.com/paritytech/jsonrpsee/pull/1090))
 
 ## [v0.17.0] - 2023-04-17
 
@@ -509,43 +726,43 @@ Because `Result<(), E>` is used here the close notification will be sent out as 
 disable the subscription close response by using `()` instead of `Result<(), E>` or implement `IntoSubscriptionCloseResponse` for other behaviour.
 
 ### [Added]
-- feat(server): configurable limit for batch requests.  ([#1073](https://github.com/paritytech/jsonrpsee/pull/1073))
-- feat(http client): add tower middleware  ([#981](https://github.com/paritytech/jsonrpsee/pull/981))
+- feat(server): configurable limit for batch requests. ([#1073](https://github.com/paritytech/jsonrpsee/pull/1073))
+- feat(http client): add tower middleware ([#981](https://github.com/paritytech/jsonrpsee/pull/981))
 
 ### [Fixed]
-- add tests for ErrorObject  ([#1078](https://github.com/paritytech/jsonrpsee/pull/1078))
-- fix: tokio v1.27  ([#1062](https://github.com/paritytech/jsonrpsee/pull/1062))
-- fix: remove needless `Semaphore::(u32::MAX)`  ([#1051](https://github.com/paritytech/jsonrpsee/pull/1051))
-- fix server: don't send error on JSON-RPC notifications  ([#1021](https://github.com/paritytech/jsonrpsee/pull/1021))
-- fix: add `max_log_length` APIs and use missing configs  ([#956](https://github.com/paritytech/jsonrpsee/pull/956))
-- fix(rpc module): subscription close bug  ([#1011](https://github.com/paritytech/jsonrpsee/pull/1011))
-- fix: customized server error codes  ([#1004](https://github.com/paritytech/jsonrpsee/pull/1004))
+- add tests for ErrorObject ([#1078](https://github.com/paritytech/jsonrpsee/pull/1078))
+- fix: tokio v1.27 ([#1062](https://github.com/paritytech/jsonrpsee/pull/1062))
+- fix: remove needless `Semaphore::(u32::MAX)` ([#1051](https://github.com/paritytech/jsonrpsee/pull/1051))
+- fix server: don't send error on JSON-RPC notifications ([#1021](https://github.com/paritytech/jsonrpsee/pull/1021))
+- fix: add `max_log_length` APIs and use missing configs ([#956](https://github.com/paritytech/jsonrpsee/pull/956))
+- fix(rpc module): subscription close bug ([#1011](https://github.com/paritytech/jsonrpsee/pull/1011))
+- fix: customized server error codes ([#1004](https://github.com/paritytech/jsonrpsee/pull/1004))
 
 ### [Changed]
 - docs: introduce workspace attributes and add keywords ([#1077](https://github.com/paritytech/jsonrpsee/pull/1077))
-- refactor(server): downgrade connection log  ([#1076](https://github.com/paritytech/jsonrpsee/pull/1076))
-- chore(deps): update webpki-roots and tls  ([#1068](https://github.com/paritytech/jsonrpsee/pull/1068))
-- rpc module: refactor subscriptions to return `impl IntoSubscriptionResponse`  ([#1034](https://github.com/paritytech/jsonrpsee/pull/1034))
-- add `IntoResponse` trait for method calls  ([#1057](https://github.com/paritytech/jsonrpsee/pull/1057))
-- Make `jsonrpc` protocol version field in `Response` as `Option`  ([#1046](https://github.com/paritytech/jsonrpsee/pull/1046))
-- server: remove dependency http  ([#1037](https://github.com/paritytech/jsonrpsee/pull/1037))
-- chore(deps): update tower-http requirement from 0.3.4 to 0.4.0  ([#1033](https://github.com/paritytech/jsonrpsee/pull/1033))
-- chore(deps): update socket2 requirement from 0.4.7 to 0.5.1  ([#1032](https://github.com/paritytech/jsonrpsee/pull/1032))
-- Update bound type name  ([#1029](https://github.com/paritytech/jsonrpsee/pull/1029))
-- rpc module: remove `SubscriptionAnswer`  ([#1025](https://github.com/paritytech/jsonrpsee/pull/1025))
-- make verify_and_insert pub  ([#1028](https://github.com/paritytech/jsonrpsee/pull/1028))
-- update MethodKind  ([#1026](https://github.com/paritytech/jsonrpsee/pull/1026))
-- remove batch response  ([#1020](https://github.com/paritytech/jsonrpsee/pull/1020))
-- remove debug log  ([#1024](https://github.com/paritytech/jsonrpsee/pull/1024))
-- client: rename `max_notifs_per_subscription` to `max_buffer_capacity_per_subscription`  ([#1012](https://github.com/paritytech/jsonrpsee/pull/1012))
-- client: feature gate tls cert store  ([#994](https://github.com/paritytech/jsonrpsee/pull/994))
-- server: bounded channels and backpressure  ([#962](https://github.com/paritytech/jsonrpsee/pull/962))
-- client: use tokio channels  ([#999](https://github.com/paritytech/jsonrpsee/pull/999))
-- chore: update gloo-net ^0.2.6  ([#978](https://github.com/paritytech/jsonrpsee/pull/978))
-- Custom errors  ([#977](https://github.com/paritytech/jsonrpsee/pull/977))
-- client: distinct APIs to configure max request and response sizes  ([#967](https://github.com/paritytech/jsonrpsee/pull/967))
-- server: replace `FutureDriver` with `tokio::spawn`  ([#1080](https://github.com/paritytech/jsonrpsee/pull/1080))
-- server: uniform whitespace handling in rpc calls  ([#1082](https://github.com/paritytech/jsonrpsee/pull/1082))
+- refactor(server): downgrade connection log ([#1076](https://github.com/paritytech/jsonrpsee/pull/1076))
+- chore(deps): update webpki-roots and tls ([#1068](https://github.com/paritytech/jsonrpsee/pull/1068))
+- rpc module: refactor subscriptions to return `impl IntoSubscriptionResponse` ([#1034](https://github.com/paritytech/jsonrpsee/pull/1034))
+- add `IntoResponse` trait for method calls ([#1057](https://github.com/paritytech/jsonrpsee/pull/1057))
+- Make `jsonrpc` protocol version field in `Response` as `Option` ([#1046](https://github.com/paritytech/jsonrpsee/pull/1046))
+- server: remove dependency http ([#1037](https://github.com/paritytech/jsonrpsee/pull/1037))
+- chore(deps): update tower-http requirement from 0.3.4 to 0.4.0 ([#1033](https://github.com/paritytech/jsonrpsee/pull/1033))
+- chore(deps): update socket2 requirement from 0.4.7 to 0.5.1 ([#1032](https://github.com/paritytech/jsonrpsee/pull/1032))
+- Update bound type name ([#1029](https://github.com/paritytech/jsonrpsee/pull/1029))
+- rpc module: remove `SubscriptionAnswer` ([#1025](https://github.com/paritytech/jsonrpsee/pull/1025))
+- make verify_and_insert pub ([#1028](https://github.com/paritytech/jsonrpsee/pull/1028))
+- update MethodKind ([#1026](https://github.com/paritytech/jsonrpsee/pull/1026))
+- remove batch response ([#1020](https://github.com/paritytech/jsonrpsee/pull/1020))
+- remove debug log ([#1024](https://github.com/paritytech/jsonrpsee/pull/1024))
+- client: rename `max_notifs_per_subscription` to `max_buffer_capacity_per_subscription` ([#1012](https://github.com/paritytech/jsonrpsee/pull/1012))
+- client: feature gate tls cert store ([#994](https://github.com/paritytech/jsonrpsee/pull/994))
+- server: bounded channels and backpressure ([#962](https://github.com/paritytech/jsonrpsee/pull/962))
+- client: use tokio channels ([#999](https://github.com/paritytech/jsonrpsee/pull/999))
+- chore: update gloo-net ^0.2.6 ([#978](https://github.com/paritytech/jsonrpsee/pull/978))
+- Custom errors ([#977](https://github.com/paritytech/jsonrpsee/pull/977))
+- client: distinct APIs to configure max request and response sizes ([#967](https://github.com/paritytech/jsonrpsee/pull/967))
+- server: replace `FutureDriver` with `tokio::spawn` ([#1080](https://github.com/paritytech/jsonrpsee/pull/1080))
+- server: uniform whitespace handling in rpc calls ([#1082](https://github.com/paritytech/jsonrpsee/pull/1082))
 
 ## [v0.16.2] - 2022-12-01
 
@@ -553,13 +770,13 @@ This release adds `Clone` and `Copy` implementations.
 
 ### [Fixed]
 
-- fix(rpc module): make async closures Clone  ([#948](https://github.com/paritytech/jsonrpsee/pull/948))
-- fix(ci): wasm tests  ([#946](https://github.com/paritytech/jsonrpsee/pull/946))
+- fix(rpc module): make async closures Clone ([#948](https://github.com/paritytech/jsonrpsee/pull/948))
+- fix(ci): wasm tests ([#946](https://github.com/paritytech/jsonrpsee/pull/946))
 
 ### [Added]
 
-- add missing `Clone` and `Copy` impls  ([#951](https://github.com/paritytech/jsonrpsee/pull/951))
-- TowerService should be clone-able for handling concurrent request  ([#950](https://github.com/paritytech/jsonrpsee/pull/950))
+- add missing `Clone` and `Copy` impls ([#951](https://github.com/paritytech/jsonrpsee/pull/951))
+- TowerService should be clone-able for handling concurrent request ([#950](https://github.com/paritytech/jsonrpsee/pull/950))
 
 ## [v0.16.1] - 2022-11-18
 
@@ -575,7 +792,7 @@ Both HTTP and WebSocket are still enabled by default.
 
 ### [Added]
 
-- server: make it possible to enable ws/http only  ([#939](https://github.com/paritytech/jsonrpsee/pull/939))
+- server: make it possible to enable ws/http only ([#939](https://github.com/paritytech/jsonrpsee/pull/939))
 
 ## [v0.16.0] - 2022-11-09
 
@@ -629,7 +846,7 @@ v0.16.0 is a breaking release and the major changes are:
 This release fixes some incorrect tracing spans.
 
 ### [Fixed]
--  [Bug Fix] - Incorrect trace caused by use of Span::enter in asynchronous code [#835](https://github.com/paritytech/jsonrpsee/pull/835)
+- [Bug Fix] - Incorrect trace caused by use of Span::enter in asynchronous code [#835](https://github.com/paritytech/jsonrpsee/pull/835)
 
 ## [v0.15.0] - 2022-07-20
 
@@ -731,7 +948,7 @@ v0.12.0 is mainly a patch release with some minor features added.
 
 ### [Changed]
 - remove vault from ci [#745](https://github.com/paritytech/jsonrpsee/pull/745)
-- chore(deps): update pprof requirement from 0.7 to 0.8  [#732](https://github.com/paritytech/jsonrpsee/pull/732)
+- chore(deps): update pprof requirement from 0.7 to 0.8 [#732](https://github.com/paritytech/jsonrpsee/pull/732)
 - chore(deps): update gloo-net requirement from 0.1.0 to 0.2.0 [#733](https://github.com/paritytech/jsonrpsee/pull/733)
 
 ## [v0.11.0] - 2022-04-21
@@ -830,7 +1047,7 @@ v0.7.0 is a breaking release that contains a big refactoring of the crate struct
 
 - servers: configurable subscriptionID [#604](https://github.com/paritytech/jsonrpsee/pull/604)
 - client: impl Stream on Subscription and tweak built-in next() method [#601](https://github.com/paritytech/jsonrpsee/pull/601)
-- ci: Create gitlab pipeline  [#534](https://github.com/paritytech/jsonrpsee/pull/534)
+- ci: Create gitlab pipeline [#534](https://github.com/paritytech/jsonrpsee/pull/534)
 
 ### [Changed]
 
@@ -878,7 +1095,7 @@ v0.6 is a breaking release
 
 ### [Fixed]
 - types: use Cow for deserializing str [#584](https://github.com/paritytech/jsonrpsee/pull/584)
-- deps: require tokio ^1.8  [#586](https://github.com/paritytech/jsonrpsee/pull/586)
+- deps: require tokio ^1.8 [#586](https://github.com/paritytech/jsonrpsee/pull/586)
 
 
 ## [v0.5.1] – 2021-11-26
@@ -931,7 +1148,7 @@ The v0.4.1 release is a bug fix.
 
 ### [Fixed]
 
--  fix: nit in ServerBuilder::custom_tokio_runtime [#512](https://github.com/paritytech/jsonrpsee/pull/512)
+- fix: nit in ServerBuilder::custom_tokio_runtime [#512](https://github.com/paritytech/jsonrpsee/pull/512)
 
 ## [v0.4.0] – 2021-10-12
 

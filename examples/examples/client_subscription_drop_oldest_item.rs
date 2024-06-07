@@ -80,12 +80,12 @@ fn drop_oldest_when_lagging<T: Clone + DeserializeOwned + Send + Sync + 'static>
 	let (tx, rx) = tokio::sync::broadcast::channel(buffer_size);
 
 	tokio::spawn(async move {
-		// poll sub, sending msgs to our chan which throws stuff away
+		// Poll the subscription which ignores errors.
 		while let Some(n) = sub.next().await {
 			let msg = match n {
 				Ok(msg) => msg,
 				Err(e) => {
-					tracing::error!("Failed to recv subscription message: {e}");
+					tracing::error!("Failed to decode the subscription message: {e}");
 					continue;
 				}
 			};
