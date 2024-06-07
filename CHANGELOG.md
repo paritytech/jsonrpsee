@@ -12,7 +12,7 @@ This is a new breaking release, and let's go through the changes.
 
 jsonrpsee has been upgraded to use hyper v1.0 and this mainly impacts users that are using
 the low-level API and rely on the `hyper::service::make_service_fn`
-which has been removed, and for now on you need to manage the socket yourself.
+which has been removed, and from now on you need to manage the socket yourself.
 
 The `hyper::service::make_service_fn` can be replaced by the following example template:
 
