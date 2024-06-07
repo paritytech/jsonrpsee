@@ -128,7 +128,38 @@ The subscription API has been modified:
 - The error type has been changed to `serde_json::Error`
   to indicate that error can only occur if the decoding of T fails.
 - It has been some confusion when the subscription is closed which can occur if the client "lagged" or the connection is closed.
-  Now it's possible to call `Subscription::close_reason` after the subscription closed to know why.
+  Now it's possible to call `Subscription::close_reason` after the subscription closed (i.e. has return None) to know why.
+
+If one wants to replace old messages in case of lagging it is recommended to write your own adaptor on top of the subscription:
+
+```rust
+fn drop_oldest_when_lagging<T: Clone + DeserializeOwned + Send + Sync + 'static>(
+    mut sub: Subscription<T>,
+    buffer_size: usize,
+) -> impl Stream<Item = Result<T, BroadcastStreamRecvError>> {
+    let (tx, rx) = tokio::sync::broadcast::channel(buffer_size);
+
+    tokio::spawn(async move {
+        // Poll the subscription which ignores errors
+        while let Some(n) = sub.next().await {
+            let msg = match n {
+                Ok(msg) => msg,
+                Err(e) => {
+                    tracing::error!("Failed to decode the subscription message: {e}");
+                    continue;
+                }
+            };
+
+            // Only fails if the receiver has been dropped
+            if tx.send(msg).is_err() {
+                return;
+            }
+        }
+    });
+
+    BroadcastStream::new(rx)
+}
+```
 
 ### [Added]
 - server: add `serve` and `serve_with_graceful_shutdown` helpers ([#1382](https://github.com/paritytech/jsonrpsee/pull/1382))
