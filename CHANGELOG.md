@@ -56,7 +56,7 @@ async fn start_server() {
 }
 ```
 
-Also, beware that `tower::service_fn` and `hyper::service::service_fn` are different and it's recommended to use `tower::service_fn` from now.
+Also, be aware that `tower::service_fn` and `hyper::service::service_fn` are different and it's recommended to use `tower::service_fn` from now.
 
 ### Extensions
 
