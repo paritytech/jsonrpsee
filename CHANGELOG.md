@@ -106,7 +106,7 @@ impl RpcServer for () {
 		12
 	}
 
-	// NOTE: ext is injected here in the API
+	// NOTE: ext is injected just after self in the API
 	async fn f(&self, ext: &Extensions: b: String) -> {
 		ext.get::<u32>().is_ok()
 	}
