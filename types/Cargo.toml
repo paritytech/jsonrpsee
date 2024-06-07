@@ -14,7 +14,6 @@ readme.workspace = true
 publish = true
 
 [dependencies]
-anyhow = "1"
 beef = { version = "0.5.1", features = ["impl_serde"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value", "std"] }
