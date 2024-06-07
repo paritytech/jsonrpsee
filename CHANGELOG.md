@@ -4,7 +4,7 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
-## [v0.23.0] - 2024-06-06
+## [v0.23.0] - 2024-06-07
 
 This is a new breaking release, and let's go through the changes.
 
