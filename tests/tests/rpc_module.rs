@@ -636,3 +636,18 @@ async fn method_response_notify_on_completion() {
 	assert!(module.call::<_, String>("hey", ["not success"]).await.is_err());
 	assert!(matches!(rx.recv().await, Some(Err(MethodResponseError::JsonRpcError))));
 }
+
+#[tokio::test]
+async fn conn_id_in_rpc_module_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_method("get_conn_id", |_, _, ext| match ext.get::<ConnectionId>() {
+			Some(id) => Ok(id.0),
+			None => Err(ErrorObject::owned(1, "no connection id".to_string(), None::<()>)),
+		})
+		.unwrap();
+
+	assert!(
+		matches!(module.call::<_, usize>("get_conn_id", EmptyServerParams::new()).await, Ok(conn_id) if conn_id == 0)
+	);
+}

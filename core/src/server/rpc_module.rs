@@ -366,10 +366,11 @@ impl Methods {
 		subscription_permit: SubscriptionPermit,
 	) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::channel(buf_size);
-		let Request { id, method, params, extensions, .. } = req;
+		let Request { id, method, params, mut extensions, .. } = req;
 		let params = Params::new(params.as_ref().map(|params| params.as_ref().get()));
 		let max_response_size = usize::MAX;
 		let conn_id = ConnectionId(0);
+		extensions.insert(conn_id);
 
 		let response = match self.method(&method) {
 			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
