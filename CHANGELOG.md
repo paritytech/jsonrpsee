@@ -4,6 +4,19 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.23.1] - 2024-06-10
+
+This is a non-breaking release that injects the ConnectionId in
+the extensions when using a RpcModule without a server. This impacts
+users that are using RpcModule directly (e.g., unit testing) and not the
+server itself.
+
+### [Changed]
+- types: remove anyhow dependency ([#1398](https://github.com/paritytech/jsonrpsee/pull/1398))
+
+### [Fixed]
+- rpc module: inject ConnectionId in extensions ([#1399](https://github.com/paritytech/jsonrpsee/pull/1399))
+
 ## [v0.23.0] - 2024-06-07
 
 This is a new breaking release, and let's go through the changes.
