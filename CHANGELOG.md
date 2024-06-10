@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.23.1] - 2024-06-10
 
-This is a non-breaking release that injects the ConnectionId in
+This is a patch release that injects the ConnectionId in
 the extensions when using a RpcModule without a server. This impacts
 users that are using RpcModule directly (e.g., unit testing) and not the
 server itself.
