@@ -105,8 +105,9 @@ fn v2_serialize(req: RequestSer<'_>) -> String {
 	serde_json::to_string(&req).unwrap()
 }
 
+#[allow(unexpected_cfgs)]
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
-	#[cfg(feature = "tokio_unstable")]
+	#[cfg(tokio_unstable)]
 	console_subscriber::init();
 
 	// Construct the serialized array request using the `RawValue` directly.
