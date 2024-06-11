@@ -107,6 +107,22 @@ impl RpcDescription {
 		})
 	}
 
+	/// Helper that will ignore results of `register_*` method calls, and panic if there have been
+	/// any errors in debug builds.
+	///
+	/// The debug assert is a safeguard should the contract that guarantees the method names to
+	/// never conflict in the macro be broken in the future.
+	fn handle_register_result(&self, tokens: TokenStream2) -> TokenStream2 {
+		let reexports = self.jrps_server_item(quote! { core::__reexports });
+		quote! {{
+			let _res = #tokens;
+			#[cfg(debug_assertions)]
+			if _res.is_err() {
+				#reexports::panic_fail_register();
+			}
+		}}
+	}
+
 	fn render_into_rpc(&self) -> Result<TokenStream2, syn::Error> {
 		let rpc_module = self.jrps_server_item(quote! { RpcModule });
 
@@ -120,18 +136,6 @@ impl RpcDescription {
 				registered.insert(name.to_string());
 			}
 		};
-
-		/// Helper that will ignore results of `register_*` method calls, and panic
-		/// if there have been any errors in debug builds.
-		///
-		/// The debug assert is a safeguard should the contract that guarantees the method
-		/// names to never conflict in the macro be broken in the future.
-		fn handle_register_result(tokens: TokenStream2) -> TokenStream2 {
-			quote! {{
-				let res = #tokens;
-				debug_assert!(res.is_ok(), "RPC macro method names should never conflict, this is a bug, please report it.");
-			}}
-		}
 
 		let methods = self
 			.methods
@@ -153,14 +157,14 @@ impl RpcDescription {
 
 				if method.signature.sig.asyncness.is_some() {
 					if method.with_extensions {
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.register_async_method(#rpc_method_name, |params, context, ext| async move {
 								#parsing
 								#into_response::into_response(context.as_ref().#rust_method_name(&ext, #params_seq).await)
 							})
 						})
 					} else {
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.register_async_method(#rpc_method_name, |params, context, _| async move {
 								#parsing
 								#into_response::into_response(context.as_ref().#rust_method_name(#params_seq).await)
@@ -172,14 +176,14 @@ impl RpcDescription {
 						if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
 
 					if method.with_extensions {
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.#register_kind(#rpc_method_name, |params, context, ext| {
 								#parsing
 								#into_response::into_response(context.#rust_method_name(&ext, #params_seq))
 							})
 						})
 					} else {
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.#register_kind(#rpc_method_name, |params, context, _| {
 								#parsing
 								#into_response::into_response(context.#rust_method_name(#params_seq))
@@ -223,14 +227,14 @@ impl RpcDescription {
 
 				if sub.signature.sig.asyncness.is_some() {
 					if sub.with_extensions {
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, ext| async move {
 								#parsing
 								#into_sub_response::into_response(context.as_ref().#rust_method_name(pending, &ext, #params_seq).await)
 							})
 						})
 					} else {
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, _| async move {
 								#parsing
 								#into_sub_response::into_response(context.as_ref().#rust_method_name(pending, #params_seq).await)
@@ -238,22 +242,22 @@ impl RpcDescription {
 						})
 					}
 				} else if sub.with_extensions {
-					handle_register_result(quote! {
-							rpc.register_subscription_raw(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, ext| {
-								#parsing
-								let _ = context.as_ref().#rust_method_name(pending, &ext, #params_seq);
-								#sub_err::None
-							})
+					self.handle_register_result(quote! {
+						rpc.register_subscription_raw(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, ext| {
+							#parsing
+							let _ = context.as_ref().#rust_method_name(pending, &ext, #params_seq);
+							#sub_err::None
 						})
+					})
 				} else {
-						handle_register_result(quote! {
-							rpc.register_subscription_raw(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, _| {
-								#parsing
-								let _ = context.as_ref().#rust_method_name(pending, #params_seq);
-								#sub_err::None
-							})
+					self.handle_register_result(quote! {
+						rpc.register_subscription_raw(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut pending, context, _| {
+							#parsing
+							let _ = context.as_ref().#rust_method_name(pending, #params_seq);
+							#sub_err::None
 						})
-					}
+					})
+				}
 			})
 			.collect::<Vec<_>>();
 
@@ -270,7 +274,7 @@ impl RpcDescription {
 					.iter()
 					.map(|alias| {
 						check_name(alias, rust_method_name.span());
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.register_alias(#alias, #rpc_name)
 						})
 					})
@@ -293,7 +297,7 @@ impl RpcDescription {
 					.iter()
 					.map(|alias| {
 						check_name(alias, rust_method_name.span());
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.register_alias(#alias, #sub_name)
 						})
 					})
@@ -303,7 +307,7 @@ impl RpcDescription {
 					.iter()
 					.map(|alias| {
 						check_name(alias, rust_method_name.span());
-						handle_register_result(quote! {
+						self.handle_register_result(quote! {
 							rpc.register_alias(#alias, #unsub_name)
 						})
 					})
@@ -353,15 +357,15 @@ impl RpcDescription {
 
 		let reexports = self.jrps_server_item(quote! { core::__reexports });
 
-		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
-		let response_payload = self.jrps_server_item(quote! { ResponsePayload });
-		let tokio = quote! { #reexports::tokio };
 		let error_ret = if let Some(pending) = &sub {
+			let tokio = quote! { #reexports::tokio };
+			let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
 			quote! {
 				#tokio::spawn(#pending.reject(e));
 				return #sub_err::None;
 			}
 		} else {
+			let response_payload = self.jrps_server_item(quote! { ResponsePayload });
 			quote! {
 				return #response_payload::error(e);
 			}
