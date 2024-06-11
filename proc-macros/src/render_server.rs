@@ -350,59 +350,36 @@ impl RpcDescription {
 
 		let params_fields_seq = params.iter().map(RpcFnArg::arg_pat);
 		let params_fields = quote! { #(#params_fields_seq),* };
-		let tracing = self.jrps_server_item(quote! { tracing });
+
+		let reexports = self.jrps_server_item(quote! { core::__reexports });
+
 		let sub_err = self.jrps_server_item(quote! { SubscriptionCloseResponse });
 		let response_payload = self.jrps_server_item(quote! { ResponsePayload });
-		let tokio = self.jrps_server_item(quote! { core::__reexports::tokio });
+		let tokio = quote! { #reexports::tokio };
+		let error_ret = if let Some(pending) = &sub {
+			quote! {
+				#tokio::spawn(#pending.reject(e));
+				return #sub_err::None;
+			}
+		} else {
+			quote! {
+				return #response_payload::error(e);
+			}
+		};
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
-			let decode_fields = params.iter().map(|RpcFnArg { arg_pat, ty, .. }| match (is_option(ty), sub.as_ref()) {
-				(true, Some(pending)) => {
-					quote! {
-						let #arg_pat: #ty = match seq.optional_next() {
-							Ok(v) => v,
-							Err(e) => {
-								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#arg_pat), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								#tokio::spawn(#pending.reject(e));
-								return #sub_err::None;
-							}
-						};
-					}
-				}
-				(true, None) => {
-					quote! {
-						let #arg_pat: #ty = match seq.optional_next() {
-							Ok(v) => v,
-							Err(e) => {
-								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#arg_pat), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								return #response_payload::error(e);
-							}
-						};
-					}
-				}
-				(false, Some(pending)) => {
-					quote! {
-						let #arg_pat: #ty = match seq.next() {
-							Ok(v) => v,
-							Err(e) => {
-								#tracing::debug!(concat!("Error parsing optional \"", stringify!(#arg_pat), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								#tokio::spawn(#pending.reject(e));
-								return #sub_err::None;
-							}
-						};
-					}
-				}
-				(false, None) => {
-					quote! {
-						let #arg_pat: #ty = match seq.next() {
-							Ok(v) => v,
-							Err(e) => {
-								#tracing::debug!(concat!("Error parsing \"", stringify!(#arg_pat), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								return #response_payload::error(e);
-							}
-						};
-					}
+			let decode_fields = params.iter().map(|RpcFnArg { arg_pat, ty, .. }| {
+				let is_option = is_option(ty);
+				let next_method = if is_option { quote!(optional_next) } else { quote!(next) };
+				quote! {
+					let #arg_pat: #ty = match seq.#next_method() {
+						Ok(v) => v,
+						Err(e) => {
+							#reexports::log_fail_parse(stringify!(#arg_pat), stringify!(#ty), &e, #is_option);
+							#error_ret
+						}
+					};
 				}
 			});
 
@@ -447,43 +424,22 @@ impl RpcDescription {
 			let destruct = params.iter().map(RpcFnArg::arg_pat).map(|a| quote!(parsed.#a));
 			let types = params.iter().map(RpcFnArg::ty);
 
-			if let Some(pending) = sub {
-				quote! {
-					#[derive(#serde::Deserialize)]
-					#[serde(crate = #serde_crate)]
-					struct ParamsObject<#(#generics,)*> {
-						#(#fields)*
-					}
-
-					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
-						Ok(p) => p,
-						Err(e) => {
-							#tracing::debug!("Failed to parse JSON-RPC params as object: {}", e);
-							#tokio::spawn(#pending.reject(e));
-							return #sub_err::None;
-						}
-					};
-
-					(#(#destruct),*)
+			quote! {
+				#[derive(#serde::Deserialize)]
+				#[serde(crate = #serde_crate)]
+				struct ParamsObject<#(#generics,)*> {
+					#(#fields)*
 				}
-			} else {
-				quote! {
-					#[derive(#serde::Deserialize)]
-					#[serde(crate = #serde_crate)]
-					struct ParamsObject<#(#generics,)*> {
-						#(#fields)*
+
+				let parsed: ParamsObject<#(#types,)*> = match params.parse() {
+					Ok(p) => p,
+					Err(e) => {
+						#reexports::log_fail_parse_as_object(&e);
+						#error_ret
 					}
+				};
 
-					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
-						Ok(p) => p,
-						Err(e) => {
-							#tracing::debug!("Failed to parse JSON-RPC params as object: {}", e);
-							return #response_payload::error(e);
-						}
-					};
-
-					(#(#destruct),*)
-				}
+				(#(#destruct),*)
 			}
 		};
 
