@@ -14,7 +14,6 @@ readme.workspace = true
 publish = true
 
 [dependencies]
-anyhow = "1"
 futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
 jsonrpsee-types = { workspace = true }
 jsonrpsee-core = { workspace = true, features = ["server", "http-helpers"] }
@@ -36,7 +35,6 @@ route-recognizer = "0.3.1"
 pin-project = "1.1.3"
 
 [dev-dependencies]
-anyhow = "1"
 jsonrpsee-test-utils = { path = "../test-utils" }
 rand = "0.8"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
