@@ -25,10 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! # jsonrpsee-client-transports
-//!
 
 /// Websocket transport
 #[cfg(feature = "ws")]
