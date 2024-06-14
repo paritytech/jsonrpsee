@@ -14,7 +14,6 @@ readme.workspace = true
 publish = true
 
 [dependencies]
-anyhow = "1"
 async-trait = "0.1"
 jsonrpsee-types = { workspace = true }
 thiserror = "1"

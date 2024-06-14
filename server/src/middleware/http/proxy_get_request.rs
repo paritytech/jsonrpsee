@@ -172,7 +172,7 @@ where
 			let mut bytes = Vec::new();
 
 			while let Some(frame) = body.frame().await {
-				let data = frame?.into_data().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+				let data = frame?.into_data().map_err(|e| format!("{e:?}"))?;
 				bytes.extend(data);
 			}
 

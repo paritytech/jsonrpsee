@@ -1030,7 +1030,7 @@ where
 			}
 			_ = inactivity_stream.next() => {
 				if inactivity_check.is_inactive() {
-					break Err(Error::Transport(anyhow::anyhow!("WebSocket ping/pong inactive")));
+					break Err(Error::Transport("WebSocket ping/pong inactive".into()));
 				}
 			}
 		}
