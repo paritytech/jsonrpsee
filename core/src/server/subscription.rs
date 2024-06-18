@@ -305,6 +305,16 @@ impl PendingSubscriptionSink {
 	pub fn connection_id(&self) -> ConnectionId {
 		self.uniq_sub.conn_id
 	}
+
+	/// Get the capacity of the channel.
+	pub fn capacity(&self) -> usize {
+		self.inner.capacity()
+	}
+
+	/// Get the max capacity of the channel.
+	pub fn max_capacity(&self) -> usize {
+		self.inner.max_capacity()
+	}
 }
 
 /// Represents a single subscription that hasn't been processed yet.
@@ -399,6 +409,16 @@ impl SubscriptionSink {
 			_ = self.inner.closed() => (),
 			_ = self.unsubscribe.unsubscribed() => (),
 		}
+	}
+
+	/// Get the capacity of the channel.
+	pub fn capacity(&self) -> usize {
+		self.inner.capacity()
+	}
+
+	/// Get the max capacity of the channel.
+	pub fn max_capacity(&self) -> usize {
+		self.inner.max_capacity()
 	}
 
 	fn is_active_subscription(&self) -> bool {

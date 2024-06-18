@@ -142,6 +142,16 @@ impl MethodSink {
 		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
 	}
 
+	/// Get the capacity of the channel.
+	pub fn capacity(&self) -> usize {
+		self.tx.capacity()
+	}
+
+	/// Get the max capacity of the channel.
+	pub fn max_capacity(&self) -> usize {
+		self.tx.max_capacity()
+	}
+
 	/// Waits for there to be space on the return channel.
 	pub async fn has_capacity(&self) -> Result<(), DisconnectError> {
 		match self.tx.reserve().await {
