@@ -305,6 +305,11 @@ impl PendingSubscriptionSink {
 	pub fn connection_id(&self) -> ConnectionId {
 		self.uniq_sub.conn_id
 	}
+
+	/// Get the method name.
+	pub fn method_name(&self) -> &str {
+		self.method
+	}
 }
 
 /// Represents a single subscription that hasn't been processed yet.
