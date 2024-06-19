@@ -9,7 +9,6 @@ publish = false
 
 [dev-dependencies]
 anyhow = "1"
-beef = { version = "0.5.1", features = ["impl_serde"] }
 fast-socks5 = { version = "0.9.1" }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.14", default-features = false, features = ["alloc"]}

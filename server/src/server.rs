@@ -839,11 +839,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///                   // Call the jsonrpsee service which
 	///                   // may upgrade it to a WebSocket connection
 	///                   // or treat it as "ordinary HTTP request".
-	///                   //
-	///                   // https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-	///                   // to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-	///                   // as workaround.
-	///                   async move { svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
+	///                   async move { svc.call(req).await }
 	///               });
 	///
 	///               // Upgrade the connection to a HTTP service with graceful shutdown.

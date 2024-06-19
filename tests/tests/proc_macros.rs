@@ -107,18 +107,14 @@ mod rpc_impl {
 			a: &str,
 			b: &'_ str,
 			c: std::borrow::Cow<'_, str>,
-			d: Option<beef::Cow<'_, str>>,
+			d: Option<std::borrow::Cow<'_, str>>,
 		) -> Result<String, ErrorObjectOwned> {
 			Ok(format!("Called with: {}, {}, {}, {:?}", a, b, c, d))
 		}
 
 		#[method(name = "zero_copy_cow")]
-		fn zero_copy_cow(
-			&self,
-			a: std::borrow::Cow<'_, str>,
-			b: beef::Cow<'_, str>,
-		) -> Result<String, ErrorObjectOwned> {
-			Ok(format!("Zero copy params: {}, {}", matches!(a, std::borrow::Cow::Borrowed(_)), b.is_borrowed()))
+		fn zero_copy_cow(&self, a: std::borrow::Cow<'_, str>) -> Result<String, ErrorObjectOwned> {
+			Ok(format!("Zero copy params: {}", matches!(a, std::borrow::Cow::Borrowed(_))))
 		}
 
 		#[method(name = "blocking_call", blocking)]
@@ -285,19 +281,19 @@ async fn macro_zero_copy_cow() {
 	let module = RpcServerImpl.into_rpc();
 
 	let (resp, _) = module
-		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo", "bar"],"id":0}"#, 1)
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo"],"id":0}"#, 1)
 		.await
 		.unwrap();
 
 	// std::borrow::Cow<str> always deserialized to owned variant here
-	assert_eq!(resp, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, true","id":0}"#);
+	assert_eq!(resp, r#"{"jsonrpc":"2.0","result":"Zero copy params: false","id":0}"#);
 
 	// serde_json will have to allocate a new string to replace `\t` with byte 0x09 (tab)
 	let (resp, _) = module
-		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo", "\tbar"],"id":0}"#, 1)
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo"],"id":0}"#, 1)
 		.await
 		.unwrap();
-	assert_eq!(resp, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
+	assert_eq!(resp, r#"{"jsonrpc":"2.0","result":"Zero copy params: false","id":0}"#);
 }
 
 // Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.

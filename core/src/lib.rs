@@ -27,6 +27,7 @@
 //! Shared utilities for `jsonrpsee`.
 
 #![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 // Macros useful internally within this crate, but not to be exposed outside of it.
@@ -81,12 +82,12 @@ pub mod __reexports {
 	}
 }
 
-pub use beef::Cow;
 pub use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json::{
 	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
 	Value as JsonValue,
 };
+pub use std::borrow::Cow;
 
 /// Ten megabytes.
 pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;

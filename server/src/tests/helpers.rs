@@ -252,12 +252,9 @@ pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
 							tokio::join!(session_close2, session_close1);
 							metrics.ws_sessions_closed.fetch_add(1, Ordering::SeqCst);
 						});
-
-						async move { rpc_svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }.boxed()
-					} else {
-						// HTTP.
-						async move { rpc_svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }.boxed()
 					}
+
+					async move { rpc_svc.call(req).await }.boxed()
 				});
 
 				tokio::spawn(serve_with_graceful_shutdown(sock, svc, stop_handle.clone().shutdown()));

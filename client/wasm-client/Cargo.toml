@@ -13,7 +13,7 @@ keywords.workspace = true
 readme.workspace = true
 publish = true
 
-[dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 jsonrpsee-types = { workspace = true }
 jsonrpsee-client-transport = { workspace = true, features = ["web"] }
 jsonrpsee-core = { workspace = true, features = ["async-wasm-client"] }

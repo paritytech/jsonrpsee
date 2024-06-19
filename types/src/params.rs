@@ -27,9 +27,9 @@
 //! Types to handle JSON-RPC request parameters according to the [spec](https://www.jsonrpc.org/specification#parameter_structures).
 //! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
 
+use std::borrow::Cow;
 use std::fmt;
 
-use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
@@ -139,7 +139,7 @@ impl<'a> Params<'a> {
 	///
 	/// This will cause an allocation if the params internally are using a borrowed JSON slice.
 	pub fn into_owned(self) -> Params<'static> {
-		Params(self.0.map(|s| Cow::owned(s.into_owned())))
+		Params(self.0.map(|s| Cow::Owned(s.into_owned())))
 	}
 
 	/// Return the length of underlying JSON string in number of bytes.
@@ -315,7 +315,7 @@ impl<'a> SubscriptionId<'a> {
 	pub fn into_owned(self) -> SubscriptionId<'static> {
 		match self {
 			SubscriptionId::Num(num) => SubscriptionId::Num(num),
-			SubscriptionId::Str(s) => SubscriptionId::Str(Cow::owned(s.into_owned())),
+			SubscriptionId::Str(s) => SubscriptionId::Str(Cow::Owned(s.into_owned())),
 		}
 	}
 }
@@ -382,7 +382,7 @@ impl<'a> Id<'a> {
 		match self {
 			Id::Null => Id::Null,
 			Id::Number(num) => Id::Number(num),
-			Id::Str(s) => Id::Str(Cow::owned(s.into_owned())),
+			Id::Str(s) => Id::Str(Cow::Owned(s.into_owned())),
 		}
 	}
 
@@ -421,7 +421,7 @@ mod test {
 		let deserialized: Id = serde_json::from_str(s).unwrap();
 		match deserialized {
 			Id::Str(ref cow) => {
-				assert!(cow.is_borrowed());
+				assert!(matches!(cow, Cow::Borrowed(_)));
 				assert_eq!(cow, "2");
 			}
 			_ => panic!("Expected Id::Str"),
@@ -433,7 +433,7 @@ mod test {
 
 		let s = r#""2x""#;
 		let deserialized: Id = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized, Id::Str(Cow::const_str("2x")));
+		assert_eq!(deserialized, Id::Str(Cow::Borrowed("2x")));
 
 		let s = r#"[1337]"#;
 		assert!(serde_json::from_str::<Id>(s).is_err());

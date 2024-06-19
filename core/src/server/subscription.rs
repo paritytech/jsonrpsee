@@ -314,6 +314,10 @@ impl PendingSubscriptionSink {
 	/// Get the max capacity of the channel.
 	pub fn max_capacity(&self) -> usize {
 		self.inner.max_capacity()
+
+	/// Get the method name.
+	pub fn method_name(&self) -> &str {
+		self.method
 	}
 }
 

@@ -225,7 +225,7 @@ pub async fn server() -> SocketAddr {
 					.connection_id(connection_id)
 					.build(methods2.clone(), stop_hdl2.clone());
 
-				async move { tower_service.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e)) }
+				async move { tower_service.call(req).await }
 			});
 
 			// Spawn a new task to serve each respective (Hyper) connection.
