@@ -421,7 +421,7 @@ impl SubscriptionSink {
 		self.inner.capacity()
 	}
 
-	/// Get the max capacity of the channel.
+	/// Get the max capacity of the subscription.
 	pub fn max_capacity(&self) -> usize {
 		self.inner.max_capacity()
 	}
