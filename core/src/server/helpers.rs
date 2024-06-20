@@ -142,7 +142,7 @@ impl MethodSink {
 		self.tx.send_timeout(msg, timeout).await.map_err(Into::into)
 	}
 
-	/// Get the capacity of the channel.
+	/// Get the capacity of the subscription sink.
 	pub fn capacity(&self) -> usize {
 		self.tx.capacity()
 	}
