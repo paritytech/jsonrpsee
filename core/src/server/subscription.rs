@@ -416,7 +416,7 @@ impl SubscriptionSink {
 		}
 	}
 
-	/// Get the capacity of the subscription sink.
+	/// Get the capacity of the subscription.
 	pub fn capacity(&self) -> usize {
 		self.inner.capacity()
 	}
