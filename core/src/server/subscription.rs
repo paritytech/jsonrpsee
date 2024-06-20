@@ -306,6 +306,16 @@ impl PendingSubscriptionSink {
 		self.uniq_sub.conn_id
 	}
 
+	/// Get the capacity of the channel.
+	pub fn capacity(&self) -> usize {
+		self.inner.capacity()
+	}
+
+	/// Get the max capacity of the channel.
+	pub fn max_capacity(&self) -> usize {
+		self.inner.max_capacity()
+	}
+
 	/// Get the method name.
 	pub fn method_name(&self) -> &str {
 		self.method
@@ -404,6 +414,16 @@ impl SubscriptionSink {
 			_ = self.inner.closed() => (),
 			_ = self.unsubscribe.unsubscribed() => (),
 		}
+	}
+
+	/// Get the capacity of the subscription.
+	pub fn capacity(&self) -> usize {
+		self.inner.capacity()
+	}
+
+	/// Get the max capacity of the subscription.
+	pub fn max_capacity(&self) -> usize {
+		self.inner.max_capacity()
 	}
 
 	fn is_active_subscription(&self) -> bool {
