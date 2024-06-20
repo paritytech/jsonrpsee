@@ -214,6 +214,8 @@ impl RpcDescription {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 		let p = Ident::new(ILLEGAL_PARAM_NAME, proc_macro2::Span::call_site());
 
+		let reexports = self.jrps_client_item(quote! { core::__reexports });
+
 		if params.is_empty() {
 			return quote!({
 				#jsonrpsee::core::params::ArrayParams::new()
@@ -249,8 +251,8 @@ impl RpcDescription {
 				quote!({
 					let mut #p = #jsonrpsee::core::params::ObjectParams::new();
 					#(
-						if let Err(err) = #p.insert( #params_insert ) {
-							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params_insert ), err);
+						if let Err(err) = #p.insert(#params_insert) {
+							#reexports::panic_fail_serialize(stringify!(#params_insert), err);
 						}
 					)*
 					#p
@@ -263,8 +265,8 @@ impl RpcDescription {
 				quote!({
 					let mut #p = #jsonrpsee::core::params::ArrayParams::new();
 					#(
-						if let Err(err) = #p.insert( #params ) {
-							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params ), err);
+						if let Err(err) = #p.insert(#params) {
+							#reexports::panic_fail_serialize(stringify!(#params), err);
 						}
 					)*
 					#p

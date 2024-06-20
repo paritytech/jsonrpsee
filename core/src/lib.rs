@@ -68,6 +68,9 @@ pub type RpcResult<T> = std::result::Result<T, jsonrpsee_types::ErrorObjectOwned
 /// Empty server `RpcParams` type to use while registering modules.
 pub type EmptyServerParams = Vec<()>;
 
+#[doc(hidden)]
+mod proc_macros_support;
+
 /// Re-exports for proc-macro library to not require any additional
 /// dependencies to be explicitly added on the client side.
 #[doc(hidden)]
@@ -80,6 +83,8 @@ pub mod __reexports {
 	cfg_client_or_server! {
 		pub use tokio;
 	}
+
+	pub use super::proc_macros_support::*;
 }
 
 pub use serde::{de::DeserializeOwned, Serialize};
