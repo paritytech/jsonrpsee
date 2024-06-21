@@ -243,6 +243,11 @@ impl Methods {
 		}
 	}
 
+	// Removes the method callback for a given name, if it exists.
+	fn remove(&mut self, name: &'static str) -> Option<MethodCallback> {
+		self.mut_callbacks().remove(name)
+	}
+
 	/// Helper for obtaining a mut ref to the callbacks HashMap.
 	fn mut_callbacks(&mut self) -> &mut FxHashMap<&'static str, MethodCallback> {
 		Arc::make_mut(&mut self.callbacks)
@@ -550,6 +555,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				MethodResponse::response(id, rp, max_response_size).with_extensions(extensions)
 			})),
 		)
+	}
+
+	/// Removes method if it exists.
+	///
+	/// It is caller responsibility to remove both `subscribe` and `unsubscribe` methods for subscriptions.
+	pub fn remove_method(&mut self, method_name: &'static str) -> Option<MethodCallback> {
+		self.methods.remove(method_name)
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
