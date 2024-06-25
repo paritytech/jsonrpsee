@@ -1,184 +1,184 @@
-test jsonrpsee_types_array_params_baseline ... bench:         125 ns/iter (+/- 0)
+test jsonrpsee_types_array_params_baseline ... bench:         120 ns/iter (+/- 0)
 
-test jsonrpsee_types_array_params ... bench:         226 ns/iter (+/- 1)
+test jsonrpsee_types_array_params ... bench:         223 ns/iter (+/- 1)
 
-test jsonrpsee_types_object_params_baseline ... bench:         127 ns/iter (+/- 0)
+test jsonrpsee_types_object_params_baseline ... bench:         123 ns/iter (+/- 0)
 
-test jsonrpsee_types_object_params ... bench:         237 ns/iter (+/- 2)
+test jsonrpsee_types_object_params ... bench:         234 ns/iter (+/- 1)
 
-test sync/http_custom_headers_round_trip/0kb ... bench:       50214 ns/iter (+/- 1577)
+test sync/http_custom_headers_round_trip/0kb ... bench:       41852 ns/iter (+/- 626)
 
-test sync/http_custom_headers_round_trip/1kb ... bench:       46589 ns/iter (+/- 1449)
+test sync/http_custom_headers_round_trip/1kb ... bench:       42568 ns/iter (+/- 911)
 
-test sync/http_custom_headers_round_trip/5kb ... bench:       46938 ns/iter (+/- 1050)
+test sync/http_custom_headers_round_trip/5kb ... bench:       44098 ns/iter (+/- 543)
 
-test sync/http_custom_headers_round_trip/25kb ... bench:       52487 ns/iter (+/- 942)
+test sync/http_custom_headers_round_trip/25kb ... bench:       49390 ns/iter (+/- 530)
 
-test sync/http_custom_headers_round_trip/100kb ... bench:       86901 ns/iter (+/- 4542)
+test sync/http_custom_headers_round_trip/100kb ... bench:       71242 ns/iter (+/- 1297)
 
-test sync/http_concurrent_conn_calls/fast_call/2 ... bench:      128318 ns/iter (+/- 41999)
-test sync/http_concurrent_conn_calls/fast_call/4 ... bench:      153404 ns/iter (+/- 425129)
-test sync/http_concurrent_conn_calls/fast_call/8 ... bench:      255323 ns/iter (+/- 704536)
+test sync/http_concurrent_conn_calls/fast_call/2 ... bench:      114329 ns/iter (+/- 141890)
+test sync/http_concurrent_conn_calls/fast_call/4 ... bench:      139288 ns/iter (+/- 333511)
+test sync/http_concurrent_conn_calls/fast_call/8 ... bench:      252018 ns/iter (+/- 707453)
 
-test sync/http_round_trip/3 ... bench:     2625698 ns/iter (+/- 86031)
+test sync/http_round_trip/3 ... bench:     2535242 ns/iter (+/- 11689)
 
-test sync/http_round_trip/9 ... bench:     7954767 ns/iter (+/- 297989)
+test sync/http_round_trip/9 ... bench:     6604469 ns/iter (+/- 225394)
 
-test sync/http_round_trip/27 ... bench:    24741407 ns/iter (+/- 996261)
+test sync/http_round_trip/27 ... bench:    21339490 ns/iter (+/- 652368)
 
-test sync/http_round_trip/81 ... bench:    66198369 ns/iter (+/- 3556964)
+test sync/http_round_trip/81 ... bench:    63128885 ns/iter (+/- 2358351)
 
-test sync/http_round_trip/243 ... bench:   198909796 ns/iter (+/- 6425726)
+test sync/http_round_trip/243 ... bench:   185095333 ns/iter (+/- 5244486)
 
-test sync/http_round_trip/729 ... bench:   629630520 ns/iter (+/- 16482139)
+test sync/http_round_trip/729 ... bench:   610378797 ns/iter (+/- 15779107)
 
-test sync/http_batch_requests/fast_call/2 ... bench:       54428 ns/iter (+/- 1834)
-test sync/http_batch_requests/fast_call/5 ... bench:       59468 ns/iter (+/- 1908)
-test sync/http_batch_requests/fast_call/10 ... bench:       74068 ns/iter (+/- 1763)
-test sync/http_batch_requests/fast_call/50 ... bench:      143499 ns/iter (+/- 3583)
-test sync/http_batch_requests/fast_call/100 ... bench:      227189 ns/iter (+/- 5767)
+test sync/http_batch_requests/fast_call/2 ... bench:       46714 ns/iter (+/- 638)
+test sync/http_batch_requests/fast_call/5 ... bench:       51609 ns/iter (+/- 1006)
+test sync/http_batch_requests/fast_call/10 ... bench:       64158 ns/iter (+/- 1393)
+test sync/http_batch_requests/fast_call/50 ... bench:      131242 ns/iter (+/- 2711)
+test sync/http_batch_requests/fast_call/100 ... bench:      202803 ns/iter (+/- 2249)
 
-test sync/ws_custom_headers_handshake/0kb ... bench:       70628 ns/iter (+/- 1887)
-test sync/ws_custom_headers_handshake/1kb ... bench:       73120 ns/iter (+/- 2378)
-test sync/ws_custom_headers_handshake/2kb ... bench:       78530 ns/iter (+/- 2444)
-test sync/ws_custom_headers_handshake/4kb ... bench:       80356 ns/iter (+/- 2428)
+test sync/ws_custom_headers_handshake/0kb ... bench:       63315 ns/iter (+/- 886)
+test sync/ws_custom_headers_handshake/1kb ... bench:       63612 ns/iter (+/- 866)
+test sync/ws_custom_headers_handshake/2kb ... bench:       68428 ns/iter (+/- 1110)
+test sync/ws_custom_headers_handshake/4kb ... bench:       71780 ns/iter (+/- 1625)
 
-test sync/ws_concurrent_conn_calls/fast_call/2 ... bench:      156621 ns/iter (+/- 6104)
-test sync/ws_concurrent_conn_calls/fast_call/4 ... bench:      292767 ns/iter (+/- 30583)
-test sync/ws_concurrent_conn_calls/fast_call/8 ... bench:      526191 ns/iter (+/- 60895)
+test sync/ws_concurrent_conn_calls/fast_call/2 ... bench:      144993 ns/iter (+/- 16870)
+test sync/ws_concurrent_conn_calls/fast_call/4 ... bench:      264659 ns/iter (+/- 25676)
+test sync/ws_concurrent_conn_calls/fast_call/8 ... bench:      500703 ns/iter (+/- 87927)
 
-test sync/ws_round_trip/3 ... bench:     1969660 ns/iter (+/- 50044)
+test sync/ws_round_trip/3 ... bench:     1939336 ns/iter (+/- 11533)
 
-test sync/ws_round_trip/9 ... bench:     4372502 ns/iter (+/- 33121)
+test sync/ws_round_trip/9 ... bench:     4225265 ns/iter (+/- 47900)
 
-test sync/ws_round_trip/27 ... bench:    12925859 ns/iter (+/- 507312)
+test sync/ws_round_trip/27 ... bench:    13387763 ns/iter (+/- 881380)
 
-test sync/ws_round_trip/81 ... bench:    39307624 ns/iter (+/- 2255264)
+test sync/ws_round_trip/81 ... bench:    41728676 ns/iter (+/- 3950260)
 
-test sync/ws_round_trip/243 ... bench:   135117087 ns/iter (+/- 11450750)
+test sync/ws_round_trip/243 ... bench:   136091071 ns/iter (+/- 9584283)
 
-test sync/ws_round_trip/729 ... bench:   423319296 ns/iter (+/- 15097443)
+test sync/ws_round_trip/729 ... bench:   432631021 ns/iter (+/- 15737239)
 
-test sync/ws_batch_requests/fast_call/2 ... bench:       40383 ns/iter (+/- 544)
-test sync/ws_batch_requests/fast_call/5 ... bench:       46717 ns/iter (+/- 748)
-test sync/ws_batch_requests/fast_call/10 ... bench:       56929 ns/iter (+/- 813)
-test sync/ws_batch_requests/fast_call/50 ... bench:      131573 ns/iter (+/- 7946)
-test sync/ws_batch_requests/fast_call/100 ... bench:      244364 ns/iter (+/- 4461)
+test sync/ws_batch_requests/fast_call/2 ... bench:       38502 ns/iter (+/- 493)
+test sync/ws_batch_requests/fast_call/5 ... bench:       44418 ns/iter (+/- 1667)
+test sync/ws_batch_requests/fast_call/10 ... bench:       54407 ns/iter (+/- 2358)
+test sync/ws_batch_requests/fast_call/50 ... bench:      128798 ns/iter (+/- 1437)
+test sync/ws_batch_requests/fast_call/100 ... bench:      235689 ns/iter (+/- 2489)
 
-test sync/http_concurrent_conn_calls/fast_call/16 ... bench:      465890 ns/iter (+/- 1072002)
-test sync/http_concurrent_conn_calls/fast_call/32 ... bench:      888604 ns/iter (+/- 2059046)
-test sync/http_concurrent_conn_calls/fast_call/64 ... bench:     1731500 ns/iter (+/- 4325107)
+test sync/http_concurrent_conn_calls/fast_call/16 ... bench:      455206 ns/iter (+/- 1283711)
+test sync/http_concurrent_conn_calls/fast_call/32 ... bench:      894597 ns/iter (+/- 2049203)
+test sync/http_concurrent_conn_calls/fast_call/64 ... bench:     1716719 ns/iter (+/- 4117720)
 
-test sync/ws_concurrent_conn_calls/fast_call/16 ... bench:      889007 ns/iter (+/- 155615)
-test sync/ws_concurrent_conn_calls/fast_call/32 ... bench:     1732919 ns/iter (+/- 60895)
-test sync/ws_concurrent_conn_calls/fast_call/64 ... bench:     3468132 ns/iter (+/- 111784)
+test sync/ws_concurrent_conn_calls/fast_call/16 ... bench:      873474 ns/iter (+/- 82883)
+test sync/ws_concurrent_conn_calls/fast_call/32 ... bench:     1699512 ns/iter (+/- 47981)
+test sync/ws_concurrent_conn_calls/fast_call/64 ... bench:     3349850 ns/iter (+/- 102982)
 
-test sync/ws_concurrent_conn_subs/16 ... bench:     1599757 ns/iter (+/- 92137)
-test sync/ws_concurrent_conn_subs/32 ... bench:     3063053 ns/iter (+/- 110564)
-test sync/ws_concurrent_conn_subs/64 ... bench:     5970741 ns/iter (+/- 231938)
+test sync/ws_concurrent_conn_subs/16 ... bench:     1574423 ns/iter (+/- 61067)
+test sync/ws_concurrent_conn_subs/32 ... bench:     3057347 ns/iter (+/- 116400)
+test sync/ws_concurrent_conn_subs/64 ... bench:     5833190 ns/iter (+/- 231598)
 
-test sync/http_concurrent_conn_calls/fast_call/128 ... bench:     7875679 ns/iter (+/- 4097014)
-test sync/http_concurrent_conn_calls/fast_call/256 ... bench:    15857602 ns/iter (+/- 7269324)
-test sync/http_concurrent_conn_calls/fast_call/512 ... bench:    42009624 ns/iter (+/- 12722370)
-test sync/http_concurrent_conn_calls/fast_call/1024 ... bench:    83140794 ns/iter (+/- 22699934)
+test sync/http_concurrent_conn_calls/fast_call/128 ... bench:     7793229 ns/iter (+/- 3857869)
+test sync/http_concurrent_conn_calls/fast_call/256 ... bench:    15633438 ns/iter (+/- 7894204)
+test sync/http_concurrent_conn_calls/fast_call/512 ... bench:    41084726 ns/iter (+/- 11949632)
+test sync/http_concurrent_conn_calls/fast_call/1024 ... bench:    79041515 ns/iter (+/- 21378729)
 
-test sync/ws_concurrent_conn_calls/fast_call/128 ... bench:     7613987 ns/iter (+/- 154386)
-test sync/ws_concurrent_conn_calls/fast_call/256 ... bench:    15333749 ns/iter (+/- 494040)
-test sync/ws_concurrent_conn_calls/fast_call/512 ... bench:    31398122 ns/iter (+/- 1011996)
-test sync/ws_concurrent_conn_calls/fast_call/1024 ... bench:    69958459 ns/iter (+/- 2010726)
+test sync/ws_concurrent_conn_calls/fast_call/128 ... bench:     6509409 ns/iter (+/- 104077)
+test sync/ws_concurrent_conn_calls/fast_call/256 ... bench:    13502069 ns/iter (+/- 147041)
+test sync/ws_concurrent_conn_calls/fast_call/512 ... bench:    27666114 ns/iter (+/- 319473)
+test sync/ws_concurrent_conn_calls/fast_call/1024 ... bench:    58419550 ns/iter (+/- 651991)
 
-test sync/ws_concurrent_conn_subs/128 ... bench:    13410818 ns/iter (+/- 194371)
-test sync/ws_concurrent_conn_subs/256 ... bench:    24852257 ns/iter (+/- 585379)
-test sync/ws_concurrent_conn_subs/512 ... bench:    48929351 ns/iter (+/- 564268)
-test sync/ws_concurrent_conn_subs/1024 ... bench:   112780721 ns/iter (+/- 5687371)
+test sync/ws_concurrent_conn_subs/128 ... bench:    11341571 ns/iter (+/- 272536)
+test sync/ws_concurrent_conn_subs/256 ... bench:    23131230 ns/iter (+/- 292773)
+test sync/ws_concurrent_conn_subs/512 ... bench:    46512030 ns/iter (+/- 578721)
+test sync/ws_concurrent_conn_subs/1024 ... bench:    99047419 ns/iter (+/- 1583759)
 
-test async/http_custom_headers_round_trip/0kb ... bench:       47325 ns/iter (+/- 1404)
+test async/http_custom_headers_round_trip/0kb ... bench:       41714 ns/iter (+/- 407)
 
-test async/http_custom_headers_round_trip/1kb ... bench:       47462 ns/iter (+/- 937)
+test async/http_custom_headers_round_trip/1kb ... bench:       41964 ns/iter (+/- 501)
 
-test async/http_custom_headers_round_trip/5kb ... bench:       49449 ns/iter (+/- 1020)
+test async/http_custom_headers_round_trip/5kb ... bench:       43638 ns/iter (+/- 407)
 
-test async/http_custom_headers_round_trip/25kb ... bench:       54171 ns/iter (+/- 980)
+test async/http_custom_headers_round_trip/25kb ... bench:       49145 ns/iter (+/- 567)
 
-test async/http_custom_headers_round_trip/100kb ... bench:       76219 ns/iter (+/- 2667)
+test async/http_custom_headers_round_trip/100kb ... bench:       71341 ns/iter (+/- 1233)
 
-test async/http_concurrent_conn_calls/fast_call/2 ... bench:      117859 ns/iter (+/- 87966)
-test async/http_concurrent_conn_calls/fast_call/4 ... bench:      142684 ns/iter (+/- 331686)
-test async/http_concurrent_conn_calls/fast_call/8 ... bench:      259013 ns/iter (+/- 658007)
+test async/http_concurrent_conn_calls/fast_call/2 ... bench:      114348 ns/iter (+/- 95169)
+test async/http_concurrent_conn_calls/fast_call/4 ... bench:      138344 ns/iter (+/- 373586)
+test async/http_concurrent_conn_calls/fast_call/8 ... bench:      255739 ns/iter (+/- 678370)
 
-test async/http_round_trip/3 ... bench:     2612381 ns/iter (+/- 33046)
+test async/http_round_trip/3 ... bench:     2628667 ns/iter (+/- 21574)
 
-test async/http_round_trip/9 ... bench:     6489777 ns/iter (+/- 102362)
+test async/http_round_trip/9 ... bench:     6304059 ns/iter (+/- 66955)
 
-test async/http_round_trip/27 ... bench:    19264346 ns/iter (+/- 566856)
+test async/http_round_trip/27 ... bench:    18503444 ns/iter (+/- 469365)
 
-test async/http_round_trip/81 ... bench:    56364795 ns/iter (+/- 1968473)
+test async/http_round_trip/81 ... bench:    57854292 ns/iter (+/- 2370728)
 
-test async/http_round_trip/243 ... bench:   197035287 ns/iter (+/- 5512553)
+test async/http_round_trip/243 ... bench:   184948042 ns/iter (+/- 5159127)
 
-test async/http_round_trip/729 ... bench:   605968378 ns/iter (+/- 15723039)
+test async/http_round_trip/729 ... bench:   607643088 ns/iter (+/- 11280993)
 
-test async/http_batch_requests/fast_call/2 ... bench:       50013 ns/iter (+/- 964)
-test async/http_batch_requests/fast_call/5 ... bench:       55529 ns/iter (+/- 1344)
-test async/http_batch_requests/fast_call/10 ... bench:       67183 ns/iter (+/- 1374)
-test async/http_batch_requests/fast_call/50 ... bench:      133579 ns/iter (+/- 1931)
-test async/http_batch_requests/fast_call/100 ... bench:      210622 ns/iter (+/- 2359)
+test async/http_batch_requests/fast_call/2 ... bench:       46439 ns/iter (+/- 715)
+test async/http_batch_requests/fast_call/5 ... bench:       50552 ns/iter (+/- 540)
+test async/http_batch_requests/fast_call/10 ... bench:       64197 ns/iter (+/- 640)
+test async/http_batch_requests/fast_call/50 ... bench:      126707 ns/iter (+/- 733)
+test async/http_batch_requests/fast_call/100 ... bench:      203974 ns/iter (+/- 1726)
 
-test async/ws_custom_headers_handshake/0kb ... bench:       64050 ns/iter (+/- 1059)
-test async/ws_custom_headers_handshake/1kb ... bench:       69003 ns/iter (+/- 1514)
-test async/ws_custom_headers_handshake/2kb ... bench:       75971 ns/iter (+/- 1976)
-test async/ws_custom_headers_handshake/4kb ... bench:       78302 ns/iter (+/- 1181)
+test async/ws_custom_headers_handshake/0kb ... bench:       62437 ns/iter (+/- 1080)
+test async/ws_custom_headers_handshake/1kb ... bench:       63319 ns/iter (+/- 1710)
+test async/ws_custom_headers_handshake/2kb ... bench:       69667 ns/iter (+/- 1494)
+test async/ws_custom_headers_handshake/4kb ... bench:       71319 ns/iter (+/- 1313)
 
-test async/ws_concurrent_conn_calls/fast_call/2 ... bench:      151864 ns/iter (+/- 9981)
-test async/ws_concurrent_conn_calls/fast_call/4 ... bench:      280847 ns/iter (+/- 94745)
-test async/ws_concurrent_conn_calls/fast_call/8 ... bench:      503430 ns/iter (+/- 53997)
+test async/ws_concurrent_conn_calls/fast_call/2 ... bench:      144454 ns/iter (+/- 6898)
+test async/ws_concurrent_conn_calls/fast_call/4 ... bench:      269195 ns/iter (+/- 44007)
+test async/ws_concurrent_conn_calls/fast_call/8 ... bench:      488782 ns/iter (+/- 74173)
 
-test async/ws_round_trip/3 ... bench:     1984886 ns/iter (+/- 27056)
+test async/ws_round_trip/3 ... bench:     1952572 ns/iter (+/- 27293)
 
-test async/ws_round_trip/9 ... bench:     4584405 ns/iter (+/- 54214)
+test async/ws_round_trip/9 ... bench:     4304608 ns/iter (+/- 60218)
 
-test async/ws_round_trip/27 ... bench:    13697691 ns/iter (+/- 776278)
+test async/ws_round_trip/27 ... bench:    12870129 ns/iter (+/- 587280)
 
-test async/ws_round_trip/81 ... bench:    41156094 ns/iter (+/- 3536171)
+test async/ws_round_trip/81 ... bench:    39883893 ns/iter (+/- 2541769)
 
-test async/ws_round_trip/243 ... bench:   140229397 ns/iter (+/- 9264943)
+test async/ws_round_trip/243 ... bench:   129570546 ns/iter (+/- 10392866)
 
-test async/ws_round_trip/729 ... bench:   446818196 ns/iter (+/- 15209930)
+test async/ws_round_trip/729 ... bench:   425156669 ns/iter (+/- 18755937)
 
-test async/ws_batch_requests/fast_call/2 ... bench:       41185 ns/iter (+/- 556)
-test async/ws_batch_requests/fast_call/5 ... bench:       48396 ns/iter (+/- 941)
-test async/ws_batch_requests/fast_call/10 ... bench:       58170 ns/iter (+/- 806)
-test async/ws_batch_requests/fast_call/50 ... bench:      137846 ns/iter (+/- 1761)
-test async/ws_batch_requests/fast_call/100 ... bench:      249366 ns/iter (+/- 4742)
+test async/ws_batch_requests/fast_call/2 ... bench:       38595 ns/iter (+/- 949)
+test async/ws_batch_requests/fast_call/5 ... bench:       44425 ns/iter (+/- 859)
+test async/ws_batch_requests/fast_call/10 ... bench:       54482 ns/iter (+/- 747)
+test async/ws_batch_requests/fast_call/50 ... bench:      130729 ns/iter (+/- 1184)
+test async/ws_batch_requests/fast_call/100 ... bench:      244054 ns/iter (+/- 7011)
 
-test async/http_concurrent_conn_calls/fast_call/16 ... bench:      474019 ns/iter (+/- 1094829)
-test async/http_concurrent_conn_calls/fast_call/32 ... bench:      912587 ns/iter (+/- 1976259)
-test async/http_concurrent_conn_calls/fast_call/64 ... bench:     1769498 ns/iter (+/- 4180037)
+test async/http_concurrent_conn_calls/fast_call/16 ... bench:      463361 ns/iter (+/- 1086726)
+test async/http_concurrent_conn_calls/fast_call/32 ... bench:      879363 ns/iter (+/- 2150168)
+test async/http_concurrent_conn_calls/fast_call/64 ... bench:     1694197 ns/iter (+/- 5502061)
 
-test async/ws_concurrent_conn_calls/fast_call/16 ... bench:      891480 ns/iter (+/- 70506)
-test async/ws_concurrent_conn_calls/fast_call/32 ... bench:     1799691 ns/iter (+/- 78194)
-test async/ws_concurrent_conn_calls/fast_call/64 ... bench:     3675364 ns/iter (+/- 105900)
+test async/ws_concurrent_conn_calls/fast_call/16 ... bench:      874718 ns/iter (+/- 48715)
+test async/ws_concurrent_conn_calls/fast_call/32 ... bench:     1689588 ns/iter (+/- 428563)
+test async/ws_concurrent_conn_calls/fast_call/64 ... bench:     3289521 ns/iter (+/- 83202)
 
-test async/ws_concurrent_conn_subs/16 ... bench:     1617851 ns/iter (+/- 53766)
-test async/ws_concurrent_conn_subs/32 ... bench:     3084560 ns/iter (+/- 95321)
-test async/ws_concurrent_conn_subs/64 ... bench:     5947417 ns/iter (+/- 215333)
+test async/ws_concurrent_conn_subs/16 ... bench:     1532984 ns/iter (+/- 36115)
+test async/ws_concurrent_conn_subs/32 ... bench:     2946503 ns/iter (+/- 72378)
+test async/ws_concurrent_conn_subs/64 ... bench:     5622623 ns/iter (+/- 131222)
 
-test async/http_concurrent_conn_calls/fast_call/128 ... bench:     8112798 ns/iter (+/- 4400115)
-test async/http_concurrent_conn_calls/fast_call/256 ... bench:    16345889 ns/iter (+/- 7485589)
-test async/http_concurrent_conn_calls/fast_call/512 ... bench:    42096434 ns/iter (+/- 12654091)
-test async/http_concurrent_conn_calls/fast_call/1024 ... bench:    79345450 ns/iter (+/- 21017679)
+test async/http_concurrent_conn_calls/fast_call/128 ... bench:     7638110 ns/iter (+/- 4613515)
+test async/http_concurrent_conn_calls/fast_call/256 ... bench:    15673051 ns/iter (+/- 7723136)
+test async/http_concurrent_conn_calls/fast_call/512 ... bench:    41185030 ns/iter (+/- 12149161)
+test async/http_concurrent_conn_calls/fast_call/1024 ... bench:    84032682 ns/iter (+/- 26201181)
 
-test async/ws_concurrent_conn_calls/fast_call/128 ... bench:     6752309 ns/iter (+/- 443850)
-test async/ws_concurrent_conn_calls/fast_call/256 ... bench:    15248023 ns/iter (+/- 392667)
-test async/ws_concurrent_conn_calls/fast_call/512 ... bench:    29098014 ns/iter (+/- 489617)
-test async/ws_concurrent_conn_calls/fast_call/1024 ... bench:    60716738 ns/iter (+/- 1046275)
+test async/ws_concurrent_conn_calls/fast_call/128 ... bench:     6501441 ns/iter (+/- 90149)
+test async/ws_concurrent_conn_calls/fast_call/256 ... bench:    13582551 ns/iter (+/- 539435)
+test async/ws_concurrent_conn_calls/fast_call/512 ... bench:    27408287 ns/iter (+/- 490504)
+test async/ws_concurrent_conn_calls/fast_call/1024 ... bench:    57376502 ns/iter (+/- 1130690)
 
-test async/ws_concurrent_conn_subs/128 ... bench:    12130494 ns/iter (+/- 220824)
-test async/ws_concurrent_conn_subs/256 ... bench:    23990118 ns/iter (+/- 407479)
-test async/ws_concurrent_conn_subs/512 ... bench:    48145132 ns/iter (+/- 738107)
-test async/ws_concurrent_conn_subs/1024 ... bench:   100280141 ns/iter (+/- 3344014)
+test async/ws_concurrent_conn_subs/128 ... bench:    11280624 ns/iter (+/- 157128)
+test async/ws_concurrent_conn_subs/256 ... bench:    22884786 ns/iter (+/- 278979)
+test async/ws_concurrent_conn_subs/512 ... bench:    45844516 ns/iter (+/- 880864)
+test async/ws_concurrent_conn_subs/1024 ... bench:    97320457 ns/iter (+/- 1460703)
 
-test subscriptions/subscribe ... bench:       52913 ns/iter (+/- 744)
-test subscriptions/subscribe_response ... bench:        3808 ns/iter (+/- 130)
-test subscriptions/unsub ... bench:        2521 ns/iter (+/- 43)
+test subscriptions/subscribe ... bench:       51702 ns/iter (+/- 456)
+test subscriptions/subscribe_response ... bench:        3671 ns/iter (+/- 117)
+test subscriptions/unsub ... bench:        2454 ns/iter (+/- 43)
 
