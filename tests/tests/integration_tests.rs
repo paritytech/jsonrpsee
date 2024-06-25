@@ -29,6 +29,7 @@
 
 mod helpers;
 
+use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1426,5 +1427,94 @@ async fn run_shutdown_test(transport: &str) {
 			run_shutdown_test_inner(http, handle, call_answered, call_ack).await
 		}
 		_ => unreachable!("Only `http` and `ws` supported"),
+	}
+}
+
+#[tokio::test]
+async fn server_ws_low_api_works() {
+	let local_addr = run_server().await.unwrap();
+
+	let client = WsClientBuilder::default().build(&format!("ws://{}", local_addr)).await.unwrap();
+	assert!(matches!(client.request::<String, _>("say_hello", rpc_params![]).await, Ok(r) if r == "hello"));
+
+	async fn run_server() -> anyhow::Result<SocketAddr> {
+		use futures_util::future::FutureExt;
+		use jsonrpsee::core::BoxError;
+		use jsonrpsee::server::{
+			http, middleware::rpc::RpcServiceBuilder, serve_with_graceful_shutdown, stop_channel, ws, ConnectionGuard,
+			ConnectionState, Methods, ServerConfig, StopHandle,
+		};
+
+		let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from(([127, 0, 0, 1], 0))).await?;
+		let local_addr = listener.local_addr()?;
+		let (stop_handle, server_handle) = stop_channel();
+
+		let mut methods = RpcModule::new(());
+
+		methods.register_async_method("say_hello", |_, _, _| async { "hello" }).unwrap();
+
+		#[derive(Clone)]
+		struct PerConnection {
+			methods: Methods,
+			stop_handle: StopHandle,
+			conn_guard: ConnectionGuard,
+		}
+
+		let per_conn = PerConnection {
+			methods: methods.into(),
+			stop_handle: stop_handle.clone(),
+			conn_guard: ConnectionGuard::new(100),
+		};
+
+		tokio::spawn(async move {
+			loop {
+				let (sock, _) = tokio::select! {
+					res = listener.accept() => {
+						match res {
+							Ok(sock) => sock,
+							Err(e) => {
+								tracing::error!("Failed to accept v4 connection: {:?}", e);
+								continue;
+							}
+						}
+					}
+					_ = per_conn.stop_handle.clone().shutdown() => break,
+				};
+				let per_conn = per_conn.clone();
+
+				let stop_handle2 = per_conn.stop_handle.clone();
+				let per_conn = per_conn.clone();
+				let svc = tower::service_fn(move |req| {
+					let PerConnection { methods, stop_handle, conn_guard } = per_conn.clone();
+					let conn_permit =
+						conn_guard.try_acquire().expect("Connection limit is 100 must be work for two connections");
+
+					if ws::is_upgrade_request(&req) {
+						let rpc_service = RpcServiceBuilder::new();
+
+						let conn = ConnectionState::new(stop_handle, 0, conn_permit);
+
+						async move {
+							match ws::connect(req, ServerConfig::default(), methods, conn, rpc_service).await {
+								Ok((rp, conn_fut)) => {
+									tokio::spawn(conn_fut);
+									Ok(rp)
+								}
+								Err(rp) => Ok(rp),
+							}
+						}
+						.boxed()
+					} else {
+						async { Ok::<_, BoxError>(http::response::denied()) }.boxed()
+					}
+				});
+
+				tokio::spawn(serve_with_graceful_shutdown(sock, svc, stop_handle2.shutdown()));
+			}
+		});
+
+		tokio::spawn(server_handle.stopped());
+
+		Ok(local_addr)
 	}
 }

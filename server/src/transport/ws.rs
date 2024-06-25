@@ -393,7 +393,7 @@ async fn graceful_shutdown<S>(
 /// async fn handle_websocket_conn<L>(
 ///     req: HttpRequest,
 ///     server_cfg: ServerConfig,
-///     methods: impl Into<Methods> + 'static,
+///     methods: impl Into<Methods> + Send + 'static,
 ///     conn: ConnectionState,
 ///     rpc_middleware: RpcServiceBuilder<L>,
 ///     mut disconnect: tokio::sync::mpsc::Receiver<()>
@@ -435,17 +435,6 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
-			let extensions = req.extensions().clone();
-
-			let upgraded = match hyper::upgrade::on(req).await {
-				Ok(u) => u,
-				Err(e) => {
-					tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
-					return Err(HttpResponse::new(HttpBody::from(format!("WS upgrade handshake failed {e}"))));
-				}
-			};
-
-			let io = TokioIo::new(upgraded);
 			let (tx, rx) = mpsc::channel::<String>(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
@@ -473,6 +462,18 @@ where
 			// Note: This can't possibly be fulfilled until the HTTP response
 			// is returned below, so that's why it's a separate async block
 			let fut = async move {
+				let extensions = req.extensions().clone();
+
+				let upgraded = match hyper::upgrade::on(req).await {
+					Ok(upgraded) => upgraded,
+					Err(e) => {
+						tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
+						return;
+					}
+				};
+
+				let io = TokioIo::new(upgraded);
+
 				let stream = BufReader::new(BufWriter::new(io.compat()));
 				let mut ws_builder = server.into_builder(stream);
 				ws_builder.set_max_message_size(server_cfg.max_response_body_size as usize);
