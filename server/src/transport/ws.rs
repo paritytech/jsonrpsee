@@ -393,7 +393,7 @@ async fn graceful_shutdown<S>(
 /// async fn handle_websocket_conn<L>(
 ///     req: HttpRequest,
 ///     server_cfg: ServerConfig,
-///     methods: impl Into<Methods> + Send + 'static,
+///     methods: impl Into<Methods> + 'static,
 ///     conn: ConnectionState,
 ///     rpc_middleware: RpcServiceBuilder<L>,
 ///     mut disconnect: tokio::sync::mpsc::Receiver<()>
