@@ -4,6 +4,25 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.23.2] - 2024-06-26
+
+This a small patch release that fixes a couple of bugs and adds a couple of new APIs.
+
+The bug fixes are:
+- The `server::ws::on_connect` was not working properly due to a merge nit when upgrading to hyper v1.0 
+  This impacts only users that are using the low-level API and not the server itself.
+- `WsTransport::build_with_stream` shouldn't not resolve the socket addresses and it's fixed now, [see #1411 for further info](https://github.com/paritytech/jsonrpsee/issues/1411). 
+  This impacts users that are inject their own TcpStream directly into the `WsTransport`.
+
+### [Added]
+- server: add `RpcModule::remove` ([#1416](https://github.com/paritytech/jsonrpsee/pull/1416))
+- server: add `capacity and max_capacity` to the subscription API ([#1414](https://github.com/paritytech/jsonrpsee/pull/1414))
+- server: add `PendingSubscriptionSink::method_name` ([#1413](https://github.com/paritytech/jsonrpsee/pull/1413))
+
+### [Fixed]
+- server: make `ws::on_connect` work again ([#1418](https://github.com/paritytech/jsonrpsee/pull/1418))
+- client: `WsTransport::build_with_stream` don't resolve sockaddrs ([#1412](https://github.com/paritytech/jsonrpsee/pull/1412))
+
 ## [v0.23.1] - 2024-06-10
 
 This is a patch release that injects the ConnectionId in
