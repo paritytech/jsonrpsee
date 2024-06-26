@@ -552,6 +552,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		)
 	}
 
+	/// Removes the method if it exists.
+	///
+	/// Be aware that a subscription consist of two methods, `subscribe` and `unsubscribe` and
+	/// it's the caller responsibility to remove both `subscribe` and `unsubscribe` methods for subscriptions.
+	pub fn remove_method(&mut self, method_name: &'static str) -> Option<MethodCallback> {
+		self.methods.mut_callbacks().remove(method_name)
+	}
+
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
 	///
 	/// ## Examples
