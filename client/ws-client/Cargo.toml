@@ -16,7 +16,7 @@ publish = true
 [dependencies]
 http = "1"
 jsonrpsee-types = { workspace = true }
-jsonrpsee-client-transport = { workspace = true, features = ["ws"] }
+jsonrpsee-client-transport = { workspace = true, features = ["ws"], default-features = false }
 jsonrpsee-core = { workspace = true, features = ["async-client"] }
 url = "2.4.0"
 
@@ -30,7 +30,8 @@ rustls = { version = "0.23.7", default-features = false, features = ["logging", 
 
 [features]
 tls = ["jsonrpsee-client-transport/tls"]
-default = ["tls"]
+tls-rustls-platform-verifier = ["jsonrpsee-client-transport/tls-rustls-platform-verifier"]
+default = ["tls-rustls-platform-verifier"]
 
 [package.metadata.docs.rs]
 all-features = true

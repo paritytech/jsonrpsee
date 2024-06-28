@@ -61,6 +61,7 @@ pub type CustomCertStore = rustls::ClientConfig;
 #[cfg(feature = "tls")]
 #[derive(Debug, Clone)]
 pub enum CertificateStore {
+	#[cfg(feature = "tls-rustls-platform-verifier")]
 	/// Native.
 	Native,
 	/// Custom certificate store.
@@ -101,10 +102,22 @@ pub struct WsTransportClientBuilder {
 }
 
 impl Default for WsTransportClientBuilder {
+	#[cfg(feature = "tls-rustls-platform-verifier")]
 	fn default() -> Self {
 		Self {
-			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
+			max_request_size: TEN_MB_SIZE_BYTES,
+			max_response_size: TEN_MB_SIZE_BYTES,
+			connection_timeout: Duration::from_secs(10),
+			headers: http::HeaderMap::new(),
+			max_redirections: 5,
+			tcp_no_delay: true,
+		}
+	}
+
+	#[cfg(not(feature = "tls"))]
+	fn default() -> Self {
+		Self {
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
 			connection_timeout: Duration::from_secs(10),
@@ -614,6 +627,7 @@ impl TryFrom<url::Url> for Target {
 #[cfg(feature = "tls")]
 fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsConnector, WsHandshakeError> {
 	let config = match cert_store {
+		#[cfg(feature = "tls-rustls-platform-verifier")]
 		CertificateStore::Native => rustls_platform_verifier::tls_config(),
 		CertificateStore::Custom(cfg) => cfg.clone(),
 	};

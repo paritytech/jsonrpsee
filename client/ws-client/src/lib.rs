@@ -53,7 +53,7 @@ use url::Url;
 #[cfg(feature = "tls")]
 pub use jsonrpsee_client_transport::ws::CustomCertStore;
 
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "tls-rustls-platform-verifier"))]
 use jsonrpsee_client_transport::ws::CertificateStore;
 
 /// Builder for [`WsClient`].
@@ -83,7 +83,7 @@ use jsonrpsee_client_transport::ws::CertificateStore;
 /// ```
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder {
-	#[cfg(feature = "tls")]
+	#[cfg(any(feature = "tls", feature = "tls-rustls-platform-verifier"))]
 	certificate_store: CertificateStore,
 	max_request_size: u32,
 	max_response_size: u32,
@@ -100,10 +100,28 @@ pub struct WsClientBuilder {
 }
 
 impl Default for WsClientBuilder {
+	#[cfg(feature = "tls-rustls-platform-verifier")]
 	fn default() -> Self {
 		Self {
-			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
+			max_request_size: TEN_MB_SIZE_BYTES,
+			max_response_size: TEN_MB_SIZE_BYTES,
+			request_timeout: Duration::from_secs(60),
+			connection_timeout: Duration::from_secs(10),
+			ping_config: None,
+			headers: HeaderMap::new(),
+			max_concurrent_requests: 256,
+			max_buffer_capacity_per_subscription: 1024,
+			max_redirections: 5,
+			id_kind: IdKind::Number,
+			max_log_length: 4096,
+			tcp_no_delay: true,
+		}
+	}
+
+	#[cfg(not(any(feature = "tls", feature = "tls-rustls-platform-verifier")))]
+	fn default() -> Self {
+		Self {
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
@@ -122,8 +140,29 @@ impl Default for WsClientBuilder {
 
 impl WsClientBuilder {
 	/// Create a new WebSocket client builder.
+	#[cfg(any(not(feature = "tls"), feature = "tls-rustls-platform-verifier"))]
 	pub fn new() -> WsClientBuilder {
 		WsClientBuilder::default()
+	}
+
+	/// Create a new WebSocket client builder.
+	#[cfg(feature = "tls")]
+	pub fn new(cfg: CustomCertStore) -> WsClientBuilder {
+		WsClientBuilder {
+			certificate_store: CertificateStore::Custom(cfg),
+			max_request_size: TEN_MB_SIZE_BYTES,
+			max_response_size: TEN_MB_SIZE_BYTES,
+			request_timeout: Duration::from_secs(60),
+			connection_timeout: Duration::from_secs(10),
+			ping_config: None,
+			headers: HeaderMap::new(),
+			max_concurrent_requests: 256,
+			max_buffer_capacity_per_subscription: 1024,
+			max_redirections: 5,
+			id_kind: IdKind::Number,
+			max_log_length: 4096,
+			tcp_no_delay: true,
+		}
 	}
 
 	/// Force to use a custom certificate store.
@@ -320,7 +359,7 @@ impl WsClientBuilder {
 		T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
 	{
 		let transport_builder = WsTransportClientBuilder {
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustls-platform-verifier"))]
 			certificate_store: self.certificate_store.clone(),
 			connection_timeout: self.connection_timeout,
 			headers: self.headers.clone(),
@@ -346,7 +385,7 @@ impl WsClientBuilder {
 	/// Panics if being called outside of `tokio` runtime context.
 	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
 		let transport_builder = WsTransportClientBuilder {
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustls-platform-verifier"))]
 			certificate_store: self.certificate_store.clone(),
 			connection_timeout: self.connection_timeout,
 			headers: self.headers.clone(),
