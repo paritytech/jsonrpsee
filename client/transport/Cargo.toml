@@ -44,7 +44,6 @@ futures-channel = { version = "0.3.14", default-features = false, optional = tru
 [features]
 tls = ["rustls", "tokio-rustls", "rustls-pki-types"]
 tls-rustls-platform-verifier = ["tls", "rustls-platform-verifier"]
-default = ["tls-rustls-platform-verifier"]
 
 ws = [
     "base64",
