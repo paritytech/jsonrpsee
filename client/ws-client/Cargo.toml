@@ -30,7 +30,8 @@ rustls = { version = "0.23.7", default-features = false, features = ["logging", 
 
 [features]
 tls = ["jsonrpsee-client-transport/tls"]
-default = ["tls"]
+tls-rustls-platform-verifier = ["jsonrpsee-client-transport/tls-rustls-platform-verifier", "tls"]
+default = ["tls-rustls-platform-verifier"]
 
 [package.metadata.docs.rs]
 all-features = true
