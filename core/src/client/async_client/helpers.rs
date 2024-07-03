@@ -106,6 +106,8 @@ pub(crate) fn process_subscription_response(
 		}
 	};
 
+	tracing::trace!(target: LOG_TARGET, "subscription = {}, sub_id = {}, item = {}", response.method, serde_json::to_string(&sub_id).unwrap(), serde_json::to_string(&response.params.result).unwrap());
+
 	match manager.as_subscription_mut(&request_id) {
 		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
