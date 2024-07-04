@@ -42,7 +42,8 @@ gloo-net = { version = "0.5.0", default-features = false, features = ["json", "w
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 
 [features]
-tls = ["tokio-rustls", "rustls-pki-types", "rustls-platform-verifier", "rustls"]
+tls = ["rustls", "tokio-rustls", "rustls-pki-types"]
+tls-rustls-platform-verifier = ["tls", "rustls-platform-verifier"]
 
 ws = [
     "base64",
