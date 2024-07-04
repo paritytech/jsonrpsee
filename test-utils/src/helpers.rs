@@ -60,56 +60,56 @@ pub fn to_http_uri(sockaddr: SocketAddr) -> Uri {
 }
 
 pub fn ok_response(result: Value, id: Id) -> String {
-	format!(r#"{{"jsonrpc":"2.0","result":{},"id":{}}}"#, result, serde_json::to_string(&id).unwrap())
+	format!(r#"{{"jsonrpc":"2.0","id":{},"result":{}}}"#, serde_json::to_string(&id).unwrap(), result)
 }
 
 pub fn method_not_found(id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32601,"message":"Method not found"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32601,"message":"Method not found"}}}}"#,
 		serde_json::to_string(&id).unwrap()
 	)
 }
 
 pub fn parse_error(id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32700,"message":"Parse error"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32700,"message":"Parse error"}}}}"#,
 		serde_json::to_string(&id).unwrap()
 	)
 }
 
 pub fn oversized_request(max_limit: u32) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32007,"message":"Request is too big","data":"Exceeded max limit of {max_limit}"}},"id":null}}"#
+		r#"{{"jsonrpc":"2.0","id":null,"error":{{"code":-32007,"message":"Request is too big","data":"Exceeded max limit of {max_limit}"}}}}"#
 	)
 }
 
 pub fn batches_not_supported() -> String {
-	r#"{"jsonrpc":"2.0","error":{"code":-32005,"message":"Batched requests are not supported by this server"},"id":null}"#.into()
+	r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32005,"message":"Batched requests are not supported by this server"}}"#.into()
 }
 
 pub fn batches_too_large(max_limit: usize) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32010,"message":"The batch request was too large","data":"Exceeded max limit of {max_limit}"}},"id":null}}"#
+		r#"{{"jsonrpc":"2.0","id":null,"error":{{"code":-32010,"message":"The batch request was too large","data":"Exceeded max limit of {max_limit}"}}}}"#
 	)
 }
 
 pub fn batch_response_too_large(max_limit: usize) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of {max_limit}"}},"id":null}}"#
+		r#"{{"jsonrpc":"2.0","id":null,"error":{{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of {max_limit}"}}}}"#
 	)
 }
 
 pub fn oversized_response(id: Id, max_limit: u32) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32008,"message":"Response is too big","data":"Exceeded max limit of {}"}},"id":{}}}"#,
-		max_limit,
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32008,"message":"Response is too big","data":"Exceeded max limit of {}"}}}}"#,
 		serde_json::to_string(&id).unwrap(),
+		max_limit,
 	)
 }
 
 pub fn invalid_request(id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32600,"message":"Invalid request"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32600,"message":"Invalid request"}}}}"#,
 		serde_json::to_string(&id).unwrap()
 	)
 }
@@ -121,7 +121,7 @@ pub fn invalid_batch(ids: Vec<Id>) -> String {
 	for (i, id) in ids.iter().enumerate() {
 		write!(
 			result,
-			r#"{{"jsonrpc":"2.0","error":{{"code":-32600,"message":"Invalid request"}},"id":{}}}{}"#,
+			r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32600,"message":"Invalid request"}}}}{}"#,
 			serde_json::to_string(&id).unwrap(),
 			if i + 1 == ids.len() { "" } else { "," }
 		)
@@ -133,7 +133,7 @@ pub fn invalid_batch(ids: Vec<Id>) -> String {
 
 pub fn invalid_params(id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid params"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32602,"message":"Invalid params"}}}}"#,
 		serde_json::to_string(&id).unwrap()
 	)
 }
@@ -149,22 +149,22 @@ pub fn call<T: Serialize>(method: &str, params: Vec<T>, id: Id) -> String {
 
 pub fn call_execution_failed(msg: &str, id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32000,"message":"{}"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32000,"message":"{}"}}}}"#,
+		serde_json::to_string(&id).unwrap(),
 		msg,
-		serde_json::to_string(&id).unwrap()
 	)
 }
 
 pub fn internal_error(id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32603,"message":"Internal error"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32603,"message":"Internal error"}}}}"#,
 		serde_json::to_string(&id).unwrap()
 	)
 }
 
 pub fn server_error(id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32000,"message":"Server error"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32000,"message":"Server error"}}}}"#,
 		serde_json::to_string(&id).unwrap()
 	)
 }
@@ -174,7 +174,7 @@ pub fn server_error(id: Id) -> String {
 /// NOTE: works only for one subscription because the subscription ID is hardcoded.
 pub fn server_subscription_id_response(id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","result":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","id":{},"result":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o"}}"#,
 		serde_json::to_string(&id).unwrap()
 	)
 }

@@ -184,7 +184,7 @@ mod tests {
 		let rp = &Response::new(result, Id::Number(1));
 
 		assert!(serde_json::to_writer(&mut writer, rp).is_ok());
-		assert_eq!(String::from_utf8(writer.into_bytes()).unwrap(), r#"{"jsonrpc":"2.0","result":"success","id":1}"#);
+		assert_eq!(String::from_utf8(writer.into_bytes()).unwrap(), r#"{"jsonrpc":"2.0","id":1,"result":"success"}"#);
 	}
 
 	#[test]
