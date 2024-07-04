@@ -327,12 +327,13 @@ where
 			s.serialize_field("jsonrpc", field)?;
 		}
 
+		s.serialize_field("id", &self.id)?;
+
 		match &self.payload {
 			ResponsePayload::Error(err) => s.serialize_field("error", err)?,
 			ResponsePayload::Success(r) => s.serialize_field("result", r)?,
 		};
 
-		s.serialize_field("id", &self.id)?;
 		s.end()
 	}
 }
@@ -350,7 +351,7 @@ mod tests {
 			id: Id::Number(1),
 		})
 		.unwrap();
-		let exp = r#"{"jsonrpc":"2.0","result":"ok","id":1}"#;
+		let exp = r#"{"jsonrpc":"2.0","id":1,"result":"ok"}"#;
 		assert_eq!(ser, exp);
 	}
 
@@ -362,7 +363,7 @@ mod tests {
 			id: Id::Number(1),
 		})
 		.unwrap();
-		let exp = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"lo"},"id":1}"#;
+		let exp = r#"{"jsonrpc":"2.0","id":1,"error":{"code":1,"message":"lo"}}"#;
 		assert_eq!(ser, exp);
 	}
 
@@ -374,7 +375,7 @@ mod tests {
 			id: Id::Number(1),
 		})
 		.unwrap();
-		let exp = r#"{"result":"ok","id":1}"#;
+		let exp = r#"{"id":1,"result":"ok"}"#;
 		assert_eq!(ser, exp);
 	}
 

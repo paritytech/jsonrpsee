@@ -203,7 +203,7 @@ async fn batch_method_call_works() {
 	let response = client.send_request_text(batch).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(
 		response,
-		r#"[{"jsonrpc":"2.0","result":"Yawn!","id":123},{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","result":"hello","id":2},{"jsonrpc":"2.0","result":"hello","id":3}]"#
+		r#"[{"jsonrpc":"2.0","id":123,"result":"Yawn!"},{"jsonrpc":"2.0","id":1,"result":"hello"},{"jsonrpc":"2.0","id":2,"result":"hello"},{"jsonrpc":"2.0","id":3,"result":"hello"}]"#
 	);
 }
 
@@ -223,7 +223,7 @@ async fn batch_method_call_where_some_calls_fail() {
 
 	assert_eq!(
 		response,
-		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
+		r#"[{"jsonrpc":"2.0","id":1,"result":"hello"},{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"MyAppError"}},{"jsonrpc":"2.0","id":3,"result":79}]"#
 	);
 }
 
@@ -278,7 +278,7 @@ async fn whitespace_is_not_significant() {
 
 	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, r#"[{"jsonrpc":"2.0","result":3,"id":1}]"#);
+	assert_eq!(response, r#"[{"jsonrpc":"2.0","id":1,"result":3}]"#);
 
 	// Up to 127 whitespace chars are accepted.
 	let req = format!("{}{}", " ".repeat(127), r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#);
@@ -305,7 +305,7 @@ async fn single_method_call_with_params_works() {
 async fn single_method_call_with_faulty_params_returns_err() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
-	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params","data":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
+	let expected = r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid params","data":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"}}"#;
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["should be a number"],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
@@ -486,7 +486,7 @@ async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	// Good request, but causes error.
 	let req = r#"{"jsonrpc":"2.0","method":"call_fail","params":[],"id":123}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":123}"#);
+	assert_eq!(response, r#"{"jsonrpc":"2.0","id":123,"error":{"code":-32000,"message":"MyAppError"}}"#);
 
 	// Connection is still good.
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;
@@ -585,9 +585,9 @@ async fn custom_subscription_id_works() {
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let sub = client.send_request_text(call("subscribe_hello", Vec::<()>::new(), Id::Num(0))).await.unwrap();
-	assert_eq!(&sub, r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":0}"#);
+	assert_eq!(&sub, r#"{"jsonrpc":"2.0","id":0,"result":"0xdeadbeef"}"#);
 	let unsub = client.send_request_text(call("unsubscribe_hello", vec!["0xdeadbeef"], Id::Num(1))).await.unwrap();
-	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
+	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","id":1,"result":true}"#);
 }
 
 #[tokio::test]
@@ -694,7 +694,7 @@ async fn batch_with_mixed_calls() {
 			{"foo": "boo"},
 			{"jsonrpc": "2.0", "method": "foo.get", "params": {"name": "myself"}, "id": "5"}
 		]"#;
-	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":"5"}]"#;
+	let res = r#"[{"jsonrpc":"2.0","id":"1","result":7},{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid request"}},{"jsonrpc":"2.0","id":"5","error":{"code":-32601,"message":"Method not found"}}]"#;
 	let response = client.send_request_text(req.to_string()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, res);
 }
@@ -710,7 +710,7 @@ async fn batch_notif_without_params_works() {
 			{"jsonrpc": "2.0", "method": "add", "params": [1,2,4], "id": "1"},
 			{"jsonrpc": "2.0", "method": "add"}
 		]"#;
-	let res = r#"[{"jsonrpc":"2.0","result":7,"id":"1"}]"#;
+	let res = r#"[{"jsonrpc":"2.0","id":"1","result":7}]"#;
 	let response = client.send_request_text(req.to_string()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, res);
 }

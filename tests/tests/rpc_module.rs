@@ -383,13 +383,13 @@ async fn subscribe_unsubscribe_without_server() {
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
 		let (resp, _) = module.raw_json_request(&unsub_req, 1).await.unwrap();
 
-		assert_eq!(resp, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
+		assert_eq!(resp, r#"{"jsonrpc":"2.0","id":1,"result":true}"#);
 
 		// Unsubscribe already performed; should be error.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
 		let (resp, _) = module.raw_json_request(&unsub_req, 2).await.unwrap();
 
-		assert_eq!(resp, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
+		assert_eq!(resp, r#"{"jsonrpc":"2.0","id":1,"result":false}"#);
 	}
 
 	let sub1 = subscribe_and_assert(&module);
@@ -429,7 +429,7 @@ async fn reject_works() {
 		.unwrap();
 
 	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
-	assert_eq!(rp, r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"rejected"},"id":0}"#);
+	assert_eq!(rp, r#"{"jsonrpc":"2.0","id":0,"error":{"code":-32700,"message":"rejected"}}"#);
 	assert!(stream.recv().await.is_none());
 }
 
@@ -629,7 +629,7 @@ async fn method_response_notify_on_completion() {
 	// Low level call should also work.
 	let (rp, _) =
 		module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hey","params":["success"],"id":0}"#, 1).await.unwrap();
-	assert_eq!(rp, r#"{"jsonrpc":"2.0","result":"lo","id":0}"#);
+	assert_eq!(rp, r#"{"jsonrpc":"2.0","id":0,"result":"lo"}"#);
 	assert!(matches!(rx.recv().await, Some(Ok(_))));
 
 	// Error call should return a failed notification.
