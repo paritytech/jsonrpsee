@@ -706,6 +706,8 @@ fn handle_backend_messages<R: TransportReceiverT>(
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
 		let mut messages = Vec::new();
 
+		tracing::trace!(target: LOG_TARGET, "rx: {}", serde_json::from_slice::<&JsonRawValue>(raw).map(|j| j.get()).unwrap_or("<Failed to decode message as JSON>"));
+
 		match first_non_whitespace {
 			Some(b'{') => {
 				// Single response to a request.
