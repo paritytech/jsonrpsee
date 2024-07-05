@@ -26,7 +26,7 @@
 
 //! Error type for client(s).
 
-use crate::{params::EmptyBatchRequest, RegisterMethodError};
+use crate::{params::EmptyBatchRequest, BoxError, RegisterMethodError};
 use jsonrpsee_types::{ErrorObjectOwned, InvalidRequestId};
 use std::sync::Arc;
 
@@ -37,8 +37,8 @@ pub enum Error {
 	#[error("{0}")]
 	Call(#[from] ErrorObjectOwned),
 	/// Networking error or error on the low-level protocol layer.
-	#[error("{0}")]
-	Transport(#[source] anyhow::Error),
+	#[error(transparent)]
+	Transport(BoxError),
 	/// The background task has been terminated.
 	#[error("The background task closed {0}; restart required")]
 	RestartNeeded(Arc<Error>),

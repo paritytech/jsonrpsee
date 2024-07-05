@@ -476,7 +476,7 @@ mod tests {
 		builder.append(&method).unwrap();
 		let batch = builder.finish();
 
-		assert_eq!(batch.0, r#"[{"jsonrpc":"2.0","result":"a","id":1}]"#)
+		assert_eq!(batch.0, r#"[{"jsonrpc":"2.0","id":1,"result":"a"}]"#)
 	}
 
 	#[test]
@@ -492,14 +492,14 @@ mod tests {
 		builder.append(&m1).unwrap();
 		let batch = builder.finish();
 
-		assert_eq!(batch.0, r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#)
+		assert_eq!(batch.0, r#"[{"jsonrpc":"2.0","id":1,"result":"a"},{"jsonrpc":"2.0","id":1,"result":"a"}]"#)
 	}
 
 	#[test]
 	fn batch_empty_err() {
 		let batch = BatchResponseBuilder::new_with_limit(1024).finish();
 
-		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
+		let exp_err = r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid request"}}"#;
 		assert_eq!(batch.0, exp_err);
 	}
 
@@ -510,7 +510,7 @@ mod tests {
 
 		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
 
-		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of 63"},"id":null}"#;
+		let exp_err = r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of 63"}}"#;
 		assert_eq!(batch.result, exp_err);
 	}
 }

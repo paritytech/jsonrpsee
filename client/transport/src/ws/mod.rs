@@ -326,7 +326,7 @@ impl WsTransportClientBuilder {
 		&self,
 		uri: Url,
 	) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
-		let mut target: Target = uri.try_into()?;
+		let mut target: Target = uri.clone().try_into()?;
 		let mut err = None;
 
 		// Only build TLS connector if `wss` in URL.
@@ -336,11 +336,14 @@ impl WsTransportClientBuilder {
 			Mode::Plain => None,
 		};
 
+		// The sockaddrs might get reused if the server replies with a relative URI.
+		let mut target_sockaddrs = uri.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
+
 		for _ in 0..self.max_redirections {
 			tracing::debug!(target: LOG_TARGET, "Connecting to target: {:?}", target);
 
-			// The sockaddrs might get reused if the server replies with a relative URI.
-			let sockaddrs = std::mem::take(&mut target.sockaddrs);
+			let sockaddrs = std::mem::take(&mut target_sockaddrs);
+
 			for sockaddr in &sockaddrs {
 				#[cfg(feature = "tls")]
 				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref(), self.tcp_no_delay)
@@ -373,6 +376,11 @@ impl WsTransportClientBuilder {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
+								target_sockaddrs = uri.socket_addrs(|| None).map_err(|e| {
+									tracing::debug!(target: LOG_TARGET, "Redirection failed: {:?}", e);
+									e
+								})?;
+
 								target = uri.try_into().map_err(|e| {
 									tracing::debug!(target: LOG_TARGET, "Redirection failed: {:?}", e);
 									e
@@ -407,7 +415,7 @@ impl WsTransportClientBuilder {
 										}
 									};
 								}
-								target.sockaddrs = sockaddrs;
+								target_sockaddrs = sockaddrs;
 								break;
 							}
 
@@ -550,8 +558,6 @@ impl From<soketto::connection::Error> for WsError {
 /// Represents a verified remote WebSocket address.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Target {
-	/// Socket addresses resolved the host name.
-	sockaddrs: Vec<SocketAddr>,
 	/// The host name (domain or IP address).
 	host: String,
 	/// The Host request header specifies the host and port number of the server to which the request is being sent.
@@ -600,8 +606,7 @@ impl TryFrom<url::Url> for Target {
 
 		let host_header = if let Some(port) = url.port() { format!("{host}:{port}") } else { host.to_string() };
 
-		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self { sockaddrs, host, host_header, _mode, path_and_query: path_and_query.to_string(), basic_auth })
+		Ok(Self { host, host_header, _mode, path_and_query: path_and_query.to_string(), basic_auth })
 	}
 }
 
@@ -609,7 +614,15 @@ impl TryFrom<url::Url> for Target {
 #[cfg(feature = "tls")]
 fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsConnector, WsHandshakeError> {
 	let config = match cert_store {
+		#[cfg(feature = "tls-rustls-platform-verifier")]
 		CertificateStore::Native => rustls_platform_verifier::tls_config(),
+		#[cfg(not(feature = "tls-rustls-platform-verifier"))]
+		CertificateStore::Native => {
+			return Err(WsHandshakeError::CertificateStore(io::Error::new(
+				io::ErrorKind::Other,
+				"Native certificate store not supported, either call `Builder::with_custom_cert_store` or enable the `tls-rustls-platform-verifier` feature.",
+			)))
+		}
 		CertificateStore::Custom(cfg) => cfg.clone(),
 	};
 
