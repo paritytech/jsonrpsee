@@ -4,6 +4,8 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: Serialize` is not satisfi
 9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `<Conf as Config>::Hash`, which is required by `Result<<Conf as Config>::Hash, ErrorObject<'_>>: IntoResponse`
   |
+  = note: for local types consider adding `#[derive(serde::Serialize)]` to your `<Conf as Config>::Hash` type
+  = note: for types from other crates check whether the crate offers a `serde` feature flag
   = note: required for `Result<<Conf as Config>::Hash, ErrorObject<'_>>` to implement `IntoResponse`
   = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
 
