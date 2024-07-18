@@ -27,6 +27,7 @@
 use jsonrpsee_types::SubscriptionId;
 use serde::Serialize;
 use serde_json::value::RawValue;
+use serde_json::Value;
 
 /// Marker trait for types that can be serialized as JSON compatible strings.
 ///
@@ -102,6 +103,10 @@ impl<P, const N: usize> ToRpcParams for [P; N]
 where
 	[P; N]: Serialize,
 {
+	to_rpc_params_impl!();
+}
+
+impl ToRpcParams for Value {
 	to_rpc_params_impl!();
 }
 
