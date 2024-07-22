@@ -38,7 +38,7 @@ soketto = { version = "0.8", optional = true }
 
 # web-sys
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-gloo-net = { version = "0.5.0", default-features = false, features = ["json", "websocket"], optional = true }
+gloo-net = { version = "0.6.0", default-features = false, features = ["json", "websocket"], optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 
 [features]
