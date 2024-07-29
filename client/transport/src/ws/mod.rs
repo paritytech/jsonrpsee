@@ -321,6 +321,21 @@ impl WsTransportClientBuilder {
 		self.try_connect(&target, data_stream.compat()).await
 	}
 
+	#[cfg(feature = "tls")]
+	fn tls_connector(&self, target: &Target) -> Result<Option<tokio_rustls::TlsConnector>, WsHandshakeError> {
+		// Make sure that the TLS provider is set. If not, set a default one.
+		// Otherwise, creating `tls` configuration may panic if there are multiple
+		// providers available due to `rustls` features (e.g. both `ring` and `aws-lc-rs`).
+		// Function returns an error if the provider is already installed, and we're fine with it.
+		let _ = rustls::crypto::ring::default_provider().install_default();
+
+		let connector = match target._mode {
+			Mode::Tls => Some(build_tls_config(&self.certificate_store)?),
+			Mode::Plain => None,
+		};
+		Ok(connector)
+	}
+
 	// Try to establish the connection over TCP.
 	async fn try_connect_over_tcp(
 		&self,
@@ -331,10 +346,7 @@ impl WsTransportClientBuilder {
 
 		// Only build TLS connector if `wss` in URL.
 		#[cfg(feature = "tls")]
-		let mut connector = match target._mode {
-			Mode::Tls => Some(build_tls_config(&self.certificate_store)?),
-			Mode::Plain => None,
-		};
+		let mut connector = self.tls_connector(&target)?;
 
 		// The sockaddrs might get reused if the server replies with a relative URI.
 		let mut target_sockaddrs = uri.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
