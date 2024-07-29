@@ -219,6 +219,12 @@ impl<L> HttpTransportClientBuilder<L> {
 			}
 			#[cfg(feature = "tls")]
 			"https" => {
+				// Make sure that the TLS provider is set. If not, set a default one.
+				// Otherwise, creating `tls` configuration may panic if there are multiple
+				// providers available due to `rustls` features (e.g. both `ring` and `aws-lc-rs`).
+				// Function returns an error if the provider is already installed, and we're fine with it.
+				let _ = rustls::crypto::ring::default_provider().install_default();
+
 				let mut http_conn = HttpConnector::new();
 				http_conn.set_nodelay(tcp_no_delay);
 				http_conn.enforce_http(false);
