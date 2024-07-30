@@ -4,6 +4,19 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.1] - 2024-07-30
+
+This is a small release that forces jsonrpsee `rustls` to use the crypto backend ring which may panic if both `ring` and `aws-lc` features are enabled.
+See https://github.com/rustls/rustls/issues/1877 for further information.
+
+This has no impact on the default configuration of jsonrpsee which was already using `ring` as the default.
+
+### [Changed]
+- chore(deps): update gloo-net requirement from 0.5.0 to 0.6.0 ([#1428](https://github.com/paritytech/jsonrpsee/pull/1428))
+
+### [Fixed]
+- fix: Explicitly set rustls provider before using rustls ([#1424](https://github.com/paritytech/jsonrpsee/pull/1424))
+
 ## [v0.24.0] - 2024-07-05
 
 A breaking release that mainly changes:
