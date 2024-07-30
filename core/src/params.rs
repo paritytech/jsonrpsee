@@ -218,6 +218,21 @@ impl ToRpcParams for ArrayParams {
 	}
 }
 
+impl ToRpcParams for serde_json::Value {
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+		let json = match self {
+			serde_json::Value::Array(a) => serde_json::to_string(&a),
+			serde_json::Value::Object(o) => serde_json::to_string(&o),
+			serde_json::Value::Null => Ok("[null]".to_string()),
+			serde_json::Value::Bool(b) => serde_json::to_string(&[b]),
+			serde_json::Value::String(s) => serde_json::to_string(&[s]),
+			serde_json::Value::Number(n) => serde_json::to_string(&[n]),
+		}?;
+
+		RawValue::from_string(json).map(Some)
+	}
+}
+
 /// Initial number of parameters in a batch request.
 const BATCH_PARAMS_NUM_CAPACITY: usize = 4;
 
@@ -265,5 +280,55 @@ impl<'a> IntoIterator for BatchRequestBuilder<'a> {
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use serde_json::json;
+
+	fn to_rpc_params(val: serde_json::Value) -> Box<serde_json::value::RawValue> {
+		use super::ToRpcParams;
+		val.to_rpc_params().unwrap().unwrap()
+	}
+
+	#[test]
+	fn serde_json_map() {
+		let map = serde_json::json!({
+			"key": "value"
+		});
+
+		let params = to_rpc_params(map);
+		assert_eq!(params.get(), "{\"key\":\"value\"}");
+	}
+
+	#[test]
+	fn serde_json_array() {
+		let params = to_rpc_params(json![vec!["key"]]);
+		assert_eq!(params.get(), "[\"key\"]");
+	}
+
+	#[test]
+	fn serde_json_string() {
+		let params = to_rpc_params(json!["key"]);
+		assert_eq!(params.get(), "[\"key\"]");
+	}
+
+	#[test]
+	fn serde_json_int() {
+		let params = to_rpc_params(json![99]);
+		assert_eq!(params.get(), "[99]");
+	}
+
+	#[test]
+	fn serde_json_bool() {
+		let params = to_rpc_params(json![false]);
+		assert_eq!(params.get(), "[false]");
+	}
+
+	#[test]
+	fn serde_json_null() {
+		let params = to_rpc_params(json![null]);
+		assert_eq!(params.get(), "[null]");
 	}
 }
