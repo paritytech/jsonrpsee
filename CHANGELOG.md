@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.24.1] - 2024-07-30
 
-This is a small release that adds a hack to force the `rustls` to use the backend ring
+This is a small release that forces `rustls` to use the backend ring
 if both `ring` and `aws-lc` features are enabled.
 
 ### [Changed]
