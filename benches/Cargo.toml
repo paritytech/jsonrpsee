@@ -20,7 +20,7 @@ jsonrpc-http-server = { version = "18.0.0", optional = true }
 jsonrpc-pubsub = { version = "18.0.0", optional = true }
 serde_json = "1"
 tokio = { version = "1.16", features = ["rt-multi-thread"] }
-console-subscriber = "0.3.0"
+console-subscriber = "0.4.0"
 
 [[bench]]
 name = "bench"

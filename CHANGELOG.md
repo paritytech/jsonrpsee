@@ -4,6 +4,54 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.1] - 2024-07-30
+
+This is a small release that forces jsonrpsee `rustls` to use the crypto backend ring which may panic if both `ring` and `aws-lc` features are enabled.
+See https://github.com/rustls/rustls/issues/1877 for further information.
+
+This has no impact on the default configuration of jsonrpsee which was already using `ring` as the default.
+
+### [Changed]
+- chore(deps): update gloo-net requirement from 0.5.0 to 0.6.0 ([#1428](https://github.com/paritytech/jsonrpsee/pull/1428))
+
+### [Fixed]
+- fix: Explicitly set rustls provider before using rustls ([#1424](https://github.com/paritytech/jsonrpsee/pull/1424))
+
+## [v0.24.0] - 2024-07-05
+
+A breaking release that mainly changes:
+
+1. `tls` feature for the client has been divided into `tls` and `tls-platform-verifier` where the `tls` feature
+will only include `rustls` and no specific certificate store but the default one is still `tls-rustls-platform-verifier`.
+This is useful if one wants to avoid bring on openssl dependencies.
+2. Remove dependencies `anyhow` and `beef` from the codebase.
+
+### [Changed]
+- types: serialize `id` in `Response` before `result`/`error` fields ([#1421](https://github.com/paritytech/jsonrpsee/pull/1421))
+- refactor(client+transport)!: split `tls` into `tls` and `tls-rustls-platform-verifier` features ([#1419](https://github.com/paritytech/jsonrpsee/pull/1419))
+- chore(deps): update rustc-hash requirement from 1 to 2 ([#1410](https://github.com/paritytech/jsonrpsee/pull/1410))
+- deps: remove anyhow ([#1402](https://github.com/paritytech/jsonrpsee/pull/1402))
+- deps: remove beef ([#1401](https://github.com/paritytech/jsonrpsee/pull/1401))
+
+## [v0.23.2] - 2024-06-26
+
+This a small patch release that fixes a couple of bugs and adds a couple of new APIs.
+
+The bug fixes are:
+- The `server::ws::on_connect` was not working properly due to a merge nit when upgrading to hyper v1.0 
+  This impacts only users that are using the low-level API and not the server itself.
+- `WsTransport::build_with_stream` shouldn't not resolve the socket addresses and it's fixed now, [see #1411 for further info](https://github.com/paritytech/jsonrpsee/issues/1411). 
+  This impacts users that are inject their own TcpStream directly into the `WsTransport`.
+
+### [Added]
+- server: add `RpcModule::remove` ([#1416](https://github.com/paritytech/jsonrpsee/pull/1416))
+- server: add `capacity and max_capacity` to the subscription API ([#1414](https://github.com/paritytech/jsonrpsee/pull/1414))
+- server: add `PendingSubscriptionSink::method_name` ([#1413](https://github.com/paritytech/jsonrpsee/pull/1413))
+
+### [Fixed]
+- server: make `ws::on_connect` work again ([#1418](https://github.com/paritytech/jsonrpsee/pull/1418))
+- client: `WsTransport::build_with_stream` don't resolve sockaddrs ([#1412](https://github.com/paritytech/jsonrpsee/pull/1412))
+
 ## [v0.23.1] - 2024-06-10
 
 This is a patch release that injects the ConnectionId in
