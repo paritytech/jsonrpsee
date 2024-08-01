@@ -191,6 +191,26 @@ async fn notification_handler_works() {
 }
 
 #[tokio::test]
+async fn notification_no_params() {
+	let server = WebSocketTestServer::with_hardcoded_notification(
+		"127.0.0.1:0".parse().unwrap(),
+		server_notification_without_params("no_params"),
+	)
+	.with_default_timeout()
+	.await
+	.unwrap();
+
+	let uri = to_ws_uri_string(server.local_addr());
+	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
+	{
+		let mut nh: Subscription<serde_json::Value> =
+			client.subscribe_to_method("no_params").with_default_timeout().await.unwrap().unwrap();
+		let response = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
+		assert_eq!(response, serde_json::Value::Null);
+	}
+}
+
+#[tokio::test]
 async fn batched_notifs_works() {
 	init_logger();
 

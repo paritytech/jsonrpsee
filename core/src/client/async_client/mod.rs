@@ -58,14 +58,15 @@ use futures_util::future::{self, Either};
 use futures_util::stream::StreamExt;
 use futures_util::Stream;
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
-use jsonrpsee_types::{Notification, NotificationSer, RequestSer, Response, SubscriptionResponse};
+use jsonrpsee_types::{NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
 use self::utils::{InactivityCheck, IntervalStream};
-
 use super::{generate_batch_id_range, subscription_channel, FrontToBack, IdKind, RequestIdManager};
+
+pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<serde_json::Value>>;
 
 const LOG_TARGET: &str = "jsonrpsee-client";
 const NOT_POISONED: &str = "Not poisoned; qed";
@@ -728,7 +729,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 					process_subscription_close_response(&mut manager.lock(), response);
 				}
 				// Incoming Notification
-				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
+				else if let Ok(notif) = serde_json::from_slice::<Notification>(raw) {
 					process_notification(&mut manager.lock(), notif);
 				} else {
 					return Err(unparse_error(raw));
@@ -765,7 +766,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 						} else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
 							got_notif = true;
 							process_subscription_close_response(&mut manager.lock(), response);
-						} else if let Ok(notif) = serde_json::from_str::<Notification<_>>(r.get()) {
+						} else if let Ok(notif) = serde_json::from_str::<Notification>(r.get()) {
 							got_notif = true;
 							process_notification(&mut manager.lock(), notif);
 						} else {

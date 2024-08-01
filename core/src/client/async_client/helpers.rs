@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
-use crate::client::async_client::LOG_TARGET;
+use crate::client::async_client::{Notification, LOG_TARGET};
 use crate::client::{subscription_channel, Error, RequestMessage, TransportSenderT, TrySubscriptionSendError};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
@@ -36,8 +36,7 @@ use tokio::sync::oneshot;
 
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, Id, InvalidRequestId, Notification, RequestSer, Response, ResponseSuccess, SubscriptionId,
-	SubscriptionResponse,
+	ErrorObject, Id, InvalidRequestId, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
 use std::ops::Range;
@@ -148,9 +147,10 @@ pub(crate) fn process_subscription_close_response(
 /// will continue.
 ///
 /// It's possible that user close down the subscription before this notification is received.
-pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) {
+pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification) {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
-		Some(send_back_sink) => match send_back_sink.send(notif.params) {
+		// If the notification doesn't have params, we just send an empty JSON object to indicate that to the user.
+		Some(send_back_sink) => match send_back_sink.send(notif.params.unwrap_or_default()) {
 			Ok(()) => (),
 			Err(TrySubscriptionSendError::Closed) => {
 				let _ = manager.remove_notification_handler(&notif.method);
