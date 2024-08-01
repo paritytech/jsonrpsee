@@ -1,5 +1,6 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
@@ -18,7 +19,7 @@ use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{interval, interval_at};
+use tokio::time::interval;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
@@ -80,13 +81,17 @@ where
 		server_cfg;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
+	let (ping_tx, ping_rx) = mpsc::channel::<KeepAlive>(4);
 
 	// Spawn another task that sends out the responses on the Websocket.
-	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config, conn_rx));
+	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config, conn_rx, ping_tx.clone()));
+
+	if let Some(ping_config) = ping_config {
+		tokio::spawn(ping_pong_task(ping_rx, ping_config.inactive_limit, ping_config.max_failures));
+	}
 
 	let stopped = conn.stop_handle.clone().shutdown();
 	let rpc_service = Arc::new(rpc_service);
-	let mut missed_pings = 0;
 
 	tokio::pin!(stopped);
 
@@ -106,7 +111,7 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
-		let data = match try_recv(&mut ws_stream, stopped, ping_config, &mut missed_pings).await {
+		let data = match try_recv(&mut ws_stream, stopped, &ping_tx).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
 			Receive::Ok(data, stop) => {
@@ -205,6 +210,7 @@ async fn send_task(
 	mut ws_sender: Sender,
 	ping_config: Option<PingConfig>,
 	stop: oneshot::Receiver<()>,
+	ping_tx: mpsc::Sender<KeepAlive>,
 ) {
 	let ping_interval = match ping_config {
 		None => IntervalStream::pending(),
@@ -252,6 +258,12 @@ async fn send_task(
 				}
 
 				rx_item = next_rx;
+
+				let ping_tx = ping_tx.clone();
+				tokio::spawn(async move {
+					ping_tx.send(KeepAlive::Ping(Instant::now())).await.ok();
+				});
+
 				futs = future::select(ping_interval.next(), stop);
 			}
 			Either::Right((Either::Right((_stopped, _)), _)) => {
@@ -274,62 +286,102 @@ enum Receive<S> {
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.
-async fn try_recv<T, S>(
-	ws_stream: &mut T,
-	mut stopped: S,
-	ping_config: Option<PingConfig>,
-	missed_pings: &mut usize,
-) -> Receive<S>
+async fn try_recv<T, S>(ws_stream: &mut T, mut stopped: S, ping_tx: &mpsc::Sender<KeepAlive>) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
 	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
 {
-	let mut last_active = Instant::now();
-	let inactivity_check = match ping_config {
-		Some(p) => IntervalStream::new(interval_at(tokio::time::Instant::now() + p.ping_interval, p.ping_interval)),
-		None => IntervalStream::pending(),
-	};
-
-	tokio::pin!(inactivity_check);
-
-	let mut futs = futures_util::future::select(ws_stream.next(), inactivity_check.next());
-
 	loop {
-		match futures_util::future::select(futs, stopped).await {
+		match futures_util::future::select(ws_stream.next(), stopped).await {
 			// The connection is closed.
-			Either::Left((Either::Left((None, _)), _)) => break Receive::ConnectionClosed,
+			Either::Left((None, _)) => break Receive::ConnectionClosed,
 			// The message has been received, we are done
-			Either::Left((Either::Left((Some(Ok(Incoming::Data(d))), _)), s)) => break Receive::Ok(d, s),
+			Either::Left((Some(Ok(Incoming::Data(d))), s)) => {
+				let ping_tx = ping_tx.clone();
+				tokio::spawn(async move {
+					_ = ping_tx.send(KeepAlive::Pong(Instant::now())).await;
+				});
+
+				break Receive::Ok(d, s);
+			}
 			// Got a pong response, update our "last seen" timestamp.
-			Either::Left((Either::Left((Some(Ok(Incoming::Pong)), inactive)), s)) => {
-				last_active = Instant::now();
+			Either::Left((Some(Ok(Incoming::Pong)), s)) => {
+				let ping_tx = ping_tx.clone();
+				tokio::spawn(async move {
+					_ = ping_tx.send(KeepAlive::Pong(Instant::now())).await;
+				});
+
 				stopped = s;
-				futs = futures_util::future::select(ws_stream.next(), inactive);
 			}
 			// Received an error, terminate the connection.
-			Either::Left((Either::Left((Some(Err(e)), _)), s)) => break Receive::Err(e, s),
-			// Max inactivity timeout fired, check if the connection has been idle too long.
-			Either::Left((Either::Right((_instant, rcv)), s)) => {
-				if let Some(p) = ping_config {
-					if last_active.elapsed() > p.inactive_limit {
-						*missed_pings += 1;
+			Either::Left((Some(Err(e)), s)) => break Receive::Err(e, s),
+			// Server has been stopped.
+			Either::Right(_) => break Receive::Stopped,
+		}
+	}
+}
 
-						if *missed_pings >= p.max_failures {
-							tracing::debug!(
-								target: LOG_TARGET,
-								"WS ping/pong inactivity limit `{}` exceeded; closing connection",
-								p.max_failures,
-							);
-							break Receive::ConnectionClosed;
-						}
+#[derive(Debug, Copy, Clone)]
+enum KeepAlive {
+	Ping(Instant),
+	Pong(Instant),
+}
+
+async fn ping_pong_task(mut rx: mpsc::Receiver<KeepAlive>, inactive_limit: Duration, max_inactive: usize) {
+	let polling_interval = inactive_limit.mul_f64(1.2);
+	let mut pending_pings: VecDeque<Instant> = VecDeque::new();
+	let mut missed_pings = 0;
+
+	loop {
+		tokio::select! {
+			// If the ping is never answered, we use this timer as a fallback.
+			_ = tokio::time::sleep(polling_interval) => {
+				let mut remove = false;
+
+				if let Some(ping_start) = pending_pings.front() {
+
+					if ping_start.elapsed() > inactive_limit {
+						missed_pings += 1;
+						remove = true;
+					}
+
+					if missed_pings >= max_inactive {
+						tracing::debug!(target: LOG_TARGET, "Too many missed pings, closing connection");
+						break;
 					}
 				}
 
-				stopped = s;
-				futs = futures_util::future::select(rcv, inactivity_check.next());
+				if remove {
+					pending_pings.pop_front();
+				}
 			}
-			// Server has been stopped.
-			Either::Right(_) => break Receive::Stopped,
+			msg = rx.recv() => {
+				match msg {
+					Some(KeepAlive::Ping(start)) => {
+						pending_pings.push_back(start);
+					}
+					Some(KeepAlive::Pong(end)) => {
+						if let Some(start) = pending_pings.pop_front() {
+							// Calculate the round-trip time (RTT) of the ping/pong.
+							// We adjust for the time to send it to this task.
+							let elapsed = start.elapsed() - end.elapsed();
+
+							if elapsed > inactive_limit {
+								missed_pings += 1;
+							}
+
+
+							tracing::debug!(target: LOG_TARGET, "ping/pong RTT: {:?}", elapsed);
+
+							if missed_pings >= max_inactive {
+								tracing::debug!(target: LOG_TARGET, "Too many missed pings, closing connection");
+								break;
+							}
+						}
+					}
+					None => break,
+				}
+			}
 		}
 	}
 }
