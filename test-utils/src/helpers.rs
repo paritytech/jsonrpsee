@@ -192,6 +192,11 @@ pub fn server_notification(method: &str, params: Value) -> String {
 	format!(r#"{{"jsonrpc":"2.0","method":"{}", "params":{} }}"#, method, serde_json::to_string(&params).unwrap())
 }
 
+/// Server originated notification without params.
+pub fn server_notification_without_params(method: &str) -> String {
+	format!(r#"{{"jsonrpc":"2.0","method":"{}"}}"#, method)
+}
+
 pub async fn http_request(body: Body, uri: Uri) -> Result<HttpResponse, String> {
 	let client = hyper_util::client::legacy::Client::builder(TokioExecutor::new()).build_http();
 	http_post(client, body, uri).await
