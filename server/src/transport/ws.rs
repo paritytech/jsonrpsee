@@ -369,12 +369,11 @@ async fn ping_pong_task(
 					if elapsed >= max_inactive_limit {
 						missed_pings += 1;
 						remove = true;
+						tracing::debug!(target: LOG_TARGET, "ping/pong keep alive expired for peer={:?}, elapsed={}s/max={}s", remote_addr, elapsed.as_secs(), max_inactive_limit.as_secs());
 					}
 
-					tracing::debug!(target: LOG_TARGET, "Ping/pong keep alive expired for peer={:?}, elapsed={}s/max={}s", remote_addr, elapsed.as_secs(), max_inactive_limit.as_secs());
-
 					if missed_pings >= max_inactive {
-						tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs for peer={:?}, closing connection", remote_addr);
+						tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs for peer={:?}; closing connection", remote_addr);
 						break;
 					}
 				}
@@ -396,12 +395,13 @@ async fn ping_pong_task(
 
 							if elapsed >= max_inactive_limit {
 								missed_pings += 1;
+								tracing::debug!(target: LOG_TARGET, "ping/pong keep alive expired for peer={:?}, elapsed={}s/max={}s", remote_addr, elapsed.as_secs(), max_inactive_limit.as_secs());
 							}
 
 							tracing::debug!(target: LOG_TARGET, "ping/pong RTT: {:?}", elapsed);
 
 							if missed_pings >= max_inactive {
-								tracing::debug!(target: LOG_TARGET, "Ping/pong keep alive expired for peer={:?}, elapsed={}s/max={}s", remote_addr, elapsed.as_secs(), max_inactive_limit.as_secs());
+								tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs for peer={:?}; closing connection", remote_addr);
 								break;
 							}
 						}
