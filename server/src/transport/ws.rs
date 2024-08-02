@@ -113,7 +113,7 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
-		let data = match try_recv(&mut ws_stream, stopped, &ping_tx).await {
+		let data = match try_recv(&mut ws_stream, stopped, &ping_tx, remote_addr).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
 			Receive::Ok(data, stop) => {
@@ -262,6 +262,7 @@ async fn send_task(
 			Either::Right((Either::Left((_instant, _stopped)), next_rx)) => {
 				stop = _stopped;
 				let now = Instant::now();
+				tracing::debug!(target: LOG_TARGET, "Send ping to peer={:?}", remote_addr);
 				if let Err(err) = send_ping(&mut ws_sender).await {
 					tracing::debug!(target: LOG_TARGET, "WS send ping error: {}", err);
 					break;
@@ -301,7 +302,12 @@ enum Receive<S> {
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.
-async fn try_recv<T, S>(ws_stream: &mut T, stopped: S, ping_tx: &mpsc::Sender<KeepAlive>) -> Receive<S>
+async fn try_recv<T, S>(
+	ws_stream: &mut T,
+	stopped: S,
+	ping_tx: &mpsc::Sender<KeepAlive>,
+	remote_addr: SocketAddr,
+) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
 	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
@@ -326,6 +332,8 @@ where
 			}
 			// Got a pong response send status to the ping_pong_task.
 			Either::Left((Either::Left((Some(Ok(Incoming::Pong)), s)), _)) => {
+				tracing::debug!(target: LOG_TARGET, "Received pong from peer={:?}", remote_addr);
+
 				let ping_tx = ping_tx.clone();
 				tokio::spawn(async move {
 					_ = ping_tx.send(KeepAlive::Pong(Instant::now())).await;
@@ -398,7 +406,7 @@ async fn ping_pong_task(
 								tracing::debug!(target: LOG_TARGET, "ping/pong keep alive expired for peer={:?}, elapsed={}s/max={}s", remote_addr, elapsed.as_secs(), max_inactive_limit.as_secs());
 							}
 
-							tracing::debug!(target: LOG_TARGET, "ping/pong RTT: {:?}", elapsed);
+							tracing::debug!(target: LOG_TARGET, "ping_pong_rtt={:?}, peer={:?}", elapsed, remote_addr);
 
 							if missed_pings >= max_inactive {
 								tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs for peer={:?}; closing connection", remote_addr);
