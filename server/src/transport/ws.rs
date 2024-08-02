@@ -327,26 +327,29 @@ enum KeepAlive {
 	Pong(Instant),
 }
 
-async fn ping_pong_task(mut rx: mpsc::Receiver<KeepAlive>, inactive_limit: Duration, max_inactive: usize) {
-	let polling_interval = inactive_limit.mul_f64(1.2);
+async fn ping_pong_task(mut rx: mpsc::Receiver<KeepAlive>, max_inactive_limit: Duration, max_inactive: usize) {
+	let mut polling_interval = IntervalStream::new(interval(max_inactive_limit));
 	let mut pending_pings: VecDeque<Instant> = VecDeque::new();
 	let mut missed_pings = 0;
 
 	loop {
 		tokio::select! {
 			// If the ping is never answered, we use this timer as a fallback.
-			_ = tokio::time::sleep(polling_interval) => {
+			_ = polling_interval.next() => {
 				let mut remove = false;
 
 				if let Some(ping_start) = pending_pings.front() {
+					let elapsed = ping_start.elapsed();
 
-					if ping_start.elapsed() > inactive_limit {
+					if elapsed > max_inactive_limit {
 						missed_pings += 1;
 						remove = true;
 					}
 
+					tracing::debug!(target: LOG_TARGET, "ping/pong keep alive expired elapsed={:?}/max={:?}", elapsed, max_inactive_limit);
+
 					if missed_pings >= max_inactive {
-						tracing::debug!(target: LOG_TARGET, "Too many missed pings, closing connection");
+						tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs, closing connection");
 						break;
 					}
 				}
@@ -366,15 +369,14 @@ async fn ping_pong_task(mut rx: mpsc::Receiver<KeepAlive>, inactive_limit: Durat
 							// We adjust for the time to send it to this task.
 							let elapsed = start.elapsed() - end.elapsed();
 
-							if elapsed > inactive_limit {
+							if elapsed > max_inactive_limit {
 								missed_pings += 1;
 							}
-
 
 							tracing::debug!(target: LOG_TARGET, "ping/pong RTT: {:?}", elapsed);
 
 							if missed_pings >= max_inactive {
-								tracing::debug!(target: LOG_TARGET, "Too many missed pings, closing connection");
+								tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs, closing connection");
 								break;
 							}
 						}
