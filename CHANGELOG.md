@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog].
 
 Another small release that fixes:
 - Notifications without params were not handled correctly in the client,  which been has been fixed.
-- Improve compile times and reduce code-generation in the proc macros.
+- Improve compile times and reduce code-generation in the proc macro crate.
 
 ### [Fixed]
 - client: parse notification without params ([#1436](https://github.com/paritytech/jsonrpsee/pull/1436))
