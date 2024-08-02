@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -39,7 +40,6 @@ pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Resul
 }
 
 pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), SokettoError> {
-	tracing::debug!(target: LOG_TARGET, "Send ping");
 	// Submit empty slice as "optional" parameter.
 	let slice: &[u8] = &[];
 	// Byte slice fails if the provided slice is larger than 125 bytes.
@@ -77,17 +77,19 @@ where
 		mut on_session_close,
 		extensions,
 	} = params;
+
+	let remote_addr = extensions.get::<SocketAddr>().cloned().unwrap_or_else(|| "unknown".parse().unwrap());
 	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
 		server_cfg;
-
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let (ping_tx, ping_rx) = mpsc::channel::<KeepAlive>(4);
 
 	// Spawn another task that sends out the responses on the Websocket.
-	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config, conn_rx, ping_tx.clone()));
+	let send_task_handle =
+		tokio::spawn(send_task(rx, ws_sender, ping_config, conn_rx, ping_tx.clone(), remote_addr.clone()));
 
 	if let Some(ping_config) = ping_config {
-		tokio::spawn(ping_pong_task(ping_rx, ping_config.inactive_limit, ping_config.max_failures));
+		tokio::spawn(ping_pong_task(ping_rx, ping_config.inactive_limit, ping_config.max_failures, remote_addr));
 	}
 
 	let stopped = conn.stop_handle.clone().shutdown();
@@ -211,6 +213,7 @@ async fn send_task(
 	ping_config: Option<PingConfig>,
 	stop: oneshot::Receiver<()>,
 	ping_tx: mpsc::Sender<KeepAlive>,
+	remote_addr: SocketAddr,
 ) {
 	let ping_interval = match ping_config {
 		None => IntervalStream::pending(),
@@ -235,8 +238,14 @@ async fn send_task(
 			// Received message.
 			Either::Left((Some(response), not_ready)) => {
 				// If websocket message send fail then terminate the connection.
+				let now = Instant::now();
 				if let Err(err) = send_message(&mut ws_sender, response).await {
 					tracing::debug!(target: LOG_TARGET, "WS send error: {}", err);
+					break;
+				}
+
+				if now.elapsed() > Duration::from_secs(30) {
+					tracing::warn!(target: LOG_TARGET, "Send message was slow {:?},  peer={:?}", now.elapsed(), remote_addr);
 					break;
 				}
 
@@ -252,8 +261,14 @@ async fn send_task(
 			// Handle timer intervals.
 			Either::Right((Either::Left((_instant, _stopped)), next_rx)) => {
 				stop = _stopped;
+				let now = Instant::now();
 				if let Err(err) = send_ping(&mut ws_sender).await {
 					tracing::debug!(target: LOG_TARGET, "WS send ping error: {}", err);
+					break;
+				}
+
+				if now.elapsed() > Duration::from_secs(30) {
+					tracing::warn!(target: LOG_TARGET, "Send ping was slow {:?}, peer={:?}", now.elapsed(), remote_addr);
 					break;
 				}
 
@@ -286,17 +301,22 @@ enum Receive<S> {
 }
 
 /// Attempts to read data from WebSocket fails if the server was stopped.
-async fn try_recv<T, S>(ws_stream: &mut T, mut stopped: S, ping_tx: &mpsc::Sender<KeepAlive>) -> Receive<S>
+async fn try_recv<T, S>(ws_stream: &mut T, stopped: S, ping_tx: &mpsc::Sender<KeepAlive>) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
 	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
 {
+	let mut futs = future::select(ws_stream.next(), stopped);
+
 	loop {
-		match futures_util::future::select(ws_stream.next(), stopped).await {
+		let closed = ping_tx.closed();
+		tokio::pin!(closed);
+
+		match future::select(futs, closed).await {
 			// The connection is closed.
-			Either::Left((None, _)) => break Receive::ConnectionClosed,
+			Either::Left((Either::Left((None, _)), _)) => break Receive::ConnectionClosed,
 			// The message has been received, we are done
-			Either::Left((Some(Ok(Incoming::Data(d))), s)) => {
+			Either::Left((Either::Left((Some(Ok(Incoming::Data(d))), s)), _)) => {
 				let ping_tx = ping_tx.clone();
 				tokio::spawn(async move {
 					_ = ping_tx.send(KeepAlive::Pong(Instant::now())).await;
@@ -304,19 +324,19 @@ where
 
 				break Receive::Ok(d, s);
 			}
-			// Got a pong response, update our "last seen" timestamp.
-			Either::Left((Some(Ok(Incoming::Pong)), s)) => {
+			// Got a pong response send status to the ping_pong_task.
+			Either::Left((Either::Left((Some(Ok(Incoming::Pong)), s)), _)) => {
 				let ping_tx = ping_tx.clone();
 				tokio::spawn(async move {
 					_ = ping_tx.send(KeepAlive::Pong(Instant::now())).await;
 				});
 
-				stopped = s;
+				futs = futures_util::future::select(ws_stream.next(), s);
 			}
 			// Received an error, terminate the connection.
-			Either::Left((Some(Err(e)), s)) => break Receive::Err(e, s),
-			// Server has been stopped.
-			Either::Right(_) => break Receive::Stopped,
+			Either::Left((Either::Left((Some(Err(e)), s)), _)) => break Receive::Err(e, s),
+			// Server has been stopped or closed by inactive peer.
+			_ => break Receive::Stopped,
 		}
 	}
 }
@@ -327,7 +347,12 @@ enum KeepAlive {
 	Pong(Instant),
 }
 
-async fn ping_pong_task(mut rx: mpsc::Receiver<KeepAlive>, max_inactive_limit: Duration, max_inactive: usize) {
+async fn ping_pong_task(
+	mut rx: mpsc::Receiver<KeepAlive>,
+	max_inactive_limit: Duration,
+	max_inactive: usize,
+	remote_addr: SocketAddr,
+) {
 	let mut polling_interval = IntervalStream::new(interval(max_inactive_limit));
 	let mut pending_pings: VecDeque<Instant> = VecDeque::new();
 	let mut missed_pings = 0;
@@ -341,15 +366,15 @@ async fn ping_pong_task(mut rx: mpsc::Receiver<KeepAlive>, max_inactive_limit: D
 				if let Some(ping_start) = pending_pings.front() {
 					let elapsed = ping_start.elapsed();
 
-					if elapsed > max_inactive_limit {
+					if elapsed >= max_inactive_limit {
 						missed_pings += 1;
 						remove = true;
 					}
 
-					tracing::debug!(target: LOG_TARGET, "ping/pong keep alive expired elapsed={:?}/max={:?}", elapsed, max_inactive_limit);
+					tracing::debug!(target: LOG_TARGET, "Ping/pong keep alive expired for peer={:?}, elapsed={}s/max={}s", remote_addr, elapsed.as_secs(), max_inactive_limit.as_secs());
 
 					if missed_pings >= max_inactive {
-						tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs, closing connection");
+						tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs for peer={:?}, closing connection", remote_addr);
 						break;
 					}
 				}
@@ -369,14 +394,14 @@ async fn ping_pong_task(mut rx: mpsc::Receiver<KeepAlive>, max_inactive_limit: D
 							// We adjust for the time to send it to this task.
 							let elapsed = start.elapsed() - end.elapsed();
 
-							if elapsed > max_inactive_limit {
+							if elapsed >= max_inactive_limit {
 								missed_pings += 1;
 							}
 
 							tracing::debug!(target: LOG_TARGET, "ping/pong RTT: {:?}", elapsed);
 
 							if missed_pings >= max_inactive {
-								tracing::debug!(target: LOG_TARGET, "Too many missed ping/pongs, closing connection");
+								tracing::debug!(target: LOG_TARGET, "Ping/pong keep alive expired for peer={:?}, elapsed={}s/max={}s", remote_addr, elapsed.as_secs(), max_inactive_limit.as_secs());
 								break;
 							}
 						}

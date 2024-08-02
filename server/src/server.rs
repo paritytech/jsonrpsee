@@ -486,6 +486,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 		self,
 		methods: impl Into<Methods>,
 		stop_handle: StopHandle,
+		remote_addr: SocketAddr,
 	) -> TowerService<RpcMiddleware, HttpMiddleware> {
 		let conn_id = self.conn_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
@@ -497,6 +498,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 				conn_id,
 				conn_guard: self.conn_guard,
 				server_cfg: self.server_cfg,
+				remote_addr,
 			},
 			on_session_close: None,
 		};
@@ -936,6 +938,8 @@ struct ServiceData {
 	stop_handle: StopHandle,
 	/// Connection ID
 	conn_id: u32,
+	/// Remote addr
+	remote_addr: SocketAddr,
 	/// Connection guard.
 	conn_guard: ConnectionGuard,
 	/// ServerConfig
@@ -1048,6 +1052,7 @@ where
 		tracing::debug!(target: LOG_TARGET, "Accepting new connection {}/{}", curr_conns, max_conns);
 
 		request.extensions_mut().insert::<ConnectionId>(conn.conn_id.into());
+		request.extensions_mut().insert(self.inner.remote_addr);
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
@@ -1190,6 +1195,7 @@ where
 		stop_handle,
 		drop_on_completion,
 		methods,
+		remote_addr,
 		..
 	} = params;
 
@@ -1204,6 +1210,7 @@ where
 			methods,
 			stop_handle: stop_handle.clone(),
 			conn_id,
+			remote_addr,
 			conn_guard: conn_guard.clone(),
 		},
 		rpc_middleware,

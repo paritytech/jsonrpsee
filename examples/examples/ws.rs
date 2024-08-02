@@ -25,9 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::{RpcServiceBuilder, Server};
+use jsonrpsee::server::{PingConfig, RpcServiceBuilder, Server};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
 use tracing_subscriber::util::SubscriberInitExt;
@@ -40,18 +41,26 @@ async fn main() -> anyhow::Result<()> {
 	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
 	let addr = run_server().await?;
-	let url = format!("ws://{}", addr);
+	/*let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", rpc_params![]).await?;
-	tracing::info!("response: {:?}", response);
+	tracing::info!("response: {:?}", response);*/
+
+	tokio::time::sleep(Duration::from_secs(60 * 5)).await;
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
-	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
+	let server = Server::builder()
+		.enable_ws_ping(
+			PingConfig::new().ping_interval(Duration::from_secs(10)).inactive_limit(Duration::from_secs(20)),
+		)
+		.set_rpc_middleware(rpc_middleware)
+		.build("127.0.0.1:9944")
+		.await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _, _| "lo")?;
 	let addr = server.local_addr()?;
