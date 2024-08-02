@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog].
 ## [v0.24.2] - 2024-08-02
 
 Another small release that fixes:
-- Notifications without params were not handled correctly in the client was has been fixed.
+- Notifications without params were not handled correctly in the client,  which been has been fixed.
 - Improve compile times and reduce code-generation in the proc macros.
 
 ### [Fixed]
