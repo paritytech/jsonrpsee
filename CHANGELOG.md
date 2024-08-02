@@ -4,6 +4,18 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.2] - 2024-08-02
+
+Another small release that fixes:
+- Notifications without params were not handled correctly in the client, which been has been fixed.
+- Improve compile times and reduce code-generation in the proc macro crate.
+
+### [Fixed]
+- client: parse notification without params ([#1436](https://github.com/paritytech/jsonrpsee/pull/1436))
+- proc macros: remove direct tracing calls ([#1405](https://github.com/paritytech/jsonrpsee/pull/1405))
+
+Thanks to the external contributor [@DaniPopes](https://github.com/DaniPopes) who contributed to this release.
+
 ## [v0.24.1] - 2024-07-30
 
 This is a small release that forces jsonrpsee `rustls` to use the crypto backend ring which may panic if both `ring` and `aws-lc` features are enabled.
