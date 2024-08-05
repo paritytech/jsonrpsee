@@ -400,7 +400,7 @@ async fn ping_pong_task(
 						if let Some(start) = pending_pings.pop_front() {
 							// Calculate the round-trip time (RTT) of the ping/pong.
 							// We adjust for the time to send it to this task.
-							let elapsed = start.elapsed() - end.elapsed();
+							let elapsed = start.elapsed().saturating_sub(end.elapsed());
 
 							if elapsed >= max_inactive_limit {
 								missed_pings += 1;
