@@ -141,7 +141,6 @@ where
 						continue;
 					}
 					err => {
-						tracing::debug!(target: LOG_TARGET, "WS error: {}; terminate connection: {}", err, conn.conn_id);
 						break Err(err);
 					}
 				};
@@ -192,6 +191,8 @@ where
 			}
 		});
 	};
+
+	tracing::debug!(target: LOG_TARGET, "Connection closed for peer={}, reason={:?}", remote_addr, result);
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
