@@ -80,17 +80,17 @@ where
 
 	// NOTE: jsonrpsee only inject the `remote_addr` if it not set because for servers that are behind a reverse proxy,
 	// needs read HTTP headers to get the real IP address of the client.
-	let remote_addr = extensions.get::<IpAddr>().copied();
+	let ip_addr = extensions.get::<IpAddr>().copied();
 	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
 		server_cfg;
 	let (conn_tx, conn_rx) = oneshot::channel();
 	let (ping_tx, ping_rx) = mpsc::channel::<KeepAlive>(4);
 
 	// Spawn another task that sends out the responses on the Websocket.
-	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config, conn_rx, ping_tx.clone(), remote_addr));
+	let send_task_handle = tokio::spawn(send_task(rx, ws_sender, ping_config, conn_rx, ping_tx.clone(), ip_addr));
 
 	if let Some(ping_config) = ping_config {
-		tokio::spawn(ping_pong_task(ping_rx, ping_config.inactive_limit, ping_config.max_failures, remote_addr));
+		tokio::spawn(ping_pong_task(ping_rx, ping_config.inactive_limit, ping_config.max_failures, ip_addr));
 	}
 
 	let stopped = conn.stop_handle.clone().shutdown();
@@ -194,7 +194,7 @@ where
 		});
 	};
 
-	tracing::debug!(target: LOG_TARGET, "Connection closed for peer={:?}, reason={:?}", remote_addr, result);
+	tracing::debug!(target: LOG_TARGET, "Connection closed for peer={:?}, reason={:?}", ip_addr, result);
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee

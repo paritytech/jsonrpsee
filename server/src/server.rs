@@ -240,8 +240,8 @@ pub struct TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 	pub(crate) conn_id: Arc<AtomicU32>,
 	/// Connection guard.
 	pub(crate) conn_guard: ConnectionGuard,
-	/// Remote address.
-	pub(crate) remote_addr: Option<SocketAddr>,
+	/// IP address.
+	pub(crate) ip_addr: Option<IpAddr>,
 }
 
 /// Configuration for batch request handling.
@@ -463,7 +463,7 @@ pub struct Builder<HttpMiddleware, RpcMiddleware> {
 	server_cfg: ServerConfig,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
-	remote_addr: Option<SocketAddr>,
+	ip_addr: Option<IpAddr>,
 }
 
 impl Default for Builder<Identity, Identity> {
@@ -472,7 +472,7 @@ impl Default for Builder<Identity, Identity> {
 			server_cfg: ServerConfig::default(),
 			rpc_middleware: RpcServiceBuilder::new(),
 			http_middleware: tower::ServiceBuilder::new(),
-			remote_addr: None,
+			ip_addr: None,
 		}
 	}
 }
@@ -484,8 +484,8 @@ impl Builder<Identity, Identity> {
 	}
 
 	/// Set the address of the remote peer.
-	pub fn set_remote_addr(mut self, remote_addr: SocketAddr) -> Self {
-		self.remote_addr = Some(remote_addr);
+	pub fn set_ip_addr(mut self, ip_addr: IpAddr) -> Self {
+		self.ip_addr = Some(ip_addr);
 		self
 	}
 }
@@ -507,7 +507,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 				conn_id,
 				conn_guard: self.conn_guard,
 				server_cfg: self.server_cfg,
-				remote_addr: self.remote_addr,
+				ip_addr: self.ip_addr,
 			},
 			on_session_close: None,
 		};
@@ -537,7 +537,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 			http_middleware: self.http_middleware,
 			conn_id: self.conn_id,
 			conn_guard: self.conn_guard,
-			remote_addr: self.remote_addr,
+			ip_addr: self.ip_addr,
 		}
 	}
 
@@ -552,19 +552,19 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 			http_middleware,
 			conn_id: self.conn_id,
 			conn_guard: self.conn_guard,
-			remote_addr: self.remote_addr,
+			ip_addr: self.ip_addr,
 		}
 	}
 
 	/// Set the address of the remote peer.
-	pub fn set_remote_addr(self, remote_addr: SocketAddr) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
+	pub fn set_ip_addr(self, ip_addr: IpAddr) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 		TowerServiceBuilder {
 			server_cfg: self.server_cfg,
 			rpc_middleware: self.rpc_middleware,
 			http_middleware: self.http_middleware,
 			conn_id: self.conn_id,
 			conn_guard: self.conn_guard,
-			remote_addr: Some(remote_addr),
+			ip_addr: Some(ip_addr),
 		}
 	}
 }
@@ -666,7 +666,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			server_cfg: self.server_cfg,
 			rpc_middleware,
 			http_middleware: self.http_middleware,
-			remote_addr: self.remote_addr,
+			ip_addr: self.ip_addr,
 		}
 	}
 
@@ -757,7 +757,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			server_cfg: self.server_cfg,
 			http_middleware,
 			rpc_middleware: self.rpc_middleware,
-			remote_addr: self.remote_addr,
+			ip_addr: self.ip_addr,
 		}
 	}
 
@@ -894,7 +894,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			http_middleware: self.http_middleware,
 			conn_id: Arc::new(AtomicU32::new(0)),
 			conn_guard: ConnectionGuard::new(max_conns),
-			remote_addr: self.remote_addr,
+			ip_addr: self.ip_addr,
 		}
 	}
 
@@ -976,8 +976,8 @@ struct ServiceData {
 	conn_guard: ConnectionGuard,
 	/// ServerConfig
 	server_cfg: ServerConfig,
-	/// Remote address.
-	remote_addr: Option<SocketAddr>,
+	/// IP address.
+	ip_addr: Option<IpAddr>,
 }
 
 /// jsonrpsee tower service
@@ -1087,12 +1087,12 @@ where
 
 		request.extensions_mut().insert::<ConnectionId>(conn.conn_id.into());
 
-		if let Some(remote_addr) = self.inner.remote_addr {
+		if let Some(ip_addr) = self.inner.ip_addr {
 			// Only insert the remote address if it's not already set.
 			// We expect servers deployed behind a reverse proxy to set the remote address
 			// themselves otherwise the remote address will be the address of the reverse proxy.
 			if request.extensions().get::<IpAddr>().is_none() {
-				request.extensions_mut().insert(remote_addr.ip());
+				request.extensions_mut().insert(ip_addr);
 			}
 		}
 
@@ -1253,7 +1253,7 @@ where
 			stop_handle: stop_handle.clone(),
 			conn_id,
 			conn_guard: conn_guard.clone(),
-			remote_addr: Some(remote_addr),
+			ip_addr: Some(remote_addr.ip()),
 		},
 		rpc_middleware,
 		on_session_close: None,
