@@ -79,7 +79,7 @@ where
 	} = params;
 
 	// NOTE: jsonrpsee only inject the `remote_addr` if it not set because for servers that are behind a reverse proxy,
-	// needs read HTTP headers by the reverse proxy.
+	// needs read HTTP headers to get the real IP address of the client.
 	let remote_addr = extensions.get::<IpAddr>().copied();
 	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
 		server_cfg;
@@ -220,9 +220,6 @@ async fn send_task(
 ) {
 	let ping_interval = match ping_config {
 		None => IntervalStream::pending(),
-		// NOTE: we are emitted a tick here immediately to sync
-		// with how the receive task work because it starts measuring the pong
-		// when it starts up.
 		Some(p) => IntervalStream::new(interval(p.ping_interval)),
 	};
 	let rx = ReceiverStream::new(rx);
@@ -248,7 +245,7 @@ async fn send_task(
 				}
 
 				if now.elapsed() > Duration::from_secs(30) {
-					tracing::warn!(target: LOG_TARGET, "Send message was slow {:?},  peer={:?}", now.elapsed(), remote_addr);
+					tracing::warn!(target: LOG_TARGET, "Send message was slow {}s, peer={:?}", now.elapsed().as_secs(), remote_addr);
 					break;
 				}
 
@@ -396,9 +393,12 @@ async fn ping_pong_task(
 						pending_pings.push_back(start);
 					}
 					Some(KeepAlive::Pong(end)) | Some(KeepAlive::Data(end)) => {
+						// Both pong and data are considered as a response to the ping.
+						// So we might get more responses than pings that's why it's possible
+						// that the pending_pings may be empty.
 						if let Some(start) = pending_pings.pop_front() {
 							// Calculate the round-trip time (RTT) of the ping/pong.
-							// We adjust for the time to send it to this task.
+							// We adjust for the time it took to send to this task.
 							let elapsed = start.elapsed().saturating_sub(end.elapsed());
 
 							if elapsed >= max_inactive_limit {
