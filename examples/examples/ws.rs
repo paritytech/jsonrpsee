@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::server::{PingConfig, RpcServiceBuilder, Server};
