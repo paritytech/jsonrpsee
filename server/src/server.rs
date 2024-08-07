@@ -26,7 +26,7 @@
 
 use std::error::Error as StdError;
 use std::future::Future;
-use std::net::{SocketAddr, TcpListener as StdTcpListener};
+use std::net::{IpAddr, SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -240,6 +240,8 @@ pub struct TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 	pub(crate) conn_id: Arc<AtomicU32>,
 	/// Connection guard.
 	pub(crate) conn_guard: ConnectionGuard,
+	/// Remote address.
+	pub(crate) remote_addr: Option<SocketAddr>,
 }
 
 /// Configuration for batch request handling.
@@ -461,6 +463,7 @@ pub struct Builder<HttpMiddleware, RpcMiddleware> {
 	server_cfg: ServerConfig,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
+	remote_addr: Option<SocketAddr>,
 }
 
 impl Default for Builder<Identity, Identity> {
@@ -469,6 +472,7 @@ impl Default for Builder<Identity, Identity> {
 			server_cfg: ServerConfig::default(),
 			rpc_middleware: RpcServiceBuilder::new(),
 			http_middleware: tower::ServiceBuilder::new(),
+			remote_addr: None,
 		}
 	}
 }
@@ -478,6 +482,12 @@ impl Builder<Identity, Identity> {
 	pub fn new() -> Self {
 		Self::default()
 	}
+
+	/// Set the address of the remote peer.
+	pub fn set_remote_addr(mut self, remote_addr: SocketAddr) -> Self {
+		self.remote_addr = Some(remote_addr);
+		self
+	}
 }
 
 impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
@@ -486,7 +496,6 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 		self,
 		methods: impl Into<Methods>,
 		stop_handle: StopHandle,
-		remote_addr: SocketAddr,
 	) -> TowerService<RpcMiddleware, HttpMiddleware> {
 		let conn_id = self.conn_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
@@ -498,7 +507,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 				conn_id,
 				conn_guard: self.conn_guard,
 				server_cfg: self.server_cfg,
-				remote_addr,
+				remote_addr: self.remote_addr,
 			},
 			on_session_close: None,
 		};
@@ -528,6 +537,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 			http_middleware: self.http_middleware,
 			conn_id: self.conn_id,
 			conn_guard: self.conn_guard,
+			remote_addr: self.remote_addr,
 		}
 	}
 
@@ -542,6 +552,19 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 			http_middleware,
 			conn_id: self.conn_id,
 			conn_guard: self.conn_guard,
+			remote_addr: self.remote_addr,
+		}
+	}
+
+	/// Set the address of the remote peer.
+	pub fn set_remote_addr(self, remote_addr: SocketAddr) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
+		TowerServiceBuilder {
+			server_cfg: self.server_cfg,
+			rpc_middleware: self.rpc_middleware,
+			http_middleware: self.http_middleware,
+			conn_id: self.conn_id,
+			conn_guard: self.conn_guard,
+			remote_addr: Some(remote_addr),
 		}
 	}
 }
@@ -639,7 +662,12 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// let builder = ServerBuilder::default().set_rpc_middleware(m);
 	/// ```
 	pub fn set_rpc_middleware<T>(self, rpc_middleware: RpcServiceBuilder<T>) -> Builder<HttpMiddleware, T> {
-		Builder { server_cfg: self.server_cfg, rpc_middleware, http_middleware: self.http_middleware }
+		Builder {
+			server_cfg: self.server_cfg,
+			rpc_middleware,
+			http_middleware: self.http_middleware,
+			remote_addr: self.remote_addr,
+		}
 	}
 
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
@@ -725,7 +753,12 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	/// ```
 	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
-		Builder { server_cfg: self.server_cfg, http_middleware, rpc_middleware: self.rpc_middleware }
+		Builder {
+			server_cfg: self.server_cfg,
+			http_middleware,
+			rpc_middleware: self.rpc_middleware,
+			remote_addr: self.remote_addr,
+		}
 	}
 
 	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
@@ -861,6 +894,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			http_middleware: self.http_middleware,
 			conn_id: Arc::new(AtomicU32::new(0)),
 			conn_guard: ConnectionGuard::new(max_conns),
+			remote_addr: self.remote_addr,
 		}
 	}
 
@@ -938,12 +972,12 @@ struct ServiceData {
 	stop_handle: StopHandle,
 	/// Connection ID
 	conn_id: u32,
-	/// Remote addr
-	remote_addr: SocketAddr,
 	/// Connection guard.
 	conn_guard: ConnectionGuard,
 	/// ServerConfig
 	server_cfg: ServerConfig,
+	/// Remote address.
+	remote_addr: Option<SocketAddr>,
 }
 
 /// jsonrpsee tower service
@@ -1052,7 +1086,15 @@ where
 		tracing::debug!(target: LOG_TARGET, "Accepting new connection {}/{}", curr_conns, max_conns);
 
 		request.extensions_mut().insert::<ConnectionId>(conn.conn_id.into());
-		request.extensions_mut().insert(self.inner.remote_addr);
+
+		if let Some(remote_addr) = self.inner.remote_addr {
+			// Only insert the remote address if it's not already set.
+			// We expect servers deployed behind a reverse proxy to set the remote address
+			// themselves otherwise the remote address will be the address of the reverse proxy.
+			if request.extensions().get::<IpAddr>().is_none() {
+				request.extensions_mut().insert(remote_addr.ip());
+			}
+		}
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
@@ -1210,8 +1252,8 @@ where
 			methods,
 			stop_handle: stop_handle.clone(),
 			conn_id,
-			remote_addr,
 			conn_guard: conn_guard.clone(),
+			remote_addr: Some(remote_addr),
 		},
 		rpc_middleware,
 		on_session_close: None,
