@@ -219,8 +219,6 @@ async fn send_task(
 	ping_config: Option<(PingConfig, mpsc::Sender<KeepAlive>)>,
 	stop: oneshot::Receiver<()>,
 ) {
-	use futures_util::future::Either;
-
 	// Ping task is only spawned if ping config is provided.
 	let ping = match ping_config {
 		None => Either::Left(IntervalStream::pending().map(|_| None)),
