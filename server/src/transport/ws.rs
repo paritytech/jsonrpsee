@@ -371,17 +371,18 @@ async fn ping_pong_task(
 		tokio::select! {
 			// If the ping is never answered, we use this timer as a fallback.
 			_ = polling_interval.next() => {
-				if !pending_pings.check_pending(Instant::now()) {
+				if !pending_pings.check_alive() {
 					break;
 				}
 			}
+			// Data on the connection.
 			msg = rx.recv() => {
 				match msg {
 					Some(KeepAlive::Ping(start)) => {
 						pending_pings.push(start);
 					}
 					Some(KeepAlive::Pong(end)) | Some(KeepAlive::Data(end)) => {
-						if !pending_pings.check_pending(end) {
+						if !pending_pings.alive_response(end) {
 							break;
 						}
 					}
