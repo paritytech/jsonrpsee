@@ -26,7 +26,7 @@
 
 use std::error::Error as StdError;
 use std::future::Future;
-use std::net::{IpAddr, SocketAddr, TcpListener as StdTcpListener};
+use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -240,8 +240,6 @@ pub struct TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
 	pub(crate) conn_id: Arc<AtomicU32>,
 	/// Connection guard.
 	pub(crate) conn_guard: ConnectionGuard,
-	/// IP address.
-	pub(crate) ip_addr: Option<IpAddr>,
 }
 
 /// Configuration for batch request handling.
@@ -463,7 +461,6 @@ pub struct Builder<HttpMiddleware, RpcMiddleware> {
 	server_cfg: ServerConfig,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	http_middleware: tower::ServiceBuilder<HttpMiddleware>,
-	ip_addr: Option<IpAddr>,
 }
 
 impl Default for Builder<Identity, Identity> {
@@ -472,7 +469,6 @@ impl Default for Builder<Identity, Identity> {
 			server_cfg: ServerConfig::default(),
 			rpc_middleware: RpcServiceBuilder::new(),
 			http_middleware: tower::ServiceBuilder::new(),
-			ip_addr: None,
 		}
 	}
 }
@@ -481,12 +477,6 @@ impl Builder<Identity, Identity> {
 	/// Create a default server builder.
 	pub fn new() -> Self {
 		Self::default()
-	}
-
-	/// Set the address of the remote peer.
-	pub fn set_ip_addr(mut self, ip_addr: IpAddr) -> Self {
-		self.ip_addr = Some(ip_addr);
-		self
 	}
 }
 
@@ -507,7 +497,6 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 				conn_id,
 				conn_guard: self.conn_guard,
 				server_cfg: self.server_cfg,
-				ip_addr: self.ip_addr,
 			},
 			on_session_close: None,
 		};
@@ -537,7 +526,6 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 			http_middleware: self.http_middleware,
 			conn_id: self.conn_id,
 			conn_guard: self.conn_guard,
-			ip_addr: self.ip_addr,
 		}
 	}
 
@@ -552,19 +540,6 @@ impl<RpcMiddleware, HttpMiddleware> TowerServiceBuilder<RpcMiddleware, HttpMiddl
 			http_middleware,
 			conn_id: self.conn_id,
 			conn_guard: self.conn_guard,
-			ip_addr: self.ip_addr,
-		}
-	}
-
-	/// Set the address of the remote peer.
-	pub fn set_ip_addr(self, ip_addr: IpAddr) -> TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
-		TowerServiceBuilder {
-			server_cfg: self.server_cfg,
-			rpc_middleware: self.rpc_middleware,
-			http_middleware: self.http_middleware,
-			conn_id: self.conn_id,
-			conn_guard: self.conn_guard,
-			ip_addr: Some(ip_addr),
 		}
 	}
 }
@@ -662,12 +637,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// let builder = ServerBuilder::default().set_rpc_middleware(m);
 	/// ```
 	pub fn set_rpc_middleware<T>(self, rpc_middleware: RpcServiceBuilder<T>) -> Builder<HttpMiddleware, T> {
-		Builder {
-			server_cfg: self.server_cfg,
-			rpc_middleware,
-			http_middleware: self.http_middleware,
-			ip_addr: self.ip_addr,
-		}
+		Builder { server_cfg: self.server_cfg, rpc_middleware, http_middleware: self.http_middleware }
 	}
 
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
@@ -753,12 +723,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	/// ```
 	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
-		Builder {
-			server_cfg: self.server_cfg,
-			http_middleware,
-			rpc_middleware: self.rpc_middleware,
-			ip_addr: self.ip_addr,
-		}
+		Builder { server_cfg: self.server_cfg, http_middleware, rpc_middleware: self.rpc_middleware }
 	}
 
 	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
@@ -894,7 +859,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 			http_middleware: self.http_middleware,
 			conn_id: Arc::new(AtomicU32::new(0)),
 			conn_guard: ConnectionGuard::new(max_conns),
-			ip_addr: self.ip_addr,
 		}
 	}
 
@@ -976,8 +940,6 @@ struct ServiceData {
 	conn_guard: ConnectionGuard,
 	/// ServerConfig
 	server_cfg: ServerConfig,
-	/// IP address.
-	ip_addr: Option<IpAddr>,
 }
 
 /// jsonrpsee tower service
@@ -1086,15 +1048,6 @@ where
 		tracing::debug!(target: LOG_TARGET, "Accepting new connection {}/{}", curr_conns, max_conns);
 
 		request.extensions_mut().insert::<ConnectionId>(conn.conn_id.into());
-
-		if let Some(ip_addr) = self.inner.ip_addr {
-			// Only insert the remote address if it's not already set.
-			// We expect servers deployed behind a reverse proxy to set the remote address
-			// themselves otherwise the remote address will be the address of the reverse proxy.
-			if request.extensions().get::<IpAddr>().is_none() {
-				request.extensions_mut().insert(ip_addr);
-			}
-		}
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
@@ -1237,7 +1190,6 @@ where
 		stop_handle,
 		drop_on_completion,
 		methods,
-		remote_addr,
 		..
 	} = params;
 
@@ -1253,7 +1205,6 @@ where
 			stop_handle: stop_handle.clone(),
 			conn_id,
 			conn_guard: conn_guard.clone(),
-			ip_addr: Some(remote_addr.ip()),
 		},
 		rpc_middleware,
 		on_session_close: None,
