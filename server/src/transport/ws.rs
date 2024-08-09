@@ -1,10 +1,10 @@
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
 use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
+use crate::utils::PendingPings;
 use crate::{HttpBody, HttpRequest, HttpResponse, PingConfig, LOG_TARGET};
 
 use futures_util::future::{self, Either, Fuse};
@@ -354,7 +354,7 @@ where
 }
 
 #[derive(Debug, Copy, Clone)]
-enum KeepAlive {
+pub(crate) enum KeepAlive {
 	Ping(Instant),
 	Data(Instant),
 	Pong(Instant),
@@ -362,64 +362,29 @@ enum KeepAlive {
 
 async fn ping_pong_task(
 	mut rx: mpsc::Receiver<KeepAlive>,
-	max_inactive_limit: Duration,
+	max_inactivity_dur: Duration,
 	max_missed_pings: usize,
 	conn_id: u32,
 ) {
-	let mut polling_interval = IntervalStream::new(interval(max_inactive_limit));
-	let mut pending_pings: VecDeque<Instant> = VecDeque::new();
-	let mut missed_pings = 0;
+	let mut polling_interval = IntervalStream::new(interval(max_inactivity_dur));
+	let mut pending_pings = PendingPings::new(max_missed_pings, max_inactivity_dur, conn_id);
 
 	loop {
 		tokio::select! {
 			// If the ping is never answered, we use this timer as a fallback.
 			_ = polling_interval.next() => {
-				let mut remove = false;
-
-				if let Some(ping_start) = pending_pings.front() {
-					let elapsed = ping_start.elapsed();
-
-					if elapsed >= max_inactive_limit {
-						missed_pings += 1;
-						remove = true;
-						tracing::debug!(target: LOG_TARGET, "Ping/pong keep alive expired for conn_id={conn_id}, elapsed={}ms/max={}ms",  elapsed.as_millis(), max_inactive_limit.as_millis());
-					}
-
-					if missed_pings >= max_missed_pings {
-						tracing::debug!(target: LOG_TARGET, "Missed {missed_pings} ping/pongs for conn_id={conn_id}; closing connection");
-						break;
-					}
-				}
-
-				if remove {
-					pending_pings.pop_front();
+				if !pending_pings.check_pending(Instant::now()) {
+					break;
 				}
 			}
 			msg = rx.recv() => {
 				match msg {
 					Some(KeepAlive::Ping(start)) => {
-						pending_pings.push_back(start);
+						pending_pings.push(start);
 					}
 					Some(KeepAlive::Pong(end)) | Some(KeepAlive::Data(end)) => {
-						// Both pong and data are considered as a response to the ping.
-						// So we might get more responses than pings that's why it's possible
-						// that the pending_pings may be empty.
-						if let Some(start) = pending_pings.pop_front() {
-							// Calculate the round-trip time (RTT) of the ping/pong.
-							// We adjust for the time it took to send to this task.
-							let elapsed = start.elapsed().saturating_sub(end.elapsed());
-
-							if elapsed >= max_inactive_limit {
-								missed_pings += 1;
-								tracing::debug!(target: LOG_TARGET, "Ping/pong keep alive expired for conn_id={conn_id}, elapsed={}ms/max={}ms", elapsed.as_millis(), max_inactive_limit.as_millis());
-							}
-
-							tracing::trace!(target: LOG_TARGET, "ws_ping_pong_rtt={}ms, conn_id={conn_id}", elapsed.as_millis());
-
-							if missed_pings >= max_missed_pings {
-								tracing::debug!(target: LOG_TARGET, "Missed {missed_pings} ping/pongs for conn_id={conn_id}; closing connection");
-								break;
-							}
+						if !pending_pings.check_pending(end) {
+							break;
 						}
 					}
 					None => break,

@@ -24,11 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
 
-use crate::{HttpBody, HttpRequest};
+use crate::{HttpBody, HttpRequest, LOG_TARGET};
 
 use futures_util::future::{self, Either};
 use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -80,6 +82,50 @@ where
 	#[inline]
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		self.project().future.poll(cx)
+	}
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PendingPings {
+	list: VecDeque<Instant>,
+	max_missed_pings: usize,
+	missed_pings: usize,
+	max_inactivity_dur: Duration,
+	conn_id: u32,
+}
+
+impl PendingPings {
+	pub(crate) fn new(max_missed_pings: usize, max_inactivity_dur: Duration, conn_id: u32) -> Self {
+		Self { list: VecDeque::new(), max_missed_pings, max_inactivity_dur, missed_pings: 0, conn_id }
+	}
+
+	pub(crate) fn push(&mut self, instant: Instant) {
+		self.list.push_back(instant);
+	}
+
+	/// Returns `true` if the pong was answered in time, `false` otherwise.
+	pub(crate) fn check_pending(&mut self, end: Instant) -> bool {
+		for ping_start in self.list.drain(..) {
+			// Calculate the round-trip time (RTT) of the ping/pong.
+			// We adjust for the time when the pong was received.
+			let elapsed = ping_start.elapsed().saturating_sub(end.elapsed());
+
+			tracing::trace!(target: LOG_TARGET, "ws_ping_pong_rtt={}ms, conn_id={}", elapsed.as_millis(), self.conn_id);
+
+			if elapsed >= self.max_inactivity_dur {
+				self.missed_pings += 1;
+				tracing::debug!(target: LOG_TARGET, "Ping/pong keep alive expired for conn_id={}, elapsed={}ms/max={}ms",  self.conn_id, elapsed.as_millis(), self.max_inactivity_dur.as_millis());
+			} else {
+				self.missed_pings = 0;
+			}
+
+			if self.missed_pings >= self.max_missed_pings {
+				tracing::debug!(target: LOG_TARGET, "Missed {} ping/pongs for conn_id={}; closing connection", self.missed_pings, self.conn_id);
+				return false;
+			}
+		}
+
+		true
 	}
 }
 
@@ -161,5 +207,48 @@ pub(crate) mod deserialize {
 		let mut req: jsonrpsee_types::Request = serde_json::from_str(data)?;
 		*req.extensions_mut() = extensions;
 		Ok(req)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::PendingPings;
+	use std::time::Duration;
+
+	#[test]
+	fn pending_ping_works() {
+		let mut pending_pings = PendingPings::new(1, std::time::Duration::from_secs(1), 0);
+
+		pending_pings.push(std::time::Instant::now());
+		assert!(pending_pings.check_pending(std::time::Instant::now()));
+		assert!(pending_pings.list.is_empty());
+	}
+
+	#[test]
+	fn inactive_too_long() {
+		let mut pending_pings = PendingPings::new(2, std::time::Duration::from_millis(100), 0);
+
+		pending_pings.push(std::time::Instant::now());
+		pending_pings.push(std::time::Instant::now());
+
+		std::thread::sleep(Duration::from_millis(200));
+
+		assert!(!pending_pings.check_pending(std::time::Instant::now()));
+	}
+
+	#[test]
+	fn active_reset_counter() {
+		let mut pending_pings = PendingPings::new(2, std::time::Duration::from_millis(100), 0);
+
+		pending_pings.push(std::time::Instant::now());
+
+		std::thread::sleep(Duration::from_millis(200));
+
+		assert!(pending_pings.check_pending(std::time::Instant::now()));
+		assert_eq!(pending_pings.missed_pings, 1);
+
+		pending_pings.push(std::time::Instant::now());
+		assert!(pending_pings.check_pending(std::time::Instant::now()));
+		assert_eq!(pending_pings.missed_pings, 0);
 	}
 }
