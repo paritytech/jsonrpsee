@@ -479,7 +479,7 @@ impl Methods {
 
 	/// Insert extensions to the methods.
 	///
-	/// This only affects direct calls to the methods and subscriptions.
+	/// This only affects direct calls to the methods and subscriptions
 	/// and can be used for example to unit test the API without a server.
 	///
 	/// If an instance of a specific type exists in both, the one in self is
