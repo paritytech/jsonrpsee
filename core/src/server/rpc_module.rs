@@ -213,6 +213,7 @@ impl Debug for MethodCallback {
 #[derive(Default, Debug, Clone)]
 pub struct Methods {
 	callbacks: Arc<FxHashMap<&'static str, MethodCallback>>,
+	extensions: Option<Extensions>,
 }
 
 impl Methods {
@@ -366,11 +367,17 @@ impl Methods {
 		subscription_permit: SubscriptionPermit,
 	) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::channel(buf_size);
+		// The extensions is always empty when calling the method directly because decoding an JSON-RPC
+		// request doesn't have any extensions.
 		let Request { id, method, params, mut extensions, .. } = req;
 		let params = Params::new(params.as_ref().map(|params| params.as_ref().get()));
 		let max_response_size = usize::MAX;
 		let conn_id = ConnectionId(0);
 		extensions.insert(conn_id);
+
+		if let Some(other_ext) = self.extensions.as_ref() {
+			extensions.extend(other_ext.clone());
+		}
 
 		let response = match self.method(&method) {
 			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
@@ -468,6 +475,48 @@ impl Methods {
 	/// Returns an `Iterator` with all the method names registered on this server.
 	pub fn method_names(&self) -> impl Iterator<Item = &'static str> + '_ {
 		self.callbacks.keys().copied()
+	}
+
+	/// Insert extensions to the methods.
+	///
+	/// This only affects direct calls to the methods and subscriptions.
+	/// and can be used for example to unit test the API without a server.
+	///
+	/// If an instance of a specific type exists in both, the one in self is
+	/// overwritten with the one from other.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// #[tokio::main]
+	/// async fn main() {
+	///     use jsonrpsee::{RpcModule, IntoResponse, Extensions};
+	///     use jsonrpsee::core::RpcResult;
+	///
+	///     let mut module = RpcModule::new(());
+	///     module.register_method::<RpcResult<u64>, _>("magic_multiply", |params, _, ext| {
+	///         let magic = ext.get::<u64>().copied().unwrap();
+	///         let val = params.one::<u64>()?;
+	///         Ok(val * magic)
+	///     }).unwrap();
+	///
+	///     // inject arbitrary data into the extensions.
+	/// 	let mut ext = Extensions::new();
+	/// 	ext.insert(33_u64);
+	///
+	///     module.with_extensions(ext);
+	///
+	///     let magic: u64 = module.call("magic_multiply", [1_u64]).await.unwrap();
+	///     assert_eq!(magic, 33);
+	/// }
+	/// ```
+
+	pub fn with_extensions(&mut self, extensions: Extensions) {
+		if let Some(other_ext) = self.extensions.as_mut() {
+			other_ext.extend(extensions);
+		} else {
+			self.extensions = Some(extensions);
+		}
 	}
 }
 
