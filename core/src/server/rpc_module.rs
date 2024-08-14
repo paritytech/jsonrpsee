@@ -501,8 +501,8 @@ impl Methods {
 	///     }).unwrap();
 	///
 	///     // inject arbitrary data into the extensions.
-	/// 	let mut ext = Extensions::new();
-	/// 	ext.insert(33_u64);
+	///     let mut ext = Extensions::new();
+	///     ext.insert(33_u64);
 	///
 	///     module.with_extensions(ext);
 	///
