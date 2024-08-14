@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog].
 ## [v0.24.3] - 2024-08-14
 
 This is a small release that adds two new APIs to inject data into the extensions to the RpcModule/Methods
-and only impacts users that are using RpcModule directly via `Methods::call/subscribe/raw_json_request` (e.g., unit testing) and not the server itself.
+and it only impacts users that are using RpcModule directly via `Methods::call/subscribe/raw_json_request` (e.g., unit testing) and not the server itself.
 
 ### [Added]
 - feat(server): add `Methods::extensions/extensions_mut` ([#1440](https://github.com/paritytech/jsonrpsee/pull/1440))
