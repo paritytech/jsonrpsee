@@ -213,7 +213,7 @@ impl Debug for MethodCallback {
 #[derive(Default, Debug, Clone)]
 pub struct Methods {
 	callbacks: Arc<FxHashMap<&'static str, MethodCallback>>,
-	extensions: Option<Extensions>,
+	extensions: Extensions,
 }
 
 impl Methods {
@@ -369,26 +369,24 @@ impl Methods {
 		let (tx, mut rx) = mpsc::channel(buf_size);
 		// The extensions is always empty when calling the method directly because decoding an JSON-RPC
 		// request doesn't have any extensions.
-		let Request { id, method, params, mut extensions, .. } = req;
+		let Request { id, method, params, .. } = req;
 		let params = Params::new(params.as_ref().map(|params| params.as_ref().get()));
 		let max_response_size = usize::MAX;
 		let conn_id = ConnectionId(0);
-		extensions.insert(conn_id);
+		let mut ext = self.extensions.clone();
 
-		if let Some(other_ext) = self.extensions.as_ref() {
-			extensions.extend(other_ext.clone());
-		}
+		ext.insert(conn_id);
 
 		let response = match self.method(&method) {
 			None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
-			Some(MethodCallback::Sync(cb)) => (cb)(id, params, max_response_size, extensions),
+			Some(MethodCallback::Sync(cb)) => (cb)(id, params, max_response_size, ext),
 			Some(MethodCallback::Async(cb)) => {
-				(cb)(id.into_owned(), params.into_owned(), conn_id, max_response_size, extensions).await
+				(cb)(id.into_owned(), params.into_owned(), conn_id, max_response_size, ext).await
 			}
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id, id_provider: &RandomIntegerIdProvider, subscription_permit };
-				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state, extensions).await;
+				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state, ext).await;
 
 				// This message is not used because it's used for metrics so we discard in other to
 				// not read once this is used for subscriptions.
@@ -398,7 +396,7 @@ impl Methods {
 
 				res
 			}
-			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, conn_id, max_response_size, extensions),
+			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, conn_id, max_response_size, ext),
 		};
 
 		let is_success = response.is_success();
@@ -477,13 +475,16 @@ impl Methods {
 		self.callbacks.keys().copied()
 	}
 
-	/// Insert extensions to the methods.
+	/// Similar to [`Methods::extensions_mut`] but it's immutable.
+	pub fn extensions(&mut self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Get a mutable reference to the extensions to add or remove data from
+	/// the extensions.
 	///
 	/// This only affects direct calls to the methods and subscriptions
 	/// and can be used for example to unit test the API without a server.
-	///
-	/// If an instance of a specific type exists in both, the one in self is
-	/// overwritten with the one from other.
 	///
 	/// # Examples
 	///
@@ -501,22 +502,14 @@ impl Methods {
 	///     }).unwrap();
 	///
 	///     // inject arbitrary data into the extensions.
-	///     let mut ext = Extensions::new();
-	///     ext.insert(33_u64);
-	///
-	///     module.with_extensions(ext);
+	///     module.extensions_mut().insert(33_u64);
 	///
 	///     let magic: u64 = module.call("magic_multiply", [1_u64]).await.unwrap();
 	///     assert_eq!(magic, 33);
 	/// }
 	/// ```
-
-	pub fn with_extensions(&mut self, extensions: Extensions) {
-		if let Some(other_ext) = self.extensions.as_mut() {
-			other_ext.extend(extensions);
-		} else {
-			self.extensions = Some(extensions);
-		}
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 
