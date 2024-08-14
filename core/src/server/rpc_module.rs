@@ -374,7 +374,6 @@ impl Methods {
 		let max_response_size = usize::MAX;
 		let conn_id = ConnectionId(0);
 		let mut ext = self.extensions.clone();
-
 		ext.insert(conn_id);
 
 		let response = match self.method(&method) {
