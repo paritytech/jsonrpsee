@@ -39,8 +39,7 @@ use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
-	serve_with_graceful_shutdown, stop_channel, PendingSubscriptionSink, RpcModule, RpcServiceBuilder, Server,
-	ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
+	serve_with_graceful_shutdown, stop_channel, ConnectionGuard, PendingSubscriptionSink, RpcModule, RpcServiceBuilder, Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::{Methods, SubscriptionCloseResponse};
@@ -165,6 +164,8 @@ pub async fn server() -> SocketAddr {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 	module.register_method("get_connection_id", |_, _, ext| *ext.get::<u32>().unwrap()).unwrap();
+	module.register_method("get_available_connections", |_, _, ext| ext.get::<ConnectionGuard>().unwrap().available_connections()).unwrap();
+	module.register_method("get_max_connections", |_, _, ext| ext.get::<ConnectionGuard>().unwrap().max_connections()).unwrap();
 
 	module
 		.register_async_method("slow_hello", |_, _, _| async {
