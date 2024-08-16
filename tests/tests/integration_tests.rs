@@ -235,14 +235,16 @@ async fn connection_guard_extension_with_different_ws_clients() {
 	// First connected retrieves initial information from ConnectionGuard.
 	let first_client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let first_max_connections: usize = first_client.request("get_max_connections", rpc_params![]).await.unwrap();
-	let first_available_connections: usize = first_client.request("get_available_connections", rpc_params![]).await.unwrap();
+	let first_available_connections: usize =
+		first_client.request("get_available_connections", rpc_params![]).await.unwrap();
 
 	assert_eq!(first_available_connections, first_max_connections - 1);
 
 	// Second client ensure max connections stays the same, but available connections is decreased.
 	let second_client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let second_max_connections: usize = second_client.request("get_max_connections", rpc_params![]).await.unwrap();
-	let second_available_connections: usize = second_client.request("get_available_connections", rpc_params![]).await.unwrap();
+	let second_available_connections: usize =
+		second_client.request("get_available_connections", rpc_params![]).await.unwrap();
 
 	assert_eq!(second_max_connections, first_max_connections);
 	assert_eq!(second_available_connections, second_max_connections - 2);
