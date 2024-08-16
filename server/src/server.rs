@@ -1047,7 +1047,9 @@ where
 		let curr_conns = max_conns - conn_guard.available_connections();
 		tracing::debug!(target: LOG_TARGET, "Accepting new connection {}/{}", curr_conns, max_conns);
 
-		request.extensions_mut().insert::<ConnectionId>(conn.conn_id.into());
+		let req_ext = request.extensions_mut();
+		req_ext.insert::<ConnectionGuard>(conn_guard.clone());
+		req_ext.insert::<ConnectionId>(conn.conn_id.into());
 
 		let is_upgrade_request = is_upgrade_request(&request);
 
