@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.20.4] - 2024-08-24
+
+This release enables HTTP/2 for http client which is backward compatible and
+pure HTTP/1 connections will still work.
+
+### [Changed]
+- client: enable http2 for http client ([#1445](https://github.com/paritytech/jsonrpsee/pull/1445))
+
 ## [v0.20.3] - 2023-10-24
 
 This release fixes a cancel-safety issue in the server's graceful shutdown which could lead to high CPU usage.
