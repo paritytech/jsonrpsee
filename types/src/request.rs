@@ -41,6 +41,7 @@ use serde_json::value::RawValue;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Request<'a> {
 	/// JSON-RPC version.
+	#[cfg_attr(feature = "lenient", serde(default))]
 	pub jsonrpc: TwoPointZero,
 	/// Request ID
 	#[serde(borrow)]
@@ -101,6 +102,7 @@ pub struct InvalidRequest<'a> {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Notification<'a, T> {
 	/// JSON-RPC version.
+	#[cfg_attr(feature = "lenient", serde(default))]
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
 	#[serde(borrow)]
@@ -237,6 +239,16 @@ mod test {
 	#[test]
 	fn deserialize_call_bad_id_should_fail() {
 		let ser = r#"{"jsonrpc":"2.0","method":"say_hello","params":[],"id":{}}"#;
+		assert!(serde_json::from_str::<Request>(ser).is_err());
+	}
+
+	#[test]
+	fn deserialize_missing_jsonrpc_field() {
+		let ser = r#"{"method":"say_hello","params":[],"id":1}"#;
+		#[cfg(feature = "lenient")]
+		assert!(serde_json::from_str::<Request>(ser).is_ok());
+
+		#[cfg(not(feature = "lenient"))]
 		assert!(serde_json::from_str::<Request>(ser).is_err());
 	}
 
