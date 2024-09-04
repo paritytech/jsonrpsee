@@ -101,10 +101,10 @@ pub type RawRpcResponse = (String, mpsc::Receiver<String>);
 #[derive(thiserror::Error, Debug)]
 pub enum MethodsError {
 	/// Failed to parse the call as valid JSON-RPC.
-	#[error("{0}")]
+	#[error(transparent)]
 	Parse(#[from] serde_json::Error),
 	/// Specific JSON-RPC error.
-	#[error("{0}")]
+	#[error(transparent)]
 	JsonRpc(#[from] ErrorObjectOwned),
 	#[error("Invalid subscription ID: `{0}`")]
 	/// Invalid subscription ID.

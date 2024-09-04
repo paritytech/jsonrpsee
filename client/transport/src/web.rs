@@ -20,7 +20,7 @@ pub enum Error {
 	#[error("JS Error: {0:?}")]
 	Js(String),
 	/// WebSocket error
-	#[error("{0}")]
+	#[error(transparent)]
 	WebSocket(WebSocketError),
 	/// Operation not supported
 	#[error("Operation not supported")]

@@ -364,7 +364,7 @@ pub enum Error {
 	Url(String),
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
-	#[error("{0}")]
+	#[error(transparent)]
 	Http(#[from] HttpError),
 
 	/// Server returned a non-success status code.

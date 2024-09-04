@@ -49,7 +49,7 @@ pub enum Error {
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionId,
 	/// Invalid request ID.
-	#[error("{0}")]
+	#[error(transparent)]
 	InvalidRequestId(#[from] InvalidRequestId),
 	/// Request timeout
 	#[error("Request timeout")]
@@ -61,9 +61,9 @@ pub enum Error {
 	#[error("Not implemented")]
 	HttpNotImplemented,
 	/// Empty batch request.
-	#[error("{0}")]
+	#[error(transparent)]
 	EmptyBatchRequest(#[from] EmptyBatchRequest),
 	/// The error returned when registering a method or subscription failed.
-	#[error("{0}")]
+	#[error(transparent)]
 	RegisterMethod(#[from] RegisterMethodError),
 }

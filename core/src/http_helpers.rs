@@ -115,7 +115,7 @@ pub enum HttpError {
 	#[error("Malformed request")]
 	Malformed,
 	/// Represents error that can happen when dealing with HTTP streams.
-	#[error("{0}")]
+	#[error(transparent)]
 	Stream(#[from] BoxError),
 }
 
