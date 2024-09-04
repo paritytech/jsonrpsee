@@ -45,10 +45,10 @@ pub struct Authority {
 #[derive(Debug, thiserror::Error)]
 pub enum AuthorityError {
 	/// Invalid URI.
-	#[error("{0}")]
+	#[error(transparent)]
 	InvalidUri(InvalidUri),
 	/// Invalid port.
-	#[error("{0}")]
+	#[error("Invalid port: {0}")]
 	InvalidPort(String),
 	/// The host was not found.
 	#[error("The host was not found")]

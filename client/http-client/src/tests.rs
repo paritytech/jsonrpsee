@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::types::error::{ErrorCode, ErrorObject};
-
 use crate::HttpClientBuilder;
 use jsonrpsee_core::client::{BatchResponse, ClientT, IdKind};
 use jsonrpsee_core::params::BatchRequestBuilder;
