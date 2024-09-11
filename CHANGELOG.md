@@ -4,6 +4,17 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.4] - 2024-09-11
+
+This is non-breaking release that changes the error variants to be `thiserror(transparent)` for wrapped errors and adds ConnectionGuard to
+the extensions to make it possible to get the number of active connections.
+
+### [Added]
+- server: expose ConnectionGuard as request extension ([#1443](https://github.com/paritytech/jsonrpsee/pull/1443))
+
+### [Fixed]
+- types: use error(transparent) for wrapped errors when possible ([#1449](https://github.com/paritytech/jsonrpsee/pull/1449))
+
 ## [v0.24.3] - 2024-08-14
 
 This is a small release that adds two new APIs to inject data via the extensions to the `RpcModule/Methods`

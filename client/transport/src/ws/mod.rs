@@ -358,8 +358,14 @@ impl WsTransportClientBuilder {
 
 			for sockaddr in &sockaddrs {
 				#[cfg(feature = "tls")]
-				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref(), self.tcp_no_delay)
-					.await
+				let tcp_stream = match connect(
+					*sockaddr,
+					self.connection_timeout,
+					&target.host,
+					connector.as_ref(),
+					self.tcp_no_delay,
+				)
+				.await
 				{
 					Ok(stream) => stream,
 					Err(e) => {
