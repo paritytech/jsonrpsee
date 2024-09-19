@@ -46,7 +46,7 @@ See [our tracking milestone](https://github.com/paritytech/jsonrpsee/milestone/2
 If your project uses `jsonrpsee` we would like to know. Please open a pull request and add your project to the list below:
 - [parity bridges common](https://github.com/paritytech/parity-bridges-common)
 - [remote externalities](https://github.com/paritytech/substrate/tree/master/utils/frame/remote-externalities)
-- [substrate](https://github.com/paritytech/substrate)
+- [polkadot-sdk](https://github.com/paritytech/polkadot-sdk)
 - [substrate-api-client](https://github.com/scs/substrate-api-client)
 - [subwasm](https://github.com/chevdor/subwasm)
 - [subway](https://github.com/AcalaNetwork/subway)
