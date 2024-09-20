@@ -136,7 +136,7 @@ pub mod response {
 	pub fn method_not_allowed() -> HttpResponse {
 		from_template(
 			hyper::StatusCode::METHOD_NOT_ALLOWED,
-			"Used HTTP Method is not allowed. POST or OPTIONS is required\n",
+			"Used HTTP Method is not allowed. POST is required\n",
 			TEXT,
 		)
 	}
