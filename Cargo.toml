@@ -20,7 +20,7 @@ resolver = "2"
 
 [workspace.package]
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
-version = "0.24.4"
+version = "0.24.5"
 edition = "2021"
 rust-version = "1.74.1"
 license = "MIT"
@@ -31,11 +31,11 @@ keywords = ["jsonrpc", "json", "http", "websocket", "WASM"]
 readme = "README.md"
 
 [workspace.dependencies]
-jsonrpsee-types = { path = "types", version = "0.24.4" }
-jsonrpsee-core = { path = "core", version = "0.24.4" }
-jsonrpsee-server = { path = "server", version = "0.24.4" }
-jsonrpsee-ws-client = { path = "client/ws-client", version = "0.24.4" }
-jsonrpsee-http-client = { path = "client/http-client", version = "0.24.4" }
-jsonrpsee-wasm-client = { path = "client/wasm-client", version = "0.24.4" }
-jsonrpsee-client-transport = { path = "client/transport", version = "0.24.4" }
-jsonrpsee-proc-macros = { path = "proc-macros", version = "0.24.4" }
+jsonrpsee-types = { path = "types", version = "0.24.5" }
+jsonrpsee-core = { path = "core", version = "0.24.5" }
+jsonrpsee-server = { path = "server", version = "0.24.5" }
+jsonrpsee-ws-client = { path = "client/ws-client", version = "0.24.5" }
+jsonrpsee-http-client = { path = "client/http-client", version = "0.24.5" }
+jsonrpsee-wasm-client = { path = "client/wasm-client", version = "0.24.5" }
+jsonrpsee-client-transport = { path = "client/transport", version = "0.24.5" }
+jsonrpsee-proc-macros = { path = "proc-macros", version = "0.24.5" }

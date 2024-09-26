@@ -4,6 +4,16 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.5] - 2024-09-26
+
+This is patch release that mainly fixes a compilation issue when using the `tower/util` feature was not enabled.
+
+### [Fixed]
+- server: Enable tower util feature ([#1464](https://github.com/paritytech/jsonrpsee/pull/1464))
+
+### [Changed]
+- server: change `http method_not_allowed` message ([#1452](https://github.com/paritytech/jsonrpsee/pull/1452))
+
 ## [v0.24.4] - 2024-09-11
 
 This is non-breaking release that changes the error variants to be `thiserror(transparent)` for wrapped errors and adds ConnectionGuard to
