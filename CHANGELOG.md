@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.24.5] - 2024-09-26
 
-This is patch release that mainly fixes a compilation issue when using the `tower/util` feature was not enabled.
+This is patch release that mainly fixes a compilation issue for the server because the feature `tower/util` was not enabled.
 
 ### [Fixed]
 - server: Enable tower util feature ([#1464](https://github.com/paritytech/jsonrpsee/pull/1464))
