@@ -29,7 +29,7 @@ hyper-util = { version = "0.1", features = ["tokio", "service", "tokio", "server
 http = "1"
 http-body = "1"
 http-body-util = "0.1.0"
-tower = "0.4.13"
+tower = { version = "0.4.13", features = ["util"] }
 thiserror = "1"
 route-recognizer = "0.3.1"
 pin-project = "1.1.3"
