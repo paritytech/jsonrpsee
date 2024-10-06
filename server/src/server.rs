@@ -1146,12 +1146,17 @@ where
 				RpcServiceCfg::OnlyCalls,
 			));
 
-			Box::pin(
-				http::call_with_service(request, batch_config, max_request_size, rpc_service, max_response_size)
-					.map(Ok),
-			)
+			Box::pin(async move {
+				let rp =
+					http::call_with_service(request, batch_config, max_request_size, rpc_service, max_response_size)
+						.await;
+				drop(conn);
+				Ok(rp)
+			})
 		} else {
-			Box::pin(async { http::response::denied() }.map(Ok))
+			let rp = http::response::denied();
+			drop(conn);
+			Box::pin(async { Ok(rp) })
 		}
 	}
 }
