@@ -1551,7 +1551,7 @@ async fn http_connection_guard_works() {
 
 	init_logger();
 
-	let (tx, rx) = mpsc::channel::<()>(1);
+	let (tx, mut rx) = mpsc::channel::<()>(1);
 
 	let server_url = {
 		let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
@@ -1560,6 +1560,7 @@ async fn http_connection_guard_works() {
 
 		module
 			.register_async_method("wait_until", |_, wait, _| async move {
+				wait.send(()).await.unwrap();
 				wait.closed().await;
 				true
 			})
@@ -1587,6 +1588,10 @@ async fn http_connection_guard_works() {
 			})
 		})
 		.collect();
+
+	// Wait until both calls are ACK:ed by the server.
+	rx.recv().await.unwrap();
+	rx.recv().await.unwrap();
 
 	// Assert that two calls are waiting to be answered and the current one.
 	{
