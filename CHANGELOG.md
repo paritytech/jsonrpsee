@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.6] - 2024-10-07
+
+This is a bug-fix release that fixes that the `ConnectionGuard` was dropped before the future was resolved which,
+could lead to that HTTP calls were not counted correctly in the `ConnectionGuard`. This impacts only the server.
+
+### [Fixed]
+- fix(server): count http calls in connection guard ([#1468](https://github.com/paritytech/jsonrpsee/pull/1468))
+
 ## [v0.24.5] - 2024-09-26
 
 This is a patch release that mainly fixes a compilation issue for the server because the feature `tower/util` was not enabled.
