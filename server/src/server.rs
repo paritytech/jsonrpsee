@@ -1150,13 +1150,15 @@ where
 				let rp =
 					http::call_with_service(request, batch_config, max_request_size, rpc_service, max_response_size)
 						.await;
+				// NOTE: The `conn guard` must be held until the response is processed
+				// to respect the `max_connections` limit.
 				drop(conn);
 				Ok(rp)
 			})
 		} else {
-			let rp = http::response::denied();
-			drop(conn);
-			Box::pin(async { Ok(rp) })
+			// NOTE: the `conn guard` is dropped when this function which is fine
+			// because it doesn't rely on any async operations.
+			Box::pin(async { Ok(http::response::denied()) })
 		}
 	}
 }
