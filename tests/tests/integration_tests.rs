@@ -50,7 +50,7 @@ use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{JsonValue, StringError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
+use jsonrpsee::server::{ConnectionGuard, ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, ResponsePayload, RpcModule};
@@ -1541,5 +1541,73 @@ async fn server_ws_low_api_works() {
 		tokio::spawn(server_handle.stopped());
 
 		Ok(local_addr)
+	}
+}
+
+#[tokio::test]
+async fn http_connection_guard_works() {
+	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use tokio::sync::mpsc;
+
+	init_logger();
+
+	let (tx, mut rx) = mpsc::channel::<()>(1);
+
+	let server_url = {
+		let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+		let server_url = format!("http://{}", server.local_addr().unwrap());
+		let mut module = RpcModule::new(tx);
+
+		module
+			.register_async_method("wait_until", |_, wait, _| async move {
+				wait.send(()).await.unwrap();
+				wait.closed().await;
+				true
+			})
+			.unwrap();
+
+		module
+			.register_async_method("connection_count", |_, _, ctx| async move {
+				let conn = ctx.get::<ConnectionGuard>().unwrap();
+				conn.max_connections() - conn.available_connections()
+			})
+			.unwrap();
+
+		let handle = server.start(module);
+
+		tokio::spawn(handle.stopped());
+
+		server_url
+	};
+
+	let waiting_calls: Vec<_> = (0..2)
+		.map(|_| {
+			let client = HttpClientBuilder::default().build(&server_url).unwrap();
+			tokio::spawn(async move {
+				let _ = client.request::<bool, ArrayParams>("wait_until", rpc_params!()).await;
+			})
+		})
+		.collect();
+
+	// Wait until both calls are ACK:ed by the server.
+	rx.recv().await.unwrap();
+	rx.recv().await.unwrap();
+
+	// Assert that two calls are waiting to be answered and the current one.
+	{
+		let client = HttpClientBuilder::default().build(&server_url).unwrap();
+		let conn_count = client.request::<usize, ArrayParams>("connection_count", rpc_params!()).await.unwrap();
+		assert_eq!(conn_count, 3);
+	}
+
+	// Complete the waiting calls.
+	drop(rx);
+	futures::future::join_all(waiting_calls).await;
+
+	// Assert that connection count is back to 1.
+	{
+		let client = HttpClientBuilder::default().build(&server_url).unwrap();
+		let conn_count = client.request::<usize, ArrayParams>("connection_count", rpc_params!()).await.unwrap();
+		assert_eq!(conn_count, 1);
 	}
 }
