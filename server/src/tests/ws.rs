@@ -569,16 +569,17 @@ async fn custom_subscription_id_works() {
 	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _, _| async {
-			let sink = sink.accept().await.unwrap();
-
-			assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
-
-			loop {
-				let _ = &sink;
-				tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-			}
-		})
+		.register_subscription::<(), _, _>(
+			"subscribe_hello",
+			"subscribe_hello",
+			"unsubscribe_hello",
+			|_, sink, _, _| async {
+				let sink = sink.accept().await.unwrap();
+				assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
+				// Keep idle until it's unsubscribed.
+				futures_util::future::pending::<()>().await;
+			},
+		)
 		.unwrap();
 	let _handle = server.start(module);
 
