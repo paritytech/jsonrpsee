@@ -27,7 +27,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::{RpcServiceBuilder, Server};
+use jsonrpsee::server::{PingConfig, RpcServiceBuilder, Server};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, RpcModule};
 use tracing_subscriber::util::SubscriberInitExt;
@@ -51,7 +51,11 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024);
-	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
+	let server = Server::builder()
+		.enable_ws_ping(PingConfig::new())
+		.set_rpc_middleware(rpc_middleware)
+		.build("127.0.0.1:0")
+		.await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _, _| "lo")?;
 	let addr = server.local_addr()?;
