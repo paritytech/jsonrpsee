@@ -89,6 +89,13 @@ pub struct HttpClientBuilder<L = Identity> {
 }
 
 impl<L> HttpClientBuilder<L> {
+
+	/// Set the maximum number of concurrent requests. Default is 256.
+	pub fn max_concurrent_requests(mut self, max_concurrent_requests: usize) -> Self {
+		self.max_concurrent_requests = max_concurrent_requests;
+		self
+	}
+
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_size(mut self, size: u32) -> Self {
 		self.max_request_size = size;
