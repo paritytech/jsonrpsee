@@ -78,7 +78,6 @@ pub struct HttpClientBuilder<L = Identity> {
 	max_request_size: u32,
 	max_response_size: u32,
 	request_timeout: Duration,
-	max_concurrent_requests: usize,
 	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
@@ -216,7 +215,6 @@ impl<L> HttpClientBuilder<L> {
 			id_kind: self.id_kind,
 			headers: self.headers,
 			max_log_length: self.max_log_length,
-			max_concurrent_requests: self.max_concurrent_requests,
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			service_builder,
@@ -273,7 +271,6 @@ impl Default for HttpClientBuilder<Identity> {
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
-			max_concurrent_requests: 256,
 			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
