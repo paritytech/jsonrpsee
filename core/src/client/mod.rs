@@ -468,8 +468,6 @@ impl RequestIdManager {
 	}
 
 	/// Attempts to get the next request ID.
-	///
-	/// Fails if request limit has been exceeded.
 	pub fn next_request_id(&self) -> Id<'static> {
 		self.id_kind.into_id(self.current_id.next())
 	}
