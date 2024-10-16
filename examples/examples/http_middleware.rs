@@ -40,6 +40,7 @@ use jsonrpsee::rpc_params;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::time::Duration;
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
@@ -107,6 +108,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		// Mark the `Authorization` request header as sensitive so it doesn't show in logs
 		.layer(SetSensitiveRequestHeadersLayer::new(once(hyper::header::AUTHORIZATION)))
 		.layer(cors)
+		.layer(CompressionLayer::new())
 		.timeout(Duration::from_secs(2));
 
 	let server =
