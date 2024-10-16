@@ -4,7 +4,7 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
-## Unrelease
+## [v0.24.7]
 
 ### [Fixed]
 - fix(server): compatibility issue of CompressionLayer in http middleware ([#1475](https://github.com/paritytech/jsonrpsee/pull/1475))
