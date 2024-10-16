@@ -43,6 +43,7 @@ use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
+use tokio::sync::Semaphore;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::instrument;
@@ -78,7 +79,6 @@ pub struct HttpClientBuilder<L = Identity> {
 	max_request_size: u32,
 	max_response_size: u32,
 	request_timeout: Duration,
-	max_concurrent_requests: usize,
 	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
@@ -86,6 +86,7 @@ pub struct HttpClientBuilder<L = Identity> {
 	headers: HeaderMap,
 	service_builder: tower::ServiceBuilder<L>,
 	tcp_no_delay: bool,
+	max_concurrent_requests: Option<usize>,
 }
 
 impl<L> HttpClientBuilder<L> {
@@ -104,6 +105,12 @@ impl<L> HttpClientBuilder<L> {
 	/// Set request timeout (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
+		self
+	}
+
+	/// Set the maximum number of concurrent requests. Default disabled.
+	pub fn max_concurrent_requests(mut self, max_concurrent_requests: usize) -> Self {
+		self.max_concurrent_requests = Some(max_concurrent_requests);
 		self
 	}
 
@@ -216,12 +223,12 @@ impl<L> HttpClientBuilder<L> {
 			id_kind: self.id_kind,
 			headers: self.headers,
 			max_log_length: self.max_log_length,
-			max_concurrent_requests: self.max_concurrent_requests,
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			service_builder,
 			request_timeout: self.request_timeout,
 			tcp_no_delay: self.tcp_no_delay,
+			max_concurrent_requests: self.max_concurrent_requests,
 		}
 	}
 }
@@ -263,7 +270,16 @@ where
 		.build(target)
 		.map_err(|e| Error::Transport(e.into()))?;
 
-		Ok(HttpClient { transport, id_manager: Arc::new(RequestIdManager::new(id_kind)), request_timeout })
+		let request_guard = self
+			.max_concurrent_requests
+			.map(|max_concurrent_requests| Arc::new(Semaphore::new(max_concurrent_requests)));
+
+		Ok(HttpClient {
+			transport,
+			id_manager: Arc::new(RequestIdManager::new(id_kind)),
+			request_timeout,
+			request_guard,
+		})
 	}
 }
 
@@ -273,7 +289,6 @@ impl Default for HttpClientBuilder<Identity> {
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
-			max_concurrent_requests: 256,
 			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
@@ -281,6 +296,7 @@ impl Default for HttpClientBuilder<Identity> {
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
 			tcp_no_delay: true,
+			max_concurrent_requests: None,
 		}
 	}
 }
@@ -301,6 +317,8 @@ pub struct HttpClient<S = HttpBackend> {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
+	/// Concurrent requests limit guard.
+	request_guard: Option<Arc<Semaphore>>,
 }
 
 impl HttpClient<HttpBackend> {
@@ -324,6 +342,10 @@ where
 	where
 		Params: ToRpcParams + Send,
 	{
+		let _permit = match self.request_guard.as_ref() {
+			Some(permit) => permit.acquire().await.ok(),
+			None => None,
+		};
 		let params = params.to_rpc_params()?;
 		let notif =
 			serde_json::to_string(&NotificationSer::borrowed(&method, params.as_deref())).map_err(Error::ParseError)?;
@@ -343,6 +365,10 @@ where
 		R: DeserializeOwned,
 		Params: ToRpcParams + Send,
 	{
+		let _permit = match self.request_guard.as_ref() {
+			Some(permit) => permit.acquire().await.ok(),
+			None => None,
+		};
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
@@ -378,6 +404,10 @@ where
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
+		let _permit = match self.request_guard.as_ref() {
+			Some(permit) => permit.acquire().await.ok(),
+			None => None,
+		};
 		let batch = batch.build()?;
 		let id = self.id_manager.next_request_id();
 		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
