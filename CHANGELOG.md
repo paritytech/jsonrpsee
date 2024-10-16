@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog].
 ## [v0.24.7]
 
 ### [Fixed]
-- fix(server): compatibility issue of CompressionLayer in http middleware ([#1475](https://github.com/paritytech/jsonrpsee/pull/1475))
+- fix(server): make tower::Service impl generic over HttpBody ([#1475](https://github.com/paritytech/jsonrpsee/pull/1475))
 
 ## [v0.24.6] - 2024-10-07
 
