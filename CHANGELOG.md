@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.24.7]
 
+This is a bug-fix release that fixes the tower::Service implementation to be generic over the HttpBody to work with all middleware layers. For instance, this makes `tower_http::compression::CompressionLayer` work, which didn't compile before.
 ### [Fixed]
 - fix(server): make tower::Service impl generic over HttpBody ([#1475](https://github.com/paritytech/jsonrpsee/pull/1475))
 
