@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.7]
+
+This is a bug-fix release that fixes the tower::Service implementation to be generic over the HttpBody to work with all middleware layers. 
+For instance, this makes `tower_http::compression::CompressionLayer` work, which didn't compile before.
+
+### [Fixed]
+- fix(server): make tower::Service impl generic over HttpBody ([#1475](https://github.com/paritytech/jsonrpsee/pull/1475))
+
 ## [v0.24.6] - 2024-10-07
 
 This is a bug-fix release that fixes that the `ConnectionGuard` was dropped before the future was resolved which,

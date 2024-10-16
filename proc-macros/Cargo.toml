@@ -33,4 +33,4 @@ serde_json = "1"
 serde = "1"
 trybuild = "1.0.97"
 tokio = { version = "1.23.1", features = ["rt", "macros"] }
-tower = "0.4"
+tower = { workspace = true }
