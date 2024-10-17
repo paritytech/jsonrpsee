@@ -4,6 +4,19 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.7] - 2024-10-16
+
+This is a patch release that mainly fixes the tower::Service implementation to be generic over the HttpBody to work with all middleware layers.
+For instance, this makes `tower_http::compression::CompressionLayer` work, which didn't compile before.
+
+### [Added]
+- http client: add `max_concurrent_requests` ([#1473](https://github.com/paritytech/jsonrpsee/pull/1473))
+
+### [Fixed]
+- fix(server): make tower::Service impl generic over HttpBody ([#1475](https://github.com/paritytech/jsonrpsee/pull/1475))
+
+Thanks to the external contributor [@hanabi1224](https://github.com/hanabi1224) who contributed to this release.
+
 ## [v0.24.6] - 2024-10-07
 
 This is a bug-fix release that fixes that the `ConnectionGuard` was dropped before the future was resolved which,

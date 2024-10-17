@@ -48,6 +48,7 @@ use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};
 use jsonrpsee::{MethodResponse, Methods};
 use tokio::net::TcpListener;
 use tower::Service;
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -202,6 +203,7 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 				let transport_label = if is_websocket { "ws" } else { "http" };
 				let PerConnection { methods, stop_handle, metrics, svc_builder } = per_conn2.clone();
 
+				let http_middleware = tower::ServiceBuilder::new().layer(CompressionLayer::new());
 				// NOTE, the rpc middleware must be initialized here to be able to created once per connection
 				// with data from the connection such as the headers in this example
 				let headers = req.headers().clone();
@@ -209,7 +211,10 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 					AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
 				});
 
-				let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
+				let mut svc = svc_builder
+					.set_http_middleware(http_middleware)
+					.set_rpc_middleware(rpc_middleware)
+					.build(methods, stop_handle);
 
 				if is_websocket {
 					// Utilize the session close future to know when the actual WebSocket

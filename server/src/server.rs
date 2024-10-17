@@ -970,20 +970,20 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 	}
 }
 
-impl<Body, RpcMiddleware, HttpMiddleware> Service<HttpRequest<Body>> for TowerService<RpcMiddleware, HttpMiddleware>
+impl<RequestBody, ResponseBody, RpcMiddleware, HttpMiddleware> Service<HttpRequest<RequestBody>> for TowerService<RpcMiddleware, HttpMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
 	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
-		Send + Service<HttpRequest<Body>, Response = HttpResponse, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
-	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<Body>>>::Future:
+		Send + Service<HttpRequest<RequestBody>, Response = HttpResponse<ResponseBody>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<RequestBody>>>::Future:
 		Send + 'static,
-	Body: http_body::Body<Data = Bytes> + Send + 'static,
-	Body::Error: Into<BoxError>,
+	RequestBody: http_body::Body<Data = Bytes> + Send + 'static,
+	RequestBody::Error: Into<BoxError>,
 {
-	type Response = HttpResponse;
+	type Response = HttpResponse<ResponseBody>;
 	type Error = BoxError;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -991,7 +991,7 @@ where
 		Poll::Ready(Ok(()))
 	}
 
-	fn call(&mut self, request: HttpRequest<Body>) -> Self::Future {
+	fn call(&mut self, request: HttpRequest<RequestBody>) -> Self::Future {
 		Box::pin(self.http_middleware.service(self.rpc_middleware.clone()).call(request))
 	}
 }
