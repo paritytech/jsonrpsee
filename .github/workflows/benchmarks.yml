@@ -1,19 +1,9 @@
 name: Benchmarks
 
 on:
-  schedule:
-    - cron: "0 5 * * *"
-
   push:
     branches:
       - master
-  # for debug
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   bench:
@@ -40,6 +30,4 @@ jobs:
           fail-on-alert: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-alert: true
-          # disabled for debug
-          # alert-comment-cc-users: "@niklasad1"
           auto-push: true
