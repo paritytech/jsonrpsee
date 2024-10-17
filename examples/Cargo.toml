@@ -18,7 +18,7 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio = { version = "1.23.1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 serde_json = { version = "1" }
-tower-http = { version = "0.5.2", features = ["full"] }
+tower-http = { workspace = true, features = ["full"] }
 tower = { workspace = true, features = ["full"] }
 hyper = "1.3"
 hyper-util = { version = "0.1.3", features = ["client", "client-legacy"]}
