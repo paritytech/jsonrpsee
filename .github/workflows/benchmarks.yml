@@ -1,6 +1,8 @@
 name: Benchmarks
 
 on:
+  schedule:
+    - cron: "0 5 * * 6" # Every Saturday at 5:00 UTC
   push:
     branches:
       - master
