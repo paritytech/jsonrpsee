@@ -203,30 +203,6 @@ pub struct ServerConfig {
 	pub(crate) tcp_no_delay: bool,
 }
 
-#[derive(Debug, Clone)]
-pub struct ServerConfigBuilder {
-	/// Maximum size in bytes of a request.
-	max_request_body_size: u32,
-	/// Maximum size in bytes of a response.
-	max_response_body_size: u32,
-	/// Maximum number of incoming connections allowed.
-	max_connections: u32,
-	/// Maximum number of subscriptions per connection.
-	max_subscriptions_per_connection: u32,
-	/// Whether batch requests are supported by this server or not.
-	batch_requests_config: BatchRequestConfig,
-	/// Enable HTTP.
-	enable_http: bool,
-	/// Enable WS.
-	enable_ws: bool,
-	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
-	message_buffer_capacity: u32,
-	/// Ping settings.
-	ping_config: Option<PingConfig>,
-	/// ID provider.
-	id_provider: Arc<dyn IdProvider>,
-}
-
 /// Builder for [`TowerService`].
 #[derive(Debug, Clone)]
 pub struct TowerServiceBuilder<RpcMiddleware, HttpMiddleware> {
@@ -354,107 +330,6 @@ impl Default for ServerConfig {
 	}
 }
 
-impl ServerConfig {
-	/// Create a new builder for the [`ServerConfig`].
-	pub fn builder() -> ServerConfigBuilder {
-		ServerConfigBuilder::default()
-	}
-}
-
-impl Default for ServerConfigBuilder {
-	fn default() -> Self {
-		let this = ServerConfig::default();
-
-		ServerConfigBuilder {
-			max_request_body_size: this.max_request_body_size,
-			max_response_body_size: this.max_response_body_size,
-			max_connections: this.max_connections,
-			max_subscriptions_per_connection: this.max_subscriptions_per_connection,
-			batch_requests_config: this.batch_requests_config,
-			enable_http: this.enable_http,
-			enable_ws: this.enable_ws,
-			message_buffer_capacity: this.message_buffer_capacity,
-			ping_config: this.ping_config,
-			id_provider: this.id_provider,
-		}
-	}
-}
-
-impl ServerConfigBuilder {
-	/// Create a new [`ServerConfigBuilder`].
-	pub fn new() -> Self {
-		Self::default()
-	}
-
-	/// See [`Builder::max_request_body_size`] for documentation.
-	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.max_request_body_size = size;
-		self
-	}
-
-	/// See [`Builder::max_response_body_size`] for documentation.
-	pub fn max_response_body_size(mut self, size: u32) -> Self {
-		self.max_response_body_size = size;
-		self
-	}
-
-	/// See [`Builder::max_connections`] for documentation.
-	pub fn max_connections(mut self, max: u32) -> Self {
-		self.max_connections = max;
-		self
-	}
-
-	/// See [`Builder::set_batch_request_config`] for documentation.
-	pub fn set_batch_request_config(mut self, cfg: BatchRequestConfig) -> Self {
-		self.batch_requests_config = cfg;
-		self
-	}
-
-	/// See [`Builder::max_subscriptions_per_connection`] for documentation.
-	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
-		self.max_subscriptions_per_connection = max;
-		self
-	}
-
-	/// See [`Builder::http_only`] for documentation.
-	pub fn http_only(mut self) -> Self {
-		self.enable_http = true;
-		self.enable_ws = false;
-		self
-	}
-
-	/// See [`Builder::ws_only`] for documentation.
-	pub fn ws_only(mut self) -> Self {
-		self.enable_http = false;
-		self.enable_ws = true;
-		self
-	}
-
-	/// See [`Builder::set_message_buffer_capacity`] for documentation.
-	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
-		self.message_buffer_capacity = c;
-		self
-	}
-
-	/// See [`Builder::enable_ws_ping`] for documentation.
-	pub fn enable_ws_ping(mut self, config: PingConfig) -> Self {
-		self.ping_config = Some(config);
-		self
-	}
-
-	/// See [`Builder::disable_ws_ping`] for documentation.
-	pub fn disable_ws_ping(mut self) -> Self {
-		self.ping_config = None;
-		self
-	}
-
-	/// See [`Builder::set_id_provider`] for documentation.
-	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
-		self.id_provider = Arc::new(id_provider);
-		self
-	}
-}
-
 /// Builder to configure and create a JSON-RPC server
 #[derive(Debug)]
 pub struct Builder<HttpMiddleware, RpcMiddleware> {
@@ -563,6 +438,12 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
+	/// Set the maximum number of connections allowed. Default is 1024.
+	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
+		self.server_cfg.max_subscriptions_per_connection = max;
+		self
+	}
+
 	/// Configure how [batch requests](https://www.jsonrpc.org/specification#batch) shall be handled
 	/// by the server.
 	///
@@ -572,9 +453,114 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		self
 	}
 
-	/// Set the maximum number of connections allowed. Default is 1024.
-	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
-		self.server_cfg.max_subscriptions_per_connection = max;
+	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
+	///
+	/// Default: [`tokio::spawn`]
+	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) -> Self {
+		self.server_cfg.tokio_runtime = Some(rt);
+		self
+	}
+
+	/// Configure the server to only serve JSON-RPC HTTP requests.
+	///
+	/// Default: both http and ws are enabled.
+	pub fn http_only(mut self) -> Self {
+		self.server_cfg.enable_http = true;
+		self.server_cfg.enable_ws = false;
+		self
+	}
+
+	/// Configure the server to only serve JSON-RPC WebSocket requests.
+	///
+	/// That implies that server just denies HTTP requests which isn't a WebSocket upgrade request
+	///
+	/// Default: both http and ws are enabled.
+	pub fn ws_only(mut self) -> Self {
+		self.server_cfg.enable_http = false;
+		self.server_cfg.enable_ws = true;
+		self
+	}
+
+	/// The server enforces backpressure which means that
+	/// `n` messages can be buffered and if the client
+	/// can't keep with up the server.
+	///
+	/// This `capacity` is applied per connection and
+	/// applies globally on the connection which implies
+	/// all JSON-RPC messages.
+	///
+	/// For example if a subscription produces plenty of new items
+	/// and the client can't keep up then no new messages are handled.
+	///
+	/// If this limit is exceeded then the server will "back-off"
+	/// and only accept new messages once the client reads pending messages.
+	///
+	/// # Panics
+	///
+	/// Panics if the buffer capacity is 0.
+	///
+	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
+		self.server_cfg.message_buffer_capacity = c;
+		self
+	}
+
+	/// Enable WebSocket ping/pong on the server.
+	///
+	/// Default: pings are disabled.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use std::{time::Duration, num::NonZeroUsize};
+	/// use jsonrpsee_server::{ServerBuilder, PingConfig};
+	///
+	/// // Set the ping interval to 10 seconds but terminates the connection if a client is inactive for more than 2 minutes
+	/// let ping_cfg = PingConfig::new().ping_interval(Duration::from_secs(10)).inactive_limit(Duration::from_secs(60 * 2));
+	/// let builder = ServerBuilder::default().enable_ws_ping(ping_cfg);
+	/// ```
+	pub fn enable_ws_ping(mut self, config: PingConfig) -> Self {
+		self.server_cfg.ping_config = Some(config);
+		self
+	}
+
+	/// Disable WebSocket ping/pong on the server.
+	///
+	/// Default: pings are disabled.
+	pub fn disable_ws_ping(mut self) -> Self {
+		self.server_cfg.ping_config = None;
+		self
+	}
+
+	/// Configure custom `subscription ID` provider for the server to use
+	/// to when getting new subscription calls.
+	///
+	/// You may choose static dispatch or dynamic dispatch because
+	/// `IdProvider` is implemented for `Box<T>`.
+	///
+	/// Default: [`RandomIntegerIdProvider`].
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use jsonrpsee_server::{ServerBuilder, RandomStringIdProvider, IdProvider};
+	///
+	/// // static dispatch
+	/// let builder1 = ServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
+	///
+	/// // or dynamic dispatch
+	/// let builder2 = ServerBuilder::default().set_id_provider(Box::new(RandomStringIdProvider::new(16)));
+	/// ```
+	///
+	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
+		self.server_cfg.id_provider = Arc::new(id_provider);
+		self
+	}
+
+	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
+	///
+	/// Default is `true`.
+	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
+		self.server_cfg.tcp_no_delay = no_delay;
 		self
 	}
 
@@ -640,66 +626,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 		Builder { server_cfg: self.server_cfg, rpc_middleware, http_middleware: self.http_middleware }
 	}
 
-	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
-	///
-	/// Default: [`tokio::spawn`]
-	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) -> Self {
-		self.server_cfg.tokio_runtime = Some(rt);
-		self
-	}
-
-	/// Enable WebSocket ping/pong on the server.
-	///
-	/// Default: pings are disabled.
-	///
-	/// # Examples
-	///
-	/// ```rust
-	/// use std::{time::Duration, num::NonZeroUsize};
-	/// use jsonrpsee_server::{ServerBuilder, PingConfig};
-	///
-	/// // Set the ping interval to 10 seconds but terminates the connection if a client is inactive for more than 2 minutes
-	/// let ping_cfg = PingConfig::new().ping_interval(Duration::from_secs(10)).inactive_limit(Duration::from_secs(60 * 2));
-	/// let builder = ServerBuilder::default().enable_ws_ping(ping_cfg);
-	/// ```
-	pub fn enable_ws_ping(mut self, config: PingConfig) -> Self {
-		self.server_cfg.ping_config = Some(config);
-		self
-	}
-
-	/// Disable WebSocket ping/pong on the server.
-	///
-	/// Default: pings are disabled.
-	pub fn disable_ws_ping(mut self) -> Self {
-		self.server_cfg.ping_config = None;
-		self
-	}
-
-	/// Configure custom `subscription ID` provider for the server to use
-	/// to when getting new subscription calls.
-	///
-	/// You may choose static dispatch or dynamic dispatch because
-	/// `IdProvider` is implemented for `Box<T>`.
-	///
-	/// Default: [`RandomIntegerIdProvider`].
-	///
-	/// # Examples
-	///
-	/// ```rust
-	/// use jsonrpsee_server::{ServerBuilder, RandomStringIdProvider, IdProvider};
-	///
-	/// // static dispatch
-	/// let builder1 = ServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
-	///
-	/// // or dynamic dispatch
-	/// let builder2 = ServerBuilder::default().set_id_provider(Box::new(RandomStringIdProvider::new(16)));
-	/// ```
-	///
-	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
-		self.server_cfg.id_provider = Arc::new(id_provider);
-		self
-	}
-
 	/// Configure a custom [`tower::ServiceBuilder`] middleware for composing layers to be applied to the RPC service.
 	///
 	/// Default: No tower layers are applied to the RPC service.
@@ -724,57 +650,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// ```
 	pub fn set_http_middleware<T>(self, http_middleware: tower::ServiceBuilder<T>) -> Builder<T, RpcMiddleware> {
 		Builder { server_cfg: self.server_cfg, http_middleware, rpc_middleware: self.rpc_middleware }
-	}
-
-	/// Configure `TCP_NODELAY` on the socket to the supplied value `nodelay`.
-	///
-	/// Default is `true`.
-	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
-		self.server_cfg.tcp_no_delay = no_delay;
-		self
-	}
-
-	/// Configure the server to only serve JSON-RPC HTTP requests.
-	///
-	/// Default: both http and ws are enabled.
-	pub fn http_only(mut self) -> Self {
-		self.server_cfg.enable_http = true;
-		self.server_cfg.enable_ws = false;
-		self
-	}
-
-	/// Configure the server to only serve JSON-RPC WebSocket requests.
-	///
-	/// That implies that server just denies HTTP requests which isn't a WebSocket upgrade request
-	///
-	/// Default: both http and ws are enabled.
-	pub fn ws_only(mut self) -> Self {
-		self.server_cfg.enable_http = false;
-		self.server_cfg.enable_ws = true;
-		self
-	}
-
-	/// The server enforces backpressure which means that
-	/// `n` messages can be buffered and if the client
-	/// can't keep with up the server.
-	///
-	/// This `capacity` is applied per connection and
-	/// applies globally on the connection which implies
-	/// all JSON-RPC messages.
-	///
-	/// For example if a subscription produces plenty of new items
-	/// and the client can't keep up then no new messages are handled.
-	///
-	/// If this limit is exceeded then the server will "back-off"
-	/// and only accept new messages once the client reads pending messages.
-	///
-	/// # Panics
-	///
-	/// Panics if the buffer capacity is 0.
-	///
-	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
-		self.server_cfg.message_buffer_capacity = c;
-		self
 	}
 
 	/// Convert the server builder to a [`TowerServiceBuilder`].
