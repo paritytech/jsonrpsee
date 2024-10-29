@@ -215,6 +215,8 @@ pub struct ServerConfigBuilder {
 	max_subscriptions_per_connection: u32,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_config: BatchRequestConfig,
+	/// Custom tokio runtime to run the server on.
+	tokio_runtime: Option<tokio::runtime::Handle>,
 	/// Enable HTTP.
 	enable_http: bool,
 	/// Enable WS.
@@ -225,6 +227,8 @@ pub struct ServerConfigBuilder {
 	ping_config: Option<PingConfig>,
 	/// ID provider.
 	id_provider: Arc<dyn IdProvider>,
+	/// `TCP_NODELAY` settings.
+	tcp_no_delay: bool,
 }
 
 /// Builder for [`TowerService`].
@@ -337,20 +341,7 @@ impl PingConfig {
 
 impl Default for ServerConfig {
 	fn default() -> Self {
-		Self {
-			max_request_body_size: TEN_MB_SIZE_BYTES,
-			max_response_body_size: TEN_MB_SIZE_BYTES,
-			max_connections: MAX_CONNECTIONS,
-			max_subscriptions_per_connection: 1024,
-			batch_requests_config: BatchRequestConfig::Unlimited,
-			tokio_runtime: None,
-			enable_http: true,
-			enable_ws: true,
-			message_buffer_capacity: 1024,
-			ping_config: None,
-			id_provider: Arc::new(RandomIntegerIdProvider),
-			tcp_no_delay: true,
-		}
+		ServerConfig::builder().build()
 	}
 }
 
@@ -363,19 +354,19 @@ impl ServerConfig {
 
 impl Default for ServerConfigBuilder {
 	fn default() -> Self {
-		let this = ServerConfig::default();
-
 		ServerConfigBuilder {
-			max_request_body_size: this.max_request_body_size,
-			max_response_body_size: this.max_response_body_size,
-			max_connections: this.max_connections,
-			max_subscriptions_per_connection: this.max_subscriptions_per_connection,
-			batch_requests_config: this.batch_requests_config,
-			enable_http: this.enable_http,
-			enable_ws: this.enable_ws,
-			message_buffer_capacity: this.message_buffer_capacity,
-			ping_config: this.ping_config,
-			id_provider: this.id_provider,
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_response_body_size: TEN_MB_SIZE_BYTES,
+			max_connections: MAX_CONNECTIONS,
+			max_subscriptions_per_connection: 1024,
+			batch_requests_config: BatchRequestConfig::Unlimited,
+			tokio_runtime: None,
+			enable_http: true,
+			enable_ws: true,
+			message_buffer_capacity: 1024,
+			ping_config: None,
+			id_provider: Arc::new(RandomIntegerIdProvider),
+			tcp_no_delay: true,
 		}
 	}
 }
@@ -452,6 +443,23 @@ impl ServerConfigBuilder {
 	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
 		self.id_provider = Arc::new(id_provider);
 		self
+	}
+
+	pub fn build(self) -> ServerConfig {
+		ServerConfig {
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			max_connections: self.max_connections,
+			max_subscriptions_per_connection: self.max_subscriptions_per_connection,
+			batch_requests_config: self.batch_requests_config,
+			tokio_runtime: self.tokio_runtime,
+			enable_http: self.enable_http,
+			enable_ws: self.enable_ws,
+			message_buffer_capacity: self.message_buffer_capacity,
+			ping_config: self.ping_config,
+			id_provider: self.id_provider,
+			tcp_no_delay: self.tcp_no_delay,
+		}
 	}
 }
 
