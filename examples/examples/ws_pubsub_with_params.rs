@@ -30,7 +30,7 @@ use std::time::Duration;
 use futures::{Stream, StreamExt};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::Serialize;
-use jsonrpsee::server::{RpcModule, Server, SubscriptionMessage, TrySendError};
+use jsonrpsee::server::{RpcModule, Server, ServerConfig, SubscriptionMessage, TrySendError};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, PendingSubscriptionSink};
 use tokio::time::interval;
@@ -63,7 +63,8 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-	let server = Server::builder().set_message_buffer_capacity(10).build("127.0.0.1:0").await?;
+	let config = ServerConfig::builder().set_message_buffer_capacity(10).build();
+	let server = Server::builder().set_config(config).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription(

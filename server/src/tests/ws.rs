@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use crate::tests::helpers::{deser_call, init_logger, server_with_context, ws_server_with_stats, Metrics};
 use crate::types::SubscriptionId;
-use crate::{BatchRequestConfig, RegisterMethodError};
+use crate::{BatchRequestConfig, RegisterMethodError, ServerConfig};
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
 use jsonrpsee_core::traits::IdProvider;
@@ -47,7 +47,8 @@ async fn can_set_the_max_request_body_size() {
 
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 100 bytes
-	let server = ServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
+	let config = ServerConfig::builder().max_request_body_size(100).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx, _| "a".repeat(100)).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -75,7 +76,8 @@ async fn can_set_the_max_response_body_size() {
 
 	let addr = "127.0.0.1:0";
 	// Set the max response body size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let config = ServerConfig::builder().max_response_body_size(100).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_, _, _| "a".repeat(101)).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -98,7 +100,8 @@ async fn can_set_the_max_response_size_to_batch() {
 
 	let addr = "127.0.0.1:0";
 	// Set the max response body size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let config = ServerConfig::builder().max_response_body_size(100).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx, _| "a".repeat(51)).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -121,7 +124,8 @@ async fn can_set_max_connections() {
 
 	let addr = "127.0.0.1:0";
 	// Server that accepts max 2 connections
-	let server = ServerBuilder::default().max_connections(2).build(addr).await.unwrap();
+	let config = ServerConfig::builder().max_connections(2).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_, _, _| ()).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -559,13 +563,8 @@ async fn custom_subscription_id_works() {
 	}
 
 	init_logger();
-	let server = ServerBuilder::default()
-		.set_id_provider(HardcodedSubscriptionId)
-		.build("127.0.0.1:0")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
+	let config = ServerConfig::builder().set_id_provider(HardcodedSubscriptionId).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
@@ -594,13 +593,8 @@ async fn custom_subscription_id_works() {
 #[tokio::test]
 async fn disabled_batches() {
 	// Disable batches support.
-	let server = ServerBuilder::default()
-		.set_batch_request_config(BatchRequestConfig::Disabled)
-		.build("127.0.0.1:0")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
+	let config = ServerConfig::builder().set_batch_request_config(BatchRequestConfig::Disabled).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx, _| "ok").unwrap();
@@ -624,13 +618,8 @@ async fn disabled_batches() {
 #[tokio::test]
 async fn batch_limit_works() {
 	// Disable batches support.
-	let server = ServerBuilder::default()
-		.set_batch_request_config(BatchRequestConfig::Limit(1))
-		.build("127.0.0.1:0")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
+	let config = ServerConfig::builder().set_batch_request_config(BatchRequestConfig::Limit(1)).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx, _| "ok").unwrap();
@@ -722,13 +711,8 @@ async fn ws_server_backpressure_works() {
 
 	let (backpressure_tx, mut backpressure_rx) = tokio::sync::mpsc::channel::<()>(1);
 
-	let server = ServerBuilder::default()
-		.set_message_buffer_capacity(5)
-		.build("127.0.0.1:0")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
+	let config = ServerConfig::builder().set_message_buffer_capacity(5).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let mut module = RpcModule::new(backpressure_tx);
 
@@ -908,14 +892,11 @@ async fn server_with_infinite_call(
 	timeout: Duration,
 	tx: tokio::sync::mpsc::UnboundedSender<()>,
 ) -> (crate::ServerHandle, std::net::SocketAddr) {
-	let server = ServerBuilder::default()
-		// Make sure that the ping_interval doesn't force the connection to be closed
+	// Make sure that the ping_interval doesn't force the connection to be closed
+	let config = ServerConfig::builder()
 		.enable_ws_ping(crate::PingConfig::new().max_failures(usize::MAX).ping_interval(timeout))
-		.build("127.0.0.1:0")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
+		.build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let mut module = RpcModule::new(tx);
 
