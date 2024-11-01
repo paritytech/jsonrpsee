@@ -177,7 +177,6 @@ async fn run_server() -> anyhow::Result<ServerHandle> {
 					let rpc_service = RpcServiceBuilder::new();
 
 					// Establishes the websocket connection
-					// and if the `CallLimit` middleware triggers the hard limit
 					// then the connection is closed i.e, the `conn_fut` is dropped.
 					async move {
 						match ws::connect(req, ServerConfig::default(), methods, conn, rpc_service).await {
