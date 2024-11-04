@@ -50,7 +50,7 @@ use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::core::{JsonValue, StringError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
-use jsonrpsee::server::{ConnectionGuard, ServerBuilder, ServerHandle};
+use jsonrpsee::server::{ConnectionGuard, ServerBuilder, ServerConfig, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{rpc_params, ResponsePayload, RpcModule};
@@ -826,7 +826,8 @@ async fn ws_server_limit_subs_per_conn_works() {
 
 	init_logger();
 
-	let server = ServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let config = ServerConfig::builder().max_subscriptions_per_connection(10).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());
@@ -881,7 +882,8 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 	init_logger();
 
-	let server = ServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let config = ServerConfig::builder().max_subscriptions_per_connection(10).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());

@@ -1,4 +1,5 @@
 use crate::tests::helpers::{init_logger, server_with_handles};
+use crate::ServerConfig;
 use hyper::StatusCode;
 use jsonrpsee_test_utils::helpers::{http_request, ok_response, to_http_uri};
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
@@ -42,8 +43,8 @@ async fn run_forever() {
 async fn http_only_works() {
 	use crate::{RpcModule, ServerBuilder};
 
-	let server =
-		ServerBuilder::default().http_only().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let config = ServerConfig::builder().http_only().build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _, _| {
@@ -68,7 +69,8 @@ async fn http_only_works() {
 async fn ws_only_works() {
 	use crate::{RpcModule, ServerBuilder};
 
-	let server = ServerBuilder::default().ws_only().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let config = ServerConfig::builder().ws_only().build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _, _| {

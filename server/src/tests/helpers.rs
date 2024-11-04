@@ -3,7 +3,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{fmt, sync::atomic::AtomicUsize};
 
-use crate::{serve_with_graceful_shutdown, stop_channel, RpcModule, Server, ServerBuilder, ServerHandle};
+use crate::{
+	serve_with_graceful_shutdown, stop_channel, RpcModule, Server, ServerBuilder, ServerConfigBuilder, ServerHandle,
+};
 
 use futures_util::FutureExt;
 use jsonrpsee_core::server::Methods;
@@ -213,7 +215,10 @@ pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
 	let (stop_handle, server_handle) = stop_channel();
 	let metrics = metrics.clone();
 
-	let rpc_svc = Server::builder().max_connections(33).to_service_builder().build(Methods::new(), stop_handle.clone());
+	let rpc_svc = Server::builder()
+		.set_config(ServerConfigBuilder::new().max_connections(33).build())
+		.to_service_builder()
+		.build(Methods::new(), stop_handle.clone());
 
 	tokio::spawn(async move {
 		loop {

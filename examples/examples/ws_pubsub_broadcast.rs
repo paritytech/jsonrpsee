@@ -33,7 +33,7 @@ use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, Server};
+use jsonrpsee::server::{RpcModule, Server, ServerConfig};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::PendingSubscriptionSink;
 use tokio::sync::broadcast;
@@ -66,7 +66,8 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	// let's configure the server only hold 5 messages in memory.
-	let server = Server::builder().set_message_buffer_capacity(5).build("127.0.0.1:0").await?;
+	let config = ServerConfig::builder().set_message_buffer_capacity(5).build();
+	let server = Server::builder().set_config(config).build("127.0.0.1:0").await?;
 	let (tx, _rx) = broadcast::channel::<usize>(16);
 
 	let mut module = RpcModule::new(tx.clone());
