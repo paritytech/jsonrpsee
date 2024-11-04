@@ -27,7 +27,7 @@
 //! This example shows how to use the low-level server API
 //! in jsonrpsee and inject a `mpsc::Sender<()>` into the
 //! request extensions to be able to close the connection from
-//! a subscription handler.
+//! a rpc handler (method call or subscription).
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
