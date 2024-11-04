@@ -42,7 +42,9 @@ use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
-use jsonrpsee::server::{serve_with_graceful_shutdown, stop_channel, ServerHandle, StopHandle, TowerServiceBuilder};
+use jsonrpsee::server::{
+	serve_with_graceful_shutdown, stop_channel, ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder,
+};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};
 use jsonrpsee::{MethodResponse, Methods};
@@ -174,8 +176,8 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 		stop_handle: stop_handle.clone(),
 		metrics,
 		svc_builder: jsonrpsee::server::Server::builder()
+			.set_config(ServerConfig::builder().max_connections(33).build())
 			.set_http_middleware(tower::ServiceBuilder::new().layer(CorsLayer::permissive()))
-			.max_connections(33)
 			.to_service_builder(),
 	};
 

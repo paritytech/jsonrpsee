@@ -26,7 +26,7 @@
 
 use std::net::SocketAddr;
 
-use crate::{BatchRequestConfig, RegisterMethodError, RpcModule, ServerBuilder, ServerHandle};
+use crate::{BatchRequestConfig, RegisterMethodError, RpcModule, ServerBuilder, ServerConfig, ServerHandle};
 use jsonrpsee_core::RpcResult;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode};
@@ -455,7 +455,8 @@ async fn can_register_modules() {
 async fn can_set_the_max_request_body_size() {
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 100 bytes
-	let server = ServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
+	let config = ServerConfig::builder().max_request_body_size(100).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx, _| "a".repeat(100)).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -480,7 +481,8 @@ async fn can_set_the_max_request_body_size() {
 async fn can_set_the_max_response_size() {
 	let addr = "127.0.0.1:0";
 	// Set the max response size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let config = ServerConfig::builder().max_response_body_size(100).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx, _| "a".repeat(101)).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -500,7 +502,8 @@ async fn can_set_the_max_response_size() {
 async fn can_set_the_max_response_size_to_batch() {
 	let addr = "127.0.0.1:0";
 	// Set the max response size to 100 bytes
-	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let config = ServerConfig::builder().max_response_body_size(100).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx, _| "a".repeat(51)).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -520,8 +523,8 @@ async fn can_set_the_max_response_size_to_batch() {
 async fn disabled_batches() {
 	let addr = "127.0.0.1:0";
 	// Disable batches support.
-	let server =
-		ServerBuilder::default().set_batch_request_config(BatchRequestConfig::Disabled).build(addr).await.unwrap();
+	let config = ServerConfig::builder().set_batch_request_config(BatchRequestConfig::Disabled).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx, _| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
@@ -544,8 +547,8 @@ async fn disabled_batches() {
 async fn batch_limit_works() {
 	let addr = "127.0.0.1:0";
 	// Disable batches support.
-	let server =
-		ServerBuilder::default().set_batch_request_config(BatchRequestConfig::Limit(1)).build(addr).await.unwrap();
+	let config = ServerConfig::builder().set_batch_request_config(BatchRequestConfig::Limit(1)).build();
+	let server = ServerBuilder::with_config(config).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx, _| "ok").unwrap();
 	let addr = server.local_addr().unwrap();
