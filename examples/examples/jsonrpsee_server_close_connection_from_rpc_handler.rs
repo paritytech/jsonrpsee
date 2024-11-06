@@ -202,7 +202,7 @@ async fn run_server() -> anyhow::Result<ServerHandle> {
 						tokio::select! {
 							// Rpc call finished successfully.
 							res = http::call_with_service_builder(req, ServerConfig::default(), conn, methods, RpcServiceBuilder::new()) => Ok(res),
-							// Deny the call if the call limit is exceeded.
+							// The connection was closed by a RPC handler
 							_ = disconnect.recv() => Ok(http::response::denied()),
 						}
 					}
