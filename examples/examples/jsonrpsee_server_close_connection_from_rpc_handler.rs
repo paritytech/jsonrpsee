@@ -200,7 +200,7 @@ async fn run_server() -> anyhow::Result<ServerHandle> {
 					// See [`jsonrpsee::server::http::call_with_service`]
 					async move {
 						tokio::select! {
-							// Rpc call finished successfully.
+							// RPC call finished successfully.
 							res = http::call_with_service_builder(req, ServerConfig::default(), conn, methods, RpcServiceBuilder::new()) => Ok(res),
 							// The connection was closed by a RPC handler
 							_ = disconnect.recv() => Ok(http::response::denied()),
