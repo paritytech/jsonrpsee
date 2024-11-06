@@ -30,7 +30,7 @@ http = "1"
 http-body = "1"
 http-body-util = "0.1.0"
 tower = { workspace = true, features = ["util"] }
-thiserror = "1"
+thiserror = "2"
 route-recognizer = "0.3.1"
 pin-project = "1.1.3"
 
