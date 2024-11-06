@@ -633,7 +633,11 @@ impl TryFrom<url::Url> for Target {
 fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsConnector, WsHandshakeError> {
 	let config = match cert_store {
 		#[cfg(feature = "tls-rustls-platform-verifier")]
-		CertificateStore::Native => rustls_platform_verifier::tls_config(),
+		CertificateStore::Native => {
+			use rustls_platform_verifier::ConfigVerifierExt;
+
+			rustls::ClientConfig::with_platform_verifier()
+		},
 		#[cfg(not(feature = "tls-rustls-platform-verifier"))]
 		CertificateStore::Native => {
 			return Err(WsHandshakeError::CertificateStore(io::Error::new(

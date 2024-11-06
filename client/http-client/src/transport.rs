@@ -230,11 +230,15 @@ impl<L> HttpTransportClientBuilder<L> {
 				http_conn.enforce_http(false);
 
 				let https_conn = match certificate_store {
-					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
-						.with_tls_config(rustls_platform_verifier::tls_config())
-						.https_or_http()
-						.enable_all_versions()
-						.wrap_connector(http_conn),
+					CertificateStore::Native => {
+						use rustls_platform_verifier::ConfigVerifierExt;
+
+						hyper_rustls::HttpsConnectorBuilder::new()
+							.with_tls_config(rustls::ClientConfig::with_platform_verifier())
+							.https_or_http()
+							.enable_all_versions()
+							.wrap_connector(http_conn)
+					}
 
 					CertificateStore::Custom(tls_config) => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_tls_config(tls_config)
