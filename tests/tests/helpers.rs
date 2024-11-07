@@ -279,7 +279,7 @@ pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
 pub async fn server_with_cors(cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
-		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
+		.layer(ProxyGetRequestLayer::new([("/health", "system_health")]).unwrap())
 		// Add `CORS` layer.
 		.layer(cors);
 

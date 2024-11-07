@@ -746,8 +746,8 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// fn run_server() -> ServerHandle {
 	///     let (stop_handle, server_handle) = stop_channel();
 	///     let svc_builder = jsonrpsee_server::Server::builder()
-	///     	.set_config(ServerConfig::builder().max_connections(33).build())
-	///  		.to_service_builder();
+	///         .set_config(ServerConfig::builder().max_connections(33).build())
+	///         .to_service_builder();
 	///     let methods = Methods::new();
 	///     let stop_handle = stop_handle.clone();
 	///
