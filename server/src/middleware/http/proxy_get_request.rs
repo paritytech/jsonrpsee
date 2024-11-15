@@ -72,21 +72,21 @@ impl ProxyGetRequestLayer {
 	/// Fails if the path does not start with `/`.
 	pub fn new<P, M>(pairs: impl IntoIterator<Item = (P, M)>) -> Result<Self, ProxyGetRequestError>
 	where
-		P: AsRef<str>,
-		M: AsRef<str>,
+		P: Into<String>,
+		M: Into<String>,
 	{
 		let mut methods = HashMap::new();
 
 		for (path, method) in pairs {
-			let path = path.as_ref();
-			let method = method.as_ref();
+			let path = path.into();
+			let method = method.into();
 
 			if !path.starts_with('/') {
-				return Err(ProxyGetRequestError::InvalidPath(path.to_owned()));
+				return Err(ProxyGetRequestError::InvalidPath(path));
 			}
 
-			if let Some(path) = methods.insert(path.to_owned(), method.to_owned()) {
-				return Err(ProxyGetRequestError::DuplicatedPath(path.to_owned()));
+			if let Some(path) = methods.insert(path, method) {
+				return Err(ProxyGetRequestError::DuplicatedPath(path));
 			}
 		}
 
