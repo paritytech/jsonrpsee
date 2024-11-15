@@ -37,7 +37,7 @@ use hyper::http::HeaderValue;
 use hyper::{Method, Uri};
 use jsonrpsee_core::BoxError;
 use jsonrpsee_types::{Id, RequestSer};
-use rustc_hash::FxHashMap;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -46,8 +46,14 @@ use tower::{Layer, Service};
 
 /// Error that occur if the specified path doesn't start with `/<path>`
 #[derive(Debug, thiserror::Error)]
-#[error("ProxyGetRequestLayer path must start with `/`, got `{0}`")]
-pub struct InvalidPath(String);
+pub enum ProxyGetRequestError {
+	/// Duplicated path.
+	#[error("ProxyGetRequestLayer path must be unique, got duplicated `{0}`")]
+	DuplicatedPath(String),
+	/// Invalid path.
+	#[error("ProxyGetRequestLayer path must start with `/`, got `{0}`")]
+	InvalidPath(String),
+}
 
 /// Layer that applies [`ProxyGetRequest`] which proxies the `GET /path` requests to
 /// specific RPC method calls and that strips the response.
@@ -56,7 +62,7 @@ pub struct InvalidPath(String);
 #[derive(Debug, Clone)]
 pub struct ProxyGetRequestLayer {
 	// path => method mapping
-	methods: Arc<FxHashMap<String, String>>,
+	methods: Arc<HashMap<String, String>>,
 }
 
 impl ProxyGetRequestLayer {
@@ -64,19 +70,23 @@ impl ProxyGetRequestLayer {
 	///
 	/// The request `GET /path` is redirected to the provided method.
 	/// Fails if the path does not start with `/`.
-	pub fn new<P, M>(methods: impl IntoIterator<Item = (P, M)>) -> Result<Self, InvalidPath>
+	pub fn new<P, M>(pairs: impl IntoIterator<Item = (P, M)>) -> Result<Self, ProxyGetRequestError>
 	where
-		P: Into<String>,
-		M: Into<String>,
+		P: AsRef<str>,
+		M: AsRef<str>,
 	{
-		let methods = methods
-			.into_iter()
-			.map(|(path, method)| (path.into(), method.into()))
-			.collect::<FxHashMap<String, String>>();
+		let mut methods = HashMap::new();
 
-		for path in methods.keys() {
+		for (path, method) in pairs {
+			let path = path.as_ref();
+			let method = method.as_ref();
+
 			if !path.starts_with('/') {
-				return Err(InvalidPath(path.clone()));
+				return Err(ProxyGetRequestError::InvalidPath(path.to_owned()));
+			}
+
+			if let Some(path) = methods.insert(path.to_owned(), method.to_owned()) {
+				return Err(ProxyGetRequestError::DuplicatedPath(path.to_owned()));
 			}
 		}
 
@@ -108,7 +118,7 @@ impl<S> Layer<S> for ProxyGetRequestLayer {
 pub struct ProxyGetRequest<S> {
 	inner: S,
 	// path => method mapping
-	methods: Arc<FxHashMap<String, String>>,
+	methods: Arc<HashMap<String, String>>,
 }
 
 impl<S, B> Service<HttpRequest<B>> for ProxyGetRequest<S>
