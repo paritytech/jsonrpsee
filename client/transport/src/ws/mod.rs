@@ -35,6 +35,7 @@ use futures_util::io::{BufReader, BufWriter};
 use jsonrpsee_core::client::{MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
+use soketto::connection::CloseReason;
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
@@ -230,6 +231,9 @@ pub enum WsError {
 	/// Message was too large.
 	#[error("The message was too large")]
 	MessageTooLarge,
+	/// Connection was closed.
+	#[error("Connection was closed: {0:?}")]
+	Closed(CloseReason),
 }
 
 #[async_trait]
@@ -291,7 +295,7 @@ where
 				}
 				Incoming::Data(Data::Binary(_)) => break Ok(ReceivedMessage::Bytes(message)),
 				Incoming::Pong(_) => break Ok(ReceivedMessage::Pong),
-				_ => continue,
+				Incoming::Closed(c) => break Err(WsError::Closed(c)),
 			}
 		}
 	}
