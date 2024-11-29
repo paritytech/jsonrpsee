@@ -440,27 +440,14 @@ impl Client {
 		!self.to_back.is_closed()
 	}
 
-	/// This is similar to [`Client::on_disconnect`] but it can be used to get
-	/// the reason why the client was disconnected but it's not cancel-safe.
-	///
-	/// The typical use-case is that this method will be called after
-	/// [`Client::on_disconnect`] has returned in a "select loop".
-	///
-	/// # Cancel-safety
-	///
-	/// This method is cancel-safe
-	pub async fn disconnect_reason(&self) -> Error {
-		self.error.read_error().await
-	}
-
 	/// Completes when the client is disconnected or the client's background task encountered an error.
 	/// If the client is already disconnected, the future produced by this method will complete immediately.
 	///
 	/// # Cancel safety
 	///
 	/// This method is cancel safe.
-	pub async fn on_disconnect(&self) {
-		self.to_back.closed().await;
+	pub async fn on_disconnect(&self) -> Error {
+		self.error.read_error().await
 	}
 }
 
@@ -494,7 +481,7 @@ impl ClientT for Client {
 
 		match future::select(fut, Delay::new(self.request_timeout)).await {
 			Either::Left((Ok(()), _)) => Ok(()),
-			Either::Left((Err(_), _)) => Err(self.disconnect_reason().await),
+			Either::Left((Err(_), _)) => Err(self.on_disconnect().await),
 			Either::Right((_, _)) => Err(Error::RequestTimeout),
 		}
 	}
@@ -520,13 +507,13 @@ impl ClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.disconnect_reason().await);
+			return Err(self.on_disconnect().await);
 		}
 
 		let json_value = match call_with_timeout(self.request_timeout, send_back_rx).await {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.disconnect_reason().await),
+			Err(_) => return Err(self.on_disconnect().await),
 		};
 
 		rx_log_from_json(&Response::new(ResponsePayload::success_borrowed(&json_value), id), self.max_log_length);
@@ -567,14 +554,14 @@ impl ClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.disconnect_reason().await);
+			return Err(self.on_disconnect().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 		let json_values = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.disconnect_reason().await),
+			Err(_) => return Err(self.on_disconnect().await),
 		};
 
 		rx_log_from_json(&json_values, self.max_log_length);
@@ -644,13 +631,13 @@ impl SubscriptionClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.disconnect_reason().await);
+			return Err(self.on_disconnect().await);
 		}
 
 		let (notifs_rx, sub_id) = match call_with_timeout(self.request_timeout, send_back_rx).await {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.disconnect_reason().await),
+			Err(_) => return Err(self.on_disconnect().await),
 		};
 
 		rx_log_from_json(&Response::new(ResponsePayload::success_borrowed(&sub_id), id_unsub), self.max_log_length);
@@ -675,7 +662,7 @@ impl SubscriptionClientT for Client {
 			.await
 			.is_err()
 		{
-			return Err(self.disconnect_reason().await);
+			return Err(self.on_disconnect().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
@@ -683,7 +670,7 @@ impl SubscriptionClientT for Client {
 		let (rx, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.disconnect_reason().await),
+			Err(_) => return Err(self.on_disconnect().await),
 		};
 
 		Ok(Subscription::new(self.to_back.clone(), rx, SubscriptionKind::Method(method)))
