@@ -284,19 +284,16 @@ where
 
 	/// Returns a `Future` resolving when the server sent us something back.
 	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
-		loop {
-			let mut message = Vec::new();
-			let recv = self.inner.receive(&mut message).await?;
+		let mut message = Vec::new();
 
-			match recv {
-				Incoming::Data(Data::Text(_)) => {
-					let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
-					break Ok(ReceivedMessage::Text(s));
-				}
-				Incoming::Data(Data::Binary(_)) => break Ok(ReceivedMessage::Bytes(message)),
-				Incoming::Pong(_) => break Ok(ReceivedMessage::Pong),
-				Incoming::Closed(c) => break Err(WsError::Closed(c)),
+		match self.inner.receive(&mut message).await? {
+			Incoming::Data(Data::Text(_)) => {
+				let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
+				Ok(ReceivedMessage::Text(s))
 			}
+			Incoming::Data(Data::Binary(_)) => Ok(ReceivedMessage::Bytes(message)),
+			Incoming::Pong(_) => Ok(ReceivedMessage::Pong),
+			Incoming::Closed(c) => Err(WsError::Closed(c)),
 		}
 	}
 }
