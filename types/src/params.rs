@@ -44,7 +44,7 @@ pub struct TwoPointZero;
 
 struct TwoPointZeroVisitor;
 
-impl<'de> Visitor<'de> for TwoPointZeroVisitor {
+impl Visitor<'_> for TwoPointZeroVisitor {
 	type Value = TwoPointZero;
 
 	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -269,7 +269,7 @@ pub enum SubscriptionId<'a> {
 	Str(Cow<'a, str>),
 }
 
-impl<'a> From<SubscriptionId<'a>> for JsonValue {
+impl From<SubscriptionId<'_>> for JsonValue {
 	fn from(sub_id: SubscriptionId) -> Self {
 		match sub_id {
 			SubscriptionId::Num(n) => n.into(),
@@ -278,13 +278,13 @@ impl<'a> From<SubscriptionId<'a>> for JsonValue {
 	}
 }
 
-impl<'a> From<u64> for SubscriptionId<'a> {
+impl From<u64> for SubscriptionId<'_> {
 	fn from(sub_id: u64) -> Self {
 		Self::Num(sub_id)
 	}
 }
 
-impl<'a> From<String> for SubscriptionId<'a> {
+impl From<String> for SubscriptionId<'_> {
 	fn from(sub_id: String) -> Self {
 		Self::Str(sub_id.into())
 	}
@@ -308,7 +308,7 @@ impl<'a> TryFrom<JsonValue> for SubscriptionId<'a> {
 	}
 }
 
-impl<'a> SubscriptionId<'a> {
+impl SubscriptionId<'_> {
 	/// Convert `SubscriptionId<'a>` to `SubscriptionId<'static>` so that it can be moved across threads.
 	///
 	/// This can cause an allocation if the id is a string.
@@ -350,7 +350,7 @@ pub enum Id<'a> {
 	Str(Cow<'a, str>),
 }
 
-impl<'a> Id<'a> {
+impl Id<'_> {
 	/// If the Id is a number, returns the associated number. Returns None otherwise.
 	pub fn as_number(&self) -> Option<&u64> {
 		match self {
@@ -396,7 +396,7 @@ impl<'a> Id<'a> {
 	}
 }
 
-impl<'a> std::fmt::Display for Id<'a> {
+impl std::fmt::Display for Id<'_> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Id::Null => f.write_str("null"),
