@@ -59,7 +59,7 @@ impl<'a, T: Clone> Response<'a, T> {
 	}
 }
 
-impl<'a, T> fmt::Display for Response<'a, T>
+impl<T> fmt::Display for Response<'_, T>
 where
 	T: Serialize + Clone,
 {
@@ -68,7 +68,7 @@ where
 	}
 }
 
-impl<'a, T> fmt::Debug for Response<'a, T>
+impl<T> fmt::Debug for Response<'_, T>
 where
 	T: Serialize + Clone,
 {
@@ -205,7 +205,7 @@ where
 			{
 				struct FieldVisitor;
 
-				impl<'de> serde::de::Visitor<'de> for FieldVisitor {
+				impl serde::de::Visitor<'_> for FieldVisitor {
 					type Value = Field;
 
 					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -313,7 +313,7 @@ where
 	}
 }
 
-impl<'a, T> Serialize for Response<'a, T>
+impl<T> Serialize for Response<'_, T>
 where
 	T: Serialize + Clone,
 {

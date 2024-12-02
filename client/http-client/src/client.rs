@@ -74,7 +74,7 @@ use crate::{CertificateStore, CustomCertStore};
 ///     // use client....
 /// }
 /// ```
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HttpClientBuilder<L = Identity> {
 	max_request_size: u32,
 	max_response_size: u32,
