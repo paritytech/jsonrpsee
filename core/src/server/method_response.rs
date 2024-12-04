@@ -394,7 +394,7 @@ where
 	}
 }
 
-impl<'a, T> From<ErrorCode> for ResponsePayload<'a, T>
+impl<T> From<ErrorCode> for ResponsePayload<'_, T>
 where
 	T: Clone,
 {

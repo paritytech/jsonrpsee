@@ -96,7 +96,7 @@ impl<'a> ErrorObject<'a> {
 	}
 }
 
-impl<'a> PartialEq for ErrorObject<'a> {
+impl PartialEq for ErrorObject<'_> {
 	fn eq(&self, other: &Self) -> bool {
 		let this_raw = self.data.as_ref().map(|r| r.get());
 		let other_raw = other.data.as_ref().map(|r| r.get());
@@ -104,7 +104,7 @@ impl<'a> PartialEq for ErrorObject<'a> {
 	}
 }
 
-impl<'a> From<ErrorCode> for ErrorObject<'a> {
+impl From<ErrorCode> for ErrorObject<'_> {
 	fn from(code: ErrorCode) -> Self {
 		Self { code, message: code.message().into(), data: None }
 	}
