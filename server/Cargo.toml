@@ -14,28 +14,28 @@ readme.workspace = true
 publish = true
 
 [dependencies]
-futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
-http = "1"
-http-body = "1"
-http-body-util = "0.1.0"
-hyper = { version = "1.3", features = ["server", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["tokio", "service", "tokio", "server-auto"] }
+futures-util = { workspace = true, features = ["io", "async-await-macro"] }
+http = { workspace = true }
+http-body = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true, features = ["server", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["tokio", "service", "tokio", "server-auto"] }
 jsonrpsee-core = { workspace = true, features = ["server", "http-helpers"] }
 jsonrpsee-types = { workspace = true }
-pin-project = "1.1.3"
-route-recognizer = "0.3.1"
-serde = "1"
-serde_json = { version = "1", features = ["raw_value"] }
-soketto = { version = "0.8", features = ["http"] }
-thiserror = "2"
-tokio = { version = "1.23.1", features = ["net", "rt-multi-thread", "macros", "time"] }
-tokio-util = { version = "0.7", features = ["compat"] }
-tokio-stream = { version = "0.1.7", features = ["sync"] }
+pin-project = { workspace = true }
+route-recognizer = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+soketto = { workspace = true, features = ["http"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["net", "rt-multi-thread", "macros", "time"] }
+tokio-util = { workspace = true, features = ["compat"] }
+tokio-stream = { workspace = true, features = ["sync"] }
 tower = { workspace = true, features = ["util"] }
-tracing = "0.1.34"
+tracing = { workspace = true }
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
-socket2 = "0.5.1"
+socket2 = { workspace = true }
 tower = { workspace = true, features = ["timeout"] }
-tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+tracing-subscriber = { workspace = true }

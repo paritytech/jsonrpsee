@@ -7,14 +7,14 @@ license.workspace = true
 publish = false
 
 [dependencies]
-futures-channel = "0.3.14"
-futures-util = "0.3.14"
-hyper = { version = "1.3.1", features = [] }
-hyper-util = { version = "0.1", features = ["server-auto", "tokio", "client-legacy"] }
-http-body-util = "0.1.0"
-tracing = "0.1.34"
-serde = { version = "1", default-features = false, features = ["derive"] }
-serde_json = "1"
-soketto = { version = "0.8.0", features = ["http"] }
-tokio = { version = "1.23.1", features = ["net", "rt-multi-thread", "macros", "time"] }
-tokio-util = { version = "0.7", features = ["compat"] }
+futures-channel = { workspace = true }
+futures-util = { workspace = true, features = ["default"] }
+hyper = { workspace = true }
+hyper-util = { workspace = true, features = ["server-auto", "tokio", "client-legacy"] }
+http-body-util = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+soketto = { workspace = true, features = ["http"] }
+tokio = { workspace = true, features = ["net", "rt-multi-thread", "macros", "time"] }
+tokio-util = { workspace = true, features = ["compat"] }
