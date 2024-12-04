@@ -24,8 +24,8 @@ jsonrpsee-server = { workspace = true, optional = true }
 jsonrpsee-proc-macros = { workspace = true, optional = true }
 jsonrpsee-core = { workspace = true, optional = true }
 jsonrpsee-types = { workspace = true, optional = true }
-tracing = { version = "0.1.34", optional = true }
-tokio = { version = "1.23.1", optional = true }
+tracing = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 [features]
 client-ws-transport-tls = ["jsonrpsee-client-transport/ws", "jsonrpsee-client-transport/tls-rustls-platform-verifier"]

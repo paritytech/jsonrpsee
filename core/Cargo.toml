@@ -14,29 +14,29 @@ readme.workspace = true
 publish = true
 
 [dependencies]
-async-trait = "0.1"
+async-trait = { workspace = true }
 jsonrpsee-types = { workspace = true }
-thiserror = "2"
-serde = { version = "1.0", default-features = false, features = ["derive"] }
-serde_json = { version = "1", features = ["raw_value"] }
-tracing = "0.1.34"
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["std"] }
+tracing = { workspace = true }
 
 # optional deps
-futures-util = { version = "0.3.14", default-features = false, optional = true }
-http = { version = "1.1", default-features = false, optional = true }
-bytes = { version = "1.6", optional = true }
-http-body = { version = "1", optional = true }
-http-body-util = { version = "0.1.1", optional = true }
-rustc-hash = { version = "2", optional = true }
-rand = { version = "0.8", optional = true }
-parking_lot = { version = "0.12", optional = true }
-tokio = { version = "1.23.1", optional = true }
-futures-timer = { version = "3", optional = true }
-tokio-stream = { version = "0.1", optional = true }
-pin-project = { version = "1", optional = true }
+futures-util = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+http-body = { workspace = true, optional = true }
+http-body-util = { workspace = true, optional = true }
+rustc-hash = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+futures-timer = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
+pin-project = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = { version = "0.4.19", optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -66,10 +66,10 @@ async-wasm-client = [
 ]
 
 [dev-dependencies]
-serde_json = "1.0"
-tokio = { version = "1.23.1", features = ["macros", "rt"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 jsonrpsee = { path = "../jsonrpsee", features = ["server", "macros"] }
-http-body-util = "0.1.1"
+http-body-util = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

@@ -14,7 +14,7 @@ readme.workspace = true
 publish = true
 
 [dependencies]
-serde = { version = "1", default-features = false, features = ["derive"] }
-serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value", "std"] }
-thiserror = "2.0"
-http = "1"
+http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
