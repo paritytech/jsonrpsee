@@ -30,7 +30,7 @@ base64 = { version = "0.22", default-features = false, features = ["alloc"], opt
 # tls
 tokio-rustls = { version = "0.26", default-features = false, optional = true, features = ["logging", "tls12", "ring"] }
 rustls-pki-types = { version = "1", optional = true }
-rustls-platform-verifier = { version = "0.4.0", optional = true }
+rustls-platform-verifier = { version = "0.5.0", optional = true }
 rustls = { version = "0.23", default-features = false, optional = true }
 
 # ws
