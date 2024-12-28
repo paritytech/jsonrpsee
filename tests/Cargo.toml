@@ -9,7 +9,7 @@ publish = false
 
 [dev-dependencies]
 anyhow = "1"
-fast-socks5 = { version = "0.9.1" }
+fast-socks5 = { version = "0.10.0" }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.14", default-features = false, features = ["alloc"]}
 http-body-util = "0.1"
