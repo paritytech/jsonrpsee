@@ -66,7 +66,7 @@ route-recognizer = "0.3.1"
 rustc-hash = "2"
 rustls = { version = "0.23", default-features = false }
 rustls-pki-types = "1"
-rustls-platform-verifier =  "0.4"
+rustls-platform-verifier =  "0.5"
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value"] }
 soketto = "0.8.1"
@@ -86,7 +86,7 @@ wasm-bindgen-futures = "0.4.19"
 anyhow = "1"
 console-subscriber = "0.4"
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
-fast-socks5 = "0.9.1"
+fast-socks5 = "0.10"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 pprof = { version = "0.14", features = ["flamegraph", "criterion"] }
 socket2 = "0.5.1"
