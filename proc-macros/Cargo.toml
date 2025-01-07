@@ -17,20 +17,20 @@ publish = true
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = { version = "2.0", default-features = false, features = ["extra-traits", "full", "visit", "parsing", "printing", "clone-impls", "proc-macro"] }
-proc-macro-crate = "3"
-heck = "0.5.0"
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true, features = ["extra-traits", "full", "visit", "parsing", "printing", "clone-impls", "proc-macro"] }
+proc-macro-crate = { workspace = true }
+heck = { workspace = true }
 
 [dev-dependencies]
 jsonrpsee = { path = "../jsonrpsee", features = ["server", "client-core", "http-client", "ws-client", "macros"] }
-hyper = "1.3"
-hyper-util = { version = "0.1.3", features = ["client", "client-legacy"]}
-futures-channel = { version = "0.3.14", default-features = false }
-futures-util = { version = "0.3.14", default-features = false }
-serde_json = "1"
-serde = "1"
-trybuild = "1.0.97"
-tokio = { version = "1.23.1", features = ["rt", "macros"] }
+hyper = { workspace = true }
+hyper-util = { workspace = true, features = ["client", "client-legacy"]}
+futures-channel = { workspace = true }
+futures-util = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+trybuild = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }
 tower = { workspace = true }
