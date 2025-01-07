@@ -149,8 +149,12 @@ where
 			(Some(method), &Method::GET) => {
 				// RPC methods are accessed with `POST`.
 				*req.method_mut() = Method::POST;
-				// Precautionary remove the URI.
-				*req.uri_mut() = Uri::from_static("/");
+				// Precautionary remove the URI path.
+				*req.uri_mut() = if let Some(query) = req.uri().query() {
+					Uri::from_str(&format!("/?{}", query)).expect("Valid uri; qed")
+				} else {
+					Uri::from_static("/")
+				};
 				// Requests must have the following headers:
 				req.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 				req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
