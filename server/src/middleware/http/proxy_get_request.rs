@@ -40,6 +40,7 @@ use jsonrpsee_types::{Id, RequestSer};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
