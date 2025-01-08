@@ -40,6 +40,7 @@ use jsonrpsee_types::{Id, RequestSer};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
@@ -149,8 +150,12 @@ where
 			(Some(method), &Method::GET) => {
 				// RPC methods are accessed with `POST`.
 				*req.method_mut() = Method::POST;
-				// Precautionary remove the URI.
-				*req.uri_mut() = Uri::from_static("/");
+				// Precautionary remove the URI path.
+				*req.uri_mut() = if let Some(query) = req.uri().query() {
+					Uri::from_str(&format!("/?{}", query)).expect("The query comes from a valid URI; qed")
+				} else {
+					Uri::from_static("/")
+				};
 				// Requests must have the following headers:
 				req.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 				req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
