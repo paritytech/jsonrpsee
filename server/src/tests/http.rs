@@ -26,13 +26,23 @@
 
 use std::net::SocketAddr;
 
-use crate::{BatchRequestConfig, RegisterMethodError, RpcModule, ServerBuilder, ServerConfig, ServerHandle};
-use jsonrpsee_core::RpcResult;
+use crate::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
+use crate::types::Request;
+use crate::{
+	BatchRequestConfig, HttpBody, HttpRequest, HttpResponse, MethodResponse, RegisterMethodError, RpcModule,
+	ServerBuilder, ServerConfig, ServerHandle,
+};
+use futures_util::future::{BoxFuture, Future, FutureExt};
+use hyper::body::Bytes;
+use jsonrpsee_core::{BoxError, RpcResult};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::ErrorObjectOwned;
 use serde_json::Value as JsonValue;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tower::Service;
 
 use super::helpers::{MyAppError, TestContext};
 
@@ -40,6 +50,66 @@ fn init_logger() {
 	let _ = tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init();
+}
+
+#[derive(Clone)]
+struct InjectExt<S> {
+	service: S,
+}
+
+impl<'a, S> RpcServiceT<'a> for InjectExt<S>
+where
+	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
+{
+	type Future = BoxFuture<'a, MethodResponse>;
+
+	fn call(&self, mut req: Request<'a>) -> Self::Future {
+		if req.method_name().contains("err") {
+			req.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
+		} else {
+			req.extensions_mut().insert(StatusCode::OK);
+		}
+
+		self.service.call(req).boxed()
+	}
+}
+
+#[derive(Debug, Clone)]
+struct ModifyHttpStatus<S> {
+	service: S,
+}
+
+impl<S, B> Service<HttpRequest<B>> for ModifyHttpStatus<S>
+where
+	S: Service<HttpRequest<B>, Response = HttpResponse<HttpBody>>,
+	S::Response: 'static,
+	S::Error: Into<BoxError> + Send + 'static,
+	S::Future: Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + std::fmt::Debug + 'static,
+	B::Data: Send,
+	B::Error: Into<BoxError>,
+{
+	type Response = S::Response;
+	type Error = BoxError;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+
+	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		self.service.poll_ready(cx).map_err(Into::into)
+	}
+
+	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
+		tracing::info!("{:?}", request);
+		let fut = self.service.call(request);
+		async move {
+			let mut rp = fut.await.map_err(Into::into)?;
+			let status_code = rp.extensions().get::<StatusCode>().copied().unwrap();
+
+			*rp.status_mut() = status_code;
+
+			Ok(rp)
+		}
+		.boxed()
+	}
 }
 
 async fn server() -> (SocketAddr, ServerHandle) {
@@ -578,4 +648,65 @@ async fn http2_method_call_works() {
 	let response = http2_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
+}
+
+#[tokio::test]
+async fn http_extensions_from_rpc_response_propagated() {
+	init_logger();
+
+	let server = ServerBuilder::default()
+		.set_rpc_middleware(RpcServiceBuilder::new().layer_fn(|service| InjectExt { service }))
+		.set_http_middleware(tower::ServiceBuilder::new().layer_fn(|service| ModifyHttpStatus { service }))
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("say_hello", |_, _ctx, _| "lo").unwrap();
+	let addr = server.local_addr().unwrap();
+	let uri = to_http_uri(addr);
+	let handle = server.start(module);
+
+	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
+	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::IM_A_TEAPOT);
+
+	handle.stop().unwrap();
+	handle.stopped().await;
+}
+
+#[tokio::test]
+async fn http_extensions_from_rpc_batch_response_overwrite() {
+	init_logger();
+
+	let server = ServerBuilder::default()
+		.set_rpc_middleware(RpcServiceBuilder::new().layer_fn(|service| InjectExt { service }))
+		.set_http_middleware(tower::ServiceBuilder::new().layer_fn(|service| ModifyHttpStatus { service }))
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("say_hello", |_, _ctx, _| "lo").unwrap();
+	module.register_method("err", |_, _ctx, _| "e").unwrap();
+	let addr = server.local_addr().unwrap();
+	let uri = to_http_uri(addr);
+	let handle = server.start(module);
+
+	// Send a batch which will overwrite the status code Teapot with OK.
+	let req = r#"[
+		{"jsonrpc":"2.0","method":"err", "params":[],"id":2},
+		{"jsonrpc":"2.0","method":"say_hello", "params":[],"id":3}
+	]"#;
+	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+
+	// Send a batch which will overwrite the status code OK with TEAPOT.
+	let req = r#"[
+			{"jsonrpc":"2.0","method":"say_hello", "params":[],"id":2},
+			{"jsonrpc":"2.0","method":"err", "params":[],"id":3}
+		]"#;
+	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::IM_A_TEAPOT);
+
+	handle.stop().unwrap();
+	handle.stopped().await;
 }

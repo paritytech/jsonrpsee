@@ -166,7 +166,8 @@ where
 				async move {
 					let res = fut.await.map_err(Into::into)?;
 
-					let mut body = http_body_util::BodyStream::new(res.into_body());
+					let (parts, body) = res.into_parts();
+					let mut body = http_body_util::BodyStream::new(body);
 					let mut bytes = Vec::new();
 
 					while let Some(frame) = body.frame().await {
@@ -181,7 +182,9 @@ where
 					}
 
 					let response = if let Ok(payload) = serde_json::from_slice::<RpcPayload>(&bytes) {
-						http::response::ok_response(payload.result.to_string())
+						let mut rp = http::response::ok_response(payload.result.to_string());
+						rp.extensions_mut().extend(parts.extensions);
+						rp
 					} else {
 						http::response::internal_error()
 					};
