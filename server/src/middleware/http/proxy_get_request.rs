@@ -152,7 +152,7 @@ where
 				*req.method_mut() = Method::POST;
 				// Precautionary remove the URI path.
 				*req.uri_mut() = if let Some(query) = req.uri().query() {
-					Uri::from_str(&format!("/?{}", query)).expect("Valid uri; qed")
+					Uri::from_str(&format!("/?{}", query)).expect("The query comes from a valid URI; qed")
 				} else {
 					Uri::from_static("/")
 				};
