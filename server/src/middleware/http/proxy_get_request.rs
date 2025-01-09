@@ -36,7 +36,7 @@ use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Method, Uri};
 use jsonrpsee_core::BoxError;
-use jsonrpsee_types::{Id, RequestSer};
+use jsonrpsee_types::{ErrorObject, Id, RequestSer};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -179,16 +179,27 @@ where
 						bytes.extend(data);
 					}
 
-					#[derive(serde::Deserialize)]
-					struct RpcPayload<'a> {
+					#[derive(serde::Deserialize, serde::Serialize, Debug)]
+					struct SuccessResponse<'a> {
 						#[serde(borrow)]
 						result: &'a serde_json::value::RawValue,
 					}
 
-					let response = if let Ok(payload) = serde_json::from_slice::<RpcPayload>(&bytes) {
+					#[derive(serde::Deserialize, serde::Serialize, Debug)]
+					struct ErrorResponse<'a> {
+						#[serde(borrow)]
+						error: &'a serde_json::value::RawValue,
+					}
+
+					let response = if let Ok(payload) = serde_json::from_slice::<SuccessResponse>(&bytes) {
 						http::response::ok_response(payload.result.to_string())
 					} else {
-						http::response::internal_error()
+						serde_json::from_slice::<ErrorResponse>(&bytes)
+							.and_then(|payload| serde_json::from_str::<ErrorObject>(&payload.error.to_string()))
+							.map_or_else(
+								|_| http::response::internal_error(),
+								|error| http::response::error_response(error.to_owned()),
+							)
 					};
 
 					Ok(response)

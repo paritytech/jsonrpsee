@@ -127,6 +127,15 @@ pub mod response {
 		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
 	}
 
+	/// Create a json response for general errors returned by the called method.
+	pub fn error_response(error: ErrorObjectOwned) -> HttpResponse {
+		let err = ResponsePayload::<()>::error(error);
+		let rp = Response::new(err, Id::Null);
+		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
+
+		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
+	}
+
 	/// Create a text/plain response for not allowed hosts.
 	pub fn host_not_allowed() -> HttpResponse {
 		from_template(hyper::StatusCode::FORBIDDEN, "Provided Host header is not whitelisted.\n", TEXT)
