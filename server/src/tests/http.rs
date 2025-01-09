@@ -661,12 +661,12 @@ async fn http_extensions_from_rpc_response_propagated() {
 		.await
 		.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _ctx, _| "lo").unwrap();
+	module.register_method("err", |_, _ctx, _| "lo").unwrap();
 	let addr = server.local_addr().unwrap();
 	let uri = to_http_uri(addr);
 	let handle = server.start(module);
 
-	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
+	let req = r#"{"jsonrpc":"2.0","method":"err","id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::IM_A_TEAPOT);
 
