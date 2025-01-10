@@ -36,7 +36,7 @@ use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Method, Uri};
 use jsonrpsee_core::BoxError;
-use jsonrpsee_types::{ErrorObject, Id, RequestSer};
+use jsonrpsee_types::{ErrorCode, ErrorObject, Id, RequestSer};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -197,8 +197,8 @@ where
 						serde_json::from_slice::<ErrorResponse>(&bytes)
 							.and_then(|payload| serde_json::from_str::<ErrorObject>(&payload.error.to_string()))
 							.map_or_else(
-								|_| http::response::internal_error(),
-								|error| http::response::error_response(error.to_owned()),
+								|_| http::response::error_response(ErrorCode::InternalError.to_string()),
+								|error| http::response::error_response(error.to_string()),
 							)
 					};
 

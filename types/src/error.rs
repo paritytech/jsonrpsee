@@ -39,7 +39,6 @@ pub type ErrorObjectOwned = ErrorObject<'static>;
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
 #[derive(Debug, Deserialize, Serialize, Clone, thiserror::Error)]
 #[serde(deny_unknown_fields)]
-#[error("{self:?}")]
 pub struct ErrorObject<'a> {
 	/// Code
 	code: ErrorCode,
@@ -93,6 +92,12 @@ impl<'a> ErrorObject<'a> {
 			message: StdCow::Borrowed(self.message.borrow()),
 			data: self.data.as_ref().map(|d| StdCow::Borrowed(d.borrow())),
 		}
+	}
+}
+
+impl fmt::Display for ErrorObject<'_> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}: {}", self.code(), self.message())
 	}
 }
 
