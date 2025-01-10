@@ -179,13 +179,13 @@ where
 						bytes.extend(data);
 					}
 
-					#[derive(serde::Deserialize, serde::Serialize, Debug)]
+					#[derive(serde::Deserialize)]
 					struct SuccessResponse<'a> {
 						#[serde(borrow)]
 						result: &'a serde_json::value::RawValue,
 					}
 
-					#[derive(serde::Deserialize, serde::Serialize, Debug)]
+					#[derive(serde::Deserialize)]
 					struct ErrorResponse<'a> {
 						#[serde(borrow)]
 						error: ErrorObject<'a>,
