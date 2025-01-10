@@ -195,7 +195,7 @@ where
 						http::response::ok_response(payload.result.to_string())
 					} else {
 						let error = serde_json::from_slice::<ErrorResponse>(&bytes)
-							.and_then(|payload| serde_json::from_str::<ErrorObject>(&payload.error.to_string()))
+							.map(|payload| payload.error)
 							.unwrap_or_else(|_| ErrorObject::from(ErrorCode::InternalError));
 						http::response::error_response(error)
 					};
