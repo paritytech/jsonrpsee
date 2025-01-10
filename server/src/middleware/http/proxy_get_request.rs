@@ -188,7 +188,7 @@ where
 					#[derive(serde::Deserialize, serde::Serialize, Debug)]
 					struct ErrorResponse<'a> {
 						#[serde(borrow)]
-						error: &'a serde_json::value::RawValue,
+						error: ErrorObject<'a>,
 					}
 
 					let response = if let Ok(payload) = serde_json::from_slice::<SuccessResponse>(&bytes) {
