@@ -2,7 +2,7 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: Serialize` is not satisfi
  --> tests/ui/incorrect/rpc/rpc_empty_bounds.rs:9:1
   |
 9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `<Conf as Config>::Hash`, which is required by `Result<<Conf as Config>::Hash, ErrorObject<'_>>: IntoResponse`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `<Conf as Config>::Hash`
   |
   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `<Conf as Config>::Hash` type
   = note: for types from other crates check whether the crate offers a `serde` feature flag
@@ -13,7 +13,7 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: Clone` is not satisfied
  --> tests/ui/incorrect/rpc/rpc_empty_bounds.rs:9:1
   |
 9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `<Conf as Config>::Hash`, which is required by `Result<<Conf as Config>::Hash, ErrorObject<'_>>: IntoResponse`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `<Conf as Config>::Hash`
   |
   = note: required for `Result<<Conf as Config>::Hash, ErrorObject<'_>>` to implement `IntoResponse`
   = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -26,7 +26,7 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: DeserializeOwned` is not 
  --> tests/ui/incorrect/rpc/rpc_empty_bounds.rs:9:1
   |
 9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `for<'de> Deserialize<'de>` is not implemented for `<Conf as Config>::Hash`, which is required by `<Conf as Config>::Hash: DeserializeOwned`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `for<'de> Deserialize<'de>` is not implemented for `<Conf as Config>::Hash`
   |
   = note: required for `<Conf as Config>::Hash` to implement `DeserializeOwned`
 note: required by a bound in `request`
