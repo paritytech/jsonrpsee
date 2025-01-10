@@ -111,7 +111,7 @@ where
 /// HTTP response helpers.
 pub mod response {
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
-	use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload};
+	use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Id, Response, ResponsePayload};
 
 	use crate::{HttpBody, HttpResponse};
 
@@ -124,6 +124,12 @@ pub mod response {
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
+		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
+	}
+
+	/// Create a json response for general errors returned by the called method.
+	pub fn error_response(error: ErrorObject) -> HttpResponse {
+		let error = serde_json::to_string(&error).expect("JSON serialization infallible; qed");
 		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
 	}
 
@@ -172,11 +178,6 @@ pub mod response {
 	/// Create a valid JSON response.
 	pub fn ok_response(body: impl Into<HttpBody>) -> HttpResponse {
 		from_template(hyper::StatusCode::OK, body, JSON)
-	}
-
-	/// Create a general internal error response.
-	pub fn error_response(body: impl Into<HttpBody>) -> HttpResponse {
-		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, body, JSON)
 	}
 
 	/// Create a response for unsupported content type.

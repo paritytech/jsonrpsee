@@ -194,12 +194,10 @@ where
 					let response = if let Ok(payload) = serde_json::from_slice::<SuccessResponse>(&bytes) {
 						http::response::ok_response(payload.result.to_string())
 					} else {
-						serde_json::from_slice::<ErrorResponse>(&bytes)
+						let error = serde_json::from_slice::<ErrorResponse>(&bytes)
 							.and_then(|payload| serde_json::from_str::<ErrorObject>(&payload.error.to_string()))
-							.map_or_else(
-								|_| http::response::error_response(ErrorCode::InternalError.to_string()),
-								|error| http::response::error_response(error.to_string()),
-							)
+							.unwrap_or_else(|_| ErrorObject::from(ErrorCode::InternalError));
+						http::response::error_response(error)
 					};
 
 					Ok(response)
