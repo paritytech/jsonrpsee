@@ -213,7 +213,7 @@ fn internal_proxy_error(bytes: &[u8]) -> HttpResponse {
 		error: ErrorObject<'a>,
 	}
 
-	let error = serde_json::from_slice::<ErrorResponse>(&bytes)
+	let error = serde_json::from_slice::<ErrorResponse>(bytes)
 		.map(|payload| payload.error)
 		.unwrap_or_else(|_| ErrorObject::from(ErrorCode::InternalError));
 

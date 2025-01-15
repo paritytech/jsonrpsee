@@ -482,7 +482,7 @@ mod tests {
 
 		// Recall a batch appends two bytes for the `[]`.
 		let mut builder = BatchResponseBuilder::new_with_limit(39);
-		builder.append(&method).unwrap();
+		builder.append(method).unwrap();
 		let batch = builder.finish();
 
 		assert_eq!(batch.result, r#"[{"jsonrpc":"2.0","id":1,"result":"a"}]"#)
@@ -491,14 +491,15 @@ mod tests {
 	#[test]
 	fn batch_with_multiple_works() {
 		let m1 = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a"), usize::MAX);
+		let m11 = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a"), usize::MAX);
 		assert_eq!(m1.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]` and one byte for `,` to append a method call.
 		// so it should be 2 + (37 * n) + (n-1)
 		let limit = 2 + (37 * 2) + 1;
 		let mut builder = BatchResponseBuilder::new_with_limit(limit);
-		builder.append(&m1).unwrap();
-		builder.append(&m1).unwrap();
+		builder.append(m1).unwrap();
+		builder.append(m11).unwrap();
 		let batch = builder.finish();
 
 		assert_eq!(batch.result, r#"[{"jsonrpc":"2.0","id":1,"result":"a"},{"jsonrpc":"2.0","id":1,"result":"a"}]"#)
@@ -517,7 +518,7 @@ mod tests {
 		let method = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a".repeat(28)), 128);
 		assert_eq!(method.result.len(), 64);
 
-		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
+		let batch = BatchResponseBuilder::new_with_limit(63).append(method).unwrap_err();
 
 		let exp_err = r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of 63"}}"#;
 		assert_eq!(batch.result, exp_err);
