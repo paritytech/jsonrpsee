@@ -115,7 +115,7 @@ where
 pub mod response {
 	use jsonrpsee_core::server::MethodResponse;
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
-	use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload};
+	use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Id, Response, ResponsePayload};
 
 	use crate::{HttpBody, HttpResponse};
 
@@ -128,6 +128,12 @@ pub mod response {
 		let rp = Response::new(err, Id::Null);
 		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
+		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
+	}
+
+	/// Create a json response for general errors returned by the called method.
+	pub fn error_response(error: ErrorObject) -> HttpResponse {
+		let error = serde_json::to_string(&error).expect("JSON serialization infallible; qed");
 		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
 	}
 
@@ -163,7 +169,11 @@ pub mod response {
 	}
 
 	/// Create a response body.
-	fn from_template(status: hyper::StatusCode, body: impl Into<HttpBody>, content_type: &'static str) -> HttpResponse {
+	pub(crate) fn from_template(
+		status: hyper::StatusCode,
+		body: impl Into<HttpBody>,
+		content_type: &'static str,
+	) -> HttpResponse {
 		HttpResponse::builder()
 			.status(status)
 			.header("content-type", hyper::header::HeaderValue::from_static(content_type))
