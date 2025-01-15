@@ -297,11 +297,11 @@ impl BatchResponseBuilder {
 	///
 	/// Fails if the max limit is exceeded and returns to error response to
 	/// return early in order to not process method call responses which are thrown away anyway.
-	pub fn append(&mut self, response: &MethodResponse) -> Result<(), MethodResponse> {
+	pub fn append(&mut self, response: MethodResponse) -> Result<(), MethodResponse> {
 		// `,` will occupy one extra byte for each entry
 		// on the last item the `,` is replaced by `]`.
 		let len = response.result.len() + self.result.len() + 1;
-		self.extensions.extend(response.extensions.clone());
+		self.extensions.extend(response.extensions);
 
 		if len > self.max_response_size {
 			Err(MethodResponse::error(Id::Null, reject_too_big_batch_response(self.max_response_size)))

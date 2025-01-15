@@ -1274,7 +1274,7 @@ where
 				if let Ok(req) = deserialize::from_str_with_extensions(call.get(), extensions.clone()) {
 					let rp = rpc_service.call(req).await;
 
-					if let Err(too_large) = batch_response.append(&rp) {
+					if let Err(too_large) = batch_response.append(rp) {
 						return Some(too_large);
 					}
 				} else if let Ok(_notif) = serde_json::from_str::<Notif>(call.get()) {
@@ -1288,7 +1288,7 @@ where
 					};
 
 					if let Err(too_large) =
-						batch_response.append(&MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)))
+						batch_response.append(MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)))
 					{
 						return Some(too_large);
 					}
