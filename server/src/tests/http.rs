@@ -98,7 +98,6 @@ where
 	}
 
 	fn call(&mut self, request: HttpRequest<B>) -> Self::Future {
-		tracing::info!("{:?}", request);
 		let fut = self.service.call(request);
 		async move {
 			let mut rp = fut.await.map_err(Into::into)?;
