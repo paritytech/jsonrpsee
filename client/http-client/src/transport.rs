@@ -21,6 +21,7 @@ use jsonrpsee_core::{
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::Duration;
 use thiserror::Error;
 use tower::layer::util::Identity;
 use tower::{Layer, Service, ServiceExt};
@@ -103,6 +104,8 @@ pub struct HttpTransportClientBuilder<L> {
 	pub(crate) service_builder: tower::ServiceBuilder<L>,
 	/// TCP_NODELAY
 	pub(crate) tcp_no_delay: bool,
+	/// Request timeout
+	pub(crate) request_timeout: Duration,
 }
 
 impl Default for HttpTransportClientBuilder<Identity> {
@@ -123,6 +126,7 @@ impl HttpTransportClientBuilder<Identity> {
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
 			tcp_no_delay: true,
+			request_timeout: Duration::from_secs(60),
 		}
 	}
 }
@@ -182,6 +186,7 @@ impl<L> HttpTransportClientBuilder<L> {
 			max_response_size: self.max_response_size,
 			service_builder: service,
 			tcp_no_delay: self.tcp_no_delay,
+			request_timeout: self.request_timeout,
 		}
 	}
 
@@ -203,6 +208,7 @@ impl<L> HttpTransportClientBuilder<L> {
 			headers,
 			service_builder,
 			tcp_no_delay,
+			request_timeout,
 		} = self;
 		let mut url = Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
 
@@ -288,6 +294,7 @@ impl<L> HttpTransportClientBuilder<L> {
 			max_response_size,
 			max_log_length,
 			headers: cached_headers,
+			request_timeout,
 		})
 	}
 }
@@ -309,6 +316,8 @@ pub struct HttpTransportClient<S> {
 	max_log_length: u32,
 	/// Custom headers to pass with every request.
 	headers: HeaderMap,
+	/// Request timeout
+	request_timeout: Duration,
 }
 
 impl<B, S> HttpTransportClient<S>
@@ -342,7 +351,9 @@ where
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
 		tx_log_from_str(&body, self.max_log_length);
 
-		let response = self.inner_send(body).await?;
+		let response =
+			tokio::time::timeout(self.request_timeout, self.inner_send(body)).await.map_err(|_| Error::Timeout)??;
+
 		let (parts, body) = response.into_parts();
 
 		let (body, _is_single) = http_helpers::read_body(&parts.headers, body, self.max_response_size).await?;
@@ -354,7 +365,8 @@ where
 
 	/// Send serialized message without reading the HTTP message body.
 	pub(crate) async fn send(&self, body: String) -> Result<(), Error> {
-		let _ = self.inner_send(body).await?;
+		let _ =
+			tokio::time::timeout(self.request_timeout, self.inner_send(body)).await.map_err(|_| Error::Timeout)??;
 
 		Ok(())
 	}
@@ -385,6 +397,10 @@ pub enum Error {
 	/// Invalid certificate store.
 	#[error("Invalid certificate store")]
 	InvalidCertficateStore,
+
+	/// Timeout.
+	#[error("Request timed out")]
+	Timeout,
 }
 
 #[cfg(test)]
