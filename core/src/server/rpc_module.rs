@@ -399,7 +399,7 @@ impl Methods {
 		};
 
 		let is_success = response.is_success();
-		let (rp, notif) = response.into_parts();
+		let (rp, notif, _) = response.into_parts();
 
 		if let Some(n) = notif {
 			n.notify(is_success);

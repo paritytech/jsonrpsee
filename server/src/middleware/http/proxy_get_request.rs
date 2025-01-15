@@ -24,8 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Middleware that proxies requests at a specified URI to internal
-//! RPC method calls.
+//! Middleware that proxies HTTP GET requests at a specified URI to an internal RPC method call.
 
 use crate::transport::http;
 use crate::{HttpBody, HttpRequest, HttpResponse};
@@ -34,7 +33,7 @@ use http_body_util::BodyExt;
 use hyper::body::Bytes;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
-use hyper::{Method, Uri};
+use hyper::{Method, StatusCode, Uri};
 use jsonrpsee_core::BoxError;
 use jsonrpsee_types::{ErrorCode, ErrorObject, Id, RequestSer};
 use std::collections::HashMap;
@@ -171,7 +170,8 @@ where
 				async move {
 					let res = fut.await.map_err(Into::into)?;
 
-					let mut body = http_body_util::BodyStream::new(res.into_body());
+					let (parts, body) = res.into_parts();
+					let mut body = http_body_util::BodyStream::new(body);
 					let mut bytes = Vec::new();
 
 					while let Some(frame) = body.frame().await {
@@ -185,20 +185,13 @@ where
 						result: &'a serde_json::value::RawValue,
 					}
 
-					#[derive(serde::Deserialize)]
-					struct ErrorResponse<'a> {
-						#[serde(borrow)]
-						error: ErrorObject<'a>,
-					}
-
-					let response = if let Ok(payload) = serde_json::from_slice::<SuccessResponse>(&bytes) {
+					let mut response = if let Ok(payload) = serde_json::from_slice::<SuccessResponse>(&bytes) {
 						http::response::ok_response(payload.result.to_string())
 					} else {
-						let error = serde_json::from_slice::<ErrorResponse>(&bytes)
-							.map(|payload| payload.error)
-							.unwrap_or_else(|_| ErrorObject::from(ErrorCode::InternalError));
-						http::response::error_response(error)
+						internal_proxy_error(&bytes)
 					};
+
+					response.extensions_mut().extend(parts.extensions);
 
 					Ok(response)
 				}
@@ -211,4 +204,22 @@ where
 			}
 		}
 	}
+}
+
+fn internal_proxy_error(bytes: &[u8]) -> HttpResponse {
+	#[derive(serde::Deserialize)]
+	struct ErrorResponse<'a> {
+		#[serde(borrow)]
+		error: ErrorObject<'a>,
+	}
+
+	let error = serde_json::from_slice::<ErrorResponse>(bytes)
+		.map(|payload| payload.error)
+		.unwrap_or_else(|_| ErrorObject::from(ErrorCode::InternalError));
+
+	http::response::from_template(
+		StatusCode::INTERNAL_SERVER_ERROR,
+		serde_json::to_string(&error).expect("JSON serialization infallible; qed"),
+		"application/json; charset=utf-8",
+	)
 }

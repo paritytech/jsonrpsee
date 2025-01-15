@@ -95,12 +95,15 @@ where
 				}
 			};
 
-			let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, parts.extensions)
-				.await;
-
-			// If the response is empty it means that it was a notification or empty batch.
-			// For HTTP these are just ACK:ed with a empty body.
-			response::ok_response(rp.map_or(String::new(), |r| r.into_result()))
+			if let Some(rp) =
+				handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, parts.extensions).await
+			{
+				response::from_method_response(rp)
+			} else {
+				// If the response is empty it means that it was a notification or empty batch.
+				// For HTTP these are just ACK:ed with a empty body.
+				response::ok_response("")
+			}
 		}
 		// Error scenarios:
 		Method::POST => response::unsupported_content_type(),
@@ -110,6 +113,7 @@ where
 
 /// HTTP response helpers.
 pub mod response {
+	use jsonrpsee_core::server::MethodResponse;
 	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 	use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Id, Response, ResponsePayload};
 
@@ -165,7 +169,11 @@ pub mod response {
 	}
 
 	/// Create a response body.
-	fn from_template(status: hyper::StatusCode, body: impl Into<HttpBody>, content_type: &'static str) -> HttpResponse {
+	pub(crate) fn from_template(
+		status: hyper::StatusCode,
+		body: impl Into<HttpBody>,
+		content_type: &'static str,
+	) -> HttpResponse {
 		HttpResponse::builder()
 			.status(status)
 			.header("content-type", hyper::header::HeaderValue::from_static(content_type))
@@ -178,6 +186,17 @@ pub mod response {
 	/// Create a valid JSON response.
 	pub fn ok_response(body: impl Into<HttpBody>) -> HttpResponse {
 		from_template(hyper::StatusCode::OK, body, JSON)
+	}
+
+	/// Create a response from a method response.
+	///
+	/// This will include the body and extensions from the method response.
+	pub fn from_method_response(rp: MethodResponse) -> HttpResponse {
+		let (body, _, extensions) = rp.into_parts();
+
+		let mut rp = from_template(hyper::StatusCode::OK, body, JSON);
+		rp.extensions_mut().extend(extensions);
+		rp
 	}
 
 	/// Create a response for unsupported content type.
