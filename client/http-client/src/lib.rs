@@ -37,6 +37,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod client;
+mod rpc_service;
 
 /// HTTP transport.
 pub mod transport;
@@ -67,3 +68,6 @@ pub(crate) enum CertificateStore {
 	Native,
 	Custom(CustomCertStore),
 }
+
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct IsNotification;

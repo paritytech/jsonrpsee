@@ -29,12 +29,28 @@ use std::time::Duration;
 
 use hyper::body::Bytes;
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::RpcServiceT;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, Server};
+use jsonrpsee::server::{RpcModule, RpcServiceBuilder, Server};
+use jsonrpsee::types::Request;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 use tracing_subscriber::util::SubscriberInitExt;
+
+struct Logger<S>(S);
+
+impl<'a, S> RpcServiceT<'a> for Logger<S>
+where
+	S: RpcServiceT<'a>,
+{
+	type Future = S::Future;
+
+	fn call(&self, req: Request<'a>) -> Self::Future {
+		println!("logger layer : {:?}", req);
+		self.0.call(req)
+	}
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -58,7 +74,9 @@ async fn main() -> anyhow::Result<()> {
 			.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
 	);
 
-	let client = HttpClient::builder().set_http_middleware(middleware).build(url)?;
+	let rpc = RpcServiceBuilder::new().layer_fn(|service| Logger(service));
+
+	let client = HttpClient::builder().set_http_middleware(middleware).set_rpc_middleware(rpc).build(url)?;
 	let params = rpc_params![1_u64, 2, 3];
 	let response: Result<String, _> = client.request("say_hello", params).await;
 	tracing::info!("r: {:?}", response);

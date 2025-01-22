@@ -24,24 +24,25 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::borrow::Cow as StdCow;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient, HttpTransportClientBuilder};
-use crate::types::{NotificationSer, RequestSer, Response};
-use crate::{HttpRequest, HttpResponse};
+use crate::rpc_service::RpcService;
+use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClientBuilder};
+use crate::types::Response;
+use crate::{HttpRequest, HttpResponse, IsNotification};
 use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
+	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
 };
+use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
+use jsonrpsee_types::{Id, InvalidRequestId, Request, ResponseSuccess};
 use serde::de::DeserializeOwned;
 use tokio::sync::Semaphore;
 use tower::layer::util::Identity;
@@ -75,7 +76,7 @@ use crate::{CertificateStore, CustomCertStore};
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct HttpClientBuilder<L = Identity> {
+pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Identity> {
 	max_request_size: u32,
 	max_response_size: u32,
 	request_timeout: Duration,
@@ -84,12 +85,13 @@ pub struct HttpClientBuilder<L = Identity> {
 	id_kind: IdKind,
 	max_log_length: u32,
 	headers: HeaderMap,
-	service_builder: tower::ServiceBuilder<L>,
+	service_builder: tower::ServiceBuilder<HttpMiddleware>,
+	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	tcp_no_delay: bool,
 	max_concurrent_requests: Option<usize>,
 }
 
-impl<L> HttpClientBuilder<L> {
+impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddleware> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_size(mut self, size: u32) -> Self {
 		self.max_request_size = size;
@@ -215,8 +217,29 @@ impl<L> HttpClientBuilder<L> {
 		self
 	}
 
+	/// Set the RPC middleware.
+	pub fn set_rpc_middleware<T>(self, rpc_builder: RpcServiceBuilder<T>) -> HttpClientBuilder<HttpMiddleware, T> {
+		HttpClientBuilder {
+			#[cfg(feature = "tls")]
+			certificate_store: self.certificate_store,
+			id_kind: self.id_kind,
+			headers: self.headers,
+			max_log_length: self.max_log_length,
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
+			service_builder: self.service_builder,
+			rpc_middleware: rpc_builder,
+			request_timeout: self.request_timeout,
+			tcp_no_delay: self.tcp_no_delay,
+			max_concurrent_requests: self.max_concurrent_requests,
+		}
+	}
+
 	/// Set custom tower middleware.
-	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
+	pub fn set_http_middleware<T>(
+		self,
+		service_builder: tower::ServiceBuilder<T>,
+	) -> HttpClientBuilder<T, RpcMiddleware> {
 		HttpClientBuilder {
 			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store,
@@ -226,6 +249,7 @@ impl<L> HttpClientBuilder<L> {
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			service_builder,
+			rpc_middleware: self.rpc_middleware,
 			request_timeout: self.request_timeout,
 			tcp_no_delay: self.tcp_no_delay,
 			max_concurrent_requests: self.max_concurrent_requests,
@@ -233,16 +257,18 @@ impl<L> HttpClientBuilder<L> {
 	}
 }
 
-impl<B, S, L> HttpClientBuilder<L>
+impl<B, S, S2, HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddleware>
 where
-	L: Layer<transport::HttpBackend, Service = S>,
+	RpcMiddleware: Layer<RpcService<S>, Service = S2>,
+	for<'a> <RpcMiddleware as Layer<RpcService<S>>>::Service: RpcServiceT<'a>,
+	HttpMiddleware: Layer<transport::HttpBackend, Service = S>,
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Clone,
 	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {
 	/// Build the HTTP client with target to connect to.
-	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient<S>, Error> {
+	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient<S2>, Error> {
 		let Self {
 			max_request_size,
 			max_response_size,
@@ -254,10 +280,11 @@ where
 			max_log_length,
 			service_builder,
 			tcp_no_delay,
+			rpc_middleware,
 			..
 		} = self;
 
-		let transport = HttpTransportClientBuilder {
+		let http = HttpTransportClientBuilder {
 			max_request_size,
 			max_response_size,
 			headers,
@@ -266,6 +293,7 @@ where
 			service_builder,
 			#[cfg(feature = "tls")]
 			certificate_store,
+			request_timeout,
 		}
 		.build(target)
 		.map_err(|e| Error::Transport(e.into()))?;
@@ -275,9 +303,8 @@ where
 			.map(|max_concurrent_requests| Arc::new(Semaphore::new(max_concurrent_requests)));
 
 		Ok(HttpClient {
-			transport,
+			transport: rpc_middleware.service(RpcService::new(http, max_response_size)),
 			id_manager: Arc::new(RequestIdManager::new(id_kind)),
-			request_timeout,
 			request_guard,
 		})
 	}
@@ -295,6 +322,7 @@ impl Default for HttpClientBuilder<Identity> {
 			max_log_length: 4096,
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
+			rpc_middleware: RpcServiceBuilder::default(),
 			tcp_no_delay: true,
 			max_concurrent_requests: None,
 		}
@@ -310,11 +338,9 @@ impl HttpClientBuilder<Identity> {
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
-pub struct HttpClient<S = HttpBackend> {
+pub struct HttpClient<S> {
 	/// HTTP transport client.
-	transport: HttpTransportClient<S>,
-	/// Request timeout. Defaults to 60sec.
-	request_timeout: Duration,
+	transport: S,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
 	/// Concurrent requests limit guard.
@@ -329,13 +355,9 @@ impl HttpClient<HttpBackend> {
 }
 
 #[async_trait]
-impl<B, S> ClientT for HttpClient<S>
+impl<S> ClientT for HttpClient<S>
 where
-	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Send + Sync + Clone,
-	<S as Service<HttpRequest>>::Future: Send,
-	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-	B::Error: Into<BoxError>,
-	B::Data: Send,
+	for<'a> S: RpcServiceT<'a> + Send + Sync,
 {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
@@ -347,16 +369,11 @@ where
 			None => None,
 		};
 		let params = params.to_rpc_params()?;
-		let notif =
-			serde_json::to_string(&NotificationSer::borrowed(&method, params.as_deref())).map_err(Error::ParseError)?;
+		let mut request = Request::new(method.into(), params.as_deref(), Id::Null);
+		request.extensions_mut().insert(IsNotification);
 
-		let fut = self.transport.send(notif);
-
-		match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(ok)) => Ok(ok),
-			Err(_) => Err(Error::RequestTimeout),
-			Ok(Err(e)) => Err(Error::Transport(e.into())),
-		}
+		self.transport.call(request).await;
+		Ok(())
 	}
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
@@ -372,23 +389,12 @@ where
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
-		let request = RequestSer::borrowed(&id, &method, params.as_deref());
-		let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
-
-		let fut = self.transport.send_and_read_body(raw);
-		let body = match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(body)) => body,
-			Err(_e) => {
-				return Err(Error::RequestTimeout);
-			}
-			Ok(Err(e)) => {
-				return Err(Error::Transport(e.into()));
-			}
-		};
+		let request = Request::new(method.into(), params.as_deref(), id.clone());
+		let rp = self.transport.call(request).await;
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
-		let response = ResponseSuccess::try_from(serde_json::from_slice::<Response<&JsonRawValue>>(&body)?)?;
+		let response = ResponseSuccess::try_from(serde_json::from_str::<Response<&JsonRawValue>>(&rp.as_result())?)?;
 
 		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
 
@@ -404,7 +410,9 @@ where
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
-		let _permit = match self.request_guard.as_ref() {
+		todo!();
+
+		/*let _permit = match self.request_guard.as_ref() {
 			Some(permit) => permit.acquire().await.ok(),
 			None => None,
 		};
@@ -468,18 +476,14 @@ where
 			}
 		}
 
-		Ok(BatchResponse::new(successful_calls, responses, failed_calls))
+		Ok(BatchResponse::new(successful_calls, responses, failed_calls))*/
 	}
 }
 
 #[async_trait]
-impl<B, S> SubscriptionClientT for HttpClient<S>
+impl<S> SubscriptionClientT for HttpClient<S>
 where
-	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Send + Sync + Clone,
-	<S as Service<HttpRequest>>::Future: Send,
-	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-	B::Data: Send,
-	B::Error: Into<BoxError>,
+	for<'a> S: RpcServiceT<'a> + Send + Sync,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].
