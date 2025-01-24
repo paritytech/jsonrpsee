@@ -101,7 +101,7 @@ jobs:
         run: cargo machete
 
   check-msrv:
-    name: Check
+    name: Check MSRV
     runs-on: ubuntu-latest
     steps:
 
