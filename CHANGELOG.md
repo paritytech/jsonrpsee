@@ -4,6 +4,13 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.8] - 2024-01-24
+
+This is a non-breaking release that decreases the MSRV to 1.74.0.
+
+### [Changed]
+- reduce MSRV to 1.74.0 ([#1519](https://github.com/paritytech/jsonrpsee/pull/1519))
+
 ## [v0.24.7] - 2024-10-16
 
 This is a patch release that mainly fixes the tower::Service implementation to be generic over the HttpBody to work with all middleware layers.
