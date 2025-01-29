@@ -150,5 +150,3 @@ impl<T: IdProvider + ?Sized> IdProvider for Box<T> {
 		(**self).next_id()
 	}
 }
-
-
