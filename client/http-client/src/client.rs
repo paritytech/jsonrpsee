@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::borrow::Cow as StdCow;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,18 +32,18 @@ use std::time::Duration;
 use crate::rpc_service::RpcService;
 use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClientBuilder};
 use crate::types::Response;
-use crate::{HttpRequest, HttpResponse, IsNotification};
+use crate::{HttpRequest, HttpResponse};
 use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
+	generate_batch_id_range, BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
 };
 use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::{Id, InvalidRequestId, Request, ResponseSuccess};
+use jsonrpsee_types::{InvalidRequestId, Notification, Request, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tokio::sync::Semaphore;
 use tower::layer::util::Identity;
@@ -369,10 +370,8 @@ where
 			None => None,
 		};
 		let params = params.to_rpc_params()?;
-		let mut request = Request::new(method.into(), params.as_deref(), Id::Null);
-		request.extensions_mut().insert(IsNotification);
-
-		self.transport.call(request).await;
+		let n = Notification { jsonrpc: TwoPointZero, method: method.into(), params };
+		self.transport.notification(n).await;
 		Ok(())
 	}
 
@@ -410,9 +409,7 @@ where
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
-		todo!();
-
-		/*let _permit = match self.request_guard.as_ref() {
+		let _permit = match self.request_guard.as_ref() {
 			Some(permit) => permit.acquire().await.ok(),
 			None => None,
 		};
@@ -423,60 +420,37 @@ where
 		let mut batch_request = Vec::with_capacity(batch.len());
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
 			let id = self.id_manager.as_id_kind().into_id(id);
-			batch_request.push(RequestSer {
+			batch_request.push(Request {
 				jsonrpc: TwoPointZero,
-				id,
 				method: method.into(),
 				params: params.map(StdCow::Owned),
+				id,
+				extensions: Default::default(),
 			});
 		}
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+		let batch = self.transport.batch(batch_request).await;
+		let responses: Vec<Response<&JsonRawValue>> = serde_json::from_str(&batch.as_result()).unwrap();
 
-		let body = match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(body)) => body,
-			Err(_e) => return Err(Error::RequestTimeout),
-			Ok(Err(e)) => return Err(Error::Transport(e.into())),
-		};
+		let mut x = Vec::new();
+		let mut success = 0;
+		let mut failed = 0;
 
-		let json_rps: Vec<Response<&JsonRawValue>> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-
-		let mut responses = Vec::with_capacity(json_rps.len());
-		let mut successful_calls = 0;
-		let mut failed_calls = 0;
-
-		for _ in 0..json_rps.len() {
-			responses.push(Err(ErrorObject::borrowed(0, "", None)));
-		}
-
-		for rp in json_rps {
-			let id = rp.id.try_parse_inner_as_number()?;
-
-			let res = match ResponseSuccess::try_from(rp) {
+		for rp in responses.into_iter() {
+			match ResponseSuccess::try_from(rp) {
 				Ok(r) => {
-					let result = serde_json::from_str(r.result.get())?;
-					successful_calls += 1;
-					Ok(result)
+					let v = serde_json::from_str(r.result.get()).map_err(Error::ParseError)?;
+					x.push(Ok(v));
+					success += 1;
 				}
 				Err(err) => {
-					failed_calls += 1;
-					Err(err)
+					x.push(Err(err));
+					failed += 1;
 				}
 			};
-
-			let maybe_elem = id
-				.checked_sub(id_range.start)
-				.and_then(|p| p.try_into().ok())
-				.and_then(|p: usize| responses.get_mut(p));
-
-			if let Some(elem) = maybe_elem {
-				*elem = res;
-			} else {
-				return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
-			}
 		}
 
-		Ok(BatchResponse::new(successful_calls, responses, failed_calls))*/
+		Ok(BatchResponse::new(success, x, failed))
 	}
 }
 

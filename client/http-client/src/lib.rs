@@ -68,6 +68,3 @@ pub(crate) enum CertificateStore {
 	Native,
 	Custom(CustomCertStore),
 }
-
-#[derive(Copy, Clone, Debug)]
-pub(crate) struct IsNotification;

@@ -1,7 +1,8 @@
 //! Middleware for the RPC service.
 
 use futures_util::future::{Either, Future};
-use jsonrpsee_types::Request;
+use jsonrpsee_types::{Notification, Request};
+use serde_json::value::RawValue;
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
 
@@ -14,9 +15,23 @@ pub trait RpcServiceT<'a> {
 	type Future: Future<Output = MethodResponse> + Send;
 
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
-	/// In this interface they are treated in the same way but it's possible to
+	///
+	/// In this interface both are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
 	fn call(&self, request: Request<'a>) -> Self::Future;
+
+	/// Similar to `RpcServiceT::call` but process multiple JSON-RPC calls at once.
+	///
+	/// This method is optional because it's generally not by the server however
+	/// it may be useful for batch processing on the client side.
+	fn batch(&self, _requests: Vec<Request<'a>>) -> Self::Future {
+		todo!();
+	}
+
+	/// Similar to `RpcServiceT::call` but process a JSON-RPC notification.
+	fn notification(&self, _request: Notification<'a, Option<Box<RawValue>>>) -> Self::Future {
+		todo!();
+	}
 }
 
 /// Similar to [`tower::ServiceBuilder`] but doesn't
