@@ -41,6 +41,7 @@ enum ResponseKind {
 	MethodCall,
 	Subscription,
 	Batch,
+	Notification,
 }
 
 /// Represents a response to a method call.
@@ -221,6 +222,17 @@ impl MethodResponse {
 			result,
 			success_or_error: MethodResponseResult::Failed(err_code),
 			kind: ResponseKind::MethodCall,
+			on_close: None,
+			extensions: Extensions::new(),
+		}
+	}
+
+	/// Create notification response which is a response that doesn't expect a reply.
+	pub fn notification() -> Self {
+		Self {
+			result: String::new(),
+			success_or_error: MethodResponseResult::Success,
+			kind: ResponseKind::Notification,
 			on_close: None,
 			extensions: Extensions::new(),
 		}
