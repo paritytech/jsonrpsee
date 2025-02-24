@@ -28,9 +28,9 @@ use std::net::SocketAddr;
 
 use crate::{BatchRequestConfig, RegisterMethodError, RpcModule, ServerBuilder, ServerConfig, ServerHandle};
 use jsonrpsee_core::RpcResult;
+use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode};
-use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::ErrorObjectOwned;
 use serde_json::Value as JsonValue;
 

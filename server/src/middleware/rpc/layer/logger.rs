@@ -38,7 +38,7 @@ use jsonrpsee_core::{
 };
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
-use tracing::{instrument::Instrumented, Instrument};
+use tracing::{Instrument, instrument::Instrumented};
 
 use crate::middleware::rpc::RpcServiceT;
 

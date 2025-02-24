@@ -30,8 +30,8 @@
 use std::borrow::Cow;
 
 use crate::{
-	params::{Id, TwoPointZero},
 	Params,
+	params::{Id, TwoPointZero},
 };
 use http::Extensions;
 use serde::{Deserialize, Serialize};

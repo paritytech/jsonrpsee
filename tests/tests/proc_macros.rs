@@ -46,7 +46,7 @@ mod rpc_impl {
 	use jsonrpsee::core::server::{
 		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubscriptionCloseResponse, SubscriptionMessage,
 	};
-	use jsonrpsee::core::{async_trait, SubscriptionResult};
+	use jsonrpsee::core::{SubscriptionResult, async_trait};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 

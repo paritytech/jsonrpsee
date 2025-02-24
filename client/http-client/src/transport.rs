@@ -9,14 +9,14 @@
 use base64::Engine;
 use hyper::body::Bytes;
 use hyper::http::{HeaderMap, HeaderValue};
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
-use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
 use jsonrpsee_core::BoxError;
+use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
 use jsonrpsee_core::{
-	http_helpers::{self, HttpError},
 	TEN_MB_SIZE_BYTES,
+	http_helpers::{self, HttpError},
 };
 use std::future::Future;
 use std::pin::Pin;
