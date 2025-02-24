@@ -28,7 +28,7 @@
 //!
 //! `jsonrpsee-server` is a [JSON RPC](https://www.jsonrpc.org/specification) server that supports both HTTP and WebSocket transport.
 
-#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
+#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub, if_let_rescope)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 

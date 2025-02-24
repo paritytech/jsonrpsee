@@ -32,7 +32,7 @@
 //! which is not compatible with other async runtimes such as
 //! [`async-std`](https://docs.rs/async-std/), [`smol`](https://docs.rs/smol) and similar.
 
-#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
+#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub, if_let_rescope)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
