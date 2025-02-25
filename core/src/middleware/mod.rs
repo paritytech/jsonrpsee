@@ -1,12 +1,21 @@
 //! Middleware for the RPC service.
 
+pub mod layer;
+
 use futures_util::future::{Either, Future};
-use jsonrpsee_types::{Notification, Request};
+use jsonrpsee_types::Request;
+use pin_project::pin_project;
 use serde_json::value::RawValue;
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
 
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use crate::server::MethodResponse;
+
+/// JSON-RPC notification.
+pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Box<RawValue>>>;
 
 /// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
@@ -24,14 +33,10 @@ pub trait RpcServiceT<'a> {
 	///
 	/// This method is optional because it's generally not by the server however
 	/// it may be useful for batch processing on the client side.
-	fn batch(&self, _requests: Vec<Request<'a>>) -> Self::Future {
-		todo!();
-	}
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future;
 
 	/// Similar to `RpcServiceT::call` but process a JSON-RPC notification.
-	fn notification(&self, _request: Notification<'a, Option<Box<RawValue>>>) -> Self::Future {
-		todo!();
-	}
+	fn notification(&self, n: Notification<'a>) -> Self::Future;
 }
 
 /// Similar to [`tower::ServiceBuilder`] but doesn't
@@ -79,9 +84,9 @@ impl<L> RpcServiceBuilder<L> {
 	///
 	/// This logs each request and response for every call.
 	///
-	/*pub fn rpc_logger(self, max_log_len: u32) -> RpcServiceBuilder<Stack<RpcLoggerLayer, L>> {
-		RpcServiceBuilder(self.0.layer(RpcLoggerLayer::new(max_log_len)))
-	}*/
+	pub fn rpc_logger(self, max_log_len: u32) -> RpcServiceBuilder<Stack<layer::RpcLoggerLayer, L>> {
+		RpcServiceBuilder(self.0.layer(layer::RpcLoggerLayer::new(max_log_len)))
+	}
 
 	/// Wrap the service `S` with the middleware.
 	pub fn service<S>(&self, service: S) -> L::Service
@@ -89,5 +94,30 @@ impl<L> RpcServiceBuilder<L> {
 		L: tower::Layer<S>,
 	{
 		self.0.service(service)
+	}
+}
+
+/// Response which may be ready or a future.
+#[derive(Debug)]
+#[pin_project]
+pub struct ResponseFuture<F>(#[pin] futures_util::future::Either<F, std::future::Ready<MethodResponse>>);
+
+impl<F> ResponseFuture<F> {
+	/// Returns a future that resolves to a response.
+	pub fn future(f: F) -> ResponseFuture<F> {
+		ResponseFuture(Either::Left(f))
+	}
+
+	/// Return a response which is already computed.
+	pub fn ready(response: MethodResponse) -> ResponseFuture<F> {
+		ResponseFuture(Either::Right(std::future::ready(response)))
+	}
+}
+
+impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
+	type Output = MethodResponse;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		self.project().0.poll(cx)
 	}
 }

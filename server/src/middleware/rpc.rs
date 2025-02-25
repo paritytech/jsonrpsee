@@ -26,14 +26,13 @@
 
 //! JSON-RPC service middleware.
 
-use super::ResponseFuture;
 use std::sync::Arc;
 
-use crate::middleware::rpc::RpcServiceT;
 use crate::ConnectionId;
-use futures_util::future::BoxFuture;
+use futures_util::future::{BoxFuture, FutureExt};
+use jsonrpsee_core::middleware::{Notification, ResponseFuture, RpcServiceT};
 use jsonrpsee_core::server::{
-	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
+	BatchResponseBuilder, BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
@@ -146,5 +145,25 @@ impl<'a> RpcServiceT<'a> for RpcService {
 				}
 			},
 		}
+	}
+
+	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
+		let mut batch = BatchResponseBuilder::new_with_limit(self.max_response_body_size);
+		let service = self.clone();
+		let fut = async move {
+			for req in reqs {
+				let rp = service.call(req).await;
+				if let Err(err) = batch.append(&rp) {
+					return err;
+				}
+			}
+			MethodResponse::from_batch(batch.finish())
+		}
+		.boxed();
+		ResponseFuture::future(fut)
+	}
+
+	fn notification(&self, _: Notification<'a>) -> Self::Future {
+		ResponseFuture::ready(MethodResponse::notification())
 	}
 }

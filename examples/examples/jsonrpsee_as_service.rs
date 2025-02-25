@@ -39,9 +39,9 @@ use futures::FutureExt;
 use hyper::header::AUTHORIZATION;
 use hyper::HeaderMap;
 use jsonrpsee::core::async_trait;
+use jsonrpsee::core::middleware::{Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{
 	serve_with_graceful_shutdown, stop_channel, ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder,
 };
@@ -90,6 +90,14 @@ where
 		} else {
 			ResponseFuture::future(self.inner.call(req))
 		}
+	}
+
+	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
+		ResponseFuture::future(self.inner.batch(reqs))
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		ResponseFuture::future(self.inner.notification(n))
 	}
 }
 

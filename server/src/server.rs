@@ -34,7 +34,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use crate::future::{session_close, ConnectionGuard, ServerHandle, SessionClose, SessionClosedFuture, StopHandle};
-use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
+use crate::middleware::rpc::{RpcService, RpcServiceCfg};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
 use crate::utils::deserialize;
@@ -46,10 +46,9 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
+use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
-use jsonrpsee_core::server::{
-	BatchResponseBuilder, BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods,
-};
+use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 
@@ -65,7 +64,7 @@ use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::{instrument, Instrument};
 
-type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
+type Notif<'a> = Notification<'a, Option<Box<JsonRawValue>>>;
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u32 = 100;
@@ -1102,9 +1101,7 @@ where
 			));
 
 			Box::pin(async move {
-				let rp =
-					http::call_with_service(request, batch_config, max_request_size, rpc_service, max_response_size)
-						.await;
+				let rp = http::call_with_service(request, batch_config, max_request_size, rpc_service).await;
 				// NOTE: The `conn guard` must be held until the response is processed
 				// to respect the `max_connections` limit.
 				drop(conn);
@@ -1230,22 +1227,21 @@ pub(crate) async fn handle_rpc_call<S>(
 	body: &[u8],
 	is_single: bool,
 	batch_config: BatchRequestConfig,
-	max_response_size: u32,
 	rpc_service: &S,
 	extensions: Extensions,
-) -> Option<MethodResponse>
+) -> MethodResponse
 where
 	for<'a> S: RpcServiceT<'a> + Send,
 {
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = deserialize::from_slice_with_extensions(body, extensions) {
-			Some(rpc_service.call(req).await)
-		} else if let Ok(_notif) = serde_json::from_slice::<Notif>(body) {
-			None
+			rpc_service.call(req).await
+		} else if let Ok(notif) = serde_json::from_slice::<Notif>(body) {
+			rpc_service.notification(notif).await
 		} else {
 			let (id, code) = prepare_error(body);
-			Some(MethodResponse::error(id, ErrorObject::from(code)))
+			MethodResponse::error(id, ErrorObject::from(code))
 		}
 	}
 	// Batch of requests.
@@ -1256,7 +1252,7 @@ where
 					Id::Null,
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, None),
 				);
-				return Some(rp);
+				return rp;
 			}
 			BatchRequestConfig::Limit(limit) => limit as usize,
 			BatchRequestConfig::Unlimited => usize::MAX,
@@ -1264,45 +1260,36 @@ where
 
 		if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(body) {
 			if batch.len() > max_len {
-				return Some(MethodResponse::error(Id::Null, reject_too_big_batch_request(max_len)));
+				return MethodResponse::error(Id::Null, reject_too_big_batch_request(max_len));
 			}
 
+			let mut b = Vec::with_capacity(batch.len());
 			let mut got_notif = false;
-			let mut batch_response = BatchResponseBuilder::new_with_limit(max_response_size as usize);
 
 			for call in batch {
 				if let Ok(req) = deserialize::from_str_with_extensions(call.get(), extensions.clone()) {
-					let rp = rpc_service.call(req).await;
-
-					if let Err(too_large) = batch_response.append(&rp) {
-						return Some(too_large);
-					}
+					b.push(req);
 				} else if let Ok(_notif) = serde_json::from_str::<Notif>(call.get()) {
-					// notifications should not be answered.
 					got_notif = true;
 				} else {
-					// valid JSON but could be not parsable as `InvalidRequest`
 					let id = match serde_json::from_str::<InvalidRequest>(call.get()) {
 						Ok(err) => err.id,
 						Err(_) => Id::Null,
 					};
 
-					if let Err(too_large) =
-						batch_response.append(&MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)))
-					{
-						return Some(too_large);
-					}
+					return MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest));
 				}
 			}
 
-			if got_notif && batch_response.is_empty() {
-				None
+			let batch_response = rpc_service.batch(b).await;
+
+			if got_notif && batch_response.as_result().len() == 0 {
+				MethodResponse::notification()
 			} else {
-				let batch_rp = batch_response.finish();
-				Some(MethodResponse::from_batch(batch_rp))
+				batch_response
 			}
 		} else {
-			Some(MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError)))
+			MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError))
 		}
 	}
 }

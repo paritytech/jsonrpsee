@@ -1,5 +1,5 @@
 use crate::{
-	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
+	middleware::rpc::{RpcService, RpcServiceCfg},
 	server::{handle_rpc_call, ServerConfig},
 	BatchRequestConfig, ConnectionState, HttpRequest, HttpResponse, LOG_TARGET,
 };
@@ -7,6 +7,7 @@ use http::Method;
 use hyper::body::{Body, Bytes};
 use jsonrpsee_core::{
 	http_helpers::{read_body, HttpError},
+	middleware::{RpcServiceBuilder, RpcServiceT},
 	server::Methods,
 	BoxError,
 };
@@ -55,9 +56,7 @@ where
 		RpcServiceCfg::OnlyCalls,
 	));
 
-	let rp =
-		call_with_service(request, batch_requests_config, max_request_body_size, rpc_service, max_response_body_size)
-			.await;
+	let rp = call_with_service(request, batch_requests_config, max_request_body_size, rpc_service).await;
 
 	drop(conn);
 
@@ -72,7 +71,6 @@ pub async fn call_with_service<S, B>(
 	batch_config: BatchRequestConfig,
 	max_request_size: u32,
 	rpc_service: S,
-	max_response_size: u32,
 ) -> HttpResponse
 where
 	B: http_body::Body<Data = Bytes> + Send + 'static,
@@ -95,12 +93,11 @@ where
 				}
 			};
 
-			let rp = handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, parts.extensions)
-				.await;
+			let rp = handle_rpc_call(&body, is_single, batch_config, &rpc_service, parts.extensions).await;
 
 			// If the response is empty it means that it was a notification or empty batch.
 			// For HTTP these are just ACK:ed with a empty body.
-			response::ok_response(rp.map_or(String::new(), |r| r.into_result()))
+			response::ok_response(rp.into_result())
 		}
 		// Error scenarios:
 		Method::POST => response::unsupported_content_type(),

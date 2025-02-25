@@ -86,6 +86,11 @@ impl MethodResponse {
 		matches!(self.kind, ResponseKind::MethodCall)
 	}
 
+	/// Returns whether the response is a notification response.
+	pub fn is_notification(&self) -> bool {
+		matches!(self.kind, ResponseKind::Notification)
+	}
+
 	/// Returns whether the response is a batch response.
 	pub fn is_batch(&self) -> bool {
 		matches!(self.kind, ResponseKind::Batch)
@@ -443,11 +448,11 @@ pub struct MethodResponseFuture(tokio::sync::oneshot::Receiver<NotifyMsg>);
 /// was succesful or not.
 #[derive(Debug, Copy, Clone)]
 pub enum NotifyMsg {
-	/// The response was succesfully processed.
+	/// The response was successfully processed.
 	Ok,
 	/// The response was the wrong kind
 	/// such an error response when
-	/// one expected a succesful response.
+	/// one expected a successful response.
 	Err,
 }
 
