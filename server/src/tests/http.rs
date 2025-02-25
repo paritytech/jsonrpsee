@@ -35,6 +35,7 @@ use crate::{
 use futures_util::future::{BoxFuture, Future, FutureExt};
 use hyper::body::Bytes;
 use jsonrpsee_core::{BoxError, RpcResult};
+use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode};
 use jsonrpsee_types::ErrorObjectOwned;
