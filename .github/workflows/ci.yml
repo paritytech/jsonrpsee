@@ -176,6 +176,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4.2.2
 
+    - name: Install Rust stable toolchain
+      uses: actions-rs/toolchain@v1.0.7
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
     - name: Install wasm-pack
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
