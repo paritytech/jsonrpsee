@@ -101,8 +101,8 @@ impl MethodResponse {
 	}
 
 	/// Consume the method response and extract the parts.
-	pub fn into_parts(self) -> (String, Option<MethodResponseNotifyTx>) {
-		(self.result, self.on_close)
+	pub fn into_parts(self) -> (String, Option<MethodResponseNotifyTx>, Extensions) {
+		(self.result, self.on_close, self.extensions)
 	}
 
 	/// Get the error code
@@ -120,11 +120,11 @@ impl MethodResponse {
 	/// Create a method response from [`BatchResponse`].
 	pub fn from_batch(batch: BatchResponse) -> Self {
 		Self {
-			result: batch.0,
+			result: batch.result,
 			success_or_error: MethodResponseResult::Success,
 			kind: ResponseKind::Batch,
 			on_close: None,
-			extensions: Extensions::new(),
+			extensions: batch.extensions,
 		}
 	}
 
@@ -280,6 +280,8 @@ pub struct BatchResponseBuilder {
 	result: String,
 	/// Max limit for the batch
 	max_response_size: usize,
+	/// Extensions for the batch response.
+	extensions: Extensions,
 }
 
 impl BatchResponseBuilder {
@@ -288,17 +290,18 @@ impl BatchResponseBuilder {
 		let mut initial = String::with_capacity(2048);
 		initial.push('[');
 
-		Self { result: initial, max_response_size: limit }
+		Self { result: initial, max_response_size: limit, extensions: Extensions::new() }
 	}
 
 	/// Append a result from an individual method to the batch response.
 	///
 	/// Fails if the max limit is exceeded and returns to error response to
 	/// return early in order to not process method call responses which are thrown away anyway.
-	pub fn append(&mut self, response: &MethodResponse) -> Result<(), MethodResponse> {
+	pub fn append(&mut self, response: MethodResponse) -> Result<(), MethodResponse> {
 		// `,` will occupy one extra byte for each entry
 		// on the last item the `,` is replaced by `]`.
 		let len = response.result.len() + self.result.len() + 1;
+		self.extensions.extend(response.extensions);
 
 		if len > self.max_response_size {
 			Err(MethodResponse::error(Id::Null, reject_too_big_batch_response(self.max_response_size)))
@@ -317,18 +320,24 @@ impl BatchResponseBuilder {
 	/// Finish the batch response
 	pub fn finish(mut self) -> BatchResponse {
 		if self.result.len() == 1 {
-			BatchResponse(batch_response_error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest)))
+			BatchResponse {
+				result: batch_response_error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest)),
+				extensions: self.extensions,
+			}
 		} else {
 			self.result.pop();
 			self.result.push(']');
-			BatchResponse(self.result)
+			BatchResponse { result: self.result, extensions: self.extensions }
 		}
 	}
 }
 
 /// Serialized batch response.
 #[derive(Debug, Clone)]
-pub struct BatchResponse(String);
+pub struct BatchResponse {
+	result: String,
+	extensions: Extensions,
+}
 
 /// Create a JSON-RPC error response.
 pub fn batch_response_error(id: Id, err: impl Into<ErrorObject<'static>>) -> String {
@@ -473,26 +482,27 @@ mod tests {
 
 		// Recall a batch appends two bytes for the `[]`.
 		let mut builder = BatchResponseBuilder::new_with_limit(39);
-		builder.append(&method).unwrap();
+		builder.append(method).unwrap();
 		let batch = builder.finish();
 
-		assert_eq!(batch.0, r#"[{"jsonrpc":"2.0","id":1,"result":"a"}]"#)
+		assert_eq!(batch.result, r#"[{"jsonrpc":"2.0","id":1,"result":"a"}]"#)
 	}
 
 	#[test]
 	fn batch_with_multiple_works() {
 		let m1 = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a"), usize::MAX);
+		let m11 = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a"), usize::MAX);
 		assert_eq!(m1.result.len(), 37);
 
 		// Recall a batch appends two bytes for the `[]` and one byte for `,` to append a method call.
 		// so it should be 2 + (37 * n) + (n-1)
 		let limit = 2 + (37 * 2) + 1;
 		let mut builder = BatchResponseBuilder::new_with_limit(limit);
-		builder.append(&m1).unwrap();
-		builder.append(&m1).unwrap();
+		builder.append(m1).unwrap();
+		builder.append(m11).unwrap();
 		let batch = builder.finish();
 
-		assert_eq!(batch.0, r#"[{"jsonrpc":"2.0","id":1,"result":"a"},{"jsonrpc":"2.0","id":1,"result":"a"}]"#)
+		assert_eq!(batch.result, r#"[{"jsonrpc":"2.0","id":1,"result":"a"},{"jsonrpc":"2.0","id":1,"result":"a"}]"#)
 	}
 
 	#[test]
@@ -500,7 +510,7 @@ mod tests {
 		let batch = BatchResponseBuilder::new_with_limit(1024).finish();
 
 		let exp_err = r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid request"}}"#;
-		assert_eq!(batch.0, exp_err);
+		assert_eq!(batch.result, exp_err);
 	}
 
 	#[test]
@@ -508,7 +518,7 @@ mod tests {
 		let method = MethodResponse::response(Id::Number(1), ResponsePayload::success_borrowed(&"a".repeat(28)), 128);
 		assert_eq!(method.result.len(), 64);
 
-		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
+		let batch = BatchResponseBuilder::new_with_limit(63).append(method).unwrap_err();
 
 		let exp_err = r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of 63"}}"#;
 		assert_eq!(batch.result, exp_err);
