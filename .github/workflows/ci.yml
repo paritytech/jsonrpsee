@@ -111,6 +111,7 @@ jobs:
         uses: actions-rs/toolchain@v1.0.7
         with:
           profile: minimal
+          # Check that tests pass using our MSRV
           toolchain: 1.74.0
           override: true
 
@@ -120,8 +121,8 @@ jobs:
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
         with:
-          command: test
-          args: --workspace
+          command: check
+          args: --all-targets
 
   tests_ubuntu:
     name: Run tests Ubuntu
