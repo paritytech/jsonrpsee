@@ -136,7 +136,7 @@ pub const OVERSIZED_RESPONSE_CODE: i32 = -32008;
 pub const SERVER_IS_BUSY_CODE: i32 = -32009;
 /// Batch request limit was exceed.
 pub const TOO_BIG_BATCH_REQUEST_CODE: i32 = -32010;
-/// Batch request limit was exceed.
+/// Batch response limit was exceed.
 pub const TOO_BIG_BATCH_RESPONSE_CODE: i32 = -32011;
 
 /// Parse error message
