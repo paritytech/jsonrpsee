@@ -153,7 +153,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		let fut = async move {
 			for req in reqs {
 				let rp = service.call(req).await;
-				if let Err(err) = batch.append(&rp) {
+				if let Err(err) = batch.append(rp) {
 					return err;
 				}
 			}

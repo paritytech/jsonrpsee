@@ -161,7 +161,7 @@ where
 
 			if !rp.is_subscription() || !rp.is_notification() {
 				let is_success = rp.is_success();
-				let (serialized_rp, mut on_close) = rp.into_parts();
+				let (serialized_rp, mut on_close, _) = rp.into_parts();
 
 				// The connection is closed, just quit.
 				if sink.send(serialized_rp).await.is_err() {

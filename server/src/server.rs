@@ -457,6 +457,7 @@ impl ServerConfigBuilder {
 	/// Panics if the buffer capacity is 0.
 	///
 	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
+		assert!(c > 0, "buffer capacity must be set to > 0");
 		self.message_buffer_capacity = c;
 		self
 	}
@@ -1258,17 +1259,17 @@ where
 			BatchRequestConfig::Unlimited => usize::MAX,
 		};
 
-		if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(body) {
-			if batch.len() > max_len {
+		if let Ok(unchecked_batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(body) {
+			if unchecked_batch.len() > max_len {
 				return MethodResponse::error(Id::Null, reject_too_big_batch_request(max_len));
 			}
 
-			let mut b = Vec::with_capacity(batch.len());
+			let mut batch = Vec::with_capacity(unchecked_batch.len());
 			let mut got_notif = false;
 
-			for call in batch {
+			for call in unchecked_batch {
 				if let Ok(req) = deserialize::from_str_with_extensions(call.get(), extensions.clone()) {
-					b.push(req);
+					batch.push(req);
 				} else if let Ok(_notif) = serde_json::from_str::<Notif>(call.get()) {
 					got_notif = true;
 				} else {
@@ -1281,7 +1282,7 @@ where
 				}
 			}
 
-			let batch_response = rpc_service.batch(b).await;
+			let batch_response = rpc_service.batch(batch).await;
 
 			if got_notif && batch_response.as_result().len() == 0 {
 				MethodResponse::notification()

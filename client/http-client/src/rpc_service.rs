@@ -71,7 +71,9 @@ where
 					Err(err) => MethodResponse::error(Id::Number(id), err),
 				};
 
-				batch.append(&response).unwrap();
+				if let Err(rp) = batch.append(response) {
+					return rp;
+				}
 			}
 
 			MethodResponse::from_batch(batch.finish())
