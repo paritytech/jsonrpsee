@@ -3,7 +3,7 @@ use std::sync::Arc;
 use futures_util::{future::BoxFuture, FutureExt};
 use hyper::body::Bytes;
 use jsonrpsee_core::{
-	middleware::RpcServiceT,
+	middleware::{Notification, RpcServiceT},
 	server::{BatchResponseBuilder, MethodResponse, ResponsePayload},
 	BoxError, JsonRawValue,
 };
@@ -81,7 +81,7 @@ where
 		.boxed()
 	}
 
-	fn notification(&self, notif: jsonrpsee_types::Notification<'a, Option<Box<JsonRawValue>>>) -> Self::Future {
+	fn notification(&self, notif: Notification<'a>) -> Self::Future {
 		let raw = serde_json::to_string(&notif).unwrap();
 		let service = self.service.clone();
 

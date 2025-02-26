@@ -369,7 +369,7 @@ where
 			Some(permit) => permit.acquire().await.ok(),
 			None => None,
 		};
-		let params = params.to_rpc_params()?;
+		let params = params.to_rpc_params()?.map(StdCow::Owned);
 		let n = Notification { jsonrpc: TwoPointZero, method: method.into(), params };
 		self.transport.notification(n).await;
 		Ok(())

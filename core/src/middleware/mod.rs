@@ -9,13 +9,14 @@ use serde_json::value::RawValue;
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
 
+use std::borrow::Cow;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::server::MethodResponse;
 
 /// JSON-RPC notification.
-pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Box<RawValue>>>;
+pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, RawValue>>>;
 
 /// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.

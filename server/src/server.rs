@@ -46,7 +46,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
@@ -55,7 +55,7 @@ use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::{
 	reject_too_big_batch_request, ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG,
 };
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification};
+use jsonrpsee_types::{ErrorObject, Id, InvalidRequest};
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{mpsc, watch, OwnedSemaphorePermit};
@@ -63,8 +63,6 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::{instrument, Instrument};
-
-type Notif<'a> = Notification<'a, Option<Box<JsonRawValue>>>;
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u32 = 100;
@@ -1238,7 +1236,7 @@ where
 	if is_single {
 		if let Ok(req) = deserialize::from_slice_with_extensions(body, extensions) {
 			rpc_service.call(req).await
-		} else if let Ok(notif) = serde_json::from_slice::<Notif>(body) {
+		} else if let Ok(notif) = serde_json::from_slice::<Notification>(body) {
 			rpc_service.notification(notif).await
 		} else {
 			let (id, code) = prepare_error(body);
@@ -1270,7 +1268,7 @@ where
 			for call in unchecked_batch {
 				if let Ok(req) = deserialize::from_str_with_extensions(call.get(), extensions.clone()) {
 					batch.push(req);
-				} else if let Ok(_notif) = serde_json::from_str::<Notif>(call.get()) {
+				} else if let Ok(_notif) = serde_json::from_str::<Notification>(call.get()) {
 					got_notif = true;
 				} else {
 					let id = match serde_json::from_str::<InvalidRequest>(call.get()) {
