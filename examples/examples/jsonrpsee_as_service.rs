@@ -217,12 +217,9 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 				// NOTE, the rpc middleware must be initialized here to be able to created once per connection
 				// with data from the connection such as the headers in this example
 				let headers = req.headers().clone();
-				let rpc_middleware = RpcServiceBuilder::new() /* .rpc_logger(1024)*/
-					.layer_fn(move |service| AuthorizationMiddleware {
-						inner: service,
-						headers: headers.clone(),
-						transport_label,
-					});
+				let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
+					AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
+				});
 
 				let mut svc = svc_builder
 					.set_http_middleware(http_middleware)

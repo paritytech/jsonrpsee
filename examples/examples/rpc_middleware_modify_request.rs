@@ -58,12 +58,12 @@ where
 		self.0.call(req)
 	}
 
-	fn batch(&self, _reqs: Vec<Request<'a>>) -> Self::Future {
-		todo!();
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+		self.0.batch(requests)
 	}
 
-	fn notification(&self, _n: Notification<'a>) -> Self::Future {
-		todo!();
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.0.notification(n)
 	}
 }
 

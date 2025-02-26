@@ -3,7 +3,6 @@
 pub mod layer;
 
 use futures_util::future::{Either, Future};
-use jsonrpsee_types::Request;
 use pin_project::pin_project;
 use serde_json::value::RawValue;
 use tower::layer::util::{Identity, Stack};
@@ -15,8 +14,10 @@ use std::task::{Context, Poll};
 
 use crate::server::MethodResponse;
 
-/// JSON-RPC notification.
+/// Re-export types from `jsonrpsee_types` crate for convenience
 pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, RawValue>>>;
+/// Re-export types from `jsonrpsee_types` crate for convenience
+pub use jsonrpsee_types::Request;
 
 /// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.

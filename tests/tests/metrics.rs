@@ -37,12 +37,12 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use helpers::init_logger;
-use jsonrpsee::core::middleware::{RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Notification, Request, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{client::ClientT, ClientError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{Server, ServerHandle};
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::RpcModule;
 use jsonrpsee::{rpc_params, MethodResponse};
@@ -98,12 +98,12 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, _requests: Vec<Request<'a>>) -> Self::Future {
-		todo!();
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+		self.service.batch(requests).boxed()
 	}
 
-	fn notification(&self, _n: jsonrpsee::core::middleware::Notification<'a>) -> Self::Future {
-		todo!();
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.service.notification(n).boxed()
 	}
 }
 
