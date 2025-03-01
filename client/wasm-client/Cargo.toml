@@ -13,6 +13,9 @@ keywords.workspace = true
 readme.workspace = true
 publish = true
 
+[lints]
+workspace = true
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 jsonrpsee-types = { workspace = true }
 jsonrpsee-client-transport = { workspace = true, features = ["web"] }

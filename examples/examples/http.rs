@@ -32,8 +32,8 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]

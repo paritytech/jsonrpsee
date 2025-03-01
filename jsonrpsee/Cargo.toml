@@ -13,6 +13,9 @@ keywords.workspace = true
 readme.workspace = true
 publish = true
 
+[lints]
+workspace = true
+
 [dependencies]
 # No support for namespaced features yet so workspace dependencies are prefixed with `jsonrpsee-`.
 # See https://github.com/rust-lang/cargo/issues/5565 for more details.

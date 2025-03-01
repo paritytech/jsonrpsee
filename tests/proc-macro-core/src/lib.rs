@@ -1,6 +1,6 @@
 //! Test module for the proc-macro API to make sure that it compiles with the core features.
 
-use jsonrpsee::core::{async_trait, SubscriptionResult};
+use jsonrpsee::core::{SubscriptionResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObjectOwned;
 use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage};

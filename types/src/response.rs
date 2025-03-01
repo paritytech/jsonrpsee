@@ -291,7 +291,7 @@ where
 
 				let response = match (jsonrpc, result, error) {
 					(_, Some(_), Some(_)) => {
-						return Err(serde::de::Error::duplicate_field("result and error are mutually exclusive"))
+						return Err(serde::de::Error::duplicate_field("result and error are mutually exclusive"));
 					}
 					(Some(jsonrpc), Some(result), None) => {
 						Response { jsonrpc, payload: ResponsePayload::Success(result), id }
@@ -341,7 +341,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Id, Response, TwoPointZero};
-	use crate::{response::ResponsePayload, ErrorObjectOwned};
+	use crate::{ErrorObjectOwned, response::ResponsePayload};
 
 	#[test]
 	fn serialize_call_ok_response() {

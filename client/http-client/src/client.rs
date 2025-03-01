@@ -36,7 +36,7 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
+	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT, generate_batch_id_range,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;

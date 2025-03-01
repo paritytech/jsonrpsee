@@ -27,10 +27,10 @@
 use std::collections::HashSet;
 
 use crate::visitor::{FindAllParams, FindSubscriptionParams};
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use syn::{parse_quote, punctuated::Punctuated, token::Comma, visit::Visit, Token, WherePredicate};
+use syn::{Token, WherePredicate, parse_quote, punctuated::Punctuated, token::Comma, visit::Visit};
 
 /// Search for client-side `jsonrpsee` in `Cargo.toml`.
 pub(crate) fn find_jsonrpsee_client_crate() -> Result<proc_macro2::TokenStream, syn::Error> {

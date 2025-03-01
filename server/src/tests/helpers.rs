@@ -1,17 +1,17 @@
 use std::net::SocketAddr;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::{fmt, sync::atomic::AtomicUsize};
 
 use crate::{
-	serve_with_graceful_shutdown, stop_channel, RpcModule, Server, ServerBuilder, ServerConfigBuilder, ServerHandle,
+	RpcModule, Server, ServerBuilder, ServerConfigBuilder, ServerHandle, serve_with_graceful_shutdown, stop_channel,
 };
 
 use futures_util::FutureExt;
 use jsonrpsee_core::server::Methods;
 use jsonrpsee_core::{DeserializeOwned, RpcResult, StringError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::{error::ErrorCode, ErrorObject, ErrorObjectOwned, Response, ResponseSuccess};
+use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Response, ResponseSuccess, error::ErrorCode};
 use tokio::net::TcpListener;
 use tower::Service;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};

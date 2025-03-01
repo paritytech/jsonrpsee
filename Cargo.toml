@@ -16,13 +16,13 @@ members = [
 	"tests/proc-macro-core",
 	"types",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 version = "0.24.7"
-edition = "2021"
-rust-version = "1.74.0"
+edition = "2024"
+rust-version = "1.85.0"
 license = "MIT"
 repository = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee"
@@ -92,3 +92,9 @@ pprof = { version = "0.14", features = ["flamegraph", "criterion"] }
 socket2 = "0.5.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = "1.0.97"
+
+[workspace.lints.rust]
+rust_2024_compatibility = { level = "warn", priority = -1 }
+missing_docs = { level = "warn", priority = -1 }
+missing_debug_implementations = { level = "warn", priority = -1 }
+missing_copy_implementations = { level = "warn", priority = -1 }

@@ -29,13 +29,13 @@
 use std::borrow::Cow;
 
 use crate::attributes::{
-	optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind,
+	Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, optional, parse_param_kind,
 };
 use crate::helpers::extract_doc_comments;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::spanned::Spanned;
-use syn::{punctuated::Punctuated, Attribute, Token};
+use syn::{Attribute, Token, punctuated::Punctuated};
 
 /// Represents a single argument in a RPC call.
 ///
@@ -405,11 +405,7 @@ impl RpcDescription {
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
 	/// For no namespace and method `makeSpam` it will be just `makeSpam`.
 	pub(crate) fn rpc_identifier<'a>(&self, method: &'a str) -> Cow<'a, str> {
-		if let Some(ns) = &self.namespace {
-			format!("{ns}_{method}").into()
-		} else {
-			Cow::Borrowed(method)
-		}
+		if let Some(ns) = &self.namespace { format!("{ns}_{method}").into() } else { Cow::Borrowed(method) }
 	}
 }
 

@@ -29,7 +29,7 @@ use std::net::SocketAddr;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::server::{RpcServiceBuilder, Server};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, RpcModule};
+use jsonrpsee::{RpcModule, rpc_params};
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]

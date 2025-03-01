@@ -34,18 +34,18 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use helpers::init_logger;
-use jsonrpsee::core::{client::ClientT, ClientError};
+use jsonrpsee::RpcModule;
+use jsonrpsee::core::{ClientError, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{Server, ServerHandle};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::RpcModule;
-use jsonrpsee::{rpc_params, MethodResponse};
+use jsonrpsee::{MethodResponse, rpc_params};
 use tokio::time::sleep;
 
 #[derive(Default, Clone)]

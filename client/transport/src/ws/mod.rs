@@ -32,19 +32,19 @@ use std::time::Duration;
 
 use base64::Engine;
 use futures_util::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
-use jsonrpsee_core::{async_trait, Cow};
+use jsonrpsee_core::client::{MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
+use jsonrpsee_core::{Cow, async_trait};
 use soketto::connection::CloseReason;
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use soketto::{connection, Data, Incoming};
+use soketto::{Data, Incoming, connection};
 use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-pub use http::{uri::InvalidUri, HeaderMap, HeaderValue, Uri};
+pub use http::{HeaderMap, HeaderValue, Uri, uri::InvalidUri};
 pub use soketto::handshake::client::Header;
 pub use stream::EitherStream;
 pub use tokio::io::{AsyncRead, AsyncWrite};
@@ -428,7 +428,9 @@ impl WsTransportClientBuilder {
 									match target.path_and_query.rfind('/') {
 										Some(offset) => target.path_and_query.replace_range(offset + 1.., &location),
 										None => {
-											let e = format!("path_and_query: {location}; this is a bug it must contain `/` please open issue");
+											let e = format!(
+												"path_and_query: {location}; this is a bug it must contain `/` please open issue"
+											);
 											err = Some(Err(WsHandshakeError::Url(e.into())));
 											continue;
 										}
@@ -638,13 +640,13 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 			use rustls_platform_verifier::ConfigVerifierExt;
 
 			rustls::ClientConfig::with_platform_verifier()
-		},
+		}
 		#[cfg(not(feature = "tls-rustls-platform-verifier"))]
 		CertificateStore::Native => {
 			return Err(WsHandshakeError::CertificateStore(io::Error::new(
 				io::ErrorKind::Other,
 				"Native certificate store not supported, either call `Builder::with_custom_cert_store` or enable the `tls-rustls-platform-verifier` feature.",
-			)))
+			)));
 		}
 		CertificateStore::Custom(cfg) => cfg.clone(),
 	};

@@ -29,7 +29,7 @@ use std::{fmt, iter};
 use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
-use syn::{spanned::Spanned, Attribute, Error, LitStr, Token};
+use syn::{Attribute, Error, LitStr, Token, spanned::Spanned};
 
 pub(crate) struct AttributeMeta {
 	pub path: syn::Path,
@@ -187,11 +187,7 @@ impl From<MissingArgument<'_>> for Error {
 impl Argument {
 	/// Asserts that the argument is just a simple `flag` without any value present
 	pub fn flag(self) -> syn::Result<()> {
-		if self.tokens.is_empty() {
-			Ok(())
-		} else {
-			Err(Error::new(self.tokens.span(), "Expected a flag argument"))
-		}
+		if self.tokens.is_empty() { Ok(()) } else { Err(Error::new(self.tokens.span(), "Expected a flag argument")) }
 	}
 
 	/// Asserts that the argument is `key = value` pair and parses the value into `T`

@@ -32,7 +32,6 @@
 //!
 //! This library uses `tokio` as the runtime and does not support other runtimes.
 
-#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -40,13 +39,13 @@
 mod tests;
 
 pub use http::{HeaderMap, HeaderValue};
-pub use jsonrpsee_core::client::async_client::PingConfig;
 pub use jsonrpsee_core::client::Client as WsClient;
+pub use jsonrpsee_core::client::async_client::PingConfig;
 pub use jsonrpsee_types as types;
 
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
-use jsonrpsee_core::client::{ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
+use jsonrpsee_core::client::{ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT};
 use std::time::Duration;
 use url::Url;
 

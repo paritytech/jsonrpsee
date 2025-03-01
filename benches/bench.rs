@@ -2,11 +2,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use criterion::*;
-use futures_util::future::{join_all, FutureExt};
+use futures_util::future::{FutureExt, join_all};
 use futures_util::stream::FuturesUnordered;
 use helpers::fixed_client::{
-	http_client, rpc_params, ws_client, ws_handshake, ArrayParams, BatchRequestBuilder, ClientT, HeaderMap,
-	SubscriptionClientT,
+	ArrayParams, BatchRequestBuilder, ClientT, HeaderMap, SubscriptionClientT, http_client, rpc_params, ws_client,
+	ws_handshake,
 };
 use helpers::{KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::types::{Id, RequestSer};

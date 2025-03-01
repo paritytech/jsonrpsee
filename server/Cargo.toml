@@ -13,6 +13,9 @@ keywords.workspace = true
 readme.workspace = true
 publish = true
 
+[lints]
+workspace = true
+
 [dependencies]
 futures-util = { workspace = true, features = ["io", "async-await-macro"] }
 http = { workspace = true }

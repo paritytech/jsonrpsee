@@ -26,7 +26,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, client::Subscription, SubscriptionResult};
+use jsonrpsee::core::{SubscriptionResult, async_trait, client::Subscription};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, Server, SubscriptionMessage};
 use jsonrpsee::types::ErrorObjectOwned;

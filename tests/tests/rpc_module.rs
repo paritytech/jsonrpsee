@@ -34,7 +34,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
 use jsonrpsee::core::EmptyServerParams;
-use jsonrpsee::core::{server::*, RpcResult};
+use jsonrpsee::core::{RpcResult, server::*};
 use jsonrpsee::types::error::{ErrorCode, ErrorObject, INVALID_PARAMS_MSG, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Response, ResponsePayload};
 use serde::{Deserialize, Serialize};

@@ -27,15 +27,15 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::tests::helpers::{deser_call, init_logger, server_with_context, ws_server_with_stats, Metrics};
+use crate::tests::helpers::{Metrics, deser_call, init_logger, server_with_context, ws_server_with_stats};
 use crate::types::SubscriptionId;
 use crate::{BatchRequestConfig, RegisterMethodError, ServerConfig};
 use crate::{RpcModule, ServerBuilder};
 use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
 use jsonrpsee_core::traits::IdProvider;
+use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
-use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::SubscriptionResponse;
 use serde_json::Value as JsonValue;
 
@@ -423,17 +423,23 @@ async fn register_methods_works() {
 	let mut module = RpcModule::new(());
 	assert!(module.register_method("say_hello", |_, _, _| "lo").is_ok());
 	assert!(module.register_method("say_hello", |_, _, _| "lo").is_err());
-	assert!(module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _, _| async { Ok(()) })
-		.is_ok());
-	assert!(module
-		.register_subscription(
-			"subscribe_hello_again",
-			"subscribe_hello_again",
-			"unsubscribe_hello",
-			|_, _, _, _| async { Ok(()) }
-		)
-		.is_err());
+	assert!(
+		module
+			.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _, _| async {
+				Ok(())
+			})
+			.is_ok()
+	);
+	assert!(
+		module
+			.register_subscription(
+				"subscribe_hello_again",
+				"subscribe_hello_again",
+				"unsubscribe_hello",
+				|_, _, _, _| async { Ok(()) }
+			)
+			.is_err()
+	);
 	assert!(
 		module.register_method("subscribe_hello_again", |_, _, _| "lo").is_ok(),
 		"Failed register_subscription should not have side-effects"

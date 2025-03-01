@@ -224,7 +224,8 @@ impl RpcDescription {
 
 		if params.iter().any(|arg| arg.arg_pat().ident == p) {
 			panic!(
-				"Cannot use `{}` as a parameter name because it's overlapping with an internal variable in the generated code. Change it something else to make it work", ILLEGAL_PARAM_NAME
+				"Cannot use `{}` as a parameter name because it's overlapping with an internal variable in the generated code. Change it something else to make it work",
+				ILLEGAL_PARAM_NAME
 			);
 		}
 

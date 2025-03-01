@@ -25,9 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::{serve_with_graceful_shutdown, stop_channel, ServerHandle};
+use jsonrpsee::server::{ServerHandle, serve_with_graceful_shutdown, stop_channel};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, RpcModule};
+use jsonrpsee::{RpcModule, rpc_params};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing_subscriber::util::SubscriberInitExt;

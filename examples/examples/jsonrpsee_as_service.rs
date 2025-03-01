@@ -32,18 +32,18 @@
 //! access to HTTP related things.
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures::FutureExt;
-use hyper::header::AUTHORIZATION;
 use hyper::HeaderMap;
+use hyper::header::AUTHORIZATION;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{
-	serve_with_graceful_shutdown, stop_channel, ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder,
+	ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder, serve_with_graceful_shutdown, stop_channel,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};

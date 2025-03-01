@@ -26,7 +26,6 @@
 
 //! JSON-RPC specific types.
 
-#![warn(missing_docs, missing_debug_implementations, missing_copy_implementations, unreachable_pub)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 

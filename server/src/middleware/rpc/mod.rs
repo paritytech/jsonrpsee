@@ -34,8 +34,8 @@ use jsonrpsee_core::server::MethodResponse;
 use jsonrpsee_types::Request;
 use layer::either::Either;
 
-use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
+use tower::layer::util::{Identity, Stack};
 
 /// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.

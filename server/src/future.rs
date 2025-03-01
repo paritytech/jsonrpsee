@@ -32,7 +32,7 @@ use std::task::{Context, Poll};
 
 use futures_util::{Future, Stream, StreamExt};
 use pin_project::pin_project;
-use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError, watch};
 use tokio::time::Interval;
 use tokio_stream::wrappers::BroadcastStream;
 

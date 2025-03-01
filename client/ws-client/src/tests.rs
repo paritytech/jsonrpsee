@@ -24,17 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
+use crate::types::error::{ErrorCode, ErrorObject};
 
 use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT, SubscriptionCloseReason,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
-use jsonrpsee_core::{rpc_params, DeserializeOwned};
+use jsonrpsee_core::{DeserializeOwned, rpc_params};
+use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
-use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::ErrorObjectOwned;
 use jsonrpsee_types::{Notification, SubscriptionId, SubscriptionPayload, SubscriptionResponse};
 use serde_json::Value as JsonValue;

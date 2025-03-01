@@ -34,8 +34,8 @@ use futures_util::future::{self, Either};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::BoxError;
 use pin_project::pin_project;
-use tower::util::Oneshot;
 use tower::ServiceExt;
+use tower::util::Oneshot;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct TowerToHyperService<S> {
