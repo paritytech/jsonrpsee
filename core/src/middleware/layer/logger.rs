@@ -31,16 +31,15 @@ use std::{
 	task::{Context, Poll},
 };
 
-use futures_util::Future;
-use jsonrpsee_core::{
-	server::MethodResponse,
+use crate::{
+	middleware::{MethodResponse, Notification, RpcServiceT},
 	tracing::server::{rx_log_from_json, tx_log_from_str},
 };
+
+use futures_util::Future;
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
 use tracing::{instrument::Instrumented, Instrument};
-
-use crate::middleware::rpc::RpcServiceT;
 
 /// RPC logger layer.
 #[derive(Copy, Clone, Debug)]
@@ -79,6 +78,20 @@ where
 		rx_log_from_json(&request, self.max);
 
 		ResponseFuture { fut: self.service.call(request), max: self.max }.in_current_span()
+	}
+
+	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+		rx_log_from_json(&requests, self.max);
+
+		ResponseFuture { fut: self.service.batch(requests), max: self.max }.in_current_span()
+	}
+
+	#[tracing::instrument(name = "notification", skip_all, fields(method = &*n.method), level = "trace")]
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		rx_log_from_json(&n, self.max);
+
+		ResponseFuture { fut: self.service.notification(n), max: self.max }.in_current_span()
 	}
 }
 

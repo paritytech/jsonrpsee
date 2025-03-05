@@ -1,41 +1,23 @@
-// Copyright 2019-2021 Parity Technologies (UK) Ltd.
-//
-// Permission is hereby granted, free of charge, to any
-// person obtaining a copy of this software and associated
-// documentation files (the "Software"), to deal in the
-// Software without restriction, including without
-// limitation the rights to use, copy, modify, merge,
-// publish, distribute, sublicense, and/or sell copies of
-// the Software, and to permit persons to whom the Software
-// is furnished to do so, subject to the following
-// conditions:
-//
-// The above copyright notice and this permission notice
-// shall be included in all copies or substantial portions
-// of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-// DEALINGS IN THE SOFTWARE.
-
-//! Various middleware implementations for JSON-RPC specific purposes.
+//! Middleware for the RPC service.
 
 pub mod layer;
-pub use layer::*;
 
-use futures_util::Future;
-use jsonrpsee_core::server::MethodResponse;
-use jsonrpsee_types::Request;
-use layer::either::Either;
-
+use futures_util::future::{Either, Future};
+use pin_project::pin_project;
+use serde_json::value::RawValue;
 use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
+
+use std::borrow::Cow;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use crate::server::MethodResponse;
+
+/// Re-export types from `jsonrpsee_types` crate for convenience
+pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, RawValue>>>;
+/// Re-export types from `jsonrpsee_types` crate for convenience
+pub use jsonrpsee_types::Request;
 
 /// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
@@ -44,9 +26,19 @@ pub trait RpcServiceT<'a> {
 	type Future: Future<Output = MethodResponse> + Send;
 
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
-	/// In this interface they are treated in the same way but it's possible to
+	///
+	/// In this interface both are treated in the same way but it's possible to
 	/// distinguish those based on the `MethodResponse`.
 	fn call(&self, request: Request<'a>) -> Self::Future;
+
+	/// Similar to `RpcServiceT::call` but process multiple JSON-RPC calls at once.
+	///
+	/// This method is optional because it's generally not by the server however
+	/// it may be useful for batch processing on the client side.
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future;
+
+	/// Similar to `RpcServiceT::call` but process a JSON-RPC notification.
+	fn notification(&self, n: Notification<'a>) -> Self::Future;
 }
 
 /// Similar to [`tower::ServiceBuilder`] but doesn't
@@ -94,15 +86,40 @@ impl<L> RpcServiceBuilder<L> {
 	///
 	/// This logs each request and response for every call.
 	///
-	pub fn rpc_logger(self, max_log_len: u32) -> RpcServiceBuilder<Stack<RpcLoggerLayer, L>> {
-		RpcServiceBuilder(self.0.layer(RpcLoggerLayer::new(max_log_len)))
+	pub fn rpc_logger(self, max_log_len: u32) -> RpcServiceBuilder<Stack<layer::RpcLoggerLayer, L>> {
+		RpcServiceBuilder(self.0.layer(layer::RpcLoggerLayer::new(max_log_len)))
 	}
 
 	/// Wrap the service `S` with the middleware.
-	pub(crate) fn service<S>(&self, service: S) -> L::Service
+	pub fn service<S>(&self, service: S) -> L::Service
 	where
 		L: tower::Layer<S>,
 	{
 		self.0.service(service)
+	}
+}
+
+/// Response which may be ready or a future.
+#[derive(Debug)]
+#[pin_project]
+pub struct ResponseFuture<F>(#[pin] futures_util::future::Either<F, std::future::Ready<MethodResponse>>);
+
+impl<F> ResponseFuture<F> {
+	/// Returns a future that resolves to a response.
+	pub fn future(f: F) -> ResponseFuture<F> {
+		ResponseFuture(Either::Left(f))
+	}
+
+	/// Return a response which is already computed.
+	pub fn ready(response: MethodResponse) -> ResponseFuture<F> {
+		ResponseFuture(Either::Right(std::future::ready(response)))
+	}
+}
+
+impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
+	type Output = MethodResponse;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		self.project().0.poll(cx)
 	}
 }

@@ -31,7 +31,7 @@
 //! work to implement tower::Layer for
 //! external types such as future::Either.
 
-use crate::middleware::rpc::RpcServiceT;
+use crate::middleware::{Notification, RpcServiceT};
 use jsonrpsee_types::Request;
 
 /// [`tower::util::Either`] but
@@ -70,6 +70,20 @@ where
 		match self {
 			Either::Left(service) => futures_util::future::Either::Left(service.call(request)),
 			Either::Right(service) => futures_util::future::Either::Right(service.call(request)),
+		}
+	}
+
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+		match self {
+			Either::Left(service) => futures_util::future::Either::Left(service.batch(requests)),
+			Either::Right(service) => futures_util::future::Either::Right(service.batch(requests)),
+		}
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		match self {
+			Either::Left(service) => futures_util::future::Either::Left(service.notification(n)),
+			Either::Right(service) => futures_util::future::Either::Right(service.notification(n)),
 		}
 	}
 }

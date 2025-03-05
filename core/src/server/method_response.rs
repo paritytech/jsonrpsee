@@ -41,6 +41,7 @@ enum ResponseKind {
 	MethodCall,
 	Subscription,
 	Batch,
+	Notification,
 }
 
 /// Represents a response to a method call.
@@ -83,6 +84,11 @@ impl MethodResponse {
 	/// Returns whether the response is a method response.
 	pub fn is_method_call(&self) -> bool {
 		matches!(self.kind, ResponseKind::MethodCall)
+	}
+
+	/// Returns whether the response is a notification response.
+	pub fn is_notification(&self) -> bool {
+		matches!(self.kind, ResponseKind::Notification)
 	}
 
 	/// Returns whether the response is a batch response.
@@ -221,6 +227,17 @@ impl MethodResponse {
 			result,
 			success_or_error: MethodResponseResult::Failed(err_code),
 			kind: ResponseKind::MethodCall,
+			on_close: None,
+			extensions: Extensions::new(),
+		}
+	}
+
+	/// Create notification response which is a response that doesn't expect a reply.
+	pub fn notification() -> Self {
+		Self {
+			result: String::new(),
+			success_or_error: MethodResponseResult::Success,
+			kind: ResponseKind::Notification,
 			on_close: None,
 			extensions: Extensions::new(),
 		}
@@ -440,11 +457,11 @@ pub struct MethodResponseFuture(tokio::sync::oneshot::Receiver<NotifyMsg>);
 /// was succesful or not.
 #[derive(Debug, Copy, Clone)]
 pub enum NotifyMsg {
-	/// The response was succesfully processed.
+	/// The response was successfully processed.
 	Ok,
 	/// The response was the wrong kind
 	/// such an error response when
-	/// one expected a succesful response.
+	/// one expected a successful response.
 	Err,
 }
 

@@ -26,7 +26,6 @@
 
 use std::net::SocketAddr;
 
-use crate::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use crate::types::Request;
 use crate::{
 	BatchRequestConfig, HttpBody, HttpRequest, HttpResponse, MethodResponse, RegisterMethodError, RpcModule,
@@ -34,6 +33,7 @@ use crate::{
 };
 use futures_util::future::{BoxFuture, Future, FutureExt};
 use hyper::body::Bytes;
+use jsonrpsee_core::middleware::{Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::{BoxError, RpcResult};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode};
@@ -71,6 +71,14 @@ where
 		}
 
 		self.service.call(req).boxed()
+	}
+
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+		self.service.batch(requests).boxed()
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.service.notification(n).boxed()
 	}
 }
 

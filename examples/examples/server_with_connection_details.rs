@@ -27,9 +27,9 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::async_trait;
+use jsonrpsee::core::middleware::{Notification, Request, RpcServiceT};
 use jsonrpsee::core::SubscriptionResult;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -54,11 +54,19 @@ struct LoggingMiddleware<S>(S);
 impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LoggingMiddleware<S> {
 	type Future = S::Future;
 
-	fn call(&self, request: jsonrpsee::types::Request<'a>) -> Self::Future {
+	fn call(&self, request: Request<'a>) -> Self::Future {
 		tracing::info!("Received request: {:?}", request);
 		assert!(request.extensions().get::<ConnectionId>().is_some());
 
 		self.0.call(request)
+	}
+
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+		self.0.batch(requests)
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.0.notification(n)
 	}
 }
 
@@ -127,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let rpc_middleware = jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new().layer_fn(LoggingMiddleware);
+	let rpc_middleware = jsonrpsee::server::RpcServiceBuilder::new().layer_fn(LoggingMiddleware);
 
 	let server = jsonrpsee::server::Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let addr = server.local_addr()?;

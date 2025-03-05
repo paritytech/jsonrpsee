@@ -28,5 +28,4 @@
 
 /// HTTP related middleware.
 pub mod http;
-/// JSON-RPC specific middleware.
 pub mod rpc;

@@ -37,6 +37,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod client;
+mod rpc_service;
 
 /// HTTP transport.
 pub mod transport;
