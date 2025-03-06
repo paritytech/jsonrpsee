@@ -112,7 +112,7 @@ jobs:
         with:
           profile: minimal
           # Check that tests pass using our MSRV
-          toolchain: 1.74.0
+          toolchain: 1.81
           override: true
 
       - name: Rust Cache
