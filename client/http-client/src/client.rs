@@ -326,6 +326,11 @@ impl HttpClient<HttpBackend> {
 	pub fn builder() -> HttpClientBuilder<Identity> {
 		HttpClientBuilder::new()
 	}
+
+	/// Returns configured request timeout.
+	pub fn request_timeout(&self) -> Duration {
+		self.request_timeout
+	}
 }
 
 #[async_trait]

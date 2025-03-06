@@ -449,6 +449,11 @@ impl Client {
 	pub async fn on_disconnect(&self) -> Error {
 		self.error.read_error().await
 	}
+
+	/// Returns configured request timeout.
+	pub fn request_timeout(&self) -> Duration {
+		self.request_timeout
+	}
 }
 
 impl Drop for Client {
