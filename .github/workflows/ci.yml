@@ -107,11 +107,11 @@ jobs:
 
       - uses: actions/checkout@v4.2.2
 
-      - name: Install Rust 1.74.0 toolchain
+      - name: Install Rust 1.81.0 toolchain
         uses: actions-rs/toolchain@v1.0.7
         with:
           profile: minimal
-          # Check that tests pass using our MSRV
+          # Check that jsonrpsee compiles with MSRV
           toolchain: 1.81
           override: true
 
