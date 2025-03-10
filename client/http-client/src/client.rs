@@ -37,7 +37,7 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	generate_batch_id_range, BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
+	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT, generate_batch_id_range,
 };
 use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
@@ -352,6 +352,11 @@ impl HttpClient<HttpBackend> {
 	/// Create a builder for the HttpClient.
 	pub fn builder() -> HttpClientBuilder<Identity> {
 		HttpClientBuilder::new()
+	}
+
+	/// Returns configured request timeout.
+	pub fn request_timeout(&self) -> Duration {
+		todo!();
 	}
 }
 

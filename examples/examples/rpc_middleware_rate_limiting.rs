@@ -36,7 +36,7 @@ use jsonrpsee::core::middleware::{Notification, ResponseFuture, RpcServiceBuilde
 use jsonrpsee::server::Server;
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, MethodResponse, RpcModule};
+use jsonrpsee::{MethodResponse, RpcModule, rpc_params};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

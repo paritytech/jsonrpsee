@@ -31,7 +31,7 @@
 use std::future::Future;
 use std::time::Duration;
 
-use tokio::time::{timeout, Timeout};
+use tokio::time::{Timeout, timeout};
 
 pub mod helpers;
 pub mod mocks;

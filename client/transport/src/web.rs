@@ -3,7 +3,7 @@ use core::fmt;
 use futures_channel::mpsc;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{SplitSink, SplitStream, StreamExt};
-use gloo_net::websocket::{futures::WebSocket, Message, WebSocketError};
+use gloo_net::websocket::{Message, WebSocketError, futures::WebSocket};
 use jsonrpsee_core::async_trait;
 use jsonrpsee_core::client::{ReceivedMessage, TransportReceiverT, TransportSenderT};
 

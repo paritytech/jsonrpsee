@@ -29,7 +29,7 @@ use std::net::SocketAddr;
 
 use crate::mocks::{HttpResponse, Id, Uri};
 use http_body_util::BodyExt;
-use hyper::{service::service_fn, Response};
+use hyper::{Response, service::service_fn};
 use hyper_util::{
 	client::legacy::Client,
 	rt::{TokioExecutor, TokioIo},

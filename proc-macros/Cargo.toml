@@ -13,6 +13,9 @@ keywords.workspace = true
 readme.workspace = true
 publish = true
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 

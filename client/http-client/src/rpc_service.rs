@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
-use futures_util::{future::BoxFuture, FutureExt};
+use futures_util::{FutureExt, future::BoxFuture};
 use hyper::body::Bytes;
 use jsonrpsee_core::{
+	BoxError, JsonRawValue,
 	middleware::{Notification, RpcServiceT},
 	server::{BatchResponseBuilder, MethodResponse, ResponsePayload},
-	BoxError, JsonRawValue,
 };
 use jsonrpsee_types::{Id, Response, ResponseSuccess};
 use tower::Service;
 
 use crate::{
-	transport::{Error, HttpTransportClient},
 	HttpRequest, HttpResponse,
+	transport::{Error, HttpTransportClient},
 };
 
 #[derive(Clone, Debug)]

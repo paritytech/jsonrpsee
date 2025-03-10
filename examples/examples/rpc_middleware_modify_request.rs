@@ -29,7 +29,7 @@ use jsonrpsee::core::middleware::{Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, RpcModule};
+use jsonrpsee::{RpcModule, rpc_params};
 use std::borrow::Cow as StdCow;
 use std::net::SocketAddr;
 

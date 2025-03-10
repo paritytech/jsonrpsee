@@ -30,12 +30,12 @@
 mod helpers;
 
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use futures::stream::FuturesUnordered;
-use futures::{channel::mpsc, StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt, channel::mpsc};
 use helpers::{
 	connect_over_socks_stream, init_logger, pipe_from_stream_and_drop, server, server_with_cors,
 	server_with_health_api, server_with_subscription, server_with_subscription_and_handle,
@@ -53,7 +53,7 @@ use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ConnectionGuard, ServerBuilder, ServerConfig, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, UNKNOWN_ERROR_CODE};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, ResponsePayload, RpcModule};
+use jsonrpsee::{ResponsePayload, RpcModule, rpc_params};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -514,8 +514,8 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 #[tokio::test]
 async fn ws_server_should_stop_subscription_after_client_drop() {
-	use futures::{channel::mpsc, SinkExt, StreamExt};
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use futures::{SinkExt, StreamExt, channel::mpsc};
+	use jsonrpsee::{RpcModule, server::ServerBuilder};
 
 	init_logger();
 
@@ -562,7 +562,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 #[tokio::test]
 async fn ws_server_stop_subscription_when_dropped() {
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{RpcModule, server::ServerBuilder};
 
 	init_logger();
 
@@ -822,7 +822,7 @@ async fn http_batch_works() {
 async fn ws_server_limit_subs_per_conn_works() {
 	use futures::StreamExt;
 	use jsonrpsee::types::error::{TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{RpcModule, server::ServerBuilder};
 
 	init_logger();
 
@@ -878,7 +878,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	use futures::StreamExt;
 	use jsonrpsee::core::client::SubscriptionKind;
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{RpcModule, server::ServerBuilder};
 
 	init_logger();
 
@@ -1466,10 +1466,10 @@ async fn server_ws_low_api_works() {
 
 	async fn run_server() -> anyhow::Result<SocketAddr> {
 		use futures_util::future::FutureExt;
-		use jsonrpsee::core::{middleware::RpcServiceBuilder, BoxError};
+		use jsonrpsee::core::{BoxError, middleware::RpcServiceBuilder};
 		use jsonrpsee::server::{
-			http, serve_with_graceful_shutdown, stop_channel, ws, ConnectionGuard, ConnectionState, Methods,
-			ServerConfig, StopHandle,
+			ConnectionGuard, ConnectionState, Methods, ServerConfig, StopHandle, http, serve_with_graceful_shutdown,
+			stop_channel, ws,
 		};
 
 		let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from(([127, 0, 0, 1], 0))).await?;
@@ -1548,7 +1548,7 @@ async fn server_ws_low_api_works() {
 
 #[tokio::test]
 async fn http_connection_guard_works() {
-	use jsonrpsee::{server::ServerBuilder, RpcModule};
+	use jsonrpsee::{RpcModule, server::ServerBuilder};
 	use tokio::sync::mpsc;
 
 	init_logger();

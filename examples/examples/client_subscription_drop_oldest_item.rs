@@ -28,13 +28,13 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{Stream, StreamExt};
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::DeserializeOwned;
+use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server, SubscriptionMessage};
 use jsonrpsee::ws_client::WsClientBuilder;
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

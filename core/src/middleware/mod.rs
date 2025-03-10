@@ -5,8 +5,8 @@ pub mod layer;
 use futures_util::future::{Either, Future};
 use pin_project::pin_project;
 use serde_json::value::RawValue;
-use tower::layer::util::{Identity, Stack};
 use tower::layer::LayerFn;
+use tower::layer::util::{Identity, Stack};
 
 use std::borrow::Cow;
 use std::pin::Pin;

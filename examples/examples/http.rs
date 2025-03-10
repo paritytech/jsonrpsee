@@ -34,8 +34,8 @@ use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, RpcServiceBuilder, Server};
 use jsonrpsee::types::Request;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing_subscriber::util::SubscriberInitExt;
 
 struct Logger<S>(S);

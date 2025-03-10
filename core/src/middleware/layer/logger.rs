@@ -39,7 +39,7 @@ use crate::{
 use futures_util::Future;
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
-use tracing::{instrument::Instrumented, Instrument};
+use tracing::{Instrument, instrument::Instrumented};
 
 /// RPC logger layer.
 #[derive(Copy, Clone, Debug)]

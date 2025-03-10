@@ -33,18 +33,18 @@
 //! for HTTP and WebSocket.
 //!
 
+use hyper::Method;
 use hyper::body::Bytes;
 use hyper::http::HeaderValue;
-use hyper::Method;
 use jsonrpsee::rpc_params;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::time::Duration;
+use tower_http::LatencyUnit;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClient;

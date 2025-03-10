@@ -100,6 +100,30 @@ jobs:
       - name: Check unused dependencies
         run: cargo machete
 
+  check-msrv:
+    name: Check MSRV
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v4.2.2
+
+      - name: Install Rust 1.85.0 toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          # Check that jsonrpsee compiles with MSRV
+          toolchain: 1.85
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.7.7
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --all-targets
+
   tests_ubuntu:
     name: Run tests Ubuntu
     runs-on: ubuntu-latest
@@ -175,6 +199,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4.2.2
+
+    - name: Install Rust stable toolchain
+      uses: actions-rs/toolchain@v1.0.7
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
 
     - name: Install wasm-pack
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
