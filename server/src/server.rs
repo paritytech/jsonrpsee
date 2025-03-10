@@ -458,6 +458,7 @@ impl ServerConfigBuilder {
 	/// Panics if the buffer capacity is 0.
 	///
 	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
+		assert!(c > 0, "buffer capacity must be set to > 0");
 		self.message_buffer_capacity = c;
 		self
 	}
