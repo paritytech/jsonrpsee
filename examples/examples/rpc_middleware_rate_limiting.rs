@@ -32,11 +32,11 @@
 //! such as `Arc<Mutex>`
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
+use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, MethodResponse, RpcModule};
+use jsonrpsee::{MethodResponse, RpcModule, rpc_params};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

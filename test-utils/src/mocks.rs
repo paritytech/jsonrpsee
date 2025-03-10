@@ -38,7 +38,7 @@ use futures_util::stream::{self, StreamExt};
 use futures_util::{pin_mut, select};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use serde::{Deserialize, Serialize};
-use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
+use soketto::handshake::{self, Error as SokettoError, Server, http::is_upgrade_request, server::Response};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 

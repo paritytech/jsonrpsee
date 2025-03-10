@@ -29,14 +29,14 @@
 use super::ResponseFuture;
 use std::sync::Arc;
 
-use crate::middleware::rpc::RpcServiceT;
 use crate::ConnectionId;
+use crate::middleware::rpc::RpcServiceT;
 use futures_util::future::BoxFuture;
 use jsonrpsee_core::server::{
 	BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
+use jsonrpsee_types::error::{ErrorCode, reject_too_many_subscriptions};
 use jsonrpsee_types::{ErrorObject, Request};
 
 /// JSON-RPC service middleware.

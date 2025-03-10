@@ -164,11 +164,7 @@ impl Default for ObjectParams {
 
 impl ToRpcParams for ObjectParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		if let Some(json) = self.0.build() {
-			RawValue::from_string(json).map(Some)
-		} else {
-			Ok(None)
-		}
+		if let Some(json) = self.0.build() { RawValue::from_string(json).map(Some) } else { Ok(None) }
 	}
 }
 
@@ -210,11 +206,7 @@ impl Default for ArrayParams {
 
 impl ToRpcParams for ArrayParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		if let Some(json) = self.0.build() {
-			RawValue::from_string(json).map(Some)
-		} else {
-			Ok(None)
-		}
+		if let Some(json) = self.0.build() { RawValue::from_string(json).map(Some) } else { Ok(None) }
 	}
 }
 
@@ -246,11 +238,7 @@ impl<'a> BatchRequestBuilder<'a> {
 	/// Finish the building process and return a valid batch parameter.
 	#[allow(clippy::type_complexity)]
 	pub fn build(self) -> Result<Vec<(&'a str, Option<Box<RawValue>>)>, EmptyBatchRequest> {
-		if self.0.is_empty() {
-			Err(EmptyBatchRequest)
-		} else {
-			Ok(self.0)
-		}
+		if self.0.is_empty() { Err(EmptyBatchRequest) } else { Ok(self.0) }
 	}
 
 	/// Get an iterator over the batch request.

@@ -28,8 +28,8 @@
 #![allow(dead_code)]
 
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
 use std::time::Duration;
 
 use fast_socks5::client::Socks5Stream;
@@ -39,8 +39,8 @@ use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
-	serve_with_graceful_shutdown, stop_channel, ConnectionGuard, PendingSubscriptionSink, RpcModule, RpcServiceBuilder,
-	Server, ServerBuilder, ServerHandle, SubscriptionMessage, TrySendError,
+	ConnectionGuard, PendingSubscriptionSink, RpcModule, RpcServiceBuilder, Server, ServerBuilder, ServerHandle,
+	SubscriptionMessage, TrySendError, serve_with_graceful_shutdown, stop_channel,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::{Methods, SubscriptionCloseResponse};

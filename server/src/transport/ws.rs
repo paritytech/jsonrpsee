@@ -3,8 +3,8 @@ use std::time::Instant;
 
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
-use crate::server::{handle_rpc_call, ConnectionState, ServerConfig};
-use crate::{HttpBody, HttpRequest, HttpResponse, PingConfig, LOG_TARGET};
+use crate::server::{ConnectionState, ServerConfig, handle_rpc_call};
+use crate::{HttpBody, HttpRequest, HttpResponse, LOG_TARGET, PingConfig};
 
 use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
@@ -12,8 +12,8 @@ use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
 use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
-use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
 use jsonrpsee_types::Id;
+use jsonrpsee_types::error::{ErrorCode, reject_too_big_request};
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 
