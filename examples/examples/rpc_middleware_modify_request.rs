@@ -41,6 +41,7 @@ where
 	S: Send + Sync + RpcServiceT<'a>,
 {
 	type Future = S::Future;
+	type Error = S::Error;
 
 	fn call(&self, mut req: Request<'a>) -> Self::Future {
 		// Example how to modify the params in the call.

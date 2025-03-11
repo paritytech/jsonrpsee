@@ -38,8 +38,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
-use jsonrpsee::core::async_trait;
 use jsonrpsee::core::middleware::{Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{
@@ -73,8 +73,10 @@ struct AuthorizationMiddleware<S> {
 impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
 	S: Send + Clone + Sync + RpcServiceT<'a>,
+	S::Error: Into<BoxError>,
 {
-	type Future = ResponseFuture<S::Future>;
+	type Future = ResponseFuture<S::Future, Self::Error>;
+	type Error = S::Error;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		if req.method_name() == "trusted_call" {

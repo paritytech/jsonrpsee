@@ -87,7 +87,8 @@ where
 	// Instead of `Boxing` the future in this example
 	// we are using a jsonrpsee's ResponseFuture future
 	// type to avoid those extra allocations.
-	type Future = ResponseFuture<S::Future>;
+	type Future = ResponseFuture<S::Future, Self::Error>;
+	type Error = S::Error;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let now = Instant::now();

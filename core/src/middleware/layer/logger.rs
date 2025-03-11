@@ -27,6 +27,7 @@
 //! RPC Logger layer.
 
 use std::{
+	convert::Infallible,
 	pin::Pin,
 	task::{Context, Poll},
 };
@@ -69,9 +70,10 @@ pub struct RpcLogger<S> {
 
 impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
-	S: RpcServiceT<'a>,
+	S: RpcServiceT<'a, Error = Infallible>,
 {
 	type Future = Instrumented<ResponseFuture<S::Future>>;
+	type Error = Infallible;
 
 	#[tracing::instrument(name = "method_call", skip_all, fields(method = request.method_name()), level = "trace")]
 	fn call(&self, request: Request<'a>) -> Self::Future {
@@ -109,17 +111,20 @@ impl<F> std::fmt::Debug for ResponseFuture<F> {
 	}
 }
 
-impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
+impl<F: Future<Output = Result<MethodResponse, Infallible>>> Future for ResponseFuture<F> {
 	type Output = F::Output;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		let max = self.max;
 		let fut = self.project().fut;
 
-		let res = fut.poll(cx);
-		if let Poll::Ready(rp) = &res {
-			tx_log_from_str(rp.as_result(), max);
+		match fut.poll(cx) {
+			Poll::Ready(Ok(rp)) => {
+				tx_log_from_str(rp.as_result(), max);
+				Poll::Ready(Ok(rp))
+			}
+			Poll::Ready(Err(e)) => match e {},
+			Poll::Pending => Poll::Pending,
 		}
-		res
 	}
 }

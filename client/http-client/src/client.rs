@@ -363,7 +363,7 @@ impl HttpClient<HttpBackend> {
 #[async_trait]
 impl<S> ClientT for HttpClient<S>
 where
-	for<'a> S: RpcServiceT<'a> + Send + Sync,
+	for<'a> S: RpcServiceT<'a, Error = Error> + Send + Sync,
 {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
@@ -376,7 +376,7 @@ where
 		};
 		let params = params.to_rpc_params()?.map(StdCow::Owned);
 		let n = Notification { jsonrpc: TwoPointZero, method: method.into(), params };
-		self.transport.notification(n).await;
+		self.transport.notification(n).await?;
 		Ok(())
 	}
 
@@ -394,7 +394,7 @@ where
 		let params = params.to_rpc_params()?;
 
 		let request = Request::new(method.into(), params.as_deref(), id.clone());
-		let rp = self.transport.call(request).await;
+		let rp = self.transport.call(request).await?;
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
@@ -434,10 +434,10 @@ where
 			});
 		}
 
-		let batch = self.transport.batch(batch_request).await;
-		let responses: Vec<Response<&JsonRawValue>> = serde_json::from_str(&batch.as_result()).unwrap();
+		let batch = self.transport.batch(batch_request).await?;
+		let responses: Vec<Response<&JsonRawValue>> = serde_json::from_str(&batch.as_result())?;
 
-		let mut x = Vec::new();
+		let mut res = Vec::new();
 		let mut success = 0;
 		let mut failed = 0;
 
@@ -445,24 +445,24 @@ where
 			match ResponseSuccess::try_from(rp) {
 				Ok(r) => {
 					let v = serde_json::from_str(r.result.get()).map_err(Error::ParseError)?;
-					x.push(Ok(v));
+					res.push(Ok(v));
 					success += 1;
 				}
 				Err(err) => {
-					x.push(Err(err));
+					res.push(Err(err));
 					failed += 1;
 				}
 			};
 		}
 
-		Ok(BatchResponse::new(success, x, failed))
+		Ok(BatchResponse::new(success, res, failed))
 	}
 }
 
 #[async_trait]
 impl<S> SubscriptionClientT for HttpClient<S>
 where
-	for<'a> S: RpcServiceT<'a> + Send + Sync,
+	for<'a> S: RpcServiceT<'a, Error = Error> + Send + Sync,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].

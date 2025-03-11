@@ -65,7 +65,8 @@ impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = BoxFuture<'a, Result<MethodResponse, S::Error>>;
+	type Error = S::Error;
 
 	fn call(&self, request: Request<'a>) -> Self::Future {
 		let counter = self.counter.clone();
@@ -87,7 +88,7 @@ where
 			{
 				let mut n = counter.lock().unwrap();
 				n.requests.1 += 1;
-				if rp.is_success() {
+				if rp.as_ref().map_or(false, |r| r.is_success()) {
 					n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
 				}
 			}

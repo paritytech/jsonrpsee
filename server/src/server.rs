@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
@@ -964,7 +965,7 @@ impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcM
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a, Error = Infallible>,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	Body::Error: Into<BoxError>,
 {
@@ -1230,14 +1231,20 @@ pub(crate) async fn handle_rpc_call<S>(
 	extensions: Extensions,
 ) -> MethodResponse
 where
-	for<'a> S: RpcServiceT<'a> + Send,
+	for<'a> S: RpcServiceT<'a, Error = Infallible> + Send,
 {
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = deserialize::from_slice_with_extensions(body, extensions) {
-			rpc_service.call(req).await
+			match rpc_service.call(req).await {
+				Ok(rp) => rp,
+				Err(e) => match e {},
+			}
 		} else if let Ok(notif) = serde_json::from_slice::<Notification>(body) {
-			rpc_service.notification(notif).await
+			match rpc_service.notification(notif).await {
+				Ok(rp) => rp,
+				Err(e) => match e {},
+			}
 		} else {
 			let (id, code) = prepare_error(body);
 			MethodResponse::error(id, ErrorObject::from(code))
@@ -1280,7 +1287,10 @@ where
 				}
 			}
 
-			let batch_response = rpc_service.batch(batch).await;
+			let batch_response = match rpc_service.batch(batch).await {
+				Ok(rp) => rp,
+				Err(e) => match e {},
+			};
 
 			if got_notif && batch_response.as_result().len() == 0 {
 				MethodResponse::notification()

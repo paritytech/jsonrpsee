@@ -45,6 +45,7 @@ where
 	S: RpcServiceT<'a>,
 {
 	type Future = S::Future;
+	type Error = S::Error;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		println!("logger layer : {:?}", req);

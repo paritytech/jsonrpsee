@@ -44,7 +44,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{MethodResponseBoxFuture, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{MethodResponse, RpcModule, Server};
 use jsonrpsee::types::Request;
@@ -62,7 +62,8 @@ impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = BoxFuture<'a, Result<MethodResponse, Self::Error>>;
+	type Error = S::Error;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let count = self.count.clone();
@@ -97,7 +98,8 @@ impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = MethodResponseBoxFuture<'a, Self::Error>;
+	type Error = S::Error;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let count = self.count.clone();
@@ -130,6 +132,7 @@ where
 	S: RpcServiceT<'a> + Send + Sync,
 {
 	type Future = S::Future;
+	type Error = S::Error;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		println!("logger middleware: method `{}`", req.method);

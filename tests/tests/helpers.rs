@@ -156,6 +156,7 @@ pub async fn server() -> SocketAddr {
 		S: RpcServiceT<'a>,
 	{
 		type Future = S::Future;
+		type Error = S::Error;
 
 		fn call(&self, mut request: jsonrpsee::types::Request<'a>) -> Self::Future {
 			request.extensions_mut().insert(self.connection_id);
