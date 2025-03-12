@@ -83,6 +83,7 @@ impl<S> RateLimit<S> {
 impl<'a, S> RpcServiceT<'a> for RateLimit<S>
 where
 	S: Send + RpcServiceT<'a>,
+	S::Error: Send,
 {
 	// Instead of `Boxing` the future in this example
 	// we are using a jsonrpsee's ResponseFuture future

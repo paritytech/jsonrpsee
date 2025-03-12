@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
@@ -55,6 +54,7 @@ use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
+	rpc_middleware_error,
 };
 use jsonrpsee_types::{ErrorObject, Id, InvalidRequest};
 use soketto::handshake::http::is_upgrade_request;
@@ -965,7 +965,7 @@ impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcM
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a, Error = Infallible>,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	Body::Error: Into<BoxError>,
 {
@@ -1231,19 +1231,27 @@ pub(crate) async fn handle_rpc_call<S>(
 	extensions: Extensions,
 ) -> MethodResponse
 where
-	for<'a> S: RpcServiceT<'a, Error = Infallible> + Send,
+	for<'a> S: RpcServiceT<'a> + Send,
 {
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = deserialize::from_slice_with_extensions(body, extensions) {
+			let id = req.id();
+
 			match rpc_service.call(req).await {
 				Ok(rp) => rp,
-				Err(e) => match e {},
+				Err(err) => {
+					return MethodResponse::error(id, rpc_middleware_error(err));
+				}
 			}
 		} else if let Ok(notif) = serde_json::from_slice::<Notification>(body) {
 			match rpc_service.notification(notif).await {
 				Ok(rp) => rp,
-				Err(e) => match e {},
+				Err(e) => {
+					// We don't care about the error if it's a notification.
+					tracing::debug!(target: LOG_TARGET, "Notification error: {:?}", e);
+					return MethodResponse::notification();
+				}
 			}
 		} else {
 			let (id, code) = prepare_error(body);
@@ -1289,7 +1297,9 @@ where
 
 			let batch_response = match rpc_service.batch(batch).await {
 				Ok(rp) => rp,
-				Err(e) => match e {},
+				Err(e) => {
+					return MethodResponse::error(Id::Null, rpc_middleware_error(e));
+				}
 			};
 
 			if got_notif && batch_response.as_result().len() == 0 {

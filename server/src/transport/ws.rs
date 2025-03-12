@@ -1,4 +1,3 @@
-use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -64,7 +63,7 @@ pub(crate) struct BackgroundTaskParams<S> {
 
 pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
-	for<'a> S: RpcServiceT<'a, Error = Infallible> + Send + Sync + 'static,
+	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
 {
 	let BackgroundTaskParams {
 		server_cfg,
@@ -421,7 +420,7 @@ pub async fn connect<L, B>(
 where
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a, Error = Infallible>,
+	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
 {
 	let mut server = soketto::handshake::http::Server::new();
 

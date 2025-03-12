@@ -29,7 +29,7 @@ pub trait RpcServiceT<'a> {
 	type Future: Future<Output = Result<MethodResponse, Self::Error>> + Send;
 
 	/// The error type.
-	type Error: std::error::Error + Send + Sync + 'static;
+	type Error: std::fmt::Debug;
 
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	///

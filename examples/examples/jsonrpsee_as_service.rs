@@ -73,7 +73,7 @@ struct AuthorizationMiddleware<S> {
 impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
 	S: Send + Clone + Sync + RpcServiceT<'a>,
-	S::Error: Into<BoxError>,
+	S::Error: Into<BoxError> + Send,
 {
 	type Future = ResponseFuture<S::Future, Self::Error>;
 	type Error = S::Error;
