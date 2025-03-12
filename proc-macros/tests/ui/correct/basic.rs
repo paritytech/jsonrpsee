@@ -4,12 +4,12 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
+use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::SubscriptionMessage;
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::{rpc_params, Extensions, PendingSubscriptionSink};
+use jsonrpsee::{Extensions, PendingSubscriptionSink, rpc_params};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -135,10 +135,10 @@ impl RpcServer for RpcServerImpl {
 
 pub async fn server() -> SocketAddr {
 	use hyper_util::rt::{TokioExecutor, TokioIo};
-	use jsonrpsee::server::middleware::rpc::RpcServiceT;
-	use jsonrpsee::server::{stop_channel, RpcServiceBuilder};
+	use jsonrpsee::core::middleware::{Notification, RpcServiceT};
+	use jsonrpsee::server::{RpcServiceBuilder, stop_channel};
 	use std::convert::Infallible;
-	use std::sync::{atomic::AtomicU32, Arc};
+	use std::sync::{Arc, atomic::AtomicU32};
 	use tower::Service;
 
 	#[derive(Debug, Clone)]
@@ -152,10 +152,19 @@ pub async fn server() -> SocketAddr {
 		S: RpcServiceT<'a>,
 	{
 		type Future = S::Future;
+		type Error = S::Error;
 
 		fn call(&self, mut request: jsonrpsee::types::Request<'a>) -> Self::Future {
 			request.extensions_mut().insert(self.connection_id);
 			self.inner.call(request)
+		}
+
+		fn batch(&self, requests: Vec<jsonrpsee::types::Request<'a>>) -> Self::Future {
+			self.inner.batch(requests)
+		}
+
+		fn notification(&self, notif: Notification<'a>) -> Self::Future {
+			self.inner.notification(notif)
 		}
 	}
 

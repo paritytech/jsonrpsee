@@ -32,16 +32,16 @@ use std::sync::Arc;
 
 use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
+use crate::method_response::MethodResponse;
 use crate::server::helpers::MethodSink;
-use crate::server::method_response::MethodResponse;
 use crate::server::subscription::{
-	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
-	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
-	SubscriptionState,
+	BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubNotifResultOrError, Subscribers,
+	Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit, SubscriptionState,
+	sub_message_to_json,
 };
-use crate::server::{ResponsePayload, LOG_TARGET};
+use crate::server::{LOG_TARGET, ResponsePayload};
 use crate::traits::ToRpcParams;
-use futures_util::{future::BoxFuture, FutureExt};
+use futures_util::{FutureExt, future::BoxFuture};
 use http::Extensions;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{

@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{RpcModule, rpc_params};
@@ -41,6 +41,7 @@ where
 	S: Send + Sync + RpcServiceT<'a>,
 {
 	type Future = S::Future;
+	type Error = S::Error;
 
 	fn call(&self, mut req: Request<'a>) -> Self::Future {
 		// Example how to modify the params in the call.
@@ -56,6 +57,14 @@ where
 		}
 
 		self.0.call(req)
+	}
+
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+		self.0.batch(requests)
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.0.notification(n)
 	}
 }
 

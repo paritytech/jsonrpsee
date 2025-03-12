@@ -38,10 +38,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
-use jsonrpsee::core::async_trait;
+use jsonrpsee::core::middleware::{Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{
 	ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder, serve_with_graceful_shutdown, stop_channel,
 };
@@ -73,8 +73,10 @@ struct AuthorizationMiddleware<S> {
 impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
 	S: Send + Clone + Sync + RpcServiceT<'a>,
+	S::Error: Into<BoxError> + Send,
 {
-	type Future = ResponseFuture<S::Future>;
+	type Future = ResponseFuture<S::Future, Self::Error>;
+	type Error = S::Error;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		if req.method_name() == "trusted_call" {
@@ -90,6 +92,14 @@ where
 		} else {
 			ResponseFuture::future(self.inner.call(req))
 		}
+	}
+
+	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
+		ResponseFuture::future(self.inner.batch(reqs))
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		ResponseFuture::future(self.inner.notification(n))
 	}
 }
 

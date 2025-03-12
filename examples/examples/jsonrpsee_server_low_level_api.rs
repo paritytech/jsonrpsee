@@ -46,10 +46,10 @@ use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
 use futures::future::BoxFuture;
-use jsonrpsee::core::async_trait;
+use jsonrpsee::core::middleware::{Notification, RpcServiceT};
+use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
 	ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle, http,
 	serve_with_graceful_shutdown, stop_channel, ws,
@@ -76,8 +76,10 @@ struct CallLimit<S> {
 impl<'a, S> RpcServiceT<'a> for CallLimit<S>
 where
 	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
+	S::Error: Into<BoxError>,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = BoxFuture<'a, Result<MethodResponse, Self::Error>>;
+	type Error = S::Error;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let count = self.count.clone();
@@ -89,7 +91,7 @@ where
 
 			if *lock >= 10 {
 				let _ = state.try_send(());
-				MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
+				Ok(MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 			} else {
 				let rp = service.call(req).await;
 				*lock += 1;
@@ -97,6 +99,14 @@ where
 			}
 		}
 		.boxed()
+	}
+
+	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
+		Box::pin(self.service.batch(reqs))
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		Box::pin(self.service.notification(n))
 	}
 }
 

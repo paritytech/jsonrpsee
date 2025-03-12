@@ -27,20 +27,20 @@
 //! RPC Logger layer.
 
 use std::{
+	marker::PhantomData,
 	pin::Pin,
 	task::{Context, Poll},
 };
 
-use futures_util::Future;
-use jsonrpsee_core::{
-	server::MethodResponse,
+use crate::{
+	middleware::{MethodResponse, Notification, RpcServiceT},
 	tracing::server::{rx_log_from_json, tx_log_from_str},
 };
+
+use futures_util::Future;
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
 use tracing::{Instrument, instrument::Instrumented};
-
-use crate::middleware::rpc::RpcServiceT;
 
 /// RPC logger layer.
 #[derive(Copy, Clone, Debug)]
@@ -71,42 +71,72 @@ pub struct RpcLogger<S> {
 impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a>,
+	S::Error: Send,
 {
-	type Future = Instrumented<ResponseFuture<S::Future>>;
+	type Future = Instrumented<ResponseFuture<S::Future, S::Error>>;
+	type Error = S::Error;
 
 	#[tracing::instrument(name = "method_call", skip_all, fields(method = request.method_name()), level = "trace")]
 	fn call(&self, request: Request<'a>) -> Self::Future {
 		rx_log_from_json(&request, self.max);
 
-		ResponseFuture { fut: self.service.call(request), max: self.max }.in_current_span()
+		ResponseFuture::<_, Self::Error>::new(self.service.call(request), self.max).in_current_span()
+	}
+
+	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
+	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+		rx_log_from_json(&requests, self.max);
+
+		ResponseFuture::<_, Self::Error>::new(self.service.batch(requests), self.max).in_current_span()
+	}
+
+	#[tracing::instrument(name = "notification", skip_all, fields(method = &*n.method), level = "trace")]
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		rx_log_from_json(&n, self.max);
+
+		ResponseFuture::<_, Self::Error>::new(self.service.notification(n), self.max).in_current_span()
 	}
 }
 
 /// Response future to log the response for a method call.
 #[pin_project]
-pub struct ResponseFuture<F> {
+pub struct ResponseFuture<F, R> {
 	#[pin]
 	fut: F,
 	max: u32,
+	_marker: std::marker::PhantomData<R>,
 }
 
-impl<F> std::fmt::Debug for ResponseFuture<F> {
+impl<F, E> ResponseFuture<F, E> {
+	/// Create a new response future.
+	fn new(fut: F, max: u32) -> Self {
+		Self { fut, max, _marker: PhantomData }
+	}
+}
+
+impl<F, E> std::fmt::Debug for ResponseFuture<F, E> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_str("ResponseFuture")
 	}
 }
 
-impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
+impl<F, E> Future for ResponseFuture<F, E>
+where
+	F: Future<Output = Result<MethodResponse, E>>,
+{
 	type Output = F::Output;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		let max = self.max;
 		let fut = self.project().fut;
 
-		let res = fut.poll(cx);
-		if let Poll::Ready(rp) = &res {
-			tx_log_from_str(rp.as_result(), max);
+		match fut.poll(cx) {
+			Poll::Ready(Ok(rp)) => {
+				tx_log_from_str(rp.as_result(), max);
+				Poll::Ready(Ok(rp))
+			}
+			Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+			Poll::Pending => Poll::Pending,
 		}
-		res
 	}
 }

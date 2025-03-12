@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::future::{IntervalStream, SessionClose};
-use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
+use crate::middleware::rpc::{RpcService, RpcServiceCfg};
 use crate::server::{ConnectionState, ServerConfig, handle_rpc_call};
 use crate::{HttpBody, HttpRequest, HttpResponse, LOG_TARGET, PingConfig};
 
@@ -11,6 +11,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
+use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
 use jsonrpsee_types::Id;
 use jsonrpsee_types::error::{ErrorCode, reject_too_big_request};
@@ -76,8 +77,7 @@ where
 		mut on_session_close,
 		extensions,
 	} = params;
-	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, max_response_body_size, .. } =
-		server_cfg;
+	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, .. } = server_cfg;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
 
@@ -157,30 +157,23 @@ where
 				}
 			};
 
-			if let Some(rp) = handle_rpc_call(
-				&data[idx..],
-				is_single,
-				batch_requests_config,
-				max_response_body_size,
-				&*rpc_service,
-				extensions,
-			)
-			.await
-			{
-				if !rp.is_subscription() {
-					let is_success = rp.is_success();
-					let (serialized_rp, mut on_close, _) = rp.into_parts();
+			let rp = handle_rpc_call(&data[idx..], is_single, batch_requests_config, &*rpc_service, extensions).await;
 
-					// The connection is closed, just quit.
-					if sink.send(serialized_rp).await.is_err() {
-						return;
-					}
+			// Subscriptions are handled by the subscription callback and
+			// "ordinary notifications" should not be sent back to the client.
+			if rp.is_method_call() || rp.is_batch() {
+				let is_success = rp.is_success();
+				let (serialized_rp, mut on_close, _) = rp.into_parts();
 
-					// Notify that the message has been sent out to the internal
-					// WebSocket buffer.
-					if let Some(n) = on_close.take() {
-						n.notify(is_success);
-					}
+				// The connection is closed, just quit.
+				if sink.send(serialized_rp).await.is_err() {
+					return;
+				}
+
+				// Notify that the message has been sent out to the internal
+				// WebSocket buffer.
+				if let Some(n) = on_close.take() {
+					n.notify(is_success);
 				}
 			}
 		});

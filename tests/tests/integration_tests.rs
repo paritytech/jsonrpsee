@@ -1466,10 +1466,10 @@ async fn server_ws_low_api_works() {
 
 	async fn run_server() -> anyhow::Result<SocketAddr> {
 		use futures_util::future::FutureExt;
-		use jsonrpsee::core::BoxError;
+		use jsonrpsee::core::{BoxError, middleware::RpcServiceBuilder};
 		use jsonrpsee::server::{
-			ConnectionGuard, ConnectionState, Methods, ServerConfig, StopHandle, http,
-			middleware::rpc::RpcServiceBuilder, serve_with_graceful_shutdown, stop_channel, ws,
+			ConnectionGuard, ConnectionState, Methods, ServerConfig, StopHandle, http, serve_with_graceful_shutdown,
+			stop_channel, ws,
 		};
 
 		let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from(([127, 0, 0, 1], 0))).await?;
