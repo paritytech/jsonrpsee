@@ -43,7 +43,7 @@ use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::{InvalidRequestId, Notification, Request, ResponseSuccess, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, InvalidRequestId, Notification, Request, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tokio::sync::Semaphore;
 use tower::layer::util::Identity;
@@ -398,6 +398,7 @@ where
 
 		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 		// a better error message if `R` couldn't be decoded.
+		// TODO: this is inefficient, we should avoid double parsing.
 		let response = ResponseSuccess::try_from(serde_json::from_str::<Response<&JsonRawValue>>(&rp.as_result())?)?;
 
 		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
@@ -435,27 +436,46 @@ where
 		}
 
 		let batch = self.transport.batch(batch_request).await?;
-		let responses: Vec<Response<&JsonRawValue>> = serde_json::from_str(&batch.as_result())?;
+		// TODO: this is inefficient, we should avoid double parsing.
+		let json_responses: Vec<Response<&JsonRawValue>> = serde_json::from_str(&batch.as_result())?;
 
-		let mut res = Vec::new();
+		let mut batch_response = Vec::new();
 		let mut success = 0;
 		let mut failed = 0;
 
-		for rp in responses.into_iter() {
-			match ResponseSuccess::try_from(rp) {
-				Ok(r) => {
-					let v = serde_json::from_str(r.result.get()).map_err(Error::ParseError)?;
-					res.push(Ok(v));
-					success += 1;
-				}
-				Err(err) => {
-					res.push(Err(err));
-					failed += 1;
-				}
-			};
+		// Fill the batch response with placeholder values.
+		for _ in 0..json_responses.len() {
+			batch_response.push(Err(ErrorObject::borrowed(0, "", None)));
 		}
 
-		Ok(BatchResponse::new(success, res, failed))
+		for rp in json_responses.into_iter() {
+			let id = rp.id.try_parse_inner_as_number()?;
+
+			let res = match ResponseSuccess::try_from(rp) {
+				Ok(r) => {
+					let v = serde_json::from_str(r.result.get()).map_err(Error::ParseError)?;
+					success += 1;
+					Ok(v)
+				}
+				Err(err) => {
+					failed += 1;
+					Err(err)
+				}
+			};
+
+			let maybe_elem = id
+				.checked_sub(id_range.start)
+				.and_then(|p| p.try_into().ok())
+				.and_then(|p: usize| batch_response.get_mut(p));
+
+			if let Some(elem) = maybe_elem {
+				*elem = res;
+			} else {
+				return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
+			}
+		}
+
+		Ok(BatchResponse::new(success, batch_response, failed))
 	}
 }
 
