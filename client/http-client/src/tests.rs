@@ -133,7 +133,6 @@ async fn internal_error_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn subscription_response_to_request() {
 	let req = r#"{"jsonrpc":"2.0","method":"subscribe_hello","params":{"subscription":"3px4FrtxSYQ1zBKW154NoVnrDhrq764yQNCXEgZyM6Mu","result":"hello my friend"}}"#.to_string();
 	let err = run_request_with_response(req).with_default_timeout().await.unwrap().unwrap_err();
@@ -239,7 +238,6 @@ async fn batch_request_with_untagged_enum_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn batch_request_out_of_order_response() {
 	let mut batch_request = BatchRequestBuilder::new();
 	batch_request.insert("say_hello", rpc_params![]).unwrap();

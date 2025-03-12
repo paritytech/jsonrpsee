@@ -30,7 +30,8 @@ mod helpers;
 mod manager;
 mod utils;
 
-use crate::client::async_client::helpers::{process_subscription_close_response, InnerBatchResponse};
+use crate::JsonRawValue;
+use crate::client::async_client::helpers::{InnerBatchResponse, process_subscription_close_response};
 use crate::client::async_client::utils::MaybePendingFutures;
 use crate::client::{
 	BatchMessage, BatchResponse, ClientT, Error, ReceivedMessage, RegisterNotificationMessage, RequestMessage,
@@ -40,7 +41,6 @@ use crate::error::RegisterMethodError;
 use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::tracing::client::{rx_log_from_json, tx_log_from_str};
 use crate::traits::ToRpcParams;
-use crate::JsonRawValue;
 use std::borrow::Cow as StdCow;
 
 use core::time::Duration;
@@ -54,9 +54,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures_timer::Delay;
+use futures_util::Stream;
 use futures_util::future::{self, Either};
 use futures_util::stream::StreamExt;
-use futures_util::Stream;
 use jsonrpsee_types::response::{ResponsePayload, SubscriptionError};
 use jsonrpsee_types::{NotificationSer, RequestSer, Response, SubscriptionResponse};
 use serde::de::DeserializeOwned;
@@ -64,7 +64,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
 use self::utils::{InactivityCheck, IntervalStream};
-use super::{generate_batch_id_range, subscription_channel, FrontToBack, IdKind, RequestIdManager};
+use super::{FrontToBack, IdKind, RequestIdManager, generate_batch_id_range, subscription_channel};
 
 pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<serde_json::Value>>;
 

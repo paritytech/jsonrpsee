@@ -159,7 +159,9 @@ where
 
 			let rp = handle_rpc_call(&data[idx..], is_single, batch_requests_config, &*rpc_service, extensions).await;
 
-			if !rp.is_subscription() || !rp.is_notification() {
+			// Subscriptions are handled by the subscription callback and
+			// "ordinary notifications" should not be sent back to the client.
+			if rp.is_method_call() || rp.is_batch() {
 				let is_success = rp.is_success();
 				let (serialized_rp, mut on_close, _) = rp.into_parts();
 

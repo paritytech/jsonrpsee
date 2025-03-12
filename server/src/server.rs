@@ -1240,9 +1240,7 @@ where
 
 			match rpc_service.call(req).await {
 				Ok(rp) => rp,
-				Err(err) => {
-					return MethodResponse::error(id, rpc_middleware_error(err));
-				}
+				Err(err) => MethodResponse::error(id, rpc_middleware_error(err)),
 			}
 		} else if let Ok(notif) = serde_json::from_slice::<Notification>(body) {
 			match rpc_service.notification(notif).await {

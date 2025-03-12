@@ -12,8 +12,8 @@ use std::borrow::Cow;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::server::MethodResponse;
-
+/// Re-export `MethodResponse` for convenience.
+pub use crate::method_response::MethodResponse;
 /// Re-export types from `jsonrpsee_types` crate for convenience
 pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, RawValue>>>;
 /// Re-export types from `jsonrpsee_types` crate for convenience

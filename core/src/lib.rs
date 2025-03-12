@@ -58,6 +58,7 @@ cfg_client! {
 
 cfg_client_or_server! {
 	pub mod middleware;
+	pub mod method_response;
 }
 
 /// Shared tracing helpers to trace RPC calls.

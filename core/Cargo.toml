@@ -25,7 +25,7 @@ serde_json = { workspace = true, features = ["std"] }
 tracing = { workspace = true }
 
 # optional deps
-futures-util = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true, features = ["alloc"] }
 http = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
 http-body = { workspace = true, optional = true }
@@ -45,11 +45,11 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 [features]
 default = []
 http-helpers = ["bytes", "futures-util", "http-body", "http-body-util", "http"]
-server = ["futures-util/alloc", "rustc-hash/std", "parking_lot", "rand", "tokio/rt", "tokio/sync", "tokio/macros", "tokio/time", "tower", "http"]
-client = ["futures-util/sink", "tokio/sync", "tower"]
+server = ["futures-util", "rustc-hash/std", "parking_lot", "rand", "tokio/rt", "tokio/sync", "tokio/macros", "tokio/time", "tower", "http", "pin-project"]
+client = ["futures-util/sink", "tokio/sync", "tower", "pin-project", "http"]
 async-client = [
 	"client",
-	"futures-util/alloc",
+	"futures-util",
 	"rustc-hash",
 	"tokio/macros",
 	"tokio/rt",
@@ -60,7 +60,7 @@ async-client = [
 ]
 async-wasm-client = [
 	"client",
-	"futures-util/alloc",
+	"futures-util",
 	"wasm-bindgen-futures",
 	"rustc-hash/std",
 	"futures-timer/wasm-bindgen",
