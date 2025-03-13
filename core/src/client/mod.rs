@@ -33,6 +33,7 @@ cfg_async_client! {
 
 pub mod error;
 pub use error::Error;
+use jsonrpsee_types::request::IdGeneratorFn;
 
 use std::fmt;
 use std::ops::Range;
@@ -485,14 +486,17 @@ pub enum IdKind {
 	String,
 	/// Number.
 	Number,
+	/// Custom generator.
+	Custom(IdGeneratorFn),
 }
 
 impl IdKind {
-	/// Generate an `Id` from number.
+	/// Generate an `Id` from number or from a registered generator.
 	pub fn into_id(self, id: u64) -> Id<'static> {
 		match self {
 			IdKind::Number => Id::Number(id),
 			IdKind::String => Id::Str(format!("{id}").into()),
+			IdKind::Custom(generator) => generator.call(),
 		}
 	}
 }
