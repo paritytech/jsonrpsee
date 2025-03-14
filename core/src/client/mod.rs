@@ -33,6 +33,7 @@ cfg_async_client! {
 
 pub mod error;
 pub use error::Error;
+use jsonrpsee_types::request::IdGeneratorFn;
 
 use std::fmt;
 use std::ops::Range;
@@ -469,7 +470,17 @@ impl RequestIdManager {
 
 	/// Attempts to get the next request ID.
 	pub fn next_request_id(&self) -> Id<'static> {
-		self.id_kind.into_id(self.current_id.next())
+		match self.id_kind {
+			IdKind::Number => {
+				let id = self.current_id.next();
+				Id::Number(id)
+			}
+			IdKind::String => {
+				let id = self.current_id.next();
+				Id::Str(format!("{id}").into())
+			}
+			IdKind::Custom(generator) => generator.call(),
+		}
 	}
 
 	/// Get a handle to the `IdKind`.
@@ -485,16 +496,8 @@ pub enum IdKind {
 	String,
 	/// Number.
 	Number,
-}
-
-impl IdKind {
-	/// Generate an `Id` from number.
-	pub fn into_id(self, id: u64) -> Id<'static> {
-		match self {
-			IdKind::Number => Id::Number(id),
-			IdKind::String => Id::Str(format!("{id}").into()),
-		}
-	}
+	/// Custom generator.
+	Custom(IdGeneratorFn),
 }
 
 #[derive(Debug)]
