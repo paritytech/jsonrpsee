@@ -64,7 +64,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
 use self::utils::{InactivityCheck, IntervalStream};
-use super::{generate_batch_id_range, subscription_channel, FrontToBack, IdKind, RequestIdManager};
+use super::{FrontToBack, IdKind, RequestIdManager, generate_batch_id_range, subscription_channel};
 
 pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<serde_json::Value>>;
 
@@ -536,8 +536,8 @@ impl ClientT for Client {
 		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
 
 		let mut batches = Vec::with_capacity(batch.len());
-		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.as_id_kind().into_id(id);
+		for ((method, params), _id) in batch.into_iter().zip(id_range.clone()) {
+			let id = self.id_manager.next_request_id();
 			batches.push(RequestSer {
 				jsonrpc: TwoPointZero,
 				id,

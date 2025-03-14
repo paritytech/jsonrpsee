@@ -470,7 +470,17 @@ impl RequestIdManager {
 
 	/// Attempts to get the next request ID.
 	pub fn next_request_id(&self) -> Id<'static> {
-		self.id_kind.into_id(self.current_id.next())
+		match self.id_kind {
+			IdKind::Number => {
+				let id = self.current_id.next();
+				Id::Number(id)
+			}
+			IdKind::String => {
+				let id = self.current_id.next();
+				Id::Str(format!("{id}").into())
+			}
+			IdKind::Custom(generator) => generator.call(),
+		}
 	}
 
 	/// Get a handle to the `IdKind`.
@@ -488,17 +498,6 @@ pub enum IdKind {
 	Number,
 	/// Custom generator.
 	Custom(IdGeneratorFn),
-}
-
-impl IdKind {
-	/// Generate an `Id` from number or from a registered generator.
-	pub fn into_id(self, id: u64) -> Id<'static> {
-		match self {
-			IdKind::Number => Id::Number(id),
-			IdKind::String => Id::Str(format!("{id}").into()),
-			IdKind::Custom(generator) => generator.call(),
-		}
-	}
 }
 
 #[derive(Debug)]
