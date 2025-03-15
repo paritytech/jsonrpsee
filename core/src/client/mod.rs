@@ -487,6 +487,19 @@ impl RequestIdManager {
 	pub fn as_id_kind(&self) -> IdKind {
 		self.id_kind
 	}
+
+	/// Generate a range of IDs and the corresponding list of request IDs for a batch request.
+	pub fn generate_batch_id_range(&self, batch_size: usize) -> (Range<u64>, Vec<Id<'static>>) {
+		let start_id = self.current_id.next();
+		let id_range = start_id..(start_id + batch_size as u64);
+
+		let ids = match self.id_kind {
+			IdKind::Number => id_range.clone().map(Id::Number).collect(),
+			_ => (0..batch_size).map(|_| self.next_request_id()).collect(),
+		};
+
+		(id_range, ids)
+	}
 }
 
 /// JSON-RPC request object id data type.
@@ -514,16 +527,6 @@ impl CurrentId {
 			.try_into()
 			.expect("usize -> u64 infallible, there are no CPUs > 64 bits; qed")
 	}
-}
-
-/// Generate a range of IDs to be used in a batch request.
-pub fn generate_batch_id_range(id: Id, len: u64) -> Result<Range<u64>, Error> {
-	let id_start = id.try_parse_inner_as_number()?;
-	let id_end = id_start
-		.checked_add(len)
-		.ok_or_else(|| Error::Custom("BatchID range wrapped; restart the client or try again later".to_string()))?;
-
-	Ok(id_start..id_end)
 }
 
 /// Represent a single entry in a batch response.

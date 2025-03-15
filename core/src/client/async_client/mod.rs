@@ -64,7 +64,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::instrument;
 
 use self::utils::{InactivityCheck, IntervalStream};
-use super::{FrontToBack, IdKind, RequestIdManager, generate_batch_id_range, subscription_channel};
+use super::{FrontToBack, IdKind, RequestIdManager, subscription_channel};
 
 pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<serde_json::Value>>;
 
@@ -532,12 +532,10 @@ impl ClientT for Client {
 		R: DeserializeOwned,
 	{
 		let batch = batch.build()?;
-		let id = self.id_manager.next_request_id();
-		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
+		let (id_range, ids) = self.id_manager.generate_batch_id_range(batch.len());
 
 		let mut batches = Vec::with_capacity(batch.len());
-		for ((method, params), _id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.next_request_id();
+		for ((method, params), id) in batch.into_iter().zip(ids) {
 			batches.push(RequestSer {
 				jsonrpc: TwoPointZero,
 				id,

@@ -36,7 +36,7 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT, generate_batch_id_range,
+	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
@@ -414,12 +414,10 @@ where
 			None => None,
 		};
 		let batch = batch.build()?;
-		let id = self.id_manager.next_request_id();
-		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
+		let (id_range, ids) = self.id_manager.generate_batch_id_range(batch.len());
 
 		let mut batch_request = Vec::with_capacity(batch.len());
-		for ((method, params), _id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.next_request_id();
+		for ((method, params), id) in batch.into_iter().zip(ids) {
 			batch_request.push(RequestSer {
 				jsonrpc: TwoPointZero,
 				id,
