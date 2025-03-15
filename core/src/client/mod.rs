@@ -488,17 +488,10 @@ impl RequestIdManager {
 		self.id_kind
 	}
 
-	/// Generate a range of IDs and the corresponding list of request IDs for a batch request.
-	pub fn generate_batch_id_range(&self, batch_size: usize) -> (Range<u64>, Vec<Id<'static>>) {
-		let start_id = self.current_id.next();
-		let id_range = start_id..(start_id + batch_size as u64);
-
-		let ids = match self.id_kind {
-			IdKind::Number => id_range.clone().map(Id::Number).collect(),
-			_ => (0..batch_size).map(|_| self.next_request_id()).collect(),
-		};
-
-		(id_range, ids)
+	/// Generate a range of IDs for a batch request.
+	pub fn generate_batch_id_range(&self, batch_size: usize) -> Range<u64> {
+		let start_id = self.current_id.get();
+		start_id..(start_id + batch_size as u64)
 	}
 }
 
@@ -526,6 +519,10 @@ impl CurrentId {
 			.fetch_add(1, Ordering::Relaxed)
 			.try_into()
 			.expect("usize -> u64 infallible, there are no CPUs > 64 bits; qed")
+	}
+
+	fn get(&self) -> u64 {
+		self.0.load(Ordering::Relaxed) as u64
 	}
 }
 

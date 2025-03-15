@@ -414,10 +414,11 @@ where
 			None => None,
 		};
 		let batch = batch.build()?;
-		let (id_range, ids) = self.id_manager.generate_batch_id_range(batch.len());
+		let id_range = self.id_manager.generate_batch_id_range(batch.len());
 
 		let mut batch_request = Vec::with_capacity(batch.len());
-		for ((method, params), id) in batch.into_iter().zip(ids) {
+		for (method, params) in batch.into_iter() {
+			let id = self.id_manager.next_request_id();
 			batch_request.push(RequestSer {
 				jsonrpc: TwoPointZero,
 				id,
