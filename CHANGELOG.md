@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.24.9] - 2024-03-17
+
+This is a non-breaking release that updates the dependency `rust-platform-verifier` to v0.5 to fix that
+that `rust-platform-verifier` v0.3 didn't enable the `std feature` in `rustls` which caused a compilation error.
+See https://github.com/paritytech/jsonrpsee/issues/1536 for further information.
+
+Thanks to the external contributor [@prestwich](https://github.com/prestwich) who spotted and fixed this issue.
+
 ## [v0.24.8] - 2024-01-24
 
 This is a non-breaking release that decreases the MSRV to 1.74.0.
