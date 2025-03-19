@@ -63,10 +63,11 @@ pub struct CounterMiddleware<S> {
 
 impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
-	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	S: RpcServiceT<'a, Response = MethodResponse> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, Result<MethodResponse, S::Error>>;
+	type Future = BoxFuture<'a, Result<S::Response, S::Error>>;
 	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, request: Request<'a>) -> Self::Future {
 		let counter = self.counter.clone();

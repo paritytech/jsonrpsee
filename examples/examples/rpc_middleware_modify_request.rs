@@ -42,6 +42,7 @@ where
 {
 	type Future = S::Future;
 	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, mut req: Request<'a>) -> Self::Future {
 		// Example how to modify the params in the call.

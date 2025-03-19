@@ -75,11 +75,12 @@ struct CallLimit<S> {
 
 impl<'a, S> RpcServiceT<'a> for CallLimit<S>
 where
-	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
+	S: Send + Sync + RpcServiceT<'a, Response = MethodResponse> + Clone + 'static,
 	S::Error: Into<BoxError>,
 {
-	type Future = BoxFuture<'a, Result<MethodResponse, Self::Error>>;
+	type Future = BoxFuture<'a, Result<S::Response, Self::Error>>;
 	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let count = self.count.clone();

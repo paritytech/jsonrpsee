@@ -46,6 +46,7 @@ where
 {
 	type Future = S::Future;
 	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		println!("logger layer : {:?}", req);

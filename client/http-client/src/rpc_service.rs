@@ -4,11 +4,11 @@ use futures_util::{FutureExt, future::BoxFuture};
 use hyper::body::Bytes;
 use jsonrpsee_core::{
 	BoxError, JsonRawValue,
-	client::Error,
-	method_response::{BatchResponseBuilder, MethodResponse, ResponsePayload},
+	client::{Error, MethodResponse},
 	middleware::{Notification, RpcServiceT},
+	server::Extensions,
 };
-use jsonrpsee_types::{Id, Response, ResponseSuccess};
+use jsonrpsee_types::{Response, ResponseSuccess};
 use tower::Service;
 
 use crate::{
@@ -19,12 +19,11 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct RpcService<HttpMiddleware> {
 	service: Arc<HttpTransportClient<HttpMiddleware>>,
-	max_response_size: u32,
 }
 
 impl<HttpMiddleware> RpcService<HttpMiddleware> {
-	pub fn new(service: HttpTransportClient<HttpMiddleware>, max_response_size: u32) -> Self {
-		Self { service: Arc::new(service), max_response_size }
+	pub fn new(service: HttpTransportClient<HttpMiddleware>) -> Self {
+		Self { service: Arc::new(service) }
 	}
 }
 
@@ -37,61 +36,49 @@ where
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {
-	type Future = BoxFuture<'a, Result<MethodResponse, Error>>;
+	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
 	type Error = Error;
+	type Response = MethodResponse;
 
 	fn call(&self, request: jsonrpsee_types::Request<'a>) -> Self::Future {
-		let raw = serde_json::to_string(&request).unwrap();
 		let service = self.service.clone();
-		let max_response_size = self.max_response_size;
 
 		async move {
+			let raw = serde_json::to_string(&request)?;
 			let bytes = service.send_and_read_body(raw).await.map_err(|e| Error::Transport(e.into()))?;
-			let rp: Response<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
-			Ok(MethodResponse::response(rp.id, rp.payload.into(), max_response_size as usize))
+			let json_rp: Response<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
+			let success = ResponseSuccess::try_from(json_rp)?;
+			Ok(MethodResponse::method_call(success.result, request.extensions, success.id.into_owned()))
 		}
 		.boxed()
 	}
 
 	fn batch(&self, requests: Vec<jsonrpsee_types::Request<'a>>) -> Self::Future {
-		let raw = serde_json::to_string(&requests).unwrap();
 		let service = self.service.clone();
-		let max_response_size = self.max_response_size;
 
 		async move {
+			let raw = serde_json::to_string(&requests)?;
 			let bytes = service.send_and_read_body(raw).await.map_err(|e| Error::Transport(e.into()))?;
-			let json_rps: Vec<Response<&JsonRawValue>> = serde_json::from_slice(&bytes)?;
-			let mut batch = BatchResponseBuilder::new_with_limit(max_response_size as usize);
+			let json: Vec<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
 
-			for rp in json_rps {
-				let id = rp.id.try_parse_inner_as_number()?;
+			let mut extensions = Extensions::new();
 
-				let response = match ResponseSuccess::try_from(rp) {
-					Ok(r) => {
-						let payload = ResponsePayload::success(r.result);
-						MethodResponse::response(r.id, payload, max_response_size as usize)
-					}
-					Err(err) => MethodResponse::error(Id::Number(id), err),
-				};
-
-				if let Err(rp) = batch.append(response) {
-					return Ok(rp);
-				}
+			for req in requests {
+				extensions.extend(req.extensions);
 			}
 
-			Ok(MethodResponse::from_batch(batch.finish()))
+			Ok(MethodResponse::batch(json, extensions))
 		}
 		.boxed()
 	}
 
 	fn notification(&self, notif: Notification<'a>) -> Self::Future {
-		let notif = serde_json::to_string(&notif);
 		let service = self.service.clone();
 
 		async move {
-			let notif = notif?;
-			service.send(notif).await.map_err(|e| Error::Transport(e.into()))?;
-			Ok(MethodResponse::notification())
+			let raw = serde_json::to_string(&notif)?;
+			service.send(raw).await.map_err(|e| Error::Transport(e.into()))?;
+			Ok(MethodResponse::notification(notif.extensions))
 		}
 		.boxed()
 	}

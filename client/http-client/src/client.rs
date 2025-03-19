@@ -37,10 +37,12 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT, generate_batch_id_range,
+	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
+	generate_batch_id_range,
 };
 use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
+use jsonrpsee_core::server::Extensions;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, InvalidRequestId, Notification, Request, ResponseSuccess, TwoPointZero};
@@ -304,7 +306,7 @@ where
 			.map(|max_concurrent_requests| Arc::new(Semaphore::new(max_concurrent_requests)));
 
 		Ok(HttpClient {
-			transport: rpc_middleware.service(RpcService::new(http, max_response_size)),
+			transport: rpc_middleware.service(RpcService::new(http)),
 			id_manager: Arc::new(RequestIdManager::new(id_kind)),
 			request_guard,
 		})
@@ -363,7 +365,7 @@ impl HttpClient<HttpBackend> {
 #[async_trait]
 impl<S> ClientT for HttpClient<S>
 where
-	for<'a> S: RpcServiceT<'a, Error = Error> + Send + Sync,
+	for<'a> S: RpcServiceT<'a, Error = Error, Response = MethodResponse> + Send + Sync,
 {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
@@ -375,8 +377,7 @@ where
 			None => None,
 		};
 		let params = params.to_rpc_params()?.map(StdCow::Owned);
-		let n = Notification { jsonrpc: TwoPointZero, method: method.into(), params };
-		self.transport.notification(n).await?;
+		self.transport.notification(Notification::new(method.into(), params)).await?;
 		Ok(())
 	}
 
@@ -394,20 +395,11 @@ where
 		let params = params.to_rpc_params()?;
 
 		let request = Request::new(method.into(), params.as_deref(), id.clone());
-		let rp = self.transport.call(request).await?;
+		let method_response = self.transport.call(request).await?;
+		let rp = method_response.as_method_call().expect("Transport::call must return a method call");
 
-		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
-		// a better error message if `R` couldn't be decoded.
-		// TODO: this is inefficient, we should avoid double parsing.
-		let response = ResponseSuccess::try_from(serde_json::from_str::<Response<&JsonRawValue>>(&rp.as_result())?)?;
-
-		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
-
-		if response.id == id {
-			Ok(result)
-		} else {
-			Err(InvalidRequestId::NotPendingRequest(response.id.to_string()).into())
-		}
+		let result = rp.decode()?;
+		if rp.id() == &id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id().to_string()).into()) }
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
@@ -426,29 +418,30 @@ where
 		let mut batch_request = Vec::with_capacity(batch.len());
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
 			let id = self.id_manager.as_id_kind().into_id(id);
-			batch_request.push(Request {
-				jsonrpc: TwoPointZero,
+			let req = Request {
+				jsonrpc: TwoPointZero::default(),
 				method: method.into(),
 				params: params.map(StdCow::Owned),
-				id,
-				extensions: Default::default(),
-			});
+				id: id.into(),
+				extensions: Extensions::new(),
+			};
+			batch_request.push(req);
 		}
 
-		let batch = self.transport.batch(batch_request).await?;
-		// TODO: this is inefficient, we should avoid double parsing.
-		let json_responses: Vec<Response<&JsonRawValue>> = serde_json::from_str(&batch.as_result())?;
+		let method_response = self.transport.batch(batch_request).await?;
+		let json_rps = method_response.as_batch().expect("Transport::batch must return a batch");
 
 		let mut batch_response = Vec::new();
 		let mut success = 0;
 		let mut failed = 0;
 
 		// Fill the batch response with placeholder values.
-		for _ in 0..json_responses.len() {
+		for _ in 0..json_rps.len() {
 			batch_response.push(Err(ErrorObject::borrowed(0, "", None)));
 		}
 
-		for rp in json_responses.into_iter() {
+		for json_rp in json_rps.into_iter() {
+			let rp: Response<&JsonRawValue> = serde_json::from_str(json_rp.get()).map_err(Error::ParseError)?;
 			let id = rp.id.try_parse_inner_as_number()?;
 
 			let res = match ResponseSuccess::try_from(rp) {
@@ -482,7 +475,7 @@ where
 #[async_trait]
 impl<S> SubscriptionClientT for HttpClient<S>
 where
-	for<'a> S: RpcServiceT<'a, Error = Error> + Send + Sync,
+	for<'a> S: RpcServiceT<'a, Error = Error, Response = MethodResponse> + Send + Sync,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].

@@ -33,6 +33,9 @@ cfg_async_client! {
 
 pub mod error;
 pub use error::Error;
+use http::Extensions;
+use serde::Deserialize;
+use serde_json::value::RawValue;
 
 use std::fmt;
 use std::ops::Range;
@@ -320,11 +323,7 @@ impl<Notif> Subscription<Notif> {
 			return None;
 		}
 
-		if lagged {
-			Some(SubscriptionCloseReason::Lagged)
-		} else {
-			Some(SubscriptionCloseReason::ConnectionClosed)
-		}
+		if lagged { Some(SubscriptionCloseReason::Lagged) } else { Some(SubscriptionCloseReason::ConnectionClosed) }
 	}
 }
 
@@ -649,4 +648,111 @@ fn subscription_channel(max_buf_size: usize) -> (SubscriptionSender, Subscriptio
 	let lagged_rx = lagged_tx.clone();
 
 	(SubscriptionSender { inner: tx, lagged: lagged_tx }, SubscriptionReceiver { inner: rx, lagged: lagged_rx })
+}
+
+#[derive(Debug, Clone)]
+enum MethodResponseKind {
+	MethodCall(MethodCall),
+	Notification,
+	Batch(Vec<Box<RawValue>>),
+}
+
+/// Represents a method call from the server.
+#[derive(Debug, Clone)]
+pub struct MethodCall {
+	json: Box<RawValue>,
+	id: Id<'static>,
+}
+
+impl MethodCall {
+	/// Consume the method call and return the raw JSON value.
+	pub fn into_json(self) -> Box<RawValue> {
+		self.json
+	}
+
+	/// Get the ID of the method call.
+	pub fn id(&self) -> &Id<'static> {
+		&self.id
+	}
+
+	/// Decode the JSON value into the desired type.
+	pub fn decode<'a, T: Deserialize<'a>>(&'a self) -> Result<T, serde_json::Error> {
+		serde_json::from_str(self.json.get())
+	}
+}
+
+/// Represents a response from the server which can be a method call, notification or batch.
+#[derive(Debug, Clone)]
+pub struct MethodResponse {
+	extensions: Extensions,
+	inner: MethodResponseKind,
+}
+
+impl MethodResponse {
+	/// Create a new method response.
+	pub fn method_call(json: Box<RawValue>, extensions: Extensions, id: Id<'static>) -> Self {
+		Self { inner: MethodResponseKind::MethodCall(MethodCall { json, id }), extensions }
+	}
+
+	/// Create a new notification response.
+	pub fn notification(extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::Notification, extensions }
+	}
+
+	/// Create a new batch response.
+	pub fn batch(json: Vec<Box<RawValue>>, extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::Batch(json), extensions }
+	}
+
+	/// Consume the response and return the raw JSON value.
+	pub fn into_json(self) -> Box<RawValue> {
+		match self.inner {
+			MethodResponseKind::MethodCall(call) => call.json,
+			MethodResponseKind::Notification => panic!("MethodResponse::into_json called on a notification"),
+			MethodResponseKind::Batch(json) => {
+				serde_json::value::to_raw_value(&json).expect("Batch serialization failed")
+			}
+		}
+	}
+
+	/// Get the method call if this response is a method call.
+	pub fn as_method_call(&self) -> Option<&MethodCall> {
+		match &self.inner {
+			MethodResponseKind::MethodCall(call) => Some(call),
+			_ => None,
+		}
+	}
+
+	/// Get the batch if this response is a batch.
+	pub fn as_batch(&self) -> Option<&[Box<RawValue>]> {
+		match &self.inner {
+			MethodResponseKind::Batch(batch) => Some(batch),
+			_ => None,
+		}
+	}
+
+	/// Returns whether this response is a method call.
+	pub fn is_method_call(&self) -> bool {
+		matches!(self.inner, MethodResponseKind::MethodCall(_))
+	}
+
+	/// Returns whether this response is a notification.
+	pub fn is_notification(&self) -> bool {
+		matches!(self.inner, MethodResponseKind::Notification)
+	}
+
+	/// Returns whether this response is a batch.
+	pub fn is_batch(&self) -> bool {
+		matches!(self.inner, MethodResponseKind::Batch(_))
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Returns a mutable reference to the associated extensions.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
+	}
 }

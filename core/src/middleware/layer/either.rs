@@ -62,10 +62,11 @@ where
 impl<'a, A, B> RpcServiceT<'a> for Either<A, B>
 where
 	A: RpcServiceT<'a> + Send + 'a,
-	B: RpcServiceT<'a, Error = A::Error> + Send + 'a,
+	B: RpcServiceT<'a, Error = A::Error, Response = A::Response> + Send + 'a,
 {
 	type Future = futures_util::future::Either<A::Future, B::Future>;
 	type Error = A::Error;
+	type Response = A::Response;
 
 	fn call(&self, request: Request<'a>) -> Self::Future {
 		match self {

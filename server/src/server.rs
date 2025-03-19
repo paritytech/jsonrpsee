@@ -965,7 +965,8 @@ impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcM
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a, Response = MethodResponse>,
+	for<'a> <<RpcMiddleware as Layer<RpcService>>::Service as RpcServiceT<'a>>::Error: std::fmt::Debug,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	Body::Error: Into<BoxError>,
 {
@@ -1231,7 +1232,8 @@ pub(crate) async fn handle_rpc_call<S>(
 	extensions: Extensions,
 ) -> MethodResponse
 where
-	for<'a> S: RpcServiceT<'a> + Send,
+	for<'a> S: RpcServiceT<'a, Response = MethodResponse> + Send,
+	for<'a> <S as RpcServiceT<'a>>::Error: std::fmt::Debug,
 {
 	// Single request or notification
 	if is_single {

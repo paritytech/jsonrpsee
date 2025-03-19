@@ -52,6 +52,7 @@ struct LoggingMiddleware<S>(S);
 impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LoggingMiddleware<S> {
 	type Future = S::Future;
 	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, request: Request<'a>) -> Self::Future {
 		tracing::info!("Received request: {:?}", request);

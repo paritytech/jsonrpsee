@@ -82,14 +82,15 @@ impl<S> RateLimit<S> {
 
 impl<'a, S> RpcServiceT<'a> for RateLimit<S>
 where
-	S: Send + RpcServiceT<'a>,
+	S: Send + RpcServiceT<'a, Response = MethodResponse> + 'static,
 	S::Error: Send,
 {
 	// Instead of `Boxing` the future in this example
 	// we are using a jsonrpsee's ResponseFuture future
 	// type to avoid those extra allocations.
-	type Future = ResponseFuture<S::Future, Self::Error>;
+	type Future = ResponseFuture<S::Future, Self::Response, Self::Error>;
 	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let now = Instant::now();

@@ -20,16 +20,19 @@ pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, Raw
 pub use jsonrpsee_types::Request;
 
 /// Type alias for a future that resolves to a [`MethodResponse`].
-pub type MethodResponseBoxFuture<'a, E> = BoxFuture<'a, Result<MethodResponse, E>>;
+pub type MethodResponseBoxFuture<'a, R, E> = BoxFuture<'a, Result<R, E>>;
 
 /// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
 pub trait RpcServiceT<'a> {
 	/// The future response value.
-	type Future: Future<Output = Result<MethodResponse, Self::Error>> + Send;
+	type Future: Future<Output = Result<Self::Response, Self::Error>> + Send;
 
 	/// The error type.
 	type Error: std::fmt::Debug;
+
+	/// The response type
+	type Response;
 
 	/// Process a single JSON-RPC call it may be a subscription or regular call.
 	///
@@ -108,23 +111,23 @@ impl<L> RpcServiceBuilder<L> {
 /// Response which may be ready or a future.
 #[derive(Debug)]
 #[pin_project]
-pub struct ResponseFuture<F, E>(#[pin] futures_util::future::Either<F, std::future::Ready<Result<MethodResponse, E>>>);
+pub struct ResponseFuture<F, R, E>(#[pin] futures_util::future::Either<F, std::future::Ready<Result<R, E>>>);
 
-impl<F, E> ResponseFuture<F, E> {
+impl<F, R, E> ResponseFuture<F, R, E> {
 	/// Returns a future that resolves to a response.
-	pub fn future(f: F) -> ResponseFuture<F, E> {
+	pub fn future(f: F) -> ResponseFuture<F, R, E> {
 		ResponseFuture(Either::Left(f))
 	}
 
 	/// Return a response which is already computed.
-	pub fn ready(response: MethodResponse) -> ResponseFuture<F, E> {
+	pub fn ready(response: R) -> ResponseFuture<F, R, E> {
 		ResponseFuture(Either::Right(std::future::ready(Ok(response))))
 	}
 }
 
-impl<F, E> Future for ResponseFuture<F, E>
+impl<F, R, E> Future for ResponseFuture<F, R, E>
 where
-	F: Future<Output = Result<MethodResponse, E>>,
+	F: Future<Output = Result<R, E>>,
 {
 	type Output = F::Output;
 

@@ -77,8 +77,9 @@ impl RpcService {
 impl<'a> RpcServiceT<'a> for RpcService {
 	// The rpc module is already boxing the futures and
 	// it's used to under the hood by the RpcService.
-	type Future = MethodResponseBoxFuture<'a, Self::Error>;
+	type Future = MethodResponseBoxFuture<'a, Self::Response, Self::Error>;
 	type Error = Infallible;
+	type Response = MethodResponse;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let conn_id = self.conn_id;

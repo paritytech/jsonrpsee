@@ -61,8 +61,9 @@ impl<'a, S> RpcServiceT<'a> for InjectExt<S>
 where
 	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
 {
-	type Future = MethodResponseBoxFuture<'a, Self::Error>;
+	type Future = MethodResponseBoxFuture<'a, Self::Response, Self::Error>;
 	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, mut req: Request<'a>) -> Self::Future {
 		if req.method_name().contains("err") {

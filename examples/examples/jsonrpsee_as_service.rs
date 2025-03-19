@@ -72,11 +72,13 @@ struct AuthorizationMiddleware<S> {
 
 impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
 where
-	S: Send + Clone + Sync + RpcServiceT<'a>,
+	S: Send + Clone + Sync + RpcServiceT<'a, Response = MethodResponse>,
 	S::Error: Into<BoxError> + Send,
+	S::Response: Send,
 {
-	type Future = ResponseFuture<S::Future, Self::Error>;
+	type Future = ResponseFuture<S::Future, Self::Response, Self::Error>;
 	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		if req.method_name() == "trusted_call" {

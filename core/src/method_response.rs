@@ -69,6 +69,12 @@ pub struct MethodResponse {
 	extensions: Extensions,
 }
 
+impl AsRef<str> for MethodResponse {
+	fn as_ref(&self) -> &str {
+		self.as_result()
+	}
+}
+
 impl MethodResponse {
 	/// Returns whether the call was successful.
 	pub fn is_success(&self) -> bool {
@@ -252,7 +258,7 @@ impl MethodResponse {
 		&self.extensions
 	}
 
-	/// Returns a reference to the associated extensions.
+	/// Returns a mut reference to the associated extensions.
 	pub fn extensions_mut(&mut self) -> &mut Extensions {
 		&mut self.extensions
 	}

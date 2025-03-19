@@ -12,7 +12,7 @@ use futures_util::{Future, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
 use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
-use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink, Methods};
+use jsonrpsee_core::server::{BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_types::Id;
 use jsonrpsee_types::error::{ErrorCode, reject_too_big_request};
 use soketto::connection::Error as SokettoError;
@@ -63,7 +63,8 @@ pub(crate) struct BackgroundTaskParams<S> {
 
 pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
-	for<'a> S: RpcServiceT<'a> + Send + Sync + 'static,
+	for<'a> S: RpcServiceT<'a, Response = MethodResponse> + Send + Sync + 'static,
+	for<'a> <S as RpcServiceT<'a>>::Error: std::fmt::Debug,
 {
 	let BackgroundTaskParams {
 		server_cfg,
@@ -422,7 +423,7 @@ pub async fn connect<L, B>(
 where
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
+	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a, Response = MethodResponse>,
 {
 	let mut server = soketto::handshake::http::Server::new();
 
