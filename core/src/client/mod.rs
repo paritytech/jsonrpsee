@@ -705,13 +705,11 @@ impl MethodResponse {
 	}
 
 	/// Consume the response and return the raw JSON value.
-	pub fn into_json(self) -> Box<RawValue> {
+	pub fn into_json(self) -> Result<Box<RawValue>, serde_json::Error> {
 		match self.inner {
-			MethodResponseKind::MethodCall(call) => call.json,
-			MethodResponseKind::Notification => panic!("MethodResponse::into_json called on a notification"),
-			MethodResponseKind::Batch(json) => {
-				serde_json::value::to_raw_value(&json).expect("Batch serialization failed")
-			}
+			MethodResponseKind::MethodCall(call) => Ok(call.json),
+			MethodResponseKind::Notification => Ok(RawValue::NULL.to_owned()),
+			MethodResponseKind::Batch(json) => serde_json::value::to_raw_value(&json),
 		}
 	}
 

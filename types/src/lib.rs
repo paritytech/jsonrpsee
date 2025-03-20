@@ -44,90 +44,94 @@ pub mod response;
 pub mod error;
 
 pub use error::{ErrorCode, ErrorObject, ErrorObjectOwned};
+pub use http::Extensions;
 pub use params::{Id, InvalidRequestId, Params, ParamsSequence, SubscriptionId, TwoPointZero};
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, ResponsePayload, SubscriptionPayload, SubscriptionResponse, Success as ResponseSuccess};
 
-/// Helper to deserialize calls with extensions.
+/// Deserialize calls, notifications and responses with HTTP extensions.
 pub mod deserialize_with_ext {
 
-	/// Request.
-	pub mod request {
+	/// Method call.
+	pub mod call {
 		use crate::Request;
 
-		/// Helper to deserialize a request with extensions.
-		pub fn from_slice(data: &[u8], extensions: http::Extensions) -> Result<Request, serde_json::Error> {
+		/// Wrapper over `serde_json::from_slice` that sets the extensions.
+		pub fn from_slice<'a>(
+			data: &'a [u8],
+			extensions: &'a http::Extensions,
+		) -> Result<Request<'a>, serde_json::Error> {
 			let mut req: Request = serde_json::from_slice(data)?;
-			*req.extensions_mut() = extensions;
+			*req.extensions_mut() = extensions.clone();
 			Ok(req)
 		}
 
-		/// Helper to deserialize a request with extensions.
-		pub fn from_str(data: &str, extensions: http::Extensions) -> Result<Request, serde_json::Error> {
+		/// Wrapper over `serde_json::from_str` that sets the extensions.
+		pub fn from_str<'a>(data: &'a str, extensions: &'a http::Extensions) -> Result<Request<'a>, serde_json::Error> {
 			let mut req: Request = serde_json::from_str(data)?;
-			*req.extensions_mut() = extensions;
+			*req.extensions_mut() = extensions.clone();
 			Ok(req)
 		}
 	}
 
 	/// Notification.
-	pub mod notification {
+	pub mod notif {
 		use crate::Notification;
 
-		/// Helper to deserialize a request with extensions.
+		/// Wrapper over `serde_json::from_slice` that sets the extensions.
 		pub fn from_slice<'a, T>(
 			data: &'a [u8],
-			extensions: http::Extensions,
+			extensions: &'a http::Extensions,
 		) -> Result<Notification<'a, T>, serde_json::Error>
 		where
 			T: serde::Deserialize<'a>,
 		{
 			let mut notif: Notification<T> = serde_json::from_slice(data)?;
-			*notif.extensions_mut() = extensions;
+			*notif.extensions_mut() = extensions.clone();
 			Ok(notif)
 		}
 
-		/// Helper to deserialize a request with extensions.
+		/// Wrapper over `serde_json::from_str` that sets the extensions.
 		pub fn from_str<'a, T>(
 			data: &'a str,
-			extensions: http::Extensions,
+			extensions: &http::Extensions,
 		) -> Result<Notification<'a, T>, serde_json::Error>
 		where
 			T: serde::Deserialize<'a>,
 		{
 			let mut notif: Notification<T> = serde_json::from_str(data)?;
-			*notif.extensions_mut() = extensions;
+			*notif.extensions_mut() = extensions.clone();
 			Ok(notif)
 		}
 	}
 
-	/// Response
+	/// Response.
 	pub mod response {
 		use crate::Response;
 
-		/// Helper to deserialize a response with extensions.
+		/// Wrapper over `serde_json::from_slice` that sets the extensions.
 		pub fn from_slice<'a, T>(
 			data: &'a [u8],
-			extensions: http::Extensions,
+			extensions: &'a http::Extensions,
 		) -> Result<Response<'a, T>, serde_json::Error>
 		where
 			T: serde::Deserialize<'a> + Clone,
 		{
 			let mut res: Response<T> = serde_json::from_slice(data)?;
-			*res.extensions_mut() = extensions;
+			*res.extensions_mut() = extensions.clone();
 			Ok(res)
 		}
 
-		/// Helper to deserialize a response with extensions.
+		/// Wrapper over `serde_json::from_str` that sets the extensions.
 		pub fn from_str<'a, T>(
 			data: &'a str,
-			extensions: http::Extensions,
+			extensions: &'a http::Extensions,
 		) -> Result<Response<'a, T>, serde_json::Error>
 		where
 			T: serde::Deserialize<'a> + Clone,
 		{
 			let mut res: Response<T> = serde_json::from_str(data)?;
-			*res.extensions_mut() = extensions;
+			*res.extensions_mut() = extensions.clone();
 			Ok(res)
 		}
 	}

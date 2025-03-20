@@ -418,10 +418,10 @@ where
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
 			let id = self.id_manager.as_id_kind().into_id(id);
 			let req = Request {
-				jsonrpc: TwoPointZero::default(),
+				jsonrpc: TwoPointZero,
 				method: method.into(),
 				params: params.map(StdCow::Owned),
-				id: id.into(),
+				id,
 				extensions: Extensions::new(),
 			};
 			batch_request.push(req);
@@ -439,7 +439,7 @@ where
 			batch_response.push(Err(ErrorObject::borrowed(0, "", None)));
 		}
 
-		for json_rp in json_rps.into_iter() {
+		for json_rp in json_rps.iter() {
 			let rp: Response<&JsonRawValue> = serde_json::from_str(json_rp.get()).map_err(Error::ParseError)?;
 			let id = rp.id.try_parse_inner_as_number()?;
 

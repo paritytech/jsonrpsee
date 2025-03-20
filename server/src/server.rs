@@ -37,7 +37,6 @@ use crate::future::{ConnectionGuard, ServerHandle, SessionClose, SessionClosedFu
 use crate::middleware::rpc::{RpcService, RpcServiceCfg};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::utils::deserialize;
 use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
@@ -46,7 +45,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::{Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
@@ -56,7 +55,7 @@ use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
 	rpc_middleware_error,
 };
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequest};
+use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, deserialize_with_ext};
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, watch};
@@ -67,6 +66,8 @@ use tracing::{Instrument, instrument};
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u32 = 100;
+
+type Notif<'a> = Option<std::borrow::Cow<'a, JsonRawValue>>;
 
 /// JSON RPC server.
 pub struct Server<HttpMiddleware = Identity, RpcMiddleware = Identity> {
@@ -653,7 +654,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// The builder itself exposes a similar API as the [`tower::ServiceBuilder`]
 	/// where it is possible to compose layers to the middleware.
 	///
-	/// To add a middleware [`crate::middleware::rpc::RpcServiceBuilder`] exposes a few different layer APIs that
+	/// To add a middleware [`crate::RpcServiceBuilder`] exposes a few different layer APIs that
 	/// is wrapped on top of the [`tower::ServiceBuilder`].
 	///
 	/// When the server is started these layers are wrapped in the [`crate::middleware::rpc::RpcService`] and
@@ -1237,14 +1238,14 @@ where
 {
 	// Single request or notification
 	if is_single {
-		if let Ok(req) = deserialize::from_slice_with_extensions(body, extensions) {
+		if let Ok(req) = deserialize_with_ext::call::from_slice(body, &extensions) {
 			let id = req.id();
 
 			match rpc_service.call(req).await {
 				Ok(rp) => rp,
 				Err(err) => MethodResponse::error(id, rpc_middleware_error(err)),
 			}
-		} else if let Ok(notif) = serde_json::from_slice::<Notification>(body) {
+		} else if let Ok(notif) = deserialize_with_ext::notif::from_slice::<Notif>(body, &extensions) {
 			match rpc_service.notification(notif).await {
 				Ok(rp) => rp,
 				Err(e) => {
@@ -1281,9 +1282,11 @@ where
 			let mut got_notif = false;
 
 			for call in unchecked_batch {
-				if let Ok(req) = deserialize::from_str_with_extensions(call.get(), extensions.clone()) {
+				if let Ok(req) = deserialize_with_ext::call::from_str(call.get(), &extensions) {
 					batch.push(req);
-				} else if let Ok(_notif) = serde_json::from_str::<Notification>(call.get()) {
+				} else if let Ok(notif) = deserialize_with_ext::notif::from_str::<Notif>(call.get(), &extensions) {
+					// Notifications in a batch should not be answered but invoke middleware.
+					_ = rpc_service.notification(notif).await;
 					got_notif = true;
 				} else {
 					let id = match serde_json::from_str::<InvalidRequest>(call.get()) {
@@ -1302,7 +1305,7 @@ where
 				}
 			};
 
-			if got_notif && batch_response.as_result().len() == 0 {
+			if got_notif && batch_response.as_result().is_empty() {
 				MethodResponse::notification()
 			} else {
 				batch_response

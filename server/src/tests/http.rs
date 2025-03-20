@@ -33,7 +33,7 @@ use crate::{
 };
 use futures_util::future::{Future, FutureExt};
 use hyper::body::Bytes;
-use jsonrpsee_core::middleware::{MethodResponseBoxFuture, Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::{BoxError, RpcResult};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
@@ -61,7 +61,7 @@ impl<'a, S> RpcServiceT<'a> for InjectExt<S>
 where
 	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
 {
-	type Future = MethodResponseBoxFuture<'a, Self::Response, Self::Error>;
+	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
 	type Error = S::Error;
 	type Response = S::Response;
 

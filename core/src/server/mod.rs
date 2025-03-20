@@ -30,15 +30,17 @@
 mod error;
 /// Helpers.
 pub mod helpers;
+/// Method response.
+mod method_response;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 mod rpc_module;
 /// Subscription related types.
 mod subscription;
 
-pub use crate::method_response::*;
 pub use error::*;
 pub use helpers::*;
 pub use http::Extensions;
+pub use method_response::*;
 pub use rpc_module::*;
 pub use subscription::*;
 

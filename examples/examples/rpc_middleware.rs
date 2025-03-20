@@ -44,7 +44,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{MethodResponseBoxFuture, Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::types::Request;
@@ -99,7 +99,7 @@ impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = MethodResponseBoxFuture<'a, Self::Response, Self::Error>;
+	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
 	type Error = S::Error;
 	type Response = S::Response;
 

@@ -31,7 +31,7 @@ use std::sync::Arc;
 
 use crate::ConnectionId;
 use futures_util::future::FutureExt;
-use jsonrpsee_core::middleware::{MethodResponseBoxFuture, Notification, RpcServiceT};
+use jsonrpsee_core::middleware::{Notification, ResponseBoxFuture, RpcServiceT};
 use jsonrpsee_core::server::{
 	BatchResponseBuilder, BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
 };
@@ -77,7 +77,7 @@ impl RpcService {
 impl<'a> RpcServiceT<'a> for RpcService {
 	// The rpc module is already boxing the futures and
 	// it's used to under the hood by the RpcService.
-	type Future = MethodResponseBoxFuture<'a, Self::Response, Self::Error>;
+	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
 	type Error = Infallible;
 	type Response = MethodResponse;
 

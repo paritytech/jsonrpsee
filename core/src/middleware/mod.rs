@@ -12,15 +12,13 @@ use std::borrow::Cow;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-/// Re-export `MethodResponse` for convenience.
-pub use crate::method_response::MethodResponse;
 /// Re-export types from `jsonrpsee_types` crate for convenience
 pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, RawValue>>>;
 /// Re-export types from `jsonrpsee_types` crate for convenience
 pub use jsonrpsee_types::Request;
 
-/// Type alias for a future that resolves to a [`MethodResponse`].
-pub type MethodResponseBoxFuture<'a, R, E> = BoxFuture<'a, Result<R, E>>;
+/// Type alias for a boxed future that resolves to Result<R, E>.
+pub type ResponseBoxFuture<'a, R, E> = BoxFuture<'a, Result<R, E>>;
 
 /// Similar to the [`tower::Service`] but specific for jsonrpsee and
 /// doesn't requires `&mut self` for performance reasons.
