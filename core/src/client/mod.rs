@@ -36,7 +36,6 @@ pub use error::Error;
 use jsonrpsee_types::request::IdGeneratorFn;
 
 use std::fmt;
-use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -335,7 +334,7 @@ struct BatchMessage {
 	/// Serialized batch request.
 	raw: String,
 	/// Request IDs.
-	ids: Range<u64>,
+	ids: Vec<Id<'static>>,
 	/// One-shot channel over which we send back the result of this request.
 	send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>,
 }
@@ -487,12 +486,6 @@ impl RequestIdManager {
 	pub fn as_id_kind(&self) -> IdKind {
 		self.id_kind
 	}
-
-	/// Generate a range of IDs for a batch request.
-	pub fn generate_batch_id_range(&self, batch_size: usize) -> Range<u64> {
-		let start_id = self.current_id.get();
-		start_id..(start_id + batch_size as u64)
-	}
 }
 
 /// JSON-RPC request object id data type.
@@ -519,10 +512,6 @@ impl CurrentId {
 			.fetch_add(1, Ordering::Relaxed)
 			.try_into()
 			.expect("usize -> u64 infallible, there are no CPUs > 64 bits; qed")
-	}
-
-	fn get(&self) -> u64 {
-		self.0.load(Ordering::Relaxed) as u64
 	}
 }
 

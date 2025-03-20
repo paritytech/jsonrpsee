@@ -24,6 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::collections::BTreeMap;
+
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::async_client::{Notification, LOG_TARGET};
 use crate::client::{subscription_channel, Error, RequestMessage, TransportSenderT, TrySubscriptionSendError};
@@ -39,11 +41,10 @@ use jsonrpsee_types::{
 	ErrorObject, Id, InvalidRequestId, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
 };
 use serde_json::Value as JsonValue;
-use std::ops::Range;
 
 #[derive(Debug, Clone)]
 pub(crate) struct InnerBatchResponse {
-	pub(crate) id: u64,
+	pub(crate) id: Id<'static>,
 	pub(crate) result: Result<JsonValue, ErrorObject<'static>>,
 }
 
@@ -53,35 +54,28 @@ pub(crate) struct InnerBatchResponse {
 pub(crate) fn process_batch_response(
 	manager: &mut RequestManager,
 	rps: Vec<InnerBatchResponse>,
-	range: Range<u64>,
+	ids: Vec<Id<'static>>,
 ) -> Result<(), InvalidRequestId> {
-	let mut responses = Vec::with_capacity(rps.len());
-
-	let start_idx = range.start;
-
-	let batch_state = match manager.complete_pending_batch(range.clone()) {
+	let batch_state = match manager.complete_pending_batch(ids.clone()) {
 		Some(state) => state,
 		None => {
 			tracing::debug!(target: LOG_TARGET, "Received unknown batch response");
-			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)));
+			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", ids)));
 		}
 	};
 
-	for _ in range {
-		let err_obj = ErrorObject::borrowed(0, "", None);
-		responses.push(Err(err_obj));
-	}
+	let mut responses_map: BTreeMap<Id<'static>, Result<_, ErrorObject>> =
+		ids.iter().map(|id| (id.clone(), Err(ErrorObject::borrowed(0, "", None)))).collect();
 
 	for rp in rps {
-		let maybe_elem =
-			rp.id.checked_sub(start_idx).and_then(|p| p.try_into().ok()).and_then(|p: usize| responses.get_mut(p));
-
-		if let Some(elem) = maybe_elem {
-			*elem = rp.result;
+		if let Some(entry) = responses_map.get_mut(&rp.id) {
+			*entry = rp.result;
 		} else {
 			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()));
 		}
 	}
+
+	let responses: Vec<_> = responses_map.into_values().collect();
 
 	let _ = batch_state.send_back.send(Ok(responses));
 	Ok(())
