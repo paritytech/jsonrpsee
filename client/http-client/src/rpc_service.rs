@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use futures_util::{FutureExt, future::BoxFuture};
-use hyper::body::Bytes;
+use hyper::{body::Bytes, http::Extensions};
 use jsonrpsee_core::{
 	BoxError, JsonRawValue,
 	client::{Error, MethodResponse},
 	middleware::{Notification, RpcServiceT},
-	server::Extensions,
 };
 use jsonrpsee_types::{Response, ResponseSuccess};
 use tower::Service;

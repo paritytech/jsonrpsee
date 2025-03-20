@@ -35,14 +35,13 @@ use crate::types::Response;
 use crate::{HttpRequest, HttpResponse};
 use async_trait::async_trait;
 use hyper::body::Bytes;
-use hyper::http::HeaderMap;
+use hyper::http::{Extensions, HeaderMap};
 use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
 	generate_batch_id_range,
 };
 use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
-use jsonrpsee_core::server::Extensions;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, InvalidRequestId, Notification, Request, ResponseSuccess, TwoPointZero};
