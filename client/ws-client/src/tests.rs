@@ -323,7 +323,6 @@ async fn batch_request_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn batch_request_out_of_order_response() {
 	let mut batch_request = BatchRequestBuilder::new();
 	batch_request.insert("say_hello", rpc_params![]).unwrap();
