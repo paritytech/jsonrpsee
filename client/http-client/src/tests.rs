@@ -34,6 +34,7 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_types::error::ErrorObjectOwned;
+use jsonrpsee_types::{Id as RequestId, IdGeneratorFn};
 
 fn init_logger() {
 	let _ = tracing_subscriber::FmtSubscriber::builder()
@@ -258,34 +259,23 @@ async fn batch_request_out_of_order_response() {
 }
 
 #[tokio::test]
-async fn batch_multiple_requests_out_of_order_response() {
+async fn batch_request_with_custom_id_out_of_order_response() {
 	let mut batch_request = BatchRequestBuilder::new();
 	batch_request.insert("say_hello", rpc_params![]).unwrap();
 	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
 	batch_request.insert("get_swag", rpc_params![]).unwrap();
-	batch_request.insert("test_echo", rpc_params!["fourth"]).unwrap();
-	batch_request.insert("test_echo", rpc_params!["fifth"]).unwrap();
-	let server_response = r#"[{"jsonrpc":"2.0","result":"fifth","id":4}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"fourth","id":3}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
-	let res = run_batch_request_with_response::<String>(batch_request, server_response)
+	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
+	let res = run_batch_request_with_custom_id::<String>(batch_request, server_response, generate_predictable_id)
 		.with_default_timeout()
 		.await
 		.unwrap()
 		.unwrap();
-	assert_eq!(res.num_successful_calls(), 5);
+	assert_eq!(res.num_successful_calls(), 3);
 	assert_eq!(res.num_failed_calls(), 0);
-	assert_eq!(res.len(), 5);
+	assert_eq!(res.len(), 3);
 	let response: Vec<_> = res.into_ok().unwrap().collect();
 
-	assert_eq!(
-		response,
-		vec![
-			"hello".to_string(),
-			"goodbye".to_string(),
-			"here's your swag".to_string(),
-			"fourth".to_string(),
-			"fifth".to_string()
-		]
-	);
+	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string(),]);
 }
 
 async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
@@ -312,4 +302,22 @@ fn assert_jsonrpc_error_response(err: ClientError, exp: ErrorObjectOwned) {
 		}
 		e => panic!("Expected error: \"{err}\", got: {e:?}"),
 	};
+}
+
+async fn run_batch_request_with_custom_id<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
+	batch: BatchRequestBuilder<'_>,
+	response: String,
+	id_generator: fn() -> RequestId<'static>,
+) -> Result<BatchResponse<T>, ClientError> {
+	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
+	let uri = format!("http://{server_addr}");
+	let client =
+		HttpClientBuilder::default().id_format(IdKind::Custom(IdGeneratorFn::new(id_generator))).build(&uri).unwrap();
+	client.batch_request(batch).with_default_timeout().await.unwrap()
+}
+
+fn generate_predictable_id() -> RequestId<'static> {
+	static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+	let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+	RequestId::Number(id.try_into().unwrap())
 }
