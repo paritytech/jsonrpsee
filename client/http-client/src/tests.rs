@@ -257,6 +257,37 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
+#[tokio::test]
+async fn batch_multiple_requests_out_of_order_response() {
+	let mut batch_request = BatchRequestBuilder::new();
+	batch_request.insert("say_hello", rpc_params![]).unwrap();
+	batch_request.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
+	batch_request.insert("get_swag", rpc_params![]).unwrap();
+	batch_request.insert("test_echo", rpc_params!["fourth"]).unwrap();
+	batch_request.insert("test_echo", rpc_params!["fifth"]).unwrap();
+	let server_response = r#"[{"jsonrpc":"2.0","result":"fifth","id":4}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"fourth","id":3}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
+	let res = run_batch_request_with_response::<String>(batch_request, server_response)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(res.num_successful_calls(), 5);
+	assert_eq!(res.num_failed_calls(), 0);
+	assert_eq!(res.len(), 5);
+	let response: Vec<_> = res.into_ok().unwrap().collect();
+
+	assert_eq!(
+		response,
+		vec![
+			"hello".to_string(),
+			"goodbye".to_string(),
+			"here's your swag".to_string(),
+			"fourth".to_string(),
+			"fifth".to_string()
+		]
+	);
+}
+
 async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
 	batch: BatchRequestBuilder<'_>,
 	response: String,
