@@ -50,6 +50,7 @@ pub struct Request<'a> {
 	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	#[serde(borrow)]
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub params: Option<Cow<'a, RawValue>>,
 	/// The request's extensions.
 	#[serde(skip)]
@@ -89,7 +90,7 @@ impl<'a> Request<'a> {
 }
 
 /// JSON-RPC Invalid request as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct InvalidRequest<'a> {
 	/// Request ID
 	#[serde(borrow)]

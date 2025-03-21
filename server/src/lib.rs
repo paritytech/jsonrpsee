@@ -43,7 +43,6 @@ mod tests;
 
 pub use future::{AlreadyStoppedError, ConnectionGuard, ConnectionPermit, ServerHandle, StopHandle, stop_channel};
 pub use jsonrpsee_core::error::RegisterMethodError;
-pub use jsonrpsee_core::middleware::RpcServiceBuilder;
 pub use jsonrpsee_core::server::*;
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;

@@ -32,7 +32,7 @@
 //! such as `Arc<Mutex>`
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -130,8 +130,8 @@ where
 		}
 	}
 
-	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
-		ResponseFuture::future(self.service.batch(requests))
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		ResponseFuture::future(self.service.batch(batch))
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {

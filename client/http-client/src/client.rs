@@ -40,7 +40,7 @@ use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
 	generate_batch_id_range,
 };
-use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{BatchEntry, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
@@ -424,7 +424,7 @@ where
 				id,
 				extensions: Extensions::new(),
 			};
-			batch_request.push(req);
+			batch_request.push(BatchEntry::Call(req));
 		}
 
 		let method_response = self.transport.batch(batch_request).await?;

@@ -29,10 +29,10 @@ use std::time::Duration;
 
 use hyper::body::Bytes;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{Notification, RpcServiceT};
+use jsonrpsee::core::middleware::{BatchEntry, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, RpcServiceBuilder, Server};
+use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::types::Request;
 use tower_http::LatencyUnit;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
@@ -53,7 +53,7 @@ where
 		self.0.call(req)
 	}
 
-	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
+	fn batch(&self, reqs: Vec<BatchEntry<'a>>) -> Self::Future {
 		println!("logger layer : {:?}", reqs);
 		self.0.batch(reqs)
 	}

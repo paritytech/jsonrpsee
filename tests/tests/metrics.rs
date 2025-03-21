@@ -37,7 +37,7 @@ use std::time::Duration;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use helpers::init_logger;
-use jsonrpsee::core::middleware::{Notification, Request, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, Request, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{ClientError, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
@@ -99,8 +99,8 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
-		self.service.batch(requests).boxed()
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		self.service.batch(batch).boxed()
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {

@@ -46,13 +46,13 @@ use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
 use futures::future::BoxFuture;
-use jsonrpsee::core::middleware::{Notification, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{
-	ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle, http,
-	serve_with_graceful_shutdown, stop_channel, ws,
+	ConnectionGuard, ConnectionState, ServerConfig, ServerHandle, StopHandle, http, serve_with_graceful_shutdown,
+	stop_channel, ws,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -102,8 +102,8 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
-		Box::pin(self.service.batch(reqs))
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		Box::pin(self.service.batch(batch))
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {

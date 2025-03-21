@@ -5,7 +5,7 @@ use hyper::{body::Bytes, http::Extensions};
 use jsonrpsee_core::{
 	BoxError, JsonRawValue,
 	client::{Error, MethodResponse},
-	middleware::{Notification, RpcServiceT},
+	middleware::{Batch, Notification, Request, RpcServiceT},
 };
 use jsonrpsee_types::{Response, ResponseSuccess};
 use tower::Service;
@@ -39,7 +39,7 @@ where
 	type Error = Error;
 	type Response = MethodResponse;
 
-	fn call(&self, request: jsonrpsee_types::Request<'a>) -> Self::Future {
+	fn call(&self, request: Request<'a>) -> Self::Future {
 		let service = self.service.clone();
 
 		async move {
@@ -52,18 +52,18 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, requests: Vec<jsonrpsee_types::Request<'a>>) -> Self::Future {
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
 		let service = self.service.clone();
 
 		async move {
-			let raw = serde_json::to_string(&requests)?;
+			let raw = serde_json::to_string(&batch)?;
 			let bytes = service.send_and_read_body(raw).await.map_err(|e| Error::Transport(e.into()))?;
 			let json: Vec<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
 
 			let mut extensions = Extensions::new();
 
-			for req in requests {
-				extensions.extend(req.extensions);
+			for call in batch {
+				extensions.extend(call.into_extensions());
 			}
 
 			Ok(MethodResponse::batch(json, extensions))

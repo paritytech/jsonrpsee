@@ -38,7 +38,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
-use jsonrpsee::core::middleware::{Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
@@ -96,8 +96,8 @@ where
 		}
 	}
 
-	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
-		ResponseFuture::future(self.inner.batch(reqs))
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		ResponseFuture::future(self.inner.batch(batch))
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {

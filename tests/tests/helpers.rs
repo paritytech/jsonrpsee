@@ -35,13 +35,11 @@ use std::time::Duration;
 use fast_socks5::client::Socks5Stream;
 use fast_socks5::server;
 use futures::{SinkExt, Stream, StreamExt};
-use jsonrpsee::core::middleware::Notification;
+use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
-
-use jsonrpsee::core::middleware::RpcServiceT;
 use jsonrpsee::server::{
-	ConnectionGuard, PendingSubscriptionSink, RpcModule, RpcServiceBuilder, Server, ServerBuilder, ServerHandle,
-	SubscriptionMessage, TrySendError, serve_with_graceful_shutdown, stop_channel,
+	ConnectionGuard, PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage,
+	TrySendError, serve_with_graceful_shutdown, stop_channel,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::{Methods, SubscriptionCloseResponse};
@@ -164,8 +162,8 @@ pub async fn server() -> SocketAddr {
 			self.inner.call(request)
 		}
 
-		fn batch(&self, requests: Vec<jsonrpsee::types::Request<'a>>) -> Self::Future {
-			self.inner.batch(requests)
+		fn batch(&self, batch: Batch<'a>) -> Self::Future {
+			self.inner.batch(batch)
 		}
 
 		fn notification(&self, n: Notification<'a>) -> Self::Future {

@@ -498,16 +498,6 @@ impl Future for MethodResponseFuture {
 }
 
 /// Bounded writer that allows writing at most `max_len` bytes.
-///
-/// ```
-///    use std::io::Write;
-///
-///    use jsonrpsee_core::server::helpers::BoundedWriter;
-///
-///    let mut writer = BoundedWriter::new(10);
-///    (&mut writer).write("hello".as_bytes()).unwrap();
-///    assert_eq!(std::str::from_utf8(&writer.into_bytes()).unwrap(), "hello");
-/// ```
 #[derive(Debug, Clone)]
 struct BoundedWriter {
 	max_len: usize,

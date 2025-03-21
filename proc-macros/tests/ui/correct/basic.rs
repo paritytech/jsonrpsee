@@ -135,8 +135,8 @@ impl RpcServer for RpcServerImpl {
 
 pub async fn server() -> SocketAddr {
 	use hyper_util::rt::{TokioExecutor, TokioIo};
-	use jsonrpsee::core::middleware::{Notification, RpcServiceT};
-	use jsonrpsee::server::{RpcServiceBuilder, stop_channel};
+	use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
+	use jsonrpsee::server::stop_channel;
 	use std::convert::Infallible;
 	use std::sync::{Arc, atomic::AtomicU32};
 	use tower::Service;
@@ -160,8 +160,8 @@ pub async fn server() -> SocketAddr {
 			self.inner.call(request)
 		}
 
-		fn batch(&self, requests: Vec<jsonrpsee::types::Request<'a>>) -> Self::Future {
-			self.inner.batch(requests)
+		fn batch(&self, batch: Batch<'a>) -> Self::Future {
+			self.inner.batch(batch)
 		}
 
 		fn notification(&self, notif: Notification<'a>) -> Self::Future {

@@ -44,7 +44,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::types::Request;
@@ -80,8 +80,8 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
-		Box::pin(self.service.batch(reqs))
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		Box::pin(self.service.batch(batch))
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {
@@ -117,8 +117,8 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
-		Box::pin(self.service.batch(reqs))
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		Box::pin(self.service.batch(batch))
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {
@@ -142,10 +142,9 @@ where
 		self.0.call(req)
 	}
 
-	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
-		self.0.batch(reqs)
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		self.0.batch(batch)
 	}
-
 	fn notification(&self, n: Notification<'a>) -> Self::Future {
 		self.0.notification(n)
 	}

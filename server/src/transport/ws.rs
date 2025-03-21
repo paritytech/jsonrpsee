@@ -382,7 +382,7 @@ async fn graceful_shutdown<S>(
 ///
 /// ```no_run
 /// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState, HttpRequest, HttpResponse};
-/// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService};
+/// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService, MethodResponse};
 ///
 /// async fn handle_websocket_conn<L>(
 ///     req: HttpRequest,
@@ -395,7 +395,7 @@ async fn graceful_shutdown<S>(
 /// where
 ///     L: for<'a> tower::Layer<RpcService> + 'static,
 ///     <L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-///     for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a> + 'static,
+///     for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a, Response = MethodResponse> + 'static,
 /// {
 ///   match ws::connect(req, server_cfg, methods, conn, rpc_middleware).await {
 ///     Ok((rp, conn_fut)) => {

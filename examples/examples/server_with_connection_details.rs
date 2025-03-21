@@ -26,7 +26,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::middleware::{Notification, Request, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, Request, RpcServiceT};
 use jsonrpsee::core::{SubscriptionResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage};
@@ -61,8 +61,8 @@ impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LoggingMiddleware<S> {
 		self.0.call(request)
 	}
 
-	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
-		self.0.batch(requests)
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		self.0.batch(batch)
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {
@@ -135,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let rpc_middleware = jsonrpsee::server::RpcServiceBuilder::new().layer_fn(LoggingMiddleware);
+	let rpc_middleware = jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new().layer_fn(LoggingMiddleware);
 
 	let server = jsonrpsee::server::Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let addr = server.local_addr()?;

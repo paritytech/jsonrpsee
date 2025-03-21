@@ -99,7 +99,7 @@ where
 
 			// If the response is empty it means that it was a notification or empty batch.
 			// For HTTP these are just ACK:ed with a empty body.
-			response::ok_response(rp.into_result())
+			response::from_method_response(rp)
 		}
 		// Error scenarios:
 		Method::POST => response::unsupported_content_type(),

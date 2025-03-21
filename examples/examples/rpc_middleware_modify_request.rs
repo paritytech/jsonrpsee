@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -60,8 +60,8 @@ where
 		self.0.call(req)
 	}
 
-	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
-		self.0.batch(requests)
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		self.0.batch(batch)
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {

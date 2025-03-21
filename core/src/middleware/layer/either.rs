@@ -31,7 +31,7 @@
 //! work to implement tower::Layer for
 //! external types such as future::Either.
 
-use crate::middleware::{Notification, RpcServiceT};
+use crate::middleware::{BatchEntry, Notification, RpcServiceT};
 use jsonrpsee_types::Request;
 
 /// [`tower::util::Either`] but
@@ -75,7 +75,7 @@ where
 		}
 	}
 
-	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
+	fn batch(&self, requests: Vec<BatchEntry<'a>>) -> Self::Future {
 		match self {
 			Either::Left(service) => futures_util::future::Either::Left(service.batch(requests)),
 			Either::Right(service) => futures_util::future::Either::Right(service.batch(requests)),

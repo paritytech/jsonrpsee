@@ -33,7 +33,7 @@ use crate::{
 };
 use futures_util::future::{Future, FutureExt};
 use hyper::body::Bytes;
-use jsonrpsee_core::middleware::{Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{Batch, Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::{BoxError, RpcResult};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
@@ -75,8 +75,16 @@ where
 		self.service.call(req).boxed()
 	}
 
-	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
-		self.service.batch(requests).boxed()
+	fn batch(&self, mut batch: Batch<'a>) -> Self::Future {
+		if let Some(last) = batch.iter_mut().last() {
+			if last.method_name().contains("err") {
+				last.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
+			} else {
+				last.extensions_mut().insert(StatusCode::OK);
+			}
+		}
+
+		self.service.batch(batch).boxed()
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {

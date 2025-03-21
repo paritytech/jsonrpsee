@@ -45,7 +45,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{BatchEntry, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
@@ -664,11 +664,8 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use std::{time::Instant, net::SocketAddr, sync::Arc};
 	/// use std::sync::atomic::{Ordering, AtomicUsize};
 	///
-	/// use jsonrpsee_server::middleware::rpc::{RpcServiceT, RpcService, RpcServiceBuilder};
-	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
-	/// use jsonrpsee_core::async_trait;
-	/// use jsonrpsee_types::Request;
-	/// use futures_util::future::BoxFuture;
+	/// use jsonrpsee_server::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceT, MethodResponse, ResponseBoxFuture, Notification, Request, Batch};
+	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware<S> {
@@ -679,7 +676,9 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
 	/// where S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 	/// {
-	///    type Future = BoxFuture<'a, MethodResponse>;
+	///    type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
+	///    type Error = S::Error;
+	///    type Response = S::Response;
 	///
 	///    fn call(&self, req: Request<'a>) -> Self::Future {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
@@ -693,6 +692,15 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///             rp
 	///         })
 	///    }
+	///
+	///    fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	///          Box::pin(self.service.batch(batch))
+	///    }
+	///
+	///    fn notification(&self, notif: Notification<'a>) -> Self::Future {
+	///          Box::pin(self.service.notification(notif))
+	///    }
+	///
 	/// }
 	///
 	/// // Create a state per connection
@@ -1249,7 +1257,7 @@ where
 			match rpc_service.notification(notif).await {
 				Ok(rp) => rp,
 				Err(e) => {
-					// We don't care about the error if it's a notification.
+					// We don't care about if middleware/service encountered if it's an notification.
 					tracing::debug!(target: LOG_TARGET, "Notification error: {:?}", e);
 					return MethodResponse::notification();
 				}
@@ -1279,36 +1287,25 @@ where
 			}
 
 			let mut batch = Vec::with_capacity(unchecked_batch.len());
-			let mut got_notif = false;
 
 			for call in unchecked_batch {
 				if let Ok(req) = deserialize_with_ext::call::from_str(call.get(), &extensions) {
-					batch.push(req);
+					batch.push(BatchEntry::Call(req));
 				} else if let Ok(notif) = deserialize_with_ext::notif::from_str::<Notif>(call.get(), &extensions) {
-					// Notifications in a batch should not be answered but invoke middleware.
-					_ = rpc_service.notification(notif).await;
-					got_notif = true;
+					batch.push(BatchEntry::Notification(notif));
 				} else {
 					let id = match serde_json::from_str::<InvalidRequest>(call.get()) {
 						Ok(err) => err.id,
 						Err(_) => Id::Null,
 					};
 
-					return MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest));
+					batch.push(BatchEntry::InvalidRequest(id));
 				}
 			}
 
-			let batch_response = match rpc_service.batch(batch).await {
+			match rpc_service.batch(batch).await {
 				Ok(rp) => rp,
-				Err(e) => {
-					return MethodResponse::error(Id::Null, rpc_middleware_error(e));
-				}
-			};
-
-			if got_notif && batch_response.as_result().is_empty() {
-				MethodResponse::notification()
-			} else {
-				batch_response
+				Err(e) => MethodResponse::error(Id::Null, rpc_middleware_error(e)),
 			}
 		} else {
 			MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError))

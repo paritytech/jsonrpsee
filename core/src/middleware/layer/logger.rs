@@ -32,7 +32,7 @@ use std::{
 };
 
 use crate::{
-	middleware::{Notification, RpcServiceT},
+	middleware::{BatchEntry, Notification, RpcServiceT},
 	tracing::server::{rx_log_from_json, tx_log_from_str},
 };
 
@@ -85,8 +85,8 @@ where
 	}
 
 	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
-	fn batch(&self, requests: Vec<Request<'a>>) -> Self::Future {
-		rx_log_from_json(&requests, self.max);
+	fn batch(&self, requests: Vec<BatchEntry<'a>>) -> Self::Future {
+		//rx_log_from_json(&requests, self.max);
 
 		ResponseFuture::new(self.service.batch(requests), self.max).in_current_span()
 	}

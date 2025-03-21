@@ -26,18 +26,20 @@
 
 //! JSON-RPC service middleware.
 
+pub use jsonrpsee_core::middleware::*;
+pub use jsonrpsee_core::server::MethodResponse;
+
 use std::convert::Infallible;
 use std::sync::Arc;
 
 use crate::ConnectionId;
 use futures_util::future::FutureExt;
-use jsonrpsee_core::middleware::{Notification, ResponseBoxFuture, RpcServiceT};
 use jsonrpsee_core::server::{
-	BatchResponseBuilder, BoundedSubscriptions, MethodCallback, MethodResponse, MethodSink, Methods, SubscriptionState,
+	BatchResponseBuilder, BoundedSubscriptions, MethodCallback, MethodSink, Methods, SubscriptionState,
 };
 use jsonrpsee_core::traits::IdProvider;
+use jsonrpsee_types::ErrorObject;
 use jsonrpsee_types::error::{ErrorCode, reject_too_many_subscriptions};
-use jsonrpsee_types::{ErrorObject, Request};
 
 /// JSON-RPC service middleware.
 #[derive(Clone, Debug)]
@@ -148,20 +150,47 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		}
 	}
 
-	fn batch(&self, reqs: Vec<Request<'a>>) -> Self::Future {
+	fn batch(&self, reqs: Vec<BatchEntry<'a>>) -> Self::Future {
 		let mut batch = BatchResponseBuilder::new_with_limit(self.max_response_body_size);
 		let service = self.clone();
 		async move {
-			for req in reqs {
-				let rp = match service.call(req).await {
-					Ok(rp) => rp,
-					Err(e) => match e {},
-				};
-				if let Err(err) = batch.append(rp) {
-					return Ok(err);
+			let mut got_notification = false;
+
+			for batch_entry in reqs {
+				match batch_entry {
+					BatchEntry::Call(req) => {
+						let rp = match service.call(req).await {
+							Ok(rp) => rp,
+							Err(e) => match e {},
+						};
+						if let Err(err) = batch.append(rp) {
+							return Ok(err);
+						}
+					}
+					BatchEntry::Notification(n) => {
+						got_notification = true;
+						match service.notification(n).await {
+							Ok(rp) => rp,
+							Err(e) => match e {},
+						};
+					}
+					BatchEntry::InvalidRequest(id) => {
+						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest));
+						if let Err(err) = batch.append(rp) {
+							return Ok(err);
+						}
+					}
 				}
 			}
-			Ok(MethodResponse::from_batch(batch.finish()))
+
+			// If the batch is empty and we got a notification, we return an empty response.
+			if batch.is_empty() && got_notification {
+				Ok(MethodResponse::notification())
+			}
+			// An empty batch is regarded as an invalid request here.
+			else {
+				Ok(MethodResponse::from_batch(batch.finish()))
+			}
 		}
 		.boxed()
 	}
