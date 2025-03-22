@@ -44,9 +44,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{Batch, Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
-use jsonrpsee::server::{MethodResponse, RpcModule, Server};
+use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -62,7 +62,9 @@ impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
+	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let count = self.count.clone();
@@ -77,6 +79,14 @@ where
 		}
 		.boxed()
 	}
+
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		Box::pin(self.service.batch(batch))
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		Box::pin(self.service.notification(n))
+	}
 }
 
 #[derive(Clone)]
@@ -89,7 +99,9 @@ impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
 where
 	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
+	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let count = self.count.clone();
@@ -104,6 +116,14 @@ where
 		}
 		.boxed()
 	}
+
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		Box::pin(self.service.batch(batch))
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		Box::pin(self.service.notification(n))
+	}
 }
 
 #[derive(Clone)]
@@ -114,10 +134,19 @@ where
 	S: RpcServiceT<'a> + Send + Sync,
 {
 	type Future = S::Future;
+	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		println!("logger middleware: method `{}`", req.method);
 		self.0.call(req)
+	}
+
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		self.0.batch(batch)
+	}
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.0.notification(n)
 	}
 }
 

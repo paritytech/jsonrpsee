@@ -26,14 +26,14 @@
 
 use std::net::SocketAddr;
 
-use crate::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use crate::types::Request;
 use crate::{
-	BatchRequestConfig, HttpBody, HttpRequest, HttpResponse, MethodResponse, RegisterMethodError, RpcModule,
-	ServerBuilder, ServerConfig, ServerHandle,
+	BatchRequestConfig, HttpBody, HttpRequest, HttpResponse, RegisterMethodError, RpcModule, ServerBuilder,
+	ServerConfig, ServerHandle,
 };
-use futures_util::future::{BoxFuture, Future, FutureExt};
+use futures_util::future::{Future, FutureExt};
 use hyper::body::Bytes;
+use jsonrpsee_core::middleware::{Batch, Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::{BoxError, RpcResult};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
@@ -61,7 +61,9 @@ impl<'a, S> RpcServiceT<'a> for InjectExt<S>
 where
 	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
+	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, mut req: Request<'a>) -> Self::Future {
 		if req.method_name().contains("err") {
@@ -71,6 +73,22 @@ where
 		}
 
 		self.service.call(req).boxed()
+	}
+
+	fn batch(&self, mut batch: Batch<'a>) -> Self::Future {
+		if let Some(last) = batch.iter_mut().last() {
+			if last.method_name().contains("err") {
+				last.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
+			} else {
+				last.extensions_mut().insert(StatusCode::OK);
+			}
+		}
+
+		self.service.batch(batch).boxed()
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.service.notification(n).boxed()
 	}
 }
 

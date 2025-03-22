@@ -50,6 +50,7 @@ pub struct Request<'a> {
 	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	#[serde(borrow)]
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub params: Option<Cow<'a, RawValue>>,
 	/// The request's extensions.
 	#[serde(skip)]
@@ -89,7 +90,7 @@ impl<'a> Request<'a> {
 }
 
 /// JSON-RPC Invalid request as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct InvalidRequest<'a> {
 	/// Request ID
 	#[serde(borrow)]
@@ -107,12 +108,30 @@ pub struct Notification<'a, T> {
 	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	pub params: T,
+	/// Extensions of the notification.
+	#[serde(skip)]
+	pub extensions: Extensions,
 }
 
 impl<'a, T> Notification<'a, T> {
 	/// Create a new [`Notification`].
 	pub fn new(method: Cow<'a, str>, params: T) -> Self {
-		Self { jsonrpc: TwoPointZero, method, params }
+		Self { jsonrpc: TwoPointZero, method, params, extensions: Extensions::new() }
+	}
+
+	/// Get the method name of the request.
+	pub fn method_name(&self) -> &str {
+		&self.method
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 
@@ -175,7 +194,7 @@ impl<'a> NotificationSer<'a> {
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, TwoPointZero};
+	use super::{Cow, Id, InvalidRequest, Notification, Request, RequestSer, TwoPointZero};
 	use serde_json::value::RawValue;
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
@@ -283,22 +302,5 @@ mod test {
 
 			assert_eq!(&request, ser);
 		}
-	}
-
-	#[test]
-	fn serialize_notif() {
-		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","params":["hello"]}"#;
-		let params = Some(RawValue::from_string(r#"["hello"]"#.into()).unwrap());
-		let req = NotificationSer::owned("say_hello", params);
-		let ser = serde_json::to_string(&req).unwrap();
-		assert_eq!(exp, ser);
-	}
-
-	#[test]
-	fn serialize_notif_escaped_method_name() {
-		let exp = r#"{"jsonrpc":"2.0","method":"\"method\""}"#;
-		let req = NotificationSer::owned("\"method\"", None);
-		let ser = serde_json::to_string(&req).unwrap();
-		assert_eq!(exp, ser);
 	}
 }

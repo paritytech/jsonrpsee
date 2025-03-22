@@ -29,19 +29,22 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClient, HttpTransportClientBuilder};
-use crate::types::{NotificationSer, RequestSer, Response};
+use crate::rpc_service::RpcService;
+use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClientBuilder};
+use crate::types::Response;
 use crate::{HttpRequest, HttpResponse};
 use async_trait::async_trait;
 use hyper::body::Bytes;
-use hyper::http::HeaderMap;
+use hyper::http::{Extensions, HeaderMap};
 use jsonrpsee_core::client::{
-	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT, generate_batch_id_range,
+	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
+	generate_batch_id_range,
 };
+use jsonrpsee_core::middleware::{BatchEntry, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::{ErrorObject, InvalidRequestId, ResponseSuccess, TwoPointZero};
+use jsonrpsee_types::{ErrorObject, InvalidRequestId, Notification, Request, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tokio::sync::Semaphore;
 use tower::layer::util::Identity;
@@ -75,7 +78,7 @@ use crate::{CertificateStore, CustomCertStore};
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct HttpClientBuilder<L = Identity> {
+pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Identity> {
 	max_request_size: u32,
 	max_response_size: u32,
 	request_timeout: Duration,
@@ -84,12 +87,13 @@ pub struct HttpClientBuilder<L = Identity> {
 	id_kind: IdKind,
 	max_log_length: u32,
 	headers: HeaderMap,
-	service_builder: tower::ServiceBuilder<L>,
+	service_builder: tower::ServiceBuilder<HttpMiddleware>,
+	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	tcp_no_delay: bool,
 	max_concurrent_requests: Option<usize>,
 }
 
-impl<L> HttpClientBuilder<L> {
+impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddleware> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_size(mut self, size: u32) -> Self {
 		self.max_request_size = size;
@@ -215,8 +219,29 @@ impl<L> HttpClientBuilder<L> {
 		self
 	}
 
+	/// Set the RPC middleware.
+	pub fn set_rpc_middleware<T>(self, rpc_builder: RpcServiceBuilder<T>) -> HttpClientBuilder<HttpMiddleware, T> {
+		HttpClientBuilder {
+			#[cfg(feature = "tls")]
+			certificate_store: self.certificate_store,
+			id_kind: self.id_kind,
+			headers: self.headers,
+			max_log_length: self.max_log_length,
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
+			service_builder: self.service_builder,
+			rpc_middleware: rpc_builder,
+			request_timeout: self.request_timeout,
+			tcp_no_delay: self.tcp_no_delay,
+			max_concurrent_requests: self.max_concurrent_requests,
+		}
+	}
+
 	/// Set custom tower middleware.
-	pub fn set_http_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> HttpClientBuilder<T> {
+	pub fn set_http_middleware<T>(
+		self,
+		service_builder: tower::ServiceBuilder<T>,
+	) -> HttpClientBuilder<T, RpcMiddleware> {
 		HttpClientBuilder {
 			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store,
@@ -226,6 +251,7 @@ impl<L> HttpClientBuilder<L> {
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			service_builder,
+			rpc_middleware: self.rpc_middleware,
 			request_timeout: self.request_timeout,
 			tcp_no_delay: self.tcp_no_delay,
 			max_concurrent_requests: self.max_concurrent_requests,
@@ -233,16 +259,18 @@ impl<L> HttpClientBuilder<L> {
 	}
 }
 
-impl<B, S, L> HttpClientBuilder<L>
+impl<B, S, S2, HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddleware>
 where
-	L: Layer<transport::HttpBackend, Service = S>,
+	RpcMiddleware: Layer<RpcService<S>, Service = S2>,
+	for<'a> <RpcMiddleware as Layer<RpcService<S>>>::Service: RpcServiceT<'a>,
+	HttpMiddleware: Layer<transport::HttpBackend, Service = S>,
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Clone,
 	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {
 	/// Build the HTTP client with target to connect to.
-	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient<S>, Error> {
+	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient<S2>, Error> {
 		let Self {
 			max_request_size,
 			max_response_size,
@@ -254,10 +282,11 @@ where
 			max_log_length,
 			service_builder,
 			tcp_no_delay,
+			rpc_middleware,
 			..
 		} = self;
 
-		let transport = HttpTransportClientBuilder {
+		let http = HttpTransportClientBuilder {
 			max_request_size,
 			max_response_size,
 			headers,
@@ -266,6 +295,7 @@ where
 			service_builder,
 			#[cfg(feature = "tls")]
 			certificate_store,
+			request_timeout,
 		}
 		.build(target)
 		.map_err(|e| Error::Transport(e.into()))?;
@@ -275,9 +305,8 @@ where
 			.map(|max_concurrent_requests| Arc::new(Semaphore::new(max_concurrent_requests)));
 
 		Ok(HttpClient {
-			transport,
+			transport: rpc_middleware.service(RpcService::new(http)),
 			id_manager: Arc::new(RequestIdManager::new(id_kind)),
-			request_timeout,
 			request_guard,
 		})
 	}
@@ -295,6 +324,7 @@ impl Default for HttpClientBuilder<Identity> {
 			max_log_length: 4096,
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
+			rpc_middleware: RpcServiceBuilder::default(),
 			tcp_no_delay: true,
 			max_concurrent_requests: None,
 		}
@@ -310,11 +340,9 @@ impl HttpClientBuilder<Identity> {
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
-pub struct HttpClient<S = HttpBackend> {
+pub struct HttpClient<S> {
 	/// HTTP transport client.
-	transport: HttpTransportClient<S>,
-	/// Request timeout. Defaults to 60sec.
-	request_timeout: Duration,
+	transport: S,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
 	/// Concurrent requests limit guard.
@@ -329,18 +357,14 @@ impl HttpClient<HttpBackend> {
 
 	/// Returns configured request timeout.
 	pub fn request_timeout(&self) -> Duration {
-		self.request_timeout
+		todo!();
 	}
 }
 
 #[async_trait]
-impl<B, S> ClientT for HttpClient<S>
+impl<S> ClientT for HttpClient<S>
 where
-	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Send + Sync + Clone,
-	<S as Service<HttpRequest>>::Future: Send,
-	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-	B::Error: Into<BoxError>,
-	B::Data: Send,
+	for<'a> S: RpcServiceT<'a, Error = Error, Response = MethodResponse> + Send + Sync,
 {
 	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
@@ -351,17 +375,9 @@ where
 			Some(permit) => permit.acquire().await.ok(),
 			None => None,
 		};
-		let params = params.to_rpc_params()?;
-		let notif =
-			serde_json::to_string(&NotificationSer::borrowed(&method, params.as_deref())).map_err(Error::ParseError)?;
-
-		let fut = self.transport.send(notif);
-
-		match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(ok)) => Ok(ok),
-			Err(_) => Err(Error::RequestTimeout),
-			Ok(Err(e)) => Err(Error::Transport(e.into())),
-		}
+		let params = params.to_rpc_params()?.map(StdCow::Owned);
+		self.transport.notification(Notification::new(method.into(), params)).await?;
+		Ok(())
 	}
 
 	#[instrument(name = "method_call", skip(self, params), level = "trace")]
@@ -377,31 +393,12 @@ where
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
-		let request = RequestSer::borrowed(&id, &method, params.as_deref());
-		let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
+		let request = Request::new(method.into(), params.as_deref(), id.clone());
+		let method_response = self.transport.call(request).await?;
+		let rp = method_response.as_method_call().expect("Transport::call must return a method call");
 
-		let fut = self.transport.send_and_read_body(raw);
-		let body = match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(body)) => body,
-			Err(_e) => {
-				return Err(Error::RequestTimeout);
-			}
-			Ok(Err(e)) => {
-				return Err(Error::Transport(e.into()));
-			}
-		};
-
-		// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
-		// a better error message if `R` couldn't be decoded.
-		let response = ResponseSuccess::try_from(serde_json::from_slice::<Response<&JsonRawValue>>(&body)?)?;
-
-		let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
-
-		if response.id == id {
-			Ok(result)
-		} else {
-			Err(InvalidRequestId::NotPendingRequest(response.id.to_string()).into())
-		}
+		let result = rp.decode()?;
+		if rp.id() == &id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id().to_string()).into()) }
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
@@ -420,43 +417,40 @@ where
 		let mut batch_request = Vec::with_capacity(batch.len());
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
 			let id = self.id_manager.as_id_kind().into_id(id);
-			batch_request.push(RequestSer {
+			let req = Request {
 				jsonrpc: TwoPointZero,
-				id,
 				method: method.into(),
 				params: params.map(StdCow::Owned),
-			});
+				id,
+				extensions: Extensions::new(),
+			};
+			batch_request.push(BatchEntry::Call(req));
 		}
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+		let method_response = self.transport.batch(batch_request).await?;
+		let json_rps = method_response.as_batch().expect("Transport::batch must return a batch");
 
-		let body = match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(body)) => body,
-			Err(_e) => return Err(Error::RequestTimeout),
-			Ok(Err(e)) => return Err(Error::Transport(e.into())),
-		};
+		let mut batch_response = Vec::new();
+		let mut success = 0;
+		let mut failed = 0;
 
-		let json_rps: Vec<Response<&JsonRawValue>> = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-
-		let mut responses = Vec::with_capacity(json_rps.len());
-		let mut successful_calls = 0;
-		let mut failed_calls = 0;
-
+		// Fill the batch response with placeholder values.
 		for _ in 0..json_rps.len() {
-			responses.push(Err(ErrorObject::borrowed(0, "", None)));
+			batch_response.push(Err(ErrorObject::borrowed(0, "", None)));
 		}
 
-		for rp in json_rps {
+		for json_rp in json_rps.iter() {
+			let rp: Response<&JsonRawValue> = serde_json::from_str(json_rp.get()).map_err(Error::ParseError)?;
 			let id = rp.id.try_parse_inner_as_number()?;
 
 			let res = match ResponseSuccess::try_from(rp) {
 				Ok(r) => {
-					let result = serde_json::from_str(r.result.get())?;
-					successful_calls += 1;
-					Ok(result)
+					let v = serde_json::from_str(r.result.get()).map_err(Error::ParseError)?;
+					success += 1;
+					Ok(v)
 				}
 				Err(err) => {
-					failed_calls += 1;
+					failed += 1;
 					Err(err)
 				}
 			};
@@ -464,7 +458,7 @@ where
 			let maybe_elem = id
 				.checked_sub(id_range.start)
 				.and_then(|p| p.try_into().ok())
-				.and_then(|p: usize| responses.get_mut(p));
+				.and_then(|p: usize| batch_response.get_mut(p));
 
 			if let Some(elem) = maybe_elem {
 				*elem = res;
@@ -473,18 +467,14 @@ where
 			}
 		}
 
-		Ok(BatchResponse::new(successful_calls, responses, failed_calls))
+		Ok(BatchResponse::new(success, batch_response, failed))
 	}
 }
 
 #[async_trait]
-impl<B, S> SubscriptionClientT for HttpClient<S>
+impl<S> SubscriptionClientT for HttpClient<S>
 where
-	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Send + Sync + Clone,
-	<S as Service<HttpRequest>>::Future: Send,
-	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-	B::Data: Send,
-	B::Error: Into<BoxError>,
+	for<'a> S: RpcServiceT<'a, Error = Error, Response = MethodResponse> + Send + Sync,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].

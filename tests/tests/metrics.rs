@@ -37,15 +37,14 @@ use std::time::Duration;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use helpers::init_logger;
-use jsonrpsee::RpcModule;
+use jsonrpsee::core::middleware::{Batch, Notification, Request, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{ClientError, client::ClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{Server, ServerHandle};
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{MethodResponse, rpc_params};
+use jsonrpsee::{MethodResponse, RpcModule, rpc_params};
 use tokio::time::sleep;
 
 #[derive(Default, Clone)]
@@ -64,9 +63,11 @@ pub struct CounterMiddleware<S> {
 
 impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
 where
-	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	S: RpcServiceT<'a, Response = MethodResponse> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Future = BoxFuture<'a, Result<S::Response, S::Error>>;
+	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, request: Request<'a>) -> Self::Future {
 		let counter = self.counter.clone();
@@ -88,7 +89,7 @@ where
 			{
 				let mut n = counter.lock().unwrap();
 				n.requests.1 += 1;
-				if rp.is_success() {
+				if rp.as_ref().map_or(false, |r| r.is_success()) {
 					n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
 				}
 			}
@@ -96,6 +97,14 @@ where
 			rp
 		}
 		.boxed()
+	}
+
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		self.service.batch(batch).boxed()
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.service.notification(n).boxed()
 	}
 }
 

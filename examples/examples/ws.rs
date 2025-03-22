@@ -27,7 +27,8 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::server::{RpcServiceBuilder, Server};
+use jsonrpsee::core::middleware::RpcServiceBuilder;
+use jsonrpsee::server::Server;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{RpcModule, rpc_params};
 use tracing_subscriber::util::SubscriberInitExt;
