@@ -654,7 +654,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// The builder itself exposes a similar API as the [`tower::ServiceBuilder`]
 	/// where it is possible to compose layers to the middleware.
 	///
-	/// To add a middleware [`crate::RpcServiceBuilder`] exposes a few different layer APIs that
+	/// To add a middleware [`crate::middleware::rpc::RpcServiceBuilder`] exposes a few different layer APIs that
 	/// is wrapped on top of the [`tower::ServiceBuilder`].
 	///
 	/// When the server is started these layers are wrapped in the [`crate::middleware::rpc::RpcService`] and
