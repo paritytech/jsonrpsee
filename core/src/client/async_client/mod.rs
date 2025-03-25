@@ -524,7 +524,7 @@ where
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
-		let request = jsonrpsee_types::Request::new(method.into(), params.as_deref(), id.clone());
+		let request = jsonrpsee_types::Request::borrowed(method.into(), params.as_deref(), id.clone());
 		let fut = self.service.call(request);
 		let rp = self.map_rpc_service_err(fut).await?.into_method_call().expect("Method call response");
 

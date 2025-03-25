@@ -306,7 +306,7 @@ impl Methods {
 		params: Params,
 	) -> Result<T, MethodsError> {
 		let params = params.to_rpc_params()?;
-		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
+		let req = Request::borrowed(method, params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (rp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 
@@ -454,7 +454,7 @@ impl Methods {
 		buf_size: usize,
 	) -> Result<Subscription, MethodsError> {
 		let params = params.to_rpc_params()?;
-		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
+		let req = Request::borrowed(sub_method, params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 
 		tracing::trace!(target: LOG_TARGET, "[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 

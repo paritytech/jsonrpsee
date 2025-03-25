@@ -393,7 +393,7 @@ where
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
-		let request = Request::new(method.into(), params.as_deref(), id.clone());
+		let request = Request::borrowed(method, params.as_deref(), id.clone());
 		let rp =
 			self.transport.call(request).await?.into_method_call().expect("Transport::call must return a method call");
 

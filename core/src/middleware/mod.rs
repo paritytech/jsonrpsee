@@ -232,7 +232,7 @@ mod tests {
 		use super::{BatchEntry, Notification, Request};
 		use jsonrpsee_types::Id;
 
-		let req = Request::new("say_hello".into(), None, Id::Number(1));
+		let req = Request::borrowed("say_hello", None, Id::Number(1));
 		let batch_entry = BatchEntry::Call(req.clone());
 		assert_eq!(
 			serde_json::to_string(&batch_entry).unwrap(),

@@ -35,7 +35,7 @@ use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Method, StatusCode, Uri};
 use jsonrpsee_core::BoxError;
-use jsonrpsee_types::{ErrorCode, ErrorObject, Id, RequestSer};
+use jsonrpsee_types::{ErrorCode, ErrorObject, Id, Request};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -160,8 +160,8 @@ where
 				req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
 
 				// Adjust the body to reflect the method call.
-				let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), method, None))
-					.expect("Valid request; qed");
+				let bytes =
+					serde_json::to_vec(&Request::borrowed(method, None, Id::Number(0))).expect("Valid request; qed");
 				let req = req.map(|_| HttpBody::from(bytes));
 
 				// Call the inner service and get a future that resolves to the response.

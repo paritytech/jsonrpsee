@@ -32,14 +32,17 @@ use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
+use http::Extensions;
 use serde_json::value::RawValue;
 use tokio::sync::oneshot;
 
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, Id, InvalidRequestId, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
+	ErrorObject, Id, InvalidRequestId, Request, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
+	TwoPointZero,
 };
 use serde_json::Value as JsonValue;
+use std::borrow::Cow;
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -257,7 +260,14 @@ pub(crate) fn build_unsubscribe_message(
 	params.insert(sub_id).ok()?;
 	let params = params.to_rpc_params().ok()?;
 
-	let raw = serde_json::to_string(&RequestSer::owned(unsub_req_id.clone(), unsub, params)).ok()?;
+	let raw = serde_json::to_string(&Request {
+		jsonrpc: TwoPointZero,
+		id: unsub_req_id.clone(),
+		method: unsub.into(),
+		params: params.map(Cow::Owned),
+		extensions: Extensions::new(),
+	})
+	.ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 
