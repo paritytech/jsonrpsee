@@ -394,8 +394,8 @@ where
 		let params = params.to_rpc_params()?;
 
 		let request = Request::new(method.into(), params.as_deref(), id.clone());
-		let method_response = self.transport.call(request).await?;
-		let rp = method_response.as_method_call().expect("Transport::call must return a method call");
+		let rp =
+			self.transport.call(request).await?.into_method_call().expect("Transport::call must return a method call");
 
 		let result = rp.decode()?;
 		if rp.id() == &id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id().to_string()).into()) }
@@ -427,8 +427,8 @@ where
 			batch_request.push(BatchEntry::Call(req));
 		}
 
-		let method_response = self.transport.batch(batch_request).await?;
-		let json_rps = method_response.as_batch().expect("Transport::batch must return a batch");
+		let json_rps =
+			self.transport.batch(batch_request).await?.into_batch().expect("Transport::batch must return a batch");
 
 		let mut batch_response = Vec::new();
 		let mut success = 0;
@@ -440,7 +440,16 @@ where
 		}
 
 		for json_rp in json_rps.iter() {
-			let rp: Response<&JsonRawValue> = serde_json::from_str(json_rp.get()).map_err(Error::ParseError)?;
+			let json = match json_rp {
+				Ok(json) => json,
+				Err(e) => {
+					failed += 1;
+					batch_response.push(Err(e.clone()));
+					continue;
+				}
+			};
+
+			let rp: Response<&JsonRawValue> = serde_json::from_str(json.get()).map_err(Error::ParseError)?;
 			let id = rp.id.try_parse_inner_as_number()?;
 
 			let res = match ResponseSuccess::try_from(rp) {

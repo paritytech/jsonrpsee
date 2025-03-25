@@ -25,13 +25,14 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
-use crate::client::async_client::{Notification, LOG_TARGET};
-use crate::client::{subscription_channel, Error, RequestMessage, TransportSenderT, TrySubscriptionSendError};
+use crate::client::async_client::{LOG_TARGET, Notification};
+use crate::client::{Error, RequestMessage, TransportSenderT, TrySubscriptionSendError, subscription_channel};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
+use serde_json::value::RawValue;
 use tokio::sync::oneshot;
 
 use jsonrpsee_types::response::SubscriptionError;
@@ -44,7 +45,7 @@ use std::ops::Range;
 #[derive(Debug, Clone)]
 pub(crate) struct InnerBatchResponse {
 	pub(crate) id: u64,
-	pub(crate) result: Result<JsonValue, ErrorObject<'static>>,
+	pub(crate) result: Result<Box<RawValue>, ErrorObject<'static>>,
 }
 
 /// Attempts to process a batch response.
@@ -173,7 +174,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 /// Returns `Err(_)` if the response couldn't be handled.
 pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
-	response: Response<JsonValue>,
+	response: Response<Box<RawValue>>,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, InvalidRequestId> {
 	let response_id = response.id.clone().into_owned();
@@ -195,16 +196,18 @@ pub(crate) fn process_single_response(
 				.complete_pending_subscription(response_id.clone())
 				.ok_or(InvalidRequestId::NotPendingRequest(response_id.to_string()))?;
 
-			let sub_id = result.map(|r| SubscriptionId::try_from(r).ok());
-
-			let sub_id = match sub_id {
-				Ok(Some(sub_id)) => sub_id,
-				Ok(None) => {
-					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
-					return Ok(None);
-				}
+			let json = match result {
+				Ok(s) => s,
 				Err(e) => {
 					let _ = send_back_oneshot.send(Err(e));
+					return Ok(None);
+				}
+			};
+
+			let sub_id = match serde_json::from_str::<SubscriptionId>(json.get()) {
+				Ok(s) => s.into_owned(),
+				Err(e) => {
+					let _ = send_back_oneshot.send(Err(e.into()));
 					return Ok(None);
 				}
 			};

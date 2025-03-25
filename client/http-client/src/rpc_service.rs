@@ -66,6 +66,8 @@ where
 				extensions.extend(call.into_extensions());
 			}
 
+			let json = json.into_iter().map(Ok).collect();
+
 			Ok(MethodResponse::batch(json, extensions))
 		}
 		.boxed()

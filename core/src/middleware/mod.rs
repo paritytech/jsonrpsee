@@ -23,6 +23,14 @@ pub type ResponseBoxFuture<'a, R, E> = BoxFuture<'a, Result<R, E>>;
 /// Type alias for a batch of JSON-RPC calls and notifications.
 pub type Batch<'a> = Vec<BatchEntry<'a>>;
 
+#[derive(Debug, Clone)]
+/// A marker type to indicate that the request is a subscription for the [`RpcServiceT::call`] method.
+pub struct IsSubscription {
+	pub sub_id: Id<'static>,
+	pub unsub_id: Id<'static>,
+	pub unsub_method: String,
+}
+
 /// A batch entry specific for the [`RpcServiceT::batch`] method to support both
 /// method calls and notifications.
 #[derive(Debug, Clone, Serialize)]

@@ -33,9 +33,6 @@ cfg_async_client! {
 
 pub mod error;
 pub use error::Error;
-use http::Extensions;
-use serde::Deserialize;
-use serde_json::value::RawValue;
 
 use std::fmt;
 use std::ops::Range;
@@ -47,12 +44,16 @@ use tokio::sync::mpsc::error::TrySendError;
 
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
+
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
+use http::Extensions;
+use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Id, SubscriptionId};
+use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
+use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
 
 /// Shared state whether a subscription has lagged or not.
@@ -335,7 +336,7 @@ struct BatchMessage {
 	/// Request IDs.
 	ids: Range<u64>,
 	/// One-shot channel over which we send back the result of this request.
-	send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>,
+	send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, Box<RawValue>>>, Error>>,
 }
 
 /// Request message.
@@ -346,7 +347,7 @@ struct RequestMessage {
 	/// Request ID.
 	id: Id<'static>,
 	/// One-shot channel over which we send back the result of this request.
-	send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
+	send_back: Option<oneshot::Sender<Result<Box<RawValue>, Error>>>,
 }
 
 /// Subscription message.
@@ -650,11 +651,23 @@ fn subscription_channel(max_buf_size: usize) -> (SubscriptionSender, Subscriptio
 	(SubscriptionSender { inner: tx, lagged: lagged_tx }, SubscriptionReceiver { inner: rx, lagged: lagged_rx })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum MethodResponseKind {
 	MethodCall(MethodCall),
+	Subscription(SubscriptionResponse),
 	Notification,
-	Batch(Vec<Box<RawValue>>),
+	Batch(Vec<Result<Box<RawValue>, ErrorObjectOwned>>),
+}
+
+#[derive(Debug)]
+/// Represents an active subscription returned by the server.
+pub struct SubscriptionResponse {
+	/// The ID of the subscription.
+	sub_id: SubscriptionId<'static>,
+	// The receiver is used to receive notifications from the server and shouldn't be exposed to the user
+	// from the middleware.
+	#[doc(hidden)]
+	stream: SubscriptionReceiver,
 }
 
 /// Represents a method call from the server.
@@ -682,7 +695,7 @@ impl MethodCall {
 }
 
 /// Represents a response from the server which can be a method call, notification or batch.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MethodResponse {
 	extensions: Extensions,
 	inner: MethodResponseKind,
@@ -694,13 +707,18 @@ impl MethodResponse {
 		Self { inner: MethodResponseKind::MethodCall(MethodCall { json, id }), extensions }
 	}
 
+	/// Create a new subscription response.
+	pub fn subscription(sub_id: SubscriptionId<'static>, stream: SubscriptionReceiver, extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::Subscription(SubscriptionResponse { sub_id, stream }), extensions }
+	}
+
 	/// Create a new notification response.
 	pub fn notification(extensions: Extensions) -> Self {
 		Self { inner: MethodResponseKind::Notification, extensions }
 	}
 
 	/// Create a new batch response.
-	pub fn batch(json: Vec<Box<RawValue>>, extensions: Extensions) -> Self {
+	pub fn batch(json: Vec<Result<Box<RawValue>, ErrorObjectOwned>>, extensions: Extensions) -> Self {
 		Self { inner: MethodResponseKind::Batch(json), extensions }
 	}
 
@@ -710,21 +728,30 @@ impl MethodResponse {
 			MethodResponseKind::MethodCall(call) => Ok(call.json),
 			MethodResponseKind::Notification => Ok(RawValue::NULL.to_owned()),
 			MethodResponseKind::Batch(json) => serde_json::value::to_raw_value(&json),
+			MethodResponseKind::Subscription(s) => serde_json::value::to_raw_value(&s.sub_id),
 		}
 	}
 
 	/// Get the method call if this response is a method call.
-	pub fn as_method_call(&self) -> Option<&MethodCall> {
-		match &self.inner {
+	pub fn into_method_call(self) -> Option<MethodCall> {
+		match self.inner {
 			MethodResponseKind::MethodCall(call) => Some(call),
 			_ => None,
 		}
 	}
 
 	/// Get the batch if this response is a batch.
-	pub fn as_batch(&self) -> Option<&[Box<RawValue>]> {
-		match &self.inner {
+	pub fn into_batch(self) -> Option<Vec<Result<Box<RawValue>, ErrorObjectOwned>>> {
+		match self.inner {
 			MethodResponseKind::Batch(batch) => Some(batch),
+			_ => None,
+		}
+	}
+
+	/// Get the subscription if this response is a subscription.
+	pub fn into_subscription(self) -> Option<(SubscriptionId<'static>, SubscriptionReceiver)> {
+		match self.inner {
+			MethodResponseKind::Subscription(s) => Some((s.sub_id, s.stream)),
 			_ => None,
 		}
 	}
@@ -742,6 +769,11 @@ impl MethodResponse {
 	/// Returns whether this response is a batch.
 	pub fn is_batch(&self) -> bool {
 		matches!(self.inner, MethodResponseKind::Batch(_))
+	}
+
+	/// Returns whether this response is a subscription.
+	pub fn is_subscription(&self) -> bool {
+		matches!(self.inner, MethodResponseKind::Subscription { .. })
 	}
 
 	/// Returns a reference to the associated extensions.
