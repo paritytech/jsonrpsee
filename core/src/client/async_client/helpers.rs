@@ -26,7 +26,9 @@
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::async_client::{LOG_TARGET, Notification};
-use crate::client::{Error, RequestMessage, TransportSenderT, TrySubscriptionSendError, subscription_channel};
+use crate::client::{
+	Error, JsonValue, RequestMessage, TransportSenderT, TrySubscriptionSendError, subscription_channel,
+};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 
@@ -41,7 +43,6 @@ use jsonrpsee_types::{
 	ErrorObject, Id, InvalidRequestId, Request, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
 	TwoPointZero,
 };
-use serde_json::Value as JsonValue;
 use std::borrow::Cow;
 use std::ops::Range;
 
@@ -97,7 +98,7 @@ pub(crate) fn process_batch_response(
 /// `None` is returned.
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
-	response: SubscriptionResponse<JsonValue>,
+	response: SubscriptionResponse<Box<RawValue>>,
 ) -> Option<SubscriptionId<'static>> {
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {

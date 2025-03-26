@@ -52,13 +52,17 @@ use http::Extensions;
 use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Id, SubscriptionId};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use serde_json::Value as JsonValue;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
 
 /// Shared state whether a subscription has lagged or not.
 #[derive(Debug, Clone)]
 pub(crate) struct SubscriptionLagged(Arc<RwLock<bool>>);
+
+type JsonValue = Box<RawValue>;
+
+//pub(crate) type JsonValue<'a> = std::borrow::Cow<'a, RawValue>;
+//pub(crate) type OwnedJsonValue = std::borrow::Cow<'static, RawValue>;
 
 impl SubscriptionLagged {
 	/// Create a new [`SubscriptionLagged`].
@@ -425,7 +429,7 @@ where
 	type Item = Result<Notif, serde_json::Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let res = match futures_util::ready!(self.rx.poll_next_unpin(cx)) {
-			Some(v) => Some(serde_json::from_value::<Notif>(v).map_err(Into::into)),
+			Some(v) => Some(serde_json::from_str::<Notif>(v.get()).map_err(Into::into)),
 			None => {
 				self.is_closed = true;
 				None
@@ -607,17 +611,17 @@ enum TrySubscriptionSendError {
 	#[error("The subscription is closed")]
 	Closed,
 	#[error("A subscription message was dropped")]
-	TooSlow(JsonValue),
+	TooSlow(Box<RawValue>),
 }
 
 #[derive(Debug)]
 pub(crate) struct SubscriptionSender {
-	inner: mpsc::Sender<JsonValue>,
+	inner: mpsc::Sender<Box<RawValue>>,
 	lagged: SubscriptionLagged,
 }
 
 impl SubscriptionSender {
-	fn send(&self, msg: JsonValue) -> Result<(), TrySubscriptionSendError> {
+	fn send(&self, msg: Box<RawValue>) -> Result<(), TrySubscriptionSendError> {
 		match self.inner.try_send(msg) {
 			Ok(_) => Ok(()),
 			Err(TrySendError::Closed(_)) => Err(TrySubscriptionSendError::Closed),
@@ -631,7 +635,7 @@ impl SubscriptionSender {
 
 #[derive(Debug)]
 pub(crate) struct SubscriptionReceiver {
-	inner: mpsc::Receiver<JsonValue>,
+	inner: mpsc::Receiver<Box<RawValue>>,
 	lagged: SubscriptionLagged,
 }
 

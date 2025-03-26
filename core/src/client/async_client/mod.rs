@@ -69,7 +69,7 @@ use tracing::instrument;
 use self::utils::{InactivityCheck, IntervalStream};
 use super::{FrontToBack, IdKind, MethodResponse, RequestIdManager, generate_batch_id_range, subscription_channel};
 
-pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<serde_json::Value>>;
+pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Box<JsonRawValue>>>;
 
 const LOG_TARGET: &str = "jsonrpsee-client";
 const NOT_POISONED: &str = "Not poisoned; qed";
@@ -524,7 +524,7 @@ where
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
-		let request = jsonrpsee_types::Request::borrowed(method.into(), params.as_deref(), id.clone());
+		let request = Request::borrowed(method.into(), params.as_deref(), id.clone());
 		let fut = self.service.call(request);
 		let rp = self.map_rpc_service_err(fut).await?.into_method_call().expect("Method call response");
 
@@ -544,7 +544,7 @@ where
 			.into_iter()
 			.zip(id_range.clone())
 			.map(|((method, params), id)| {
-				BatchEntry::Call(jsonrpsee_types::Request {
+				BatchEntry::Call(Request {
 					jsonrpc: TwoPointZero,
 					id: self.id_manager.as_id_kind().into_id(id),
 					method: method.into(),
@@ -676,6 +676,8 @@ fn handle_backend_messages<R: TransportReceiverT>(
 	) -> Result<Vec<FrontToBack>, Error> {
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
 		let mut messages = Vec::new();
+
+		tracing::trace!(target: LOG_TARGET, "Received JSON: {}", serde_json::from_slice::<&JsonRawValue>(&raw).map_or("<invalid json>", |v| v.get()));
 
 		match first_non_whitespace {
 			Some(b'{') => {

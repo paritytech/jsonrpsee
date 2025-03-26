@@ -21,11 +21,23 @@ use tokio::sync::{mpsc, oneshot};
 pub enum Error {
 	/// Client error.
 	#[error(transparent)]
-	Client(#[from] crate::client::Error),
+	Client(#[from] ClientError),
 	#[error("Fetch from backend")]
 	/// Internal error state when the underlying channel is closed
 	/// and the error reason needs to be fetched from the backend.
 	FetchFromBackend,
+}
+
+impl From<mpsc::error::SendError<FrontToBack>> for Error {
+	fn from(_: mpsc::error::SendError<FrontToBack>) -> Self {
+		Error::FetchFromBackend
+	}
+}
+
+impl From<oneshot::error::RecvError> for Error {
+	fn from(_: oneshot::error::RecvError) -> Self {
+		Error::FetchFromBackend
+	}
 }
 
 /// RpcService implementation for the async client.
@@ -58,8 +70,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 				Some(sub) => {
 					let (send_back_tx, send_back_rx) = tokio::sync::oneshot::channel();
 
-					if tx
-						.clone()
+					tx.clone()
 						.send(FrontToBack::Subscribe(SubscriptionMessage {
 							raw,
 							subscribe_id: sub.sub_id.clone(),
@@ -67,39 +78,22 @@ impl<'a> RpcServiceT<'a> for RpcService {
 							unsubscribe_method: sub.unsub_method.clone(),
 							send_back: send_back_tx,
 						}))
-						.await
-						.is_err()
-					{
-						return Err(Error::FetchFromBackend);
-					}
+						.await?;
 
-					let (subscribe_rx, sub_id) = match call_with_timeout(request_timeout, send_back_rx).await {
-						Ok(Ok(v)) => v,
-						Ok(Err(err)) => return Err(client_err(err)),
-						Err(_) => return Err(Error::FetchFromBackend),
-					};
+					let (subscribe_rx, sub_id) = call_with_timeout(request_timeout, send_back_rx).await??;
 
 					Ok(MethodResponse::subscription(sub_id, subscribe_rx, request.extensions))
 				}
 				None => {
 					let (send_back_tx, send_back_rx) = oneshot::channel();
 
-					if tx
-						.send(FrontToBack::Request(RequestMessage {
-							raw,
-							send_back: Some(send_back_tx),
-							id: request.id.clone().into_owned(),
-						}))
-						.await
-						.is_err()
-					{
-						return Err(Error::FetchFromBackend);
-					}
-					let rp = match call_with_timeout(request_timeout, send_back_rx).await {
-						Ok(Ok(v)) => v,
-						Ok(Err(err)) => return Err(client_err(err)),
-						Err(_) => return Err(Error::FetchFromBackend),
-					};
+					tx.send(FrontToBack::Request(RequestMessage {
+						raw,
+						send_back: Some(send_back_tx),
+						id: request.id.clone().into_owned(),
+					}))
+					.await?;
+					let rp = call_with_timeout(request_timeout, send_back_rx).await??;
 
 					Ok(MethodResponse::method_call(rp, request.extensions, request.id.clone().into_owned()))
 				}
@@ -129,19 +123,8 @@ impl<'a> RpcServiceT<'a> for RpcService {
 				}
 			};
 
-			if tx
-				.send(FrontToBack::Batch(BatchMessage { raw, ids: first..last, send_back: send_back_tx }))
-				.await
-				.is_err()
-			{
-				return Err(Error::FetchFromBackend);
-			}
-
-			let json = match call_with_timeout(request_timeout, send_back_rx).await {
-				Ok(Ok(v)) => v,
-				Ok(Err(err)) => return Err(client_err(err)),
-				Err(_) => return Err(Error::FetchFromBackend),
-			};
+			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: first..last + 1, send_back: send_back_tx })).await?;
+			let json = call_with_timeout(request_timeout, send_back_rx).await??;
 
 			let mut extensions = Extensions::new();
 
@@ -166,8 +149,8 @@ impl<'a> RpcServiceT<'a> for RpcService {
 
 			match future::select(fut, Delay::new(request_timeout)).await {
 				Either::Left((Ok(()), _)) => Ok(MethodResponse::notification(n.extensions)),
-				Either::Left((Err(_), _)) => todo!(),
-				Either::Right((_, _)) => Err(client_err(ClientError::RequestTimeout)),
+				Either::Left((Err(e), _)) => Err(e.into()),
+				Either::Right((_, _)) => Err(ClientError::RequestTimeout.into()),
 			}
 		}
 		.boxed()
