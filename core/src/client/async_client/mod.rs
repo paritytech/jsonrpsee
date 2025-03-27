@@ -41,7 +41,7 @@ use crate::client::{
 	SubscriptionKind, TransportReceiverT, TransportSenderT,
 };
 use crate::error::RegisterMethodError;
-use crate::middleware::{BatchEntry, IsSubscription, Request, RpcServiceBuilder, RpcServiceT};
+use crate::middleware::{Batch, IsSubscription, Request, RpcServiceBuilder, RpcServiceT};
 use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::traits::ToRpcParams;
 use std::borrow::Cow as StdCow;
@@ -470,6 +470,7 @@ impl<L> Client<L> {
 			Ok(r) => Ok(r),
 			Err(RpcServiceError::Client(e)) => Err(e),
 			Err(RpcServiceError::FetchFromBackend) => Err(self.on_disconnect().await),
+			Err(RpcServiceError::Internal) => Err(Error::Custom("Internal error".to_string())),
 		}
 	}
 
@@ -528,7 +529,7 @@ where
 		let fut = self.service.call(request);
 		let rp = self.map_rpc_service_err(fut).await?.into_method_call().expect("Method call response");
 
-		serde_json::from_str(rp.json.get()).map_err(Error::ParseError)
+		rp.decode().map_err(Into::into)
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
@@ -540,21 +541,19 @@ where
 		let id = self.id_manager.next_request_id();
 		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
 
-		let batch: Vec<_> = batch
-			.into_iter()
-			.zip(id_range.clone())
-			.map(|((method, params), id)| {
-				BatchEntry::Call(Request {
-					jsonrpc: TwoPointZero,
-					id: self.id_manager.as_id_kind().into_id(id),
-					method: method.into(),
-					params: params.map(StdCow::Owned),
-					extensions: Extensions::new(),
-				})
-			})
-			.collect();
+		let mut b = Batch::new();
 
-		let fut = self.service.batch(batch);
+		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+			b.push(Request {
+				jsonrpc: TwoPointZero,
+				id: self.id_manager.as_id_kind().into_id(id),
+				method: method.into(),
+				params: params.map(StdCow::Owned),
+				extensions: Extensions::new(),
+			})?;
+		}
+
+		let fut = self.service.batch(b);
 		let json_values = self.map_rpc_service_err(fut).await?.into_batch().expect("Batch response");
 
 		let mut responses = Vec::with_capacity(json_values.len());
@@ -602,20 +601,16 @@ where
 			return Err(RegisterMethodError::SubscriptionNameConflict(unsubscribe_method.to_owned()).into());
 		}
 
-		let id_sub = self.id_manager.next_request_id();
-		let id_unsub = self.id_manager.next_request_id();
+		let req_id_sub = self.id_manager.next_request_id();
+		let req_id_unsub = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
 		let mut ext = Extensions::new();
-		ext.insert(IsSubscription {
-			sub_id: id_sub.clone(),
-			unsub_id: id_unsub.clone(),
-			unsub_method: unsubscribe_method.to_owned(),
-		});
+		ext.insert(IsSubscription::new(req_id_sub.clone(), req_id_unsub, unsubscribe_method.to_owned()));
 
 		let req = Request {
 			jsonrpc: TwoPointZero,
-			id: id_sub,
+			id: req_id_sub,
 			method: subscribe_method.into(),
 			params: params.map(StdCow::Owned),
 			extensions: ext,

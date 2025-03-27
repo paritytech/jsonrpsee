@@ -62,7 +62,7 @@ where
 
 			let mut extensions = Extensions::new();
 
-			for call in batch {
+			for call in batch.into_iter() {
 				extensions.extend(call.into_extensions());
 			}
 

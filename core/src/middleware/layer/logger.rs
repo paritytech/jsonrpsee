@@ -32,7 +32,7 @@ use std::{
 };
 
 use crate::{
-	middleware::{BatchEntry, Notification, RpcServiceT},
+	middleware::{Batch, BatchEntry, Notification, RpcServiceT},
 	tracing::server::{rx_log_from_json, tx_log_from_str},
 };
 
@@ -60,6 +60,9 @@ impl<S> tower::Layer<S> for RpcLoggerLayer {
 	}
 }
 
+
+
+
 /// A middleware that logs each RPC call and response.
 #[derive(Debug)]
 pub struct RpcLogger<S> {
@@ -85,10 +88,10 @@ where
 	}
 
 	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
-	fn batch(&self, requests: Vec<BatchEntry<'a>>) -> Self::Future {
-		//rx_log_from_json(&requests, self.max);
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		rx_log_from_json(&batch, self.max);
 
-		ResponseFuture::new(self.service.batch(requests), self.max).in_current_span()
+		ResponseFuture::new(self.service.batch(batch), self.max).in_current_span()
 	}
 
 	#[tracing::instrument(name = "notification", skip_all, fields(method = &*n.method), level = "trace")]

@@ -3,9 +3,9 @@ use std::time::Duration;
 use crate::{
 	client::{
 		BatchMessage, Error as ClientError, FrontToBack, MethodResponse, RequestMessage, SubscriptionMessage,
-		async_client::helpers::call_with_timeout,
+		SubscriptionResponse, async_client::helpers::call_with_timeout,
 	},
-	middleware::{Batch, BatchEntry, IsSubscription, Notification, Request, ResponseBoxFuture, RpcServiceT},
+	middleware::{Batch, IsSubscription, Notification, Request, ResponseBoxFuture, RpcServiceT},
 };
 
 use futures_timer::Delay;
@@ -14,6 +14,7 @@ use futures_util::{
 	future::{self, Either},
 };
 use http::Extensions;
+use jsonrpsee_types::InvalidRequestId;
 use tokio::sync::{mpsc, oneshot};
 
 /// RpcService error.
@@ -26,6 +27,9 @@ pub enum Error {
 	/// Internal error state when the underlying channel is closed
 	/// and the error reason needs to be fetched from the backend.
 	FetchFromBackend,
+	/// Internal error
+	#[error("Internal error")]
+	Internal,
 }
 
 impl From<mpsc::error::SendError<FrontToBack>> for Error {
@@ -49,6 +53,8 @@ pub struct RpcService {
 
 impl RpcService {
 	/// Create a new RpcService instance.
+	#[doc(hidden)]
+	#[allow(private_interfaces)]
 	pub fn new(tx: mpsc::Sender<FrontToBack>, request_timeout: Duration) -> Self {
 		Self { tx, request_timeout }
 	}
@@ -73,16 +79,19 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					tx.clone()
 						.send(FrontToBack::Subscribe(SubscriptionMessage {
 							raw,
-							subscribe_id: sub.sub_id.clone(),
-							unsubscribe_id: sub.unsub_id.clone(),
-							unsubscribe_method: sub.unsub_method.clone(),
+							subscribe_id: sub.sub_req_id(),
+							unsubscribe_id: sub.unsub_req_id(),
+							unsubscribe_method: sub.unsubscribe_method().to_owned(),
 							send_back: send_back_tx,
 						}))
 						.await?;
 
 					let (subscribe_rx, sub_id) = call_with_timeout(request_timeout, send_back_rx).await??;
 
-					Ok(MethodResponse::subscription(sub_id, subscribe_rx, request.extensions))
+					Ok(MethodResponse::subscription(
+						SubscriptionResponse { sub_id, stream: subscribe_rx },
+						request.extensions,
+					))
 				}
 				None => {
 					let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -110,20 +119,11 @@ impl<'a> RpcServiceT<'a> for RpcService {
 			let (send_back_tx, send_back_rx) = oneshot::channel();
 
 			let raw = serde_json::to_string(&batch).map_err(client_err)?;
-			let first = {
-				match batch.first() {
-					Some(&BatchEntry::Call(ref r)) => r.id.clone().into_owned().try_parse_inner_as_number().unwrap(),
-					_ => unreachable!("Only method calls are allowed in batch requests"),
-				}
-			};
-			let last = {
-				match batch.last() {
-					Some(&BatchEntry::Call(ref r)) => r.id.clone().into_owned().try_parse_inner_as_number().unwrap(),
-					_ => unreachable!("Only method calls are allowed in batch requests"),
-				}
-			};
+			let id_range = batch.id_range().ok_or(ClientError::InvalidRequestId(InvalidRequestId::Invalid(
+				"Batch request id range missing".to_owned(),
+			)))?;
 
-			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: first..last + 1, send_back: send_back_tx })).await?;
+			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx })).await?;
 			let json = call_with_timeout(request_timeout, send_back_rx).await??;
 
 			let mut extensions = Extensions::new();

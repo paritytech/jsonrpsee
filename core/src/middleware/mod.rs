@@ -3,7 +3,7 @@
 pub mod layer;
 
 use futures_util::future::{BoxFuture, Either, Future};
-use jsonrpsee_types::Id;
+use jsonrpsee_types::{Id, InvalidRequestId};
 use pin_project::pin_project;
 use serde::Serialize;
 use serde_json::value::RawValue;
@@ -20,15 +20,114 @@ pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, Raw
 pub use jsonrpsee_types::{Extensions, Request};
 /// Type alias for a boxed future that resolves to Result<R, E>.
 pub type ResponseBoxFuture<'a, R, E> = BoxFuture<'a, Result<R, E>>;
-/// Type alias for a batch of JSON-RPC calls and notifications.
-pub type Batch<'a> = Vec<BatchEntry<'a>>;
+
+/// A batch of JSON-RPC calls and notifications.
+#[derive(Clone, Debug)]
+pub struct Batch<'a> {
+	inner: Vec<BatchEntry<'a>>,
+	id_range: Option<std::ops::Range<u64>>,
+}
+
+impl Serialize for Batch<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		// Serialize the batch entries directly without the Batch wrapper.
+		serde::Serialize::serialize(&self.inner, serializer)
+	}
+}
+
+impl<'a> std::fmt::Display for Batch<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = serde_json::to_string(&self.inner).expect("Batch serialization failed");
+		f.write_str(&s)
+	}
+}
+
+impl<'a> Batch<'a> {
+	/// Create a new empty batch.
+	pub fn new() -> Self {
+		Self { inner: Vec::new(), id_range: None }
+	}
+
+	/// Create a new batch from a list of batch entries without an id range.
+	pub fn from_batch_entries(inner: Vec<BatchEntry<'a>>) -> Self {
+		Self { inner, id_range: None }
+	}
+
+	/// Insert a new batch entry into the batch.
+	///
+	/// Fails if the request id is not a number or the id range overflows.
+	pub fn push(&mut self, req: Request<'a>) -> Result<(), InvalidRequestId> {
+		let id = req.id().try_parse_inner_as_number()?;
+
+		match self.id_range {
+			Some(ref mut range) => {
+				debug_assert!(id + 1 > range.end);
+				range.end =
+					id.checked_add(1).ok_or_else(|| InvalidRequestId::Invalid("Id range overflow".to_string()))?;
+			}
+			None => {
+				self.id_range = Some(id..id);
+			}
+		}
+		self.inner.push(BatchEntry::Call(req));
+
+		Ok(())
+	}
+
+	/// Mutable iterator over the batch entries.
+	pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, BatchEntry<'a>> {
+		self.inner.iter_mut()
+	}
+
+	/// Immutable iterator over the batch entries.
+	pub fn iter(&self) -> std::slice::Iter<'_, BatchEntry<'a>> {
+		self.inner.iter()
+	}
+
+	/// Consume the batch and return batch entries.
+	pub fn into_iter(self) -> std::vec::IntoIter<BatchEntry<'a>> {
+		self.inner.into_iter()
+	}
+
+	/// Get the id range of the batch.
+	///
+	/// This is only available if the batch has been constructed using `Batch::push`.
+	pub fn id_range(&self) -> Option<std::ops::Range<u64>> {
+		self.id_range.clone()
+	}
+}
 
 #[derive(Debug, Clone)]
 /// A marker type to indicate that the request is a subscription for the [`RpcServiceT::call`] method.
 pub struct IsSubscription {
-	pub sub_id: Id<'static>,
-	pub unsub_id: Id<'static>,
-	pub unsub_method: String,
+	sub_id: Id<'static>,
+	unsub_id: Id<'static>,
+	unsub_method: String,
+}
+
+impl IsSubscription {
+	/// Create a new [`IsSubscription`] instance.
+	pub fn new(sub_id: Id<'static>, unsub_id: Id<'static>, unsub_method: String) -> Self {
+		Self { sub_id, unsub_id, unsub_method }
+	}
+
+	/// Get the request id of the subscription calls.
+	pub fn sub_req_id(&self) -> Id<'static> {
+		self.sub_id.clone()
+	}
+
+	/// Get the request id of the unsubscription call.
+	pub fn unsub_req_id(&self) -> Id<'static> {
+		self.unsub_id.clone()
+	}
+
+	/// Get the unsubscription method name.
+	pub fn unsubscribe_method(&self) -> &str {
+		&self.unsub_method
+	}
 }
 
 /// A batch entry specific for the [`RpcServiceT::batch`] method to support both

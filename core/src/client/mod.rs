@@ -663,14 +663,13 @@ enum MethodResponseKind {
 	Batch(Vec<Result<Box<RawValue>, ErrorObjectOwned>>),
 }
 
-#[derive(Debug)]
 /// Represents an active subscription returned by the server.
+#[derive(Debug)]
 pub struct SubscriptionResponse {
 	/// The ID of the subscription.
 	sub_id: SubscriptionId<'static>,
 	// The receiver is used to receive notifications from the server and shouldn't be exposed to the user
 	// from the middleware.
-	#[doc(hidden)]
 	stream: SubscriptionReceiver,
 }
 
@@ -712,8 +711,8 @@ impl MethodResponse {
 	}
 
 	/// Create a new subscription response.
-	pub fn subscription(sub_id: SubscriptionId<'static>, stream: SubscriptionReceiver, extensions: Extensions) -> Self {
-		Self { inner: MethodResponseKind::Subscription(SubscriptionResponse { sub_id, stream }), extensions }
+	pub fn subscription(sub: SubscriptionResponse, extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::Subscription(sub), extensions }
 	}
 
 	/// Create a new notification response.

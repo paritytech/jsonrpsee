@@ -40,7 +40,7 @@ use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
 	generate_batch_id_range,
 };
-use jsonrpsee_core::middleware::{BatchEntry, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{Batch, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
@@ -414,7 +414,7 @@ where
 		let id = self.id_manager.next_request_id();
 		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
 
-		let mut batch_request = Vec::with_capacity(batch.len());
+		let mut batch_request = Batch::new();
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
 			let id = self.id_manager.as_id_kind().into_id(id);
 			let req = Request {
@@ -424,7 +424,7 @@ where
 				id,
 				extensions: Extensions::new(),
 			};
-			batch_request.push(BatchEntry::Call(req));
+			batch_request.push(req)?;
 		}
 
 		let json_rps =

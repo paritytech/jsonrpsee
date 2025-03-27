@@ -150,20 +150,20 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		}
 	}
 
-	fn batch(&self, reqs: Vec<BatchEntry<'a>>) -> Self::Future {
-		let mut batch = BatchResponseBuilder::new_with_limit(self.max_response_body_size);
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		let mut batch_rp = BatchResponseBuilder::new_with_limit(self.max_response_body_size);
 		let service = self.clone();
 		async move {
 			let mut got_notification = false;
 
-			for batch_entry in reqs {
+			for batch_entry in batch.into_iter() {
 				match batch_entry {
 					BatchEntry::Call(req) => {
 						let rp = match service.call(req).await {
 							Ok(rp) => rp,
 							Err(e) => match e {},
 						};
-						if let Err(err) = batch.append(rp) {
+						if let Err(err) = batch_rp.append(rp) {
 							return Ok(err);
 						}
 					}
@@ -176,7 +176,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					}
 					BatchEntry::InvalidRequest(id) => {
 						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest));
-						if let Err(err) = batch.append(rp) {
+						if let Err(err) = batch_rp.append(rp) {
 							return Ok(err);
 						}
 					}
@@ -184,12 +184,12 @@ impl<'a> RpcServiceT<'a> for RpcService {
 			}
 
 			// If the batch is empty and we got a notification, we return an empty response.
-			if batch.is_empty() && got_notification {
+			if batch_rp.is_empty() && got_notification {
 				Ok(MethodResponse::notification())
 			}
 			// An empty batch is regarded as an invalid request here.
 			else {
-				Ok(MethodResponse::from_batch(batch.finish()))
+				Ok(MethodResponse::from_batch(batch_rp.finish()))
 			}
 		}
 		.boxed()

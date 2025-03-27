@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use hyper::body::Bytes;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{BatchEntry, Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
@@ -53,9 +53,9 @@ where
 		self.0.call(req)
 	}
 
-	fn batch(&self, reqs: Vec<BatchEntry<'a>>) -> Self::Future {
-		println!("logger layer : {:?}", reqs);
-		self.0.batch(reqs)
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		println!("logger layer : {:?}", batch);
+		self.0.batch(batch)
 	}
 
 	fn notification(&self, n: Notification<'a>) -> Self::Future {
