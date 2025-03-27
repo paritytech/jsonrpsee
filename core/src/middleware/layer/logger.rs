@@ -32,7 +32,7 @@ use std::{
 };
 
 use crate::{
-	middleware::{Batch, BatchEntry, Notification, RpcServiceT},
+	middleware::{Batch, Notification, RpcServiceT},
 	tracing::server::{rx_log_from_json, tx_log_from_str},
 };
 
@@ -59,9 +59,6 @@ impl<S> tower::Layer<S> for RpcLoggerLayer {
 		RpcLogger { service, max: self.0 }
 	}
 }
-
-
-
 
 /// A middleware that logs each RPC call and response.
 #[derive(Debug)]

@@ -186,7 +186,6 @@ pub struct ClientBuilder<L = Identity> {
 	max_concurrent_requests: usize,
 	max_buffer_capacity_per_subscription: usize,
 	id_kind: IdKind,
-	max_log_length: u32,
 	ping_config: Option<PingConfig>,
 	tcp_no_delay: bool,
 	service_builder: RpcServiceBuilder<L>,
@@ -199,10 +198,9 @@ impl Default for ClientBuilder<Identity> {
 			max_concurrent_requests: 256,
 			max_buffer_capacity_per_subscription: 1024,
 			id_kind: IdKind::Number,
-			max_log_length: 4096,
 			ping_config: None,
 			tcp_no_delay: true,
-			service_builder: RpcServiceBuilder::new(),
+			service_builder: RpcServiceBuilder::default(),
 		}
 	}
 }
@@ -248,14 +246,6 @@ impl<L> ClientBuilder<L> {
 		self
 	}
 
-	/// Set maximum length for logging calls and responses.
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub fn set_max_logging_length(mut self, max: u32) -> Self {
-		self.max_log_length = max;
-		self
-	}
-
 	/// Enable WebSocket ping/pong on the client.
 	///
 	/// This only works if the transport supports WebSocket pings.
@@ -291,7 +281,6 @@ impl<L> ClientBuilder<L> {
 			max_concurrent_requests: self.max_concurrent_requests,
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
 			id_kind: self.id_kind,
-			max_log_length: self.max_log_length,
 			ping_config: self.ping_config,
 			tcp_no_delay: self.tcp_no_delay,
 			service_builder,
@@ -368,7 +357,6 @@ impl<L> ClientBuilder<L> {
 			request_timeout: self.request_timeout,
 			error: ErrorFromBack::new(to_back, disconnect_reason),
 			id_manager: RequestIdManager::new(self.id_kind),
-			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
 		}
 	}
@@ -442,10 +430,6 @@ pub struct Client<L> {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: RequestIdManager,
-	/// Max length for logging for requests and responses.
-	///
-	/// Entries bigger than this limit will be truncated.
-	max_log_length: u32,
 	/// When the client is dropped a message is sent to the background thread.
 	on_exit: Option<oneshot::Sender<()>>,
 	service: L,
@@ -470,7 +454,6 @@ impl<L> Client<L> {
 			Ok(r) => Ok(r),
 			Err(RpcServiceError::Client(e)) => Err(e),
 			Err(RpcServiceError::FetchFromBackend) => Err(self.on_disconnect().await),
-			Err(RpcServiceError::Internal) => Err(Error::Custom("Internal error".to_string())),
 		}
 	}
 

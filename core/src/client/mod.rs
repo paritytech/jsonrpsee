@@ -736,6 +736,7 @@ impl MethodResponse {
 	}
 
 	/// Get the method call if this response is a method call.
+	#[doc(hidden)]
 	pub fn into_method_call(self) -> Option<MethodCall> {
 		match self.inner {
 			MethodResponseKind::MethodCall(call) => Some(call),
@@ -744,6 +745,7 @@ impl MethodResponse {
 	}
 
 	/// Get the batch if this response is a batch.
+	#[doc(hidden)]
 	pub fn into_batch(self) -> Option<Vec<Result<Box<RawValue>, ErrorObjectOwned>>> {
 		match self.inner {
 			MethodResponseKind::Batch(batch) => Some(batch),
@@ -752,7 +754,8 @@ impl MethodResponse {
 	}
 
 	/// Get the subscription if this response is a subscription.
-	pub fn into_subscription(self) -> Option<(SubscriptionId<'static>, SubscriptionReceiver)> {
+	#[doc(hidden)]
+	fn into_subscription(self) -> Option<(SubscriptionId<'static>, SubscriptionReceiver)> {
 		match self.inner {
 			MethodResponseKind::Subscription(s) => Some((s.sub_id, s.stream)),
 			_ => None,

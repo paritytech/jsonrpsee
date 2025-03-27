@@ -84,7 +84,7 @@ use jsonrpsee_client_transport::ws::CertificateStore;
 ///
 /// ```
 #[derive(Clone, Debug)]
-pub struct WsClientBuilder<RpcMiddleware> {
+pub struct WsClientBuilder<RpcMiddleware = Identity> {
 	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	max_request_size: u32,
@@ -97,7 +97,6 @@ pub struct WsClientBuilder<RpcMiddleware> {
 	max_buffer_capacity_per_subscription: usize,
 	max_redirections: usize,
 	id_kind: IdKind,
-	max_log_length: u32,
 	tcp_no_delay: bool,
 	service_builder: RpcServiceBuilder<RpcMiddleware>,
 }
@@ -117,7 +116,6 @@ impl Default for WsClientBuilder<Identity> {
 			max_buffer_capacity_per_subscription: 1024,
 			max_redirections: 5,
 			id_kind: IdKind::Number,
-			max_log_length: 4096,
 			tcp_no_delay: true,
 			service_builder: RpcServiceBuilder::default(),
 		}
@@ -264,14 +262,6 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 		self
 	}
 
-	/// Set maximum length for logging calls and responses.
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub fn set_max_logging_length(mut self, max: u32) -> Self {
-		self.max_log_length = max;
-		self
-	}
-
 	/// See documentation [`ClientBuilder::set_tcp_no_delay`] (default is true).
 	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
 		self.tcp_no_delay = no_delay;
@@ -292,7 +282,6 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
 			max_redirections: self.max_redirections,
 			id_kind: self.id_kind,
-			max_log_length: self.max_log_length,
 			tcp_no_delay: self.tcp_no_delay,
 			service_builder,
 		}
@@ -315,7 +304,6 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			ping_config,
 			max_buffer_capacity_per_subscription,
 			id_kind,
-			max_log_length,
 			tcp_no_delay,
 			service_builder,
 			..
@@ -326,7 +314,6 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)
-			.set_max_logging_length(max_log_length)
 			.set_tcp_no_delay(tcp_no_delay)
 			.set_rpc_middleware(service_builder);
 

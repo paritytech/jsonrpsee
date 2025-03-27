@@ -85,7 +85,6 @@ pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Identity
 	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
-	max_log_length: u32,
 	headers: HeaderMap,
 	service_builder: tower::ServiceBuilder<HttpMiddleware>,
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
@@ -195,14 +194,6 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 		self
 	}
 
-	/// Max length for logging for requests and responses in number characters.
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub fn set_max_logging_length(mut self, max: u32) -> Self {
-		self.max_log_length = max;
-		self
-	}
-
 	/// Set a custom header passed to the server with every request (default is none).
 	///
 	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
@@ -226,7 +217,6 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
 			headers: self.headers,
-			max_log_length: self.max_log_length,
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			service_builder: self.service_builder,
@@ -247,7 +237,6 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
 			headers: self.headers,
-			max_log_length: self.max_log_length,
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			service_builder,
@@ -279,7 +268,6 @@ where
 			certificate_store,
 			id_kind,
 			headers,
-			max_log_length,
 			service_builder,
 			tcp_no_delay,
 			rpc_middleware,
@@ -290,7 +278,6 @@ where
 			max_request_size,
 			max_response_size,
 			headers,
-			max_log_length,
 			tcp_no_delay,
 			service_builder,
 			#[cfg(feature = "tls")]
@@ -308,6 +295,7 @@ where
 			transport: rpc_middleware.service(RpcService::new(http)),
 			id_manager: Arc::new(RequestIdManager::new(id_kind)),
 			request_guard,
+			request_timeout,
 		})
 	}
 }
@@ -321,7 +309,6 @@ impl Default for HttpClientBuilder<Identity> {
 			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
-			max_log_length: 4096,
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
 			rpc_middleware: RpcServiceBuilder::default(),
@@ -347,6 +334,8 @@ pub struct HttpClient<S> {
 	id_manager: Arc<RequestIdManager>,
 	/// Concurrent requests limit guard.
 	request_guard: Option<Arc<Semaphore>>,
+	/// Request timeout.
+	request_timeout: Duration,
 }
 
 impl HttpClient<HttpBackend> {
@@ -357,7 +346,7 @@ impl HttpClient<HttpBackend> {
 
 	/// Returns configured request timeout.
 	pub fn request_timeout(&self) -> Duration {
-		todo!();
+		self.request_timeout
 	}
 }
 

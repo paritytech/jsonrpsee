@@ -27,9 +27,6 @@ pub enum Error {
 	/// Internal error state when the underlying channel is closed
 	/// and the error reason needs to be fetched from the backend.
 	FetchFromBackend,
-	/// Internal error
-	#[error("Internal error")]
-	Internal,
 }
 
 impl From<mpsc::error::SendError<FrontToBack>> for Error {
@@ -52,10 +49,10 @@ pub struct RpcService {
 }
 
 impl RpcService {
-	/// Create a new RpcService instance.
-	#[doc(hidden)]
+	// This is a private interface but we need to expose it for the async client
+	// to be able to create the service.
 	#[allow(private_interfaces)]
-	pub fn new(tx: mpsc::Sender<FrontToBack>, request_timeout: Duration) -> Self {
+	pub(crate) fn new(tx: mpsc::Sender<FrontToBack>, request_timeout: Duration) -> Self {
 		Self { tx, request_timeout }
 	}
 }
