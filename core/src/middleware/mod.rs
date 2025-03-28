@@ -22,7 +22,7 @@ pub use jsonrpsee_types::{Extensions, Request};
 pub type ResponseBoxFuture<'a, R, E> = BoxFuture<'a, Result<R, E>>;
 
 /// A batch of JSON-RPC calls and notifications.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Batch<'a> {
 	inner: Vec<BatchEntry<'a>>,
 	id_range: Option<std::ops::Range<u64>>,
@@ -48,7 +48,7 @@ impl<'a> std::fmt::Display for Batch<'a> {
 impl<'a> Batch<'a> {
 	/// Create a new empty batch.
 	pub fn new() -> Self {
-		Self { inner: Vec::new(), id_range: None }
+		Self::default()
 	}
 
 	/// Create a new batch from a list of batch entries without an id range.
@@ -235,7 +235,7 @@ pub trait RpcServiceT<'a> {
 	fn notification(&self, n: Notification<'a>) -> Self::Future;
 }
 
-/// I
+/// Interface for types that can be converted into a JSON value.
 pub trait IntoJson {
 	/// Convert the type into a JSON value.
 	fn into_json(self) -> Result<Box<RawValue>, serde_json::Error>;

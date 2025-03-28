@@ -63,9 +63,6 @@ type JsonValue = Box<RawValue>;
 pub(crate) type Response = jsonrpsee_types::Response<'static, Box<RawValue>>;
 pub(crate) type ResponseResult = Result<Response, jsonrpsee_types::params::InvalidRequestId>;
 
-//pub(crate) type JsonValue<'a> = std::borrow::Cow<'a, RawValue>;
-//pub(crate) type OwnedJsonValue = std::borrow::Cow<'static, RawValue>;
-
 impl SubscriptionLagged {
 	/// Create a new [`SubscriptionLagged`].
 	pub(crate) fn new() -> Self {
@@ -431,7 +428,7 @@ where
 	type Item = Result<Notif, serde_json::Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let res = match futures_util::ready!(self.rx.poll_next_unpin(cx)) {
-			Some(v) => Some(serde_json::from_str::<Notif>(v.get()).map_err(Into::into)),
+			Some(v) => Some(serde_json::from_str::<Notif>(v.get())),
 			None => {
 				self.is_closed = true;
 				None

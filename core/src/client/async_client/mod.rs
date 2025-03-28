@@ -505,7 +505,7 @@ where
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
-		let request = Request::borrowed(method.into(), params.as_deref(), id.clone());
+		let request = Request::borrowed(method, params.as_deref(), id.clone());
 		let fut = self.service.call(request);
 		let rp = self.map_rpc_service_err(fut).await?.into_method_call().expect("Method call response");
 		let success = ResponseSuccess::try_from(rp)?;
@@ -650,7 +650,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 		let first_non_whitespace = raw.iter().find(|byte| !byte.is_ascii_whitespace());
 		let mut messages = Vec::new();
 
-		tracing::trace!(target: LOG_TARGET, "Received JSON: {}", serde_json::from_slice::<&JsonRawValue>(&raw).map_or("<invalid json>", |v| v.get()));
+		tracing::trace!(target: LOG_TARGET, "rx: {}", serde_json::from_slice::<&JsonRawValue>(raw).map_or("<invalid json>", |v| v.get()));
 
 		match first_non_whitespace {
 			Some(b'{') => {
@@ -764,7 +764,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		FrontToBack::Batch(batch) => {
 			if let Err(send_back) = manager.lock().insert_pending_batch(batch.ids.clone(), batch.send_back) {
 				tracing::debug!(target: LOG_TARGET, "Batch request already pending: {:?}", batch.ids);
-				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!("{:?}", batch.ids)).into()));
+				let _ = send_back.send(Err(InvalidRequestId::Occupied(format!("{:?}", batch.ids))));
 				return Ok(());
 			}
 
@@ -780,7 +780,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				tracing::debug!(target: LOG_TARGET, "Denied duplicate method call");
 
 				if let Some(s) = send_back {
-					let _ = s.send(Err(InvalidRequestId::Occupied(request.id.to_string()).into()));
+					let _ = s.send(Err(InvalidRequestId::Occupied(request.id.to_string())));
 				}
 				return Ok(());
 			}

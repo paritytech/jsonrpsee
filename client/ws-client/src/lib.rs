@@ -273,6 +273,7 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 	/// Set the RPC service builder.
 	pub fn set_rpc_middleware<T>(self, service_builder: RpcServiceBuilder<T>) -> WsClientBuilder<T> {
 		WsClientBuilder {
+			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store,
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,

@@ -253,8 +253,7 @@ mod test {
 
 		for (ser, id, params, method) in test_vector.iter().cloned() {
 			let request =
-				serde_json::to_string(&Request::borrowed(method.into(), params.as_deref(), id.unwrap_or(Id::Null)))
-					.unwrap();
+				serde_json::to_string(&Request::borrowed(method, params.as_deref(), id.unwrap_or(Id::Null))).unwrap();
 
 			assert_eq!(&request, ser);
 		}
