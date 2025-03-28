@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
 			.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
 	);
 
-	let rpc = RpcServiceBuilder::new().layer_fn(|service| Logger(service));
+	let rpc = RpcServiceBuilder::new().layer_fn(|service| Logger(service)).rpc_logger(1024);
 
 	let client = HttpClient::builder().set_http_middleware(middleware).set_rpc_middleware(rpc).build(url)?;
 	let params = rpc_params![1_u64, 2, 3];

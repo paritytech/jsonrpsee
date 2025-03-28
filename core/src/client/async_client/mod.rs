@@ -34,7 +34,7 @@ mod utils;
 pub use rpc_service::{Error as RpcServiceError, RpcService};
 
 use crate::JsonRawValue;
-use crate::client::async_client::helpers::{InnerBatchResponse, process_subscription_close_response};
+use crate::client::async_client::helpers::process_subscription_close_response;
 use crate::client::async_client::utils::MaybePendingFutures;
 use crate::client::{
 	BatchResponse, ClientT, Error, ReceivedMessage, RegisterNotificationMessage, Subscription, SubscriptionClientT,
@@ -52,7 +52,7 @@ use futures_util::Stream;
 use futures_util::future::{self, Either};
 use futures_util::stream::StreamExt;
 use helpers::{
-	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
+	build_unsubscribe_message, call_with_timeout_sub, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
 use http::Extensions;
@@ -64,7 +64,6 @@ use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tower::layer::util::Identity;
-use tracing::instrument;
 
 use self::utils::{InactivityCheck, IntervalStream};
 use super::{FrontToBack, IdKind, MethodResponse, RequestIdManager, generate_batch_id_range, subscription_channel};
@@ -486,7 +485,6 @@ impl<L> ClientT for Client<L>
 where
 	for<'a> L: RpcServiceT<'a, Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
 {
-	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
 	where
 		Params: ToRpcParams + Send,
@@ -499,7 +497,6 @@ where
 		Ok(())
 	}
 
-	#[instrument(name = "method_call", skip(self, params), level = "trace")]
 	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
@@ -511,11 +508,11 @@ where
 		let request = Request::borrowed(method.into(), params.as_deref(), id.clone());
 		let fut = self.service.call(request);
 		let rp = self.map_rpc_service_err(fut).await?.into_method_call().expect("Method call response");
+		let success = ResponseSuccess::try_from(rp)?;
 
-		rp.decode().map_err(Into::into)
+		serde_json::from_str(success.result.get()).map_err(Into::into)
 	}
 
-	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
 		R: DeserializeOwned,
@@ -544,9 +541,9 @@ where
 		let mut failed_calls = 0;
 
 		for json_val in json_values {
-			match json_val {
+			match ResponseSuccess::try_from(json_val) {
 				Ok(val) => {
-					let result: R = serde_json::from_str(val.get()).map_err(Error::ParseError)?;
+					let result: R = serde_json::from_str(val.result.get()).map_err(Error::ParseError)?;
 					responses.push(Ok(result));
 					successful_calls += 1;
 				}
@@ -569,7 +566,6 @@ where
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	#[instrument(name = "subscription", fields(method = subscribe_method), skip(self, params, subscribe_method, unsubscribe_method), level = "trace")]
 	async fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
@@ -607,7 +603,6 @@ where
 	}
 
 	/// Subscribe to a specific method.
-	#[instrument(name = "subscribe_method", skip(self), level = "trace")]
 	async fn subscribe_to_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
@@ -626,7 +621,7 @@ where
 			return Err(self.on_disconnect().await);
 		}
 
-		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+		let res = call_with_timeout_sub(self.request_timeout, send_back_rx).await;
 
 		let (rx, method) = match res {
 			Ok(Ok(val)) => val,
@@ -696,8 +691,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 					for r in raw_responses {
 						if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
 							let id = response.id.try_parse_inner_as_number()?;
-							let result = ResponseSuccess::try_from(response).map(|s| s.result);
-							batch.push(InnerBatchResponse { id, result });
+							batch.push(response.into_owned());
 
 							let r = range.get_or_insert(id..id);
 

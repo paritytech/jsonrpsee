@@ -7,7 +7,7 @@ use jsonrpsee_core::{
 	client::{Error, MethodResponse},
 	middleware::{Batch, Notification, Request, RpcServiceT},
 };
-use jsonrpsee_types::{Response, ResponseSuccess};
+use jsonrpsee_types::Response;
 use tower::Service;
 
 use crate::{
@@ -46,8 +46,7 @@ where
 			let raw = serde_json::to_string(&request)?;
 			let bytes = service.send_and_read_body(raw).await.map_err(|e| Error::Transport(e.into()))?;
 			let json_rp: Response<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
-			let success = ResponseSuccess::try_from(json_rp)?;
-			Ok(MethodResponse::method_call(success.result, request.extensions, success.id.into_owned()))
+			Ok(MethodResponse::method_call(json_rp.into_owned(), request.extensions))
 		}
 		.boxed()
 	}
@@ -58,7 +57,10 @@ where
 		async move {
 			let raw = serde_json::to_string(&batch)?;
 			let bytes = service.send_and_read_body(raw).await.map_err(|e| Error::Transport(e.into()))?;
-			let json: Vec<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
+			let rp: Vec<_> = serde_json::from_slice::<Vec<Response<Box<JsonRawValue>>>>(&bytes)?
+				.into_iter()
+				.map(|r| r.into_owned())
+				.collect();
 
 			let mut extensions = Extensions::new();
 
@@ -66,9 +68,7 @@ where
 				extensions.extend(call.into_extensions());
 			}
 
-			let json = json.into_iter().map(Ok).collect();
-
-			Ok(MethodResponse::batch(json, extensions))
+			Ok(MethodResponse::batch(rp, extensions))
 		}
 		.boxed()
 	}

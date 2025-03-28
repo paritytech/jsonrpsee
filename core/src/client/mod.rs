@@ -49,8 +49,7 @@ use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
 use http::Extensions;
-use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Id, SubscriptionId};
-use serde::Deserialize;
+use jsonrpsee_types::{ErrorObject, Id, InvalidRequestId, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
@@ -60,6 +59,9 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) struct SubscriptionLagged(Arc<RwLock<bool>>);
 
 type JsonValue = Box<RawValue>;
+
+pub(crate) type Response = jsonrpsee_types::Response<'static, Box<RawValue>>;
+pub(crate) type ResponseResult = Result<Response, jsonrpsee_types::params::InvalidRequestId>;
 
 //pub(crate) type JsonValue<'a> = std::borrow::Cow<'a, RawValue>;
 //pub(crate) type OwnedJsonValue = std::borrow::Cow<'static, RawValue>;
@@ -340,7 +342,7 @@ struct BatchMessage {
 	/// Request IDs.
 	ids: Range<u64>,
 	/// One-shot channel over which we send back the result of this request.
-	send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, Box<RawValue>>>, Error>>,
+	send_back: oneshot::Sender<Result<Vec<Response>, InvalidRequestId>>,
 }
 
 /// Request message.
@@ -351,7 +353,7 @@ struct RequestMessage {
 	/// Request ID.
 	id: Id<'static>,
 	/// One-shot channel over which we send back the result of this request.
-	send_back: Option<oneshot::Sender<Result<Box<RawValue>, Error>>>,
+	send_back: Option<oneshot::Sender<ResponseResult>>,
 }
 
 /// Subscription message.
@@ -657,10 +659,10 @@ fn subscription_channel(max_buf_size: usize) -> (SubscriptionSender, Subscriptio
 
 #[derive(Debug)]
 enum MethodResponseKind {
-	MethodCall(MethodCall),
+	MethodCall(Response),
 	Subscription(SubscriptionResponse),
 	Notification,
-	Batch(Vec<Result<Box<RawValue>, ErrorObjectOwned>>),
+	Batch(Vec<Response>),
 }
 
 /// Represents an active subscription returned by the server.
@@ -671,30 +673,8 @@ pub struct SubscriptionResponse {
 	// The receiver is used to receive notifications from the server and shouldn't be exposed to the user
 	// from the middleware.
 	stream: SubscriptionReceiver,
-}
-
-/// Represents a method call from the server.
-#[derive(Debug, Clone)]
-pub struct MethodCall {
-	json: Box<RawValue>,
-	id: Id<'static>,
-}
-
-impl MethodCall {
-	/// Consume the method call and return the raw JSON value.
-	pub fn into_json(self) -> Box<RawValue> {
-		self.json
-	}
-
-	/// Get the ID of the method call.
-	pub fn id(&self) -> &Id<'static> {
-		&self.id
-	}
-
-	/// Decode the JSON value into the desired type.
-	pub fn decode<'a, T: Deserialize<'a>>(&'a self) -> Result<T, serde_json::Error> {
-		serde_json::from_str(self.json.get())
-	}
+	/// Response
+	rp: Response,
 }
 
 /// Represents a response from the server which can be a method call, notification or batch.
@@ -706,8 +686,8 @@ pub struct MethodResponse {
 
 impl MethodResponse {
 	/// Create a new method response.
-	pub fn method_call(json: Box<RawValue>, extensions: Extensions, id: Id<'static>) -> Self {
-		Self { inner: MethodResponseKind::MethodCall(MethodCall { json, id }), extensions }
+	pub fn method_call(rp: Response, extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::MethodCall(rp), extensions }
 	}
 
 	/// Create a new subscription response.
@@ -721,23 +701,23 @@ impl MethodResponse {
 	}
 
 	/// Create a new batch response.
-	pub fn batch(json: Vec<Result<Box<RawValue>, ErrorObjectOwned>>, extensions: Extensions) -> Self {
+	pub fn batch(json: Vec<Response>, extensions: Extensions) -> Self {
 		Self { inner: MethodResponseKind::Batch(json), extensions }
 	}
 
-	/// Consume the response and return the raw JSON value.
-	pub fn into_json(self) -> Result<Box<RawValue>, serde_json::Error> {
+	/// Get the raw JSON value.
+	pub fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
 		match self.inner {
-			MethodResponseKind::MethodCall(call) => Ok(call.json),
+			MethodResponseKind::MethodCall(ref call) => serde_json::value::to_raw_value(&call),
 			MethodResponseKind::Notification => Ok(RawValue::NULL.to_owned()),
-			MethodResponseKind::Batch(json) => serde_json::value::to_raw_value(&json),
-			MethodResponseKind::Subscription(s) => serde_json::value::to_raw_value(&s.sub_id),
+			MethodResponseKind::Batch(ref json) => serde_json::value::to_raw_value(&json),
+			MethodResponseKind::Subscription(ref s) => serde_json::value::to_raw_value(&s.rp),
 		}
 	}
 
 	/// Get the method call if this response is a method call.
 	#[doc(hidden)]
-	pub fn into_method_call(self) -> Option<MethodCall> {
+	pub fn into_method_call(self) -> Option<Response> {
 		match self.inner {
 			MethodResponseKind::MethodCall(call) => Some(call),
 			_ => None,
@@ -746,7 +726,7 @@ impl MethodResponse {
 
 	/// Get the batch if this response is a batch.
 	#[doc(hidden)]
-	pub fn into_batch(self) -> Option<Vec<Result<Box<RawValue>, ErrorObjectOwned>>> {
+	pub fn into_batch(self) -> Option<Vec<Response>> {
 		match self.inner {
 			MethodResponseKind::Batch(batch) => Some(batch),
 			_ => None,
@@ -790,5 +770,12 @@ impl MethodResponse {
 	/// Returns a mutable reference to the associated extensions.
 	pub fn extensions_mut(&mut self) -> &mut Extensions {
 		&mut self.extensions
+	}
+}
+
+impl std::fmt::Display for MethodResponse {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let json = self.to_json().expect("JSON serialization failed");
+		f.write_str(json.get())
 	}
 }

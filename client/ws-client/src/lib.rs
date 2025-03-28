@@ -122,12 +122,14 @@ impl Default for WsClientBuilder<Identity> {
 	}
 }
 
-impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
+impl WsClientBuilder<Identity> {
 	/// Create a new WebSocket client builder.
 	pub fn new() -> WsClientBuilder<Identity> {
 		WsClientBuilder::default()
 	}
+}
 
+impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 	/// Force to use a custom certificate store.
 	///
 	/// # Optional

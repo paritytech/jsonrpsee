@@ -46,18 +46,12 @@ use jsonrpsee_types::{
 use std::borrow::Cow;
 use std::ops::Range;
 
-#[derive(Debug, Clone)]
-pub(crate) struct InnerBatchResponse {
-	pub(crate) id: u64,
-	pub(crate) result: Result<Box<RawValue>, ErrorObject<'static>>,
-}
-
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
 pub(crate) fn process_batch_response(
 	manager: &mut RequestManager,
-	rps: Vec<InnerBatchResponse>,
+	rps: Vec<Response<'static, Box<RawValue>>>,
 	range: Range<u64>,
 ) -> Result<(), InvalidRequestId> {
 	let mut responses = Vec::with_capacity(rps.len());
@@ -74,15 +68,16 @@ pub(crate) fn process_batch_response(
 
 	for _ in range {
 		let err_obj = ErrorObject::borrowed(0, "", None);
-		responses.push(Err(err_obj));
+		responses.push(Response::new(jsonrpsee_types::ResponsePayload::error(err_obj), Id::Null));
 	}
 
 	for rp in rps {
+		let id = rp.id.try_parse_inner_as_number()?;
 		let maybe_elem =
-			rp.id.checked_sub(start_idx).and_then(|p| p.try_into().ok()).and_then(|p: usize| responses.get_mut(p));
+			id.checked_sub(start_idx).and_then(|p| p.try_into().ok()).and_then(|p: usize| responses.get_mut(p));
 
 		if let Some(elem) = maybe_elem {
-			*elem = rp.result;
+			*elem = rp;
 		} else {
 			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()));
 		}
@@ -182,7 +177,6 @@ pub(crate) fn process_single_response(
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, InvalidRequestId> {
 	let response_id = response.id.clone().into_owned();
-	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(Error::Call);
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
@@ -192,7 +186,7 @@ pub(crate) fn process_single_response(
 				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string())),
 			};
 
-			let _ = send_back_oneshot.send(result);
+			let _ = send_back_oneshot.send(Ok(response.into_owned()));
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
@@ -200,10 +194,12 @@ pub(crate) fn process_single_response(
 				.complete_pending_subscription(response_id.clone())
 				.ok_or(InvalidRequestId::NotPendingRequest(response_id.to_string()))?;
 
+			let result = ResponseSuccess::try_from(response);
+
 			let json = match result {
-				Ok(s) => s,
+				Ok(s) => s.result,
 				Err(e) => {
-					let _ = send_back_oneshot.send(Err(e));
+					let _ = send_back_oneshot.send(Err(Error::Call(e)));
 					return Ok(None);
 				}
 			};
@@ -275,10 +271,23 @@ pub(crate) fn build_unsubscribe_message(
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
 	timeout: std::time::Duration,
+	rx: oneshot::Receiver<Result<T, InvalidRequestId>>,
+) -> Result<Result<T, Error>, oneshot::error::RecvError> {
+	match future::select(rx, Delay::new(timeout)).await {
+		Either::Left((Ok(Ok(r)), _)) => Ok(Ok(r)),
+		Either::Left((Ok(Err(e)), _)) => Ok(Err(Error::InvalidRequestId(e))),
+		Either::Left((Err(e), _)) => Err(e),
+		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
+	}
+}
+
+/// Wait for a stream to complete within the given timeout.
+pub(crate) async fn call_with_timeout_sub<T>(
+	timeout: std::time::Duration,
 	rx: oneshot::Receiver<Result<T, Error>>,
 ) -> Result<Result<T, Error>, oneshot::error::RecvError> {
 	match future::select(rx, Delay::new(timeout)).await {
-		Either::Left((res, _)) => res,
+		Either::Left((r, _)) => r,
 		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
 	}
 }

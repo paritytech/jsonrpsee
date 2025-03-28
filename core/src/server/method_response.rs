@@ -75,6 +75,12 @@ impl AsRef<str> for MethodResponse {
 	}
 }
 
+impl std::fmt::Display for MethodResponse {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.result)
+	}
+}
+
 impl MethodResponse {
 	/// Returns whether the call was successful.
 	pub fn is_success(&self) -> bool {

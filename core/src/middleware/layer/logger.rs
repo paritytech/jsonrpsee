@@ -33,7 +33,7 @@ use std::{
 
 use crate::{
 	middleware::{Batch, Notification, RpcServiceT},
-	tracing::server::{rx_log_from_json, tx_log_from_str},
+	tracing::truncate_at_char_boundary,
 };
 
 use futures_util::Future;
@@ -71,7 +71,7 @@ impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a>,
 	S::Error: std::fmt::Debug + Send,
-	S::Response: AsRef<str>,
+	S::Response: std::fmt::Display,
 {
 	type Future = Instrumented<ResponseFuture<S::Future>>;
 	type Error = S::Error;
@@ -79,21 +79,24 @@ where
 
 	#[tracing::instrument(name = "method_call", skip_all, fields(method = request.method_name()), level = "trace")]
 	fn call(&self, request: Request<'a>) -> Self::Future {
-		rx_log_from_json(&request, self.max);
+		let json = serde_json::to_string(&request).unwrap_or_default();
+		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(&json, self.max as usize));
 
 		ResponseFuture::new(self.service.call(request), self.max).in_current_span()
 	}
 
 	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
 	fn batch(&self, batch: Batch<'a>) -> Self::Future {
-		rx_log_from_json(&batch, self.max);
+		let json = serde_json::to_string(&batch).unwrap_or_default();
+		tracing::trace!(target: "jsonrpsee", "batch request = {}", truncate_at_char_boundary(&json, self.max as usize));
 
 		ResponseFuture::new(self.service.batch(batch), self.max).in_current_span()
 	}
 
 	#[tracing::instrument(name = "notification", skip_all, fields(method = &*n.method), level = "trace")]
 	fn notification(&self, n: Notification<'a>) -> Self::Future {
-		rx_log_from_json(&n, self.max);
+		let json = serde_json::to_string(&n).unwrap_or_default();
+		tracing::trace!(target: "jsonrpsee", "notification = {}", truncate_at_char_boundary(&json, self.max as usize));
 
 		ResponseFuture::new(self.service.notification(n), self.max).in_current_span()
 	}
@@ -123,7 +126,7 @@ impl<F> std::fmt::Debug for ResponseFuture<F> {
 impl<F, R, E> Future for ResponseFuture<F>
 where
 	F: Future<Output = Result<R, E>>,
-	R: AsRef<str>,
+	R: std::fmt::Display,
 	E: std::fmt::Debug,
 {
 	type Output = F::Output;
@@ -134,7 +137,8 @@ where
 
 		match fut.poll(cx) {
 			Poll::Ready(Ok(rp)) => {
-				tx_log_from_str(&rp, max);
+				let json = rp.to_string();
+				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(&json, max as usize));
 				Poll::Ready(Ok(rp))
 			}
 			Poll::Ready(Err(e)) => Poll::Ready(Err(e)),

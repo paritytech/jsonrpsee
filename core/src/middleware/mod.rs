@@ -235,6 +235,12 @@ pub trait RpcServiceT<'a> {
 	fn notification(&self, n: Notification<'a>) -> Self::Future;
 }
 
+/// I
+pub trait IntoJson {
+	/// Convert the type into a JSON value.
+	fn into_json(self) -> Result<Box<RawValue>, serde_json::Error>;
+}
+
 /// Similar to [`tower::ServiceBuilder`] but doesn't
 /// support any tower middleware implementations.
 #[derive(Debug, Clone)]

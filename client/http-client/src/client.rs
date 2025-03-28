@@ -31,7 +31,6 @@ use std::time::Duration;
 
 use crate::rpc_service::RpcService;
 use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClientBuilder};
-use crate::types::Response;
 use crate::{HttpRequest, HttpResponse};
 use async_trait::async_trait;
 use hyper::body::Bytes;
@@ -43,13 +42,12 @@ use jsonrpsee_core::client::{
 use jsonrpsee_core::middleware::{Batch, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
-use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{BoxError, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::{ErrorObject, InvalidRequestId, Notification, Request, ResponseSuccess, TwoPointZero};
 use serde::de::DeserializeOwned;
 use tokio::sync::Semaphore;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
-use tracing::instrument;
 
 #[cfg(feature = "tls")]
 use crate::{CertificateStore, CustomCertStore};
@@ -355,7 +353,6 @@ impl<S> ClientT for HttpClient<S>
 where
 	for<'a> S: RpcServiceT<'a, Error = Error, Response = MethodResponse> + Send + Sync,
 {
-	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
 	where
 		Params: ToRpcParams + Send,
@@ -369,7 +366,6 @@ where
 		Ok(())
 	}
 
-	#[instrument(name = "method_call", skip(self, params), level = "trace")]
 	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
@@ -385,12 +381,12 @@ where
 		let request = Request::borrowed(method, params.as_deref(), id.clone());
 		let rp =
 			self.transport.call(request).await?.into_method_call().expect("Transport::call must return a method call");
+		let rp = ResponseSuccess::try_from(rp)?;
 
-		let result = rp.decode()?;
-		if rp.id() == &id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id().to_string()).into()) }
+		let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
+		if rp.id == id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into()) }
 	}
 
-	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
@@ -428,17 +424,7 @@ where
 			batch_response.push(Err(ErrorObject::borrowed(0, "", None)));
 		}
 
-		for json_rp in json_rps.iter() {
-			let json = match json_rp {
-				Ok(json) => json,
-				Err(e) => {
-					failed += 1;
-					batch_response.push(Err(e.clone()));
-					continue;
-				}
-			};
-
-			let rp: Response<&JsonRawValue> = serde_json::from_str(json.get()).map_err(Error::ParseError)?;
+		for rp in json_rps.into_iter() {
 			let id = rp.id.try_parse_inner_as_number()?;
 
 			let res = match ResponseSuccess::try_from(rp) {
@@ -476,7 +462,6 @@ where
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].
-	#[instrument(name = "subscription", fields(method = _subscribe_method), skip(self, _params, _subscribe_method, _unsubscribe_method), level = "trace")]
 	async fn subscribe<'a, N, Params>(
 		&self,
 		_subscribe_method: &'a str,
@@ -491,7 +476,6 @@ where
 	}
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
-	#[instrument(name = "subscribe_method", fields(method = _method), skip(self, _method), level = "trace")]
 	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,

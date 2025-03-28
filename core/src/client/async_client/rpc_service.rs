@@ -14,8 +14,10 @@ use futures_util::{
 	future::{self, Either},
 };
 use http::Extensions;
-use jsonrpsee_types::InvalidRequestId;
+use jsonrpsee_types::{InvalidRequestId, Response, ResponsePayload};
 use tokio::sync::{mpsc, oneshot};
+
+use super::helpers::call_with_timeout_sub;
 
 /// RpcService error.
 #[derive(Debug, thiserror::Error)]
@@ -83,10 +85,16 @@ impl<'a> RpcServiceT<'a> for RpcService {
 						}))
 						.await?;
 
-					let (subscribe_rx, sub_id) = call_with_timeout(request_timeout, send_back_rx).await??;
+					let (subscribe_rx, sub_id) = call_with_timeout_sub(request_timeout, send_back_rx).await??;
+
+					let s = serde_json::value::to_raw_value(&sub_id).map_err(client_err)?;
 
 					Ok(MethodResponse::subscription(
-						SubscriptionResponse { sub_id, stream: subscribe_rx },
+						SubscriptionResponse {
+							rp: Response::new(ResponsePayload::success(s), request.id.clone().into_owned()),
+							sub_id,
+							stream: subscribe_rx,
+						},
 						request.extensions,
 					))
 				}
@@ -101,7 +109,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 					.await?;
 					let rp = call_with_timeout(request_timeout, send_back_rx).await??;
 
-					Ok(MethodResponse::method_call(rp, request.extensions, request.id.clone().into_owned()))
+					Ok(MethodResponse::method_call(rp, request.extensions))
 				}
 			}
 		}
