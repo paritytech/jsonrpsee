@@ -33,15 +33,14 @@ use std::sync::Arc;
 use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
-use crate::server::method_response::MethodResponse;
 use crate::server::subscription::{
-	sub_message_to_json, BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
-	SubNotifResultOrError, Subscribers, Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit,
-	SubscriptionState,
+	BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubNotifResultOrError, Subscribers,
+	Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit, SubscriptionState,
+	sub_message_to_json,
 };
-use crate::server::{ResponsePayload, LOG_TARGET};
+use crate::server::{LOG_TARGET, MethodResponse, ResponsePayload};
 use crate::traits::ToRpcParams;
-use futures_util::{future::BoxFuture, FutureExt};
+use futures_util::{FutureExt, future::BoxFuture};
 use http::Extensions;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_types::{
@@ -307,7 +306,7 @@ impl Methods {
 		params: Params,
 	) -> Result<T, MethodsError> {
 		let params = params.to_rpc_params()?;
-		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
+		let req = Request::borrowed(method, params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (rp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 
@@ -455,7 +454,7 @@ impl Methods {
 		buf_size: usize,
 	) -> Result<Subscription, MethodsError> {
 		let params = params.to_rpc_params()?;
-		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
+		let req = Request::borrowed(sub_method, params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 
 		tracing::trace!(target: LOG_TARGET, "[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 

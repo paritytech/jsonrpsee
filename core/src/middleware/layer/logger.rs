@@ -31,16 +31,15 @@ use std::{
 	task::{Context, Poll},
 };
 
-use futures_util::Future;
-use jsonrpsee_core::{
-	server::MethodResponse,
-	tracing::server::{rx_log_from_json, tx_log_from_str},
+use crate::{
+	middleware::{Batch, Notification, RpcServiceT},
+	tracing::truncate_at_char_boundary,
 };
+
+use futures_util::Future;
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
 use tracing::{Instrument, instrument::Instrumented};
-
-use crate::middleware::rpc::RpcServiceT;
 
 /// RPC logger layer.
 #[derive(Copy, Clone, Debug)]
@@ -71,14 +70,35 @@ pub struct RpcLogger<S> {
 impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a>,
+	S::Error: std::fmt::Debug + Send,
+	S::Response: std::fmt::Display,
 {
 	type Future = Instrumented<ResponseFuture<S::Future>>;
+	type Error = S::Error;
+	type Response = S::Response;
 
 	#[tracing::instrument(name = "method_call", skip_all, fields(method = request.method_name()), level = "trace")]
 	fn call(&self, request: Request<'a>) -> Self::Future {
-		rx_log_from_json(&request, self.max);
+		let json = serde_json::to_string(&request).unwrap_or_default();
+		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(&json, self.max as usize));
 
-		ResponseFuture { fut: self.service.call(request), max: self.max }.in_current_span()
+		ResponseFuture::new(self.service.call(request), self.max).in_current_span()
+	}
+
+	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		let json = serde_json::to_string(&batch).unwrap_or_default();
+		tracing::trace!(target: "jsonrpsee", "batch request = {}", truncate_at_char_boundary(&json, self.max as usize));
+
+		ResponseFuture::new(self.service.batch(batch), self.max).in_current_span()
+	}
+
+	#[tracing::instrument(name = "notification", skip_all, fields(method = &*n.method), level = "trace")]
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		let json = serde_json::to_string(&n).unwrap_or_default();
+		tracing::trace!(target: "jsonrpsee", "notification = {}", truncate_at_char_boundary(&json, self.max as usize));
+
+		ResponseFuture::new(self.service.notification(n), self.max).in_current_span()
 	}
 }
 
@@ -90,23 +110,39 @@ pub struct ResponseFuture<F> {
 	max: u32,
 }
 
+impl<F> ResponseFuture<F> {
+	/// Create a new response future.
+	fn new(fut: F, max: u32) -> Self {
+		Self { fut, max }
+	}
+}
+
 impl<F> std::fmt::Debug for ResponseFuture<F> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_str("ResponseFuture")
 	}
 }
 
-impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
+impl<F, R, E> Future for ResponseFuture<F>
+where
+	F: Future<Output = Result<R, E>>,
+	R: std::fmt::Display,
+	E: std::fmt::Debug,
+{
 	type Output = F::Output;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		let max = self.max;
 		let fut = self.project().fut;
 
-		let res = fut.poll(cx);
-		if let Poll::Ready(rp) = &res {
-			tx_log_from_str(rp.as_result(), max);
+		match fut.poll(cx) {
+			Poll::Ready(Ok(rp)) => {
+				let json = rp.to_string();
+				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(&json, max as usize));
+				Poll::Ready(Ok(rp))
+			}
+			Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+			Poll::Pending => Poll::Pending,
 		}
-		res
 	}
 }

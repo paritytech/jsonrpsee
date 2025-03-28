@@ -26,15 +26,13 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::ConnectionId;
-use jsonrpsee::Extensions;
-use jsonrpsee::core::SubscriptionResult;
-use jsonrpsee::core::async_trait;
+use jsonrpsee::core::middleware::{Batch, Notification, Request, RpcServiceT};
+use jsonrpsee::core::{SubscriptionResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::{ConnectionId, Extensions};
 
 #[rpc(server, client)]
 pub trait Rpc {
@@ -53,12 +51,22 @@ struct LoggingMiddleware<S>(S);
 
 impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LoggingMiddleware<S> {
 	type Future = S::Future;
+	type Error = S::Error;
+	type Response = S::Response;
 
-	fn call(&self, request: jsonrpsee::types::Request<'a>) -> Self::Future {
+	fn call(&self, request: Request<'a>) -> Self::Future {
 		tracing::info!("Received request: {:?}", request);
 		assert!(request.extensions().get::<ConnectionId>().is_some());
 
 		self.0.call(request)
+	}
+
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		self.0.batch(batch)
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		self.0.notification(n)
 	}
 }
 

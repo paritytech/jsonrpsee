@@ -24,13 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::{BoundedWriter, LOG_TARGET};
+//! Represent a method response.
+
+const LOG_TARGET: &str = "jsonrpsee-core";
+
+use std::io;
 use std::task::Poll;
 
 use futures_util::{Future, FutureExt};
 use http::Extensions;
 use jsonrpsee_types::error::{
-	reject_too_big_batch_response, ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
+	ErrorCode, ErrorObject, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, reject_too_big_batch_response,
 };
 use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload as InnerResponsePayload};
 use serde::Serialize;
@@ -41,6 +45,7 @@ enum ResponseKind {
 	MethodCall,
 	Subscription,
 	Batch,
+	Notification,
 }
 
 /// Represents a response to a method call.
@@ -64,6 +69,18 @@ pub struct MethodResponse {
 	extensions: Extensions,
 }
 
+impl AsRef<str> for MethodResponse {
+	fn as_ref(&self) -> &str {
+		self.as_result()
+	}
+}
+
+impl std::fmt::Display for MethodResponse {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.result)
+	}
+}
+
 impl MethodResponse {
 	/// Returns whether the call was successful.
 	pub fn is_success(&self) -> bool {
@@ -83,6 +100,11 @@ impl MethodResponse {
 	/// Returns whether the response is a method response.
 	pub fn is_method_call(&self) -> bool {
 		matches!(self.kind, ResponseKind::MethodCall)
+	}
+
+	/// Returns whether the response is a notification response.
+	pub fn is_notification(&self) -> bool {
+		matches!(self.kind, ResponseKind::Notification)
 	}
 
 	/// Returns whether the response is a batch response.
@@ -226,12 +248,23 @@ impl MethodResponse {
 		}
 	}
 
+	/// Create notification response which is a response that doesn't expect a reply.
+	pub fn notification() -> Self {
+		Self {
+			result: String::new(),
+			success_or_error: MethodResponseResult::Success,
+			kind: ResponseKind::Notification,
+			on_close: None,
+			extensions: Extensions::new(),
+		}
+	}
+
 	/// Returns a reference to the associated extensions.
 	pub fn extensions(&self) -> &Extensions {
 		&self.extensions
 	}
 
-	/// Returns a reference to the associated extensions.
+	/// Returns a mut reference to the associated extensions.
 	pub fn extensions_mut(&mut self) -> &mut Extensions {
 		&mut self.extensions
 	}
@@ -440,11 +473,11 @@ pub struct MethodResponseFuture(tokio::sync::oneshot::Receiver<NotifyMsg>);
 /// was succesful or not.
 #[derive(Debug, Copy, Clone)]
 pub enum NotifyMsg {
-	/// The response was succesfully processed.
+	/// The response was successfully processed.
 	Ok,
 	/// The response was the wrong kind
 	/// such an error response when
-	/// one expected a succesful response.
+	/// one expected a successful response.
 	Err,
 }
 
@@ -470,10 +503,44 @@ impl Future for MethodResponseFuture {
 	}
 }
 
+/// Bounded writer that allows writing at most `max_len` bytes.
+#[derive(Debug, Clone)]
+struct BoundedWriter {
+	max_len: usize,
+	buf: Vec<u8>,
+}
+
+impl BoundedWriter {
+	/// Create a new bounded writer.
+	pub fn new(max_len: usize) -> Self {
+		Self { max_len, buf: Vec::with_capacity(128) }
+	}
+
+	/// Consume the writer and extract the written bytes.
+	pub fn into_bytes(self) -> Vec<u8> {
+		self.buf
+	}
+}
+
+impl io::Write for &mut BoundedWriter {
+	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+		let len = self.buf.len() + buf.len();
+		if self.max_len >= len {
+			self.buf.extend_from_slice(buf);
+			Ok(buf.len())
+		} else {
+			Err(io::Error::new(io::ErrorKind::OutOfMemory, "Memory capacity exceeded"))
+		}
+	}
+
+	fn flush(&mut self) -> io::Result<()> {
+		Ok(())
+	}
+}
+
 #[cfg(test)]
 mod tests {
-	use super::{BatchResponseBuilder, MethodResponse, ResponsePayload};
-	use jsonrpsee_types::Id;
+	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, ResponsePayload};
 
 	#[test]
 	fn batch_with_single_works() {
@@ -522,5 +589,24 @@ mod tests {
 
 		let exp_err = r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32011,"message":"The batch response was too large","data":"Exceeded max limit of 63"}}"#;
 		assert_eq!(batch.result, exp_err);
+	}
+
+	#[test]
+	fn bounded_serializer_work() {
+		use jsonrpsee_types::{Response, ResponsePayload};
+
+		let mut writer = BoundedWriter::new(100);
+		let result = ResponsePayload::success(&"success");
+		let rp = &Response::new(result, Id::Number(1));
+
+		assert!(serde_json::to_writer(&mut writer, rp).is_ok());
+		assert_eq!(String::from_utf8(writer.into_bytes()).unwrap(), r#"{"jsonrpc":"2.0","id":1,"result":"success"}"#);
+	}
+
+	#[test]
+	fn bounded_serializer_cap_works() {
+		let mut writer = BoundedWriter::new(100);
+		// NOTE: `"` is part of the serialization so 101 characters.
+		assert!(serde_json::to_writer(&mut writer, &"x".repeat(99)).is_err());
 	}
 }

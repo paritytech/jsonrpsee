@@ -99,7 +99,7 @@ pub mod server {
 }
 
 /// Find the next char boundary to truncate at.
-fn truncate_at_char_boundary(s: &str, max: usize) -> &str {
+pub fn truncate_at_char_boundary(s: &str, max: usize) -> &str {
 	if s.len() < max {
 		return s;
 	}

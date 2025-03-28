@@ -32,8 +32,8 @@
 //! such as `Arc<Mutex>`
 
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{Batch, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
-use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{MethodResponse, RpcModule, rpc_params};
@@ -82,12 +82,15 @@ impl<S> RateLimit<S> {
 
 impl<'a, S> RpcServiceT<'a> for RateLimit<S>
 where
-	S: Send + RpcServiceT<'a>,
+	S: Send + RpcServiceT<'a, Response = MethodResponse> + 'static,
+	S::Error: Send,
 {
 	// Instead of `Boxing` the future in this example
 	// we are using a jsonrpsee's ResponseFuture future
 	// type to avoid those extra allocations.
-	type Future = ResponseFuture<S::Future>;
+	type Future = ResponseFuture<S::Future, Self::Response, Self::Error>;
+	type Error = S::Error;
+	type Response = S::Response;
 
 	fn call(&self, req: Request<'a>) -> Self::Future {
 		let now = Instant::now();
@@ -125,6 +128,14 @@ where
 		} else {
 			ResponseFuture::future(self.service.call(req))
 		}
+	}
+
+	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+		ResponseFuture::future(self.service.batch(batch))
+	}
+
+	fn notification(&self, n: Notification<'a>) -> Self::Future {
+		ResponseFuture::future(self.service.notification(n))
 	}
 }
 
