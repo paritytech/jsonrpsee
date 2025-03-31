@@ -128,7 +128,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 			builder.insert(1u64).unwrap();
 			builder.insert(2u32).unwrap();
 			let params = builder.to_rpc_params().expect("Valid params");
-			let request = Request::borrowed(&"say_hello", params.as_deref(), Id::Number(0));
+			let request = Request::borrowed("say_hello", params.as_deref(), Id::Number(0));
 			v2_serialize(request);
 		})
 	});
@@ -150,7 +150,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 			let mut builder = ObjectParams::new();
 			builder.insert("key", 1u32).unwrap();
 			let params = builder.to_rpc_params().expect("Valid params");
-			let request = Request::borrowed(&"say_hello", params.as_deref(), Id::Number(0));
+			let request = Request::borrowed("say_hello", params.as_deref(), Id::Number(0));
 			v2_serialize(request);
 		})
 	});

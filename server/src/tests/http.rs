@@ -76,7 +76,7 @@ where
 	}
 
 	fn batch(&self, mut batch: Batch<'a>) -> Self::Future {
-		if let Some(last) = batch.iter_mut().last() {
+		if let Some(last) = batch.as_mut_batch_entries().last_mut() {
 			if last.method_name().contains("err") {
 				last.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
 			} else {

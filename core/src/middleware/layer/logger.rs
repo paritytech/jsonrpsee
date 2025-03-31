@@ -32,7 +32,7 @@ use std::{
 };
 
 use crate::{
-	middleware::{Batch, Notification, RpcServiceT},
+	middleware::{Batch, Notification, RpcServiceT, ToJson},
 	tracing::truncate_at_char_boundary,
 };
 
@@ -71,7 +71,7 @@ impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
 where
 	S: RpcServiceT<'a>,
 	S::Error: std::fmt::Debug + Send,
-	S::Response: std::fmt::Display,
+	S::Response: ToJson,
 {
 	type Future = Instrumented<ResponseFuture<S::Future>>;
 	type Error = S::Error;
@@ -126,7 +126,7 @@ impl<F> std::fmt::Debug for ResponseFuture<F> {
 impl<F, R, E> Future for ResponseFuture<F>
 where
 	F: Future<Output = Result<R, E>>,
-	R: std::fmt::Display,
+	R: ToJson,
 	E: std::fmt::Debug,
 {
 	type Output = F::Output;
@@ -137,8 +137,9 @@ where
 
 		match fut.poll(cx) {
 			Poll::Ready(Ok(rp)) => {
-				let json = rp.to_string();
-				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(&json, max as usize));
+				let as_json = rp.to_json();
+				let json = as_json.as_ref().map_or("<invalid JSON>", |j| j.as_str());
+				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(json, max as usize));
 				Poll::Ready(Ok(rp))
 			}
 			Poll::Ready(Err(e)) => Poll::Ready(Err(e)),

@@ -156,7 +156,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		async move {
 			let mut got_notification = false;
 
-			for batch_entry in batch.into_iter() {
+			for batch_entry in batch.into_batch_entries() {
 				match batch_entry {
 					BatchEntry::Call(req) => {
 						let rp = match service.call(req).await {

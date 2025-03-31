@@ -381,7 +381,7 @@ where
 		let request = Request::borrowed(method, params.as_deref(), id.clone());
 		let rp =
 			self.transport.call(request).await?.into_method_call().expect("Transport::call must return a method call");
-		let rp = ResponseSuccess::try_from(rp)?;
+		let rp = ResponseSuccess::try_from(rp.into_inner())?;
 
 		let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
 		if rp.id == id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into()) }
@@ -425,9 +425,9 @@ where
 		}
 
 		for rp in json_rps.into_iter() {
-			let id = rp.id.try_parse_inner_as_number()?;
+			let id = rp.id().try_parse_inner_as_number()?;
 
-			let res = match ResponseSuccess::try_from(rp) {
+			let res = match ResponseSuccess::try_from(rp.into_inner()) {
 				Ok(r) => {
 					let v = serde_json::from_str(r.result.get()).map_err(Error::ParseError)?;
 					success += 1;

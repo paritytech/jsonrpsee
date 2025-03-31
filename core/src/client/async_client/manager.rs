@@ -38,7 +38,7 @@ use std::{
 };
 
 use crate::{
-	client::{Error, Response, ResponseResult, SubscriptionReceiver, SubscriptionSender},
+	client::{Error, RawResponseOwned, SubscriptionReceiver, SubscriptionSender},
 	error::RegisterMethodError,
 };
 use jsonrpsee_types::{Id, InvalidRequestId, SubscriptionId};
@@ -65,8 +65,8 @@ pub(crate) enum RequestStatus {
 	Invalid,
 }
 
-type PendingCallOneshot = Option<oneshot::Sender<ResponseResult>>;
-type PendingBatchOneshot = oneshot::Sender<Result<Vec<Response>, InvalidRequestId>>;
+type PendingCallOneshot = Option<oneshot::Sender<Result<RawResponseOwned, InvalidRequestId>>>;
+type PendingBatchOneshot = oneshot::Sender<Result<Vec<RawResponseOwned>, InvalidRequestId>>;
 type PendingSubscriptionOneshot = oneshot::Sender<Result<(SubscriptionReceiver, SubscriptionId<'static>), Error>>;
 type SubscriptionSink = SubscriptionSender;
 type UnsubscribeMethod = String;

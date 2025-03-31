@@ -40,6 +40,8 @@ use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload as InnerRe
 use serde::Serialize;
 use serde_json::value::to_raw_value;
 
+use crate::middleware::ToJson;
+
 #[derive(Debug, Clone)]
 enum ResponseKind {
 	MethodCall,
@@ -72,6 +74,12 @@ pub struct MethodResponse {
 impl AsRef<str> for MethodResponse {
 	fn as_ref(&self) -> &str {
 		self.as_result()
+	}
+}
+
+impl ToJson for MethodResponse {
+	fn to_json(&self) -> Result<String, serde_json::Error> {
+		Ok(self.result.clone())
 	}
 }
 

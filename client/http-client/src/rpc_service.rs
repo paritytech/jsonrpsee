@@ -46,7 +46,7 @@ where
 			let raw = serde_json::to_string(&request)?;
 			let bytes = service.send_and_read_body(raw).await.map_err(|e| Error::Transport(e.into()))?;
 			let json_rp: Response<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
-			Ok(MethodResponse::method_call(json_rp.into_owned(), request.extensions))
+			Ok(MethodResponse::method_call(json_rp.into_owned().into(), request.extensions))
 		}
 		.boxed()
 	}
@@ -59,12 +59,12 @@ where
 			let bytes = service.send_and_read_body(raw).await.map_err(|e| Error::Transport(e.into()))?;
 			let rp: Vec<_> = serde_json::from_slice::<Vec<Response<Box<JsonRawValue>>>>(&bytes)?
 				.into_iter()
-				.map(|r| r.into_owned())
+				.map(|r| r.into_owned().into())
 				.collect();
 
 			let mut extensions = Extensions::new();
 
-			for call in batch.into_iter() {
+			for call in batch.into_batch_entries() {
 				extensions.extend(call.into_extensions());
 			}
 

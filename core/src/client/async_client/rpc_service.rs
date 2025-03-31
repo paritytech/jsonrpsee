@@ -91,7 +91,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 
 					Ok(MethodResponse::subscription(
 						SubscriptionResponse {
-							rp: Response::new(ResponsePayload::success(s), request.id.clone().into_owned()),
+							rp: Response::new(ResponsePayload::success(s), request.id.clone().into_owned()).into(),
 							sub_id,
 							stream: subscribe_rx,
 						},
@@ -133,7 +133,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 
 			let mut extensions = Extensions::new();
 
-			for entry in batch.into_iter() {
+			for entry in batch.into_batch_entries() {
 				extensions.extend(entry.into_extensions());
 			}
 

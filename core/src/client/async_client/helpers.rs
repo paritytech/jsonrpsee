@@ -27,7 +27,7 @@
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::async_client::{LOG_TARGET, Notification};
 use crate::client::{
-	Error, JsonValue, RequestMessage, TransportSenderT, TrySubscriptionSendError, subscription_channel,
+	Error, RawResponseOwned, RequestMessage, TransportSenderT, TrySubscriptionSendError, subscription_channel,
 };
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
@@ -51,7 +51,7 @@ use std::ops::Range;
 /// On success the result is sent to the frontend.
 pub(crate) fn process_batch_response(
 	manager: &mut RequestManager,
-	rps: Vec<Response<'static, Box<RawValue>>>,
+	rps: Vec<RawResponseOwned>,
 	range: Range<u64>,
 ) -> Result<(), InvalidRequestId> {
 	let mut responses = Vec::with_capacity(rps.len());
@@ -68,18 +68,18 @@ pub(crate) fn process_batch_response(
 
 	for _ in range {
 		let err_obj = ErrorObject::borrowed(0, "", None);
-		responses.push(Response::new(jsonrpsee_types::ResponsePayload::error(err_obj), Id::Null));
+		responses.push(Response::new(jsonrpsee_types::ResponsePayload::error(err_obj), Id::Null).into());
 	}
 
 	for rp in rps {
-		let id = rp.id.try_parse_inner_as_number()?;
+		let id = rp.id().try_parse_inner_as_number()?;
 		let maybe_elem =
 			id.checked_sub(start_idx).and_then(|p| p.try_into().ok()).and_then(|p: usize| responses.get_mut(p));
 
 		if let Some(elem) = maybe_elem {
 			*elem = rp;
 		} else {
-			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()));
+			return Err(InvalidRequestId::NotPendingRequest(rp.id().to_string()));
 		}
 	}
 
@@ -128,7 +128,7 @@ pub(crate) fn process_subscription_response(
 /// It's possible that the user closed down the subscription before the actual close response is received
 pub(crate) fn process_subscription_close_response(
 	manager: &mut RequestManager,
-	response: SubscriptionError<JsonValue>,
+	response: SubscriptionError<&RawValue>,
 ) {
 	let sub_id = response.params.subscription.into_owned();
 	match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -173,10 +173,10 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 /// Returns `Err(_)` if the response couldn't be handled.
 pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
-	response: Response<Box<RawValue>>,
+	response: RawResponseOwned,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, InvalidRequestId> {
-	let response_id = response.id.clone().into_owned();
+	let response_id = response.id().clone().into_owned();
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
@@ -186,7 +186,7 @@ pub(crate) fn process_single_response(
 				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string())),
 			};
 
-			let _ = send_back_oneshot.send(Ok(response.into_owned()));
+			let _ = send_back_oneshot.send(Ok(response));
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
@@ -194,7 +194,7 @@ pub(crate) fn process_single_response(
 				.complete_pending_subscription(response_id.clone())
 				.ok_or(InvalidRequestId::NotPendingRequest(response_id.to_string()))?;
 
-			let result = ResponseSuccess::try_from(response);
+			let result = ResponseSuccess::try_from(response.into_inner());
 
 			let json = match result {
 				Ok(s) => s.result,

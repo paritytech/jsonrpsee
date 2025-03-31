@@ -38,7 +38,7 @@ impl Serialize for Batch<'_> {
 	}
 }
 
-impl<'a> std::fmt::Display for Batch<'a> {
+impl std::fmt::Display for Batch<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let s = serde_json::to_string(&self.inner).expect("Batch serialization failed");
 		f.write_str(&s)
@@ -77,19 +77,19 @@ impl<'a> Batch<'a> {
 		Ok(())
 	}
 
-	/// Mutable iterator over the batch entries.
-	pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, BatchEntry<'a>> {
-		self.inner.iter_mut()
+	/// Get an iterator over the batch entries.
+	pub fn as_batch_entries(&self) -> &[BatchEntry<'a>] {
+		&self.inner
 	}
 
-	/// Immutable iterator over the batch entries.
-	pub fn iter(&self) -> std::slice::Iter<'_, BatchEntry<'a>> {
-		self.inner.iter()
+	/// Get a mutable iterator over the batch entries.
+	pub fn as_mut_batch_entries(&mut self) -> &mut [BatchEntry<'a>] {
+		&mut self.inner
 	}
 
-	/// Consume the batch and return batch entries.
-	pub fn into_iter(self) -> std::vec::IntoIter<BatchEntry<'a>> {
-		self.inner.into_iter()
+	/// Consume the batch and return the inner entries.
+	pub fn into_batch_entries(self) -> Vec<BatchEntry<'a>> {
+		self.inner
 	}
 
 	/// Get the id range of the batch.
@@ -159,7 +159,7 @@ impl<'a> InvalidRequest<'a> {
 	}
 }
 
-impl<'a> BatchEntry<'a> {
+impl BatchEntry<'_> {
 	/// Get a reference to extensions of the batch entry.
 	pub fn extensions(&self) -> &Extensions {
 		match self {
@@ -214,7 +214,7 @@ pub trait RpcServiceT<'a> {
 	type Error: std::fmt::Debug;
 
 	/// The response type
-	type Response;
+	type Response: ToJson;
 
 	/// Processes a single JSON-RPC call, which may be a subscription or regular call.
 	fn call(&self, request: Request<'a>) -> Self::Future;
@@ -226,19 +226,18 @@ pub trait RpcServiceT<'a> {
 	/// of these methods.
 	///
 	/// As a result, if you have custom logic for individual calls or notifications,
-	/// you must duplicate that logic here.
-	///
-	// TODO: Investigate if the complete service can be invoked inside `RpcService`.
+	/// you must duplicate that implementation in this method or no middleware will be applied
+	/// for calls inside the batch.
 	fn batch(&self, requests: Batch<'a>) -> Self::Future;
 
 	/// Similar to `RpcServiceT::call` but processes a JSON-RPC notification.
 	fn notification(&self, n: Notification<'a>) -> Self::Future;
 }
 
-/// Interface for types that can be converted into a JSON value.
-pub trait IntoJson {
+/// Interface for types that can be serialized into JSON.
+pub trait ToJson {
 	/// Convert the type into a JSON value.
-	fn into_json(self) -> Result<Box<RawValue>, serde_json::Error>;
+	fn to_json(&self) -> Result<String, serde_json::Error>;
 }
 
 /// Similar to [`tower::ServiceBuilder`] but doesn't

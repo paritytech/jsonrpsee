@@ -508,7 +508,7 @@ where
 		let request = Request::borrowed(method, params.as_deref(), id.clone());
 		let fut = self.service.call(request);
 		let rp = self.map_rpc_service_err(fut).await?.into_method_call().expect("Method call response");
-		let success = ResponseSuccess::try_from(rp)?;
+		let success = ResponseSuccess::try_from(rp.into_inner())?;
 
 		serde_json::from_str(success.result.get()).map_err(Into::into)
 	}
@@ -541,7 +541,7 @@ where
 		let mut failed_calls = 0;
 
 		for json_val in json_values {
-			match ResponseSuccess::try_from(json_val) {
+			match ResponseSuccess::try_from(json_val.into_inner()) {
 				Ok(val) => {
 					let result: R = serde_json::from_str(val.result.get()).map_err(Error::ParseError)?;
 					responses.push(Ok(result));
@@ -656,8 +656,11 @@ fn handle_backend_messages<R: TransportReceiverT>(
 			Some(b'{') => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
-					let maybe_unsub =
-						process_single_response(&mut manager.lock(), single, max_buffer_capacity_per_subscription)?;
+					let maybe_unsub = process_single_response(
+						&mut manager.lock(),
+						single.into_owned().into(),
+						max_buffer_capacity_per_subscription,
+					)?;
 
 					if let Some(unsub) = maybe_unsub {
 						return Ok(vec![FrontToBack::Request(unsub)]);
@@ -691,7 +694,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 					for r in raw_responses {
 						if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
 							let id = response.id.try_parse_inner_as_number()?;
-							batch.push(response.into_owned());
+							batch.push(response.into_owned().into());
 
 							let r = range.get_or_insert(id..id);
 
