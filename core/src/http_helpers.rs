@@ -180,7 +180,7 @@ where
 		Some(single) if !received_data.is_empty() => {
 			tracing::trace!(
 				target: "jsonrpsee-http",
-				"HTTP response body: {}",
+				"HTTP body: {}",
 				std::str::from_utf8(&received_data).unwrap_or("Invalid UTF-8 data")
 			);
 			Ok((received_data, single))
