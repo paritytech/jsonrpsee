@@ -18,7 +18,7 @@ pub fn content_type_is_json<T: Body>(request: &HttpRequest<T>) -> bool {
 
 /// Returns true if the `content_type` header indicates a valid JSON message.
 pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
-	content_type.and_then(|val| val.to_str().ok()).map_or(false, |content| {
+	content_type.and_then(|val| val.to_str().ok()).is_some_and(|content| {
 		content.eq_ignore_ascii_case("application/json")
 			|| content.eq_ignore_ascii_case("application/json; charset=utf-8")
 			|| content.eq_ignore_ascii_case("application/json;charset=utf-8")
