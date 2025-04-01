@@ -20,6 +20,7 @@ workspace = true
 jsonrpsee-types = { workspace = true }
 jsonrpsee-client-transport = { workspace = true, features = ["web"] }
 jsonrpsee-core = { workspace = true, features = ["async-wasm-client"] }
+tower = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

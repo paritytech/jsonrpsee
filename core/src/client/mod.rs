@@ -736,11 +736,6 @@ impl MethodResponse {
 		}
 	}
 
-	/// Extract the inner response.
-	pub fn as_inner(&self) -> &MethodResponseKind {
-		&self.inner
-	}
-
 	/// Get the subscription if this response is a subscription.
 	fn into_subscription(self) -> Option<(SubscriptionId<'static>, SubscriptionReceiver)> {
 		match self.inner {
@@ -777,6 +772,14 @@ impl MethodResponse {
 	/// Returns a mutable reference to the associated extensions.
 	pub fn extensions_mut(&mut self) -> &mut Extensions {
 		&mut self.extensions
+	}
+}
+
+impl std::ops::Deref for MethodResponse {
+	type Target = MethodResponseKind;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
 	}
 }
 

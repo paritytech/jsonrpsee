@@ -204,12 +204,14 @@ impl Default for ClientBuilder<Identity> {
 	}
 }
 
-impl<L> ClientBuilder<L> {
-	/// Create a builder for the client.
+impl ClientBuilder<Identity> {
+	/// Create a new client builder.
 	pub fn new() -> ClientBuilder<Identity> {
 		ClientBuilder::default()
 	}
+}
 
+impl<L> ClientBuilder<L> {
 	/// Set request timeout (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
@@ -273,7 +275,10 @@ impl<L> ClientBuilder<L> {
 		self
 	}
 
-	/// Set the rpc middleware service.
+	/// Configure the client to a specific RPC middleware which
+	/// runs for every JSON-RPC call.
+	///
+	/// This is useful for adding a custom logger or something similar.
 	pub fn set_rpc_middleware<T>(self, service_builder: RpcServiceBuilder<T>) -> ClientBuilder<T> {
 		ClientBuilder {
 			request_timeout: self.request_timeout,
@@ -363,10 +368,11 @@ impl<L> ClientBuilder<L> {
 	/// Build the client with given transport.
 	#[cfg(all(feature = "async-wasm-client", target_arch = "wasm32"))]
 	#[cfg_attr(docsrs, doc(cfg(feature = "async-wasm-client")))]
-	pub fn build_with_wasm<S, R>(self, sender: S, receiver: R) -> Client
+	pub fn build_with_wasm<S, R, Svc>(self, sender: S, receiver: R) -> Client<Svc>
 	where
 		S: TransportSenderT,
 		R: TransportReceiverT,
+		L: tower::Layer<RpcService, Service = Svc> + Clone + Send + Sync + 'static,
 	{
 		use futures_util::stream::Pending;
 
@@ -410,10 +416,10 @@ impl<L> ClientBuilder<L> {
 
 		Client {
 			to_back: to_back.clone(),
+			service: self.service_builder.service(RpcService::new(to_back.clone(), self.request_timeout)),
 			request_timeout: self.request_timeout,
 			error: ErrorFromBack::new(to_back, disconnect_reason),
 			id_manager: RequestIdManager::new(self.id_kind),
-			max_log_length: self.max_log_length,
 			on_exit: Some(client_dropped_tx),
 		}
 	}
@@ -421,7 +427,7 @@ impl<L> ClientBuilder<L> {
 
 /// Generic asynchronous client.
 #[derive(Debug)]
-pub struct Client<L> {
+pub struct Client<L = Identity> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
 	error: ErrorFromBack,
@@ -434,12 +440,14 @@ pub struct Client<L> {
 	service: L,
 }
 
-impl<L> Client<L> {
-	/// Create a builder for the server.
+impl Client<Identity> {
+	/// Create a builder for the client.
 	pub fn builder() -> ClientBuilder<Identity> {
 		ClientBuilder::<Identity>::new()
 	}
+}
 
+impl<L> Client<L> {
 	/// Checks if the client is connected to the target.
 	pub fn is_connected(&self) -> bool {
 		!self.to_back.is_closed()
