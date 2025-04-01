@@ -26,15 +26,15 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::async_trait;
+use jsonrpsee::ConnectionId;
+use jsonrpsee::Extensions;
 use jsonrpsee::core::SubscriptionResult;
+use jsonrpsee::core::async_trait;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage};
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ConnectionId;
-use jsonrpsee::Extensions;
 
 #[rpc(server, client)]
 pub trait Rpc {

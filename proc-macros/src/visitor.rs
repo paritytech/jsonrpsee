@@ -26,8 +26,8 @@
 
 use std::collections::HashSet;
 
-use syn::visit::{self, Visit};
 use syn::Ident;
+use syn::visit::{self, Visit};
 
 /// Visitor that parses generic type parameters from `syn::Type` by traversing the AST.
 /// A `syn::Type` can any type such as `Vec<T>, T, Foo<A<B<V>>>, usize or similar`.
@@ -224,7 +224,7 @@ impl FindSubscriptionParams {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use syn::{parse_quote, Type};
+	use syn::{Type, parse_quote};
 
 	#[test]
 	fn it_works() {

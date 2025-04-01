@@ -13,6 +13,9 @@ keywords.workspace = true
 readme.workspace = true
 publish = true
 
+[lints]
+workspace = true
+
 [dependencies]
 jsonrpsee-core = { workspace = true, features = ["client"] }
 tracing = { workspace = true }

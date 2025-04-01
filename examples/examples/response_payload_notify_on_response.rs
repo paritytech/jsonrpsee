@@ -30,7 +30,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::Server;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::{rpc_params, ResponsePayload};
+use jsonrpsee::{ResponsePayload, rpc_params};
 
 #[rpc(client, server, namespace = "state")]
 pub trait Rpc {

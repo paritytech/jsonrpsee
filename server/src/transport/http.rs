@@ -1,14 +1,14 @@
 use crate::{
-	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
-	server::{handle_rpc_call, ServerConfig},
 	BatchRequestConfig, ConnectionState, HttpRequest, HttpResponse, LOG_TARGET,
+	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
+	server::{ServerConfig, handle_rpc_call},
 };
 use http::Method;
 use hyper::body::{Body, Bytes};
 use jsonrpsee_core::{
-	http_helpers::{read_body, HttpError},
-	server::Methods,
 	BoxError,
+	http_helpers::{HttpError, read_body},
+	server::Methods,
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
@@ -114,7 +114,7 @@ where
 /// HTTP response helpers.
 pub mod response {
 	use jsonrpsee_core::server::MethodResponse;
-	use jsonrpsee_types::error::{reject_too_big_request, ErrorCode};
+	use jsonrpsee_types::error::{ErrorCode, reject_too_big_request};
 	use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Id, Response, ResponsePayload};
 
 	use crate::{HttpBody, HttpResponse};
