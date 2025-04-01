@@ -77,7 +77,7 @@ impl<S> Metrics<S> {
 	}
 }
 
-// NOTE: We are MethodResponse as the response type here to be able to inspect the response
+// NOTE: We are using MethodResponse as the response type here to be able to inspect the response
 // and not just the serialized JSON-RPC response. This is not necessary if you only care about
 // the serialized JSON-RPC response.
 impl<'a, S> RpcServiceT<'a> for Metrics<S>
