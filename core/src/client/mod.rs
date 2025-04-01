@@ -425,7 +425,7 @@ where
 	type Item = Result<Notif, serde_json::Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let res = match futures_util::ready!(self.rx.poll_next_unpin(cx)) {
-			Some(v) => Some(serde_json::from_value::<Notif>(v).map_err(Into::into)),
+			Some(v) => Some(serde_json::from_value::<Notif>(v)),
 			None => {
 				self.is_closed = true;
 				None
