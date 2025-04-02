@@ -35,7 +35,7 @@ enum Incoming {
 
 pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), SokettoError> {
 	sender.send_text_owned(response).await?;
-	sender.flush().await.map_err(Into::into)
+	sender.flush().await
 }
 
 pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), SokettoError> {
@@ -45,7 +45,7 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), SokettoError> {
 	// Byte slice fails if the provided slice is larger than 125 bytes.
 	let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
 	sender.send_ping(byte_slice).await?;
-	sender.flush().await.map_err(Into::into)
+	sender.flush().await
 }
 
 pub(crate) struct BackgroundTaskParams<S> {

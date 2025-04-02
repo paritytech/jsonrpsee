@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::Infallible;
 use std::fmt;
 
 use serde::de::Deserializer;
@@ -107,6 +108,12 @@ impl PartialEq for ErrorObject<'_> {
 impl From<ErrorCode> for ErrorObject<'_> {
 	fn from(code: ErrorCode) -> Self {
 		Self { code, message: code.message().into(), data: None }
+	}
+}
+
+impl From<Infallible> for ErrorObject<'_> {
+	fn from(e: Infallible) -> Self {
+		match e {}
 	}
 }
 
