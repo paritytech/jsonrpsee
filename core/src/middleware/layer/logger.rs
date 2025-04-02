@@ -26,11 +26,6 @@
 
 //! RPC Logger layer.
 
-use std::{
-	pin::Pin,
-	task::{Context, Poll},
-};
-
 use crate::{
 	middleware::{Batch, Notification, RpcServiceT, ToJson},
 	tracing::truncate_at_char_boundary,
@@ -38,7 +33,6 @@ use crate::{
 
 use futures_util::Future;
 use jsonrpsee_types::Request;
-use pin_project::pin_project;
 use tracing::Instrument;
 
 /// RPC logger layer.
@@ -69,7 +63,7 @@ pub struct RpcLogger<S> {
 
 impl<S> RpcServiceT for RpcLogger<S>
 where
-	S: RpcServiceT,
+	S: RpcServiceT + Send + Sync + Clone + 'static,
 	S::Error: std::fmt::Debug + Send,
 	S::Response: ToJson,
 {
@@ -80,16 +74,40 @@ where
 	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let json = serde_json::to_string(&request).unwrap_or_default();
 		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(&json, self.max as usize));
+		let service = self.service.clone();
+		let max = self.max;
 
-		ResponseFuture::new(self.service.call(request), self.max).in_current_span()
+		async move {
+			let rp = service.call(request).await;
+
+			if let Ok(ref rp) = rp {
+				let json = rp.to_json();
+				let json_str = json.as_ref().map_or("<invalid JSON>", |j| j.get());
+				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(json_str, max as usize));
+			}
+			rp
+		}
+		.in_current_span()
 	}
 
 	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let json = serde_json::to_string(&batch).unwrap_or_default();
 		tracing::trace!(target: "jsonrpsee", "batch request = {}", truncate_at_char_boundary(&json, self.max as usize));
+		let service = self.service.clone();
+		let max = self.max;
 
-		ResponseFuture::new(self.service.batch(batch), self.max).in_current_span()
+		async move {
+			let rp = service.batch(batch).await;
+
+			if let Ok(ref rp) = rp {
+				let json = rp.to_json();
+				let json_str = json.as_ref().map_or("<invalid JSON>", |j| j.get());
+				tracing::trace!(target: "jsonrpsee", "batch response = {}", truncate_at_char_boundary(json_str, max as usize));
+			}
+			rp
+		}
+		.in_current_span()
 	}
 
 	#[tracing::instrument(name = "notification", skip_all, fields(method = &*n.method), level = "trace")]
@@ -98,54 +116,8 @@ where
 		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let json = serde_json::to_string(&n).unwrap_or_default();
-		tracing::trace!(target: "jsonrpsee", "notification = {}", truncate_at_char_boundary(&json, self.max as usize));
+		tracing::trace!(target: "jsonrpsee", "notification request = {}", truncate_at_char_boundary(&json, self.max as usize));
 
-		ResponseFuture::new(self.service.notification(n), self.max).in_current_span()
-	}
-}
-
-/// Response future to log the response for a method call.
-#[pin_project]
-pub struct ResponseFuture<F> {
-	#[pin]
-	fut: F,
-	max: u32,
-}
-
-impl<F> ResponseFuture<F> {
-	/// Create a new response future.
-	fn new(fut: F, max: u32) -> Self {
-		Self { fut, max }
-	}
-}
-
-impl<F> std::fmt::Debug for ResponseFuture<F> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str("ResponseFuture")
-	}
-}
-
-impl<F, R, E> Future for ResponseFuture<F>
-where
-	F: Future<Output = Result<R, E>>,
-	R: ToJson,
-	E: std::fmt::Debug,
-{
-	type Output = F::Output;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		let max = self.max;
-		let fut = self.project().fut;
-
-		match fut.poll(cx) {
-			Poll::Ready(Ok(rp)) => {
-				let json = rp.to_json();
-				let json_str = json.as_ref().map_or("<invalid JSON>", |j| j.get());
-				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(json_str, max as usize));
-				Poll::Ready(Ok(rp))
-			}
-			Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-			Poll::Pending => Poll::Pending,
-		}
+		self.service.notification(n).in_current_span()
 	}
 }

@@ -189,13 +189,12 @@ impl RpcServiceT for RpcService {
 				Ok(MethodResponse::from_batch(batch_rp.finish()))
 			}
 		}
-		.boxed()
 	}
 
 	fn notification<'a>(
 		&self,
 		_: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		async move { Ok(MethodResponse::notification()) }.boxed()
+		async move { Ok(MethodResponse::notification()) }
 	}
 }
