@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use futures_util::{FutureExt, future::BoxFuture};
+use futures_util::FutureExt;
 use hyper::{body::Bytes, http::Extensions};
 use jsonrpsee_core::{
 	BoxError, JsonRawValue,
@@ -26,7 +26,7 @@ impl<HttpMiddleware> RpcService<HttpMiddleware> {
 	}
 }
 
-impl<'a, B, HttpMiddleware> RpcServiceT<'a> for RpcService<HttpMiddleware>
+impl<B, HttpMiddleware> RpcServiceT for RpcService<HttpMiddleware>
 where
 	HttpMiddleware:
 		Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Clone + Send + Sync + 'static,
@@ -35,11 +35,10 @@ where
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {
-	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
 	type Error = Error;
 	type Response = MethodResponse;
 
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let service = self.service.clone();
 
 		async move {
@@ -51,7 +50,7 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let service = self.service.clone();
 
 		async move {
@@ -73,7 +72,10 @@ where
 		.boxed()
 	}
 
-	fn notification(&self, notif: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		notif: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let service = self.service.clone();
 
 		async move {

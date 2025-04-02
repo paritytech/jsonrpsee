@@ -147,9 +147,9 @@ pub async fn server() -> SocketAddr {
 		connection_id: u32,
 	}
 
-	impl<'a, S> RpcServiceT<'a> for ConnectionDetails<S>
+	impl<'a, S> RpcServiceT for ConnectionDetails<S>
 	where
-		S: RpcServiceT<'a>,
+		S: RpcServiceT,
 	{
 		type Future = S::Future;
 		type Error = S::Error;

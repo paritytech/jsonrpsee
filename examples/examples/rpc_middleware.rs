@@ -47,9 +47,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures::FutureExt;
-use futures::future::BoxFuture;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{Batch, Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::types::Request;
@@ -64,15 +63,17 @@ pub struct CallsPerConn<S> {
 	role: &'static str,
 }
 
-impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
+impl<S> RpcServiceT for CallsPerConn<S>
 where
-	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	S: RpcServiceT + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let service = self.service.clone();
 		let role = self.role;
@@ -86,14 +87,20 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let len = batch.as_batch_entries().len();
 		self.count.fetch_add(len, Ordering::SeqCst);
 		println!("{} processed calls={} on the connection", self.role, self.count.load(Ordering::SeqCst));
 		Box::pin(self.service.batch(batch))
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		Box::pin(self.service.notification(n))
 	}
 }
@@ -105,15 +112,17 @@ pub struct GlobalCalls<S> {
 	role: &'static str,
 }
 
-impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
+impl<S> RpcServiceT for GlobalCalls<S>
 where
-	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	S: RpcServiceT + Send + Sync + Clone + 'static,
 {
-	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let service = self.service.clone();
 		let role = self.role;
@@ -128,14 +137,20 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let len = batch.as_batch_entries().len();
 		self.count.fetch_add(len, Ordering::SeqCst);
 		println!("{}, processed calls={} in total", self.role, self.count.load(Ordering::SeqCst));
 		Box::pin(self.service.batch(batch))
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		Box::pin(self.service.notification(n))
 	}
 }
@@ -146,24 +161,32 @@ pub struct Logger<S> {
 	role: &'static str,
 }
 
-impl<'a, S> RpcServiceT<'a> for Logger<S>
+impl<S> RpcServiceT for Logger<S>
 where
-	S: RpcServiceT<'a> + Send + Sync,
+	S: RpcServiceT + Send + Sync,
 {
-	type Future = S::Future;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		println!("{} logger middleware: method `{}`", self.role, req.method);
 		self.service.call(req)
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		println!("{} logger middleware: batch {batch}", self.role);
 		self.service.batch(batch)
 	}
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.service.notification(n)
 	}
 }

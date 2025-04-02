@@ -206,10 +206,7 @@ impl BatchEntry<'_> {
 ///
 /// In the server implementation, the error is infallible but in the client implementation, the error
 /// can occur due to I/O errors or JSON-RPC protocol errors.
-pub trait RpcServiceT<'a> {
-	/// The future response value.
-	type Future: Future<Output = Result<Self::Response, Self::Error>> + Send;
-
+pub trait RpcServiceT {
 	/// The error type.
 	type Error: std::fmt::Debug;
 
@@ -217,7 +214,7 @@ pub trait RpcServiceT<'a> {
 	type Response: ToJson;
 
 	/// Processes a single JSON-RPC call, which may be a subscription or regular call.
-	fn call(&self, request: Request<'a>) -> Self::Future;
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a;
 
 	/// Processes multiple JSON-RPC calls at once, similar to `RpcServiceT::call`.
 	///
@@ -228,10 +225,13 @@ pub trait RpcServiceT<'a> {
 	/// As a result, if you have custom logic for individual calls or notifications,
 	/// you must duplicate that implementation in this method or no middleware will be applied
 	/// for calls inside the batch.
-	fn batch(&self, requests: Batch<'a>) -> Self::Future;
+	fn batch<'a>(&self, requests: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a;
 
 	/// Similar to `RpcServiceT::call` but processes a JSON-RPC notification.
-	fn notification(&self, n: Notification<'a>) -> Self::Future;
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a;
 }
 
 /// Interface for types that can be serialized into JSON.

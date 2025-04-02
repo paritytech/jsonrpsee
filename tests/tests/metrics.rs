@@ -35,7 +35,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures::FutureExt;
-use futures::future::BoxFuture;
 use helpers::init_logger;
 use jsonrpsee::core::middleware::{Batch, Notification, Request, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{ClientError, client::ClientT};
@@ -61,15 +60,17 @@ pub struct CounterMiddleware<S> {
 	counter: Arc<Mutex<Counter>>,
 }
 
-impl<'a, S> RpcServiceT<'a> for CounterMiddleware<S>
+impl<S> RpcServiceT for CounterMiddleware<S>
 where
-	S: RpcServiceT<'a, Response = MethodResponse> + Send + Sync + Clone + 'static,
+	S: RpcServiceT<Response = MethodResponse> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, Result<S::Response, S::Error>>;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		request: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let counter = self.counter.clone();
 		let service = self.service.clone();
 
@@ -99,11 +100,17 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.service.batch(batch).boxed()
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.service.notification(n).boxed()
 	}
 }

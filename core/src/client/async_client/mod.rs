@@ -491,7 +491,7 @@ impl<L> Drop for Client<L> {
 #[async_trait]
 impl<L> ClientT for Client<L>
 where
-	for<'a> L: RpcServiceT<'a, Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
+	L: RpcServiceT<Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
 {
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
 	where
@@ -568,7 +568,7 @@ where
 #[async_trait]
 impl<L> SubscriptionClientT for Client<L>
 where
-	for<'a> L: RpcServiceT<'a, Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
+	L: RpcServiceT<Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
 {
 	/// Send a subscription request to the server.
 	///

@@ -63,8 +63,8 @@ pub(crate) struct BackgroundTaskParams<S> {
 
 pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
-	for<'a> S: RpcServiceT<'a, Response = MethodResponse> + Send + Sync + 'static,
-	for<'a> <S as RpcServiceT<'a>>::Error: std::fmt::Debug,
+	S: RpcServiceT<Response = MethodResponse> + Send + Sync + 'static,
+	<S as RpcServiceT>::Error: std::fmt::Debug,
 {
 	let BackgroundTaskParams {
 		server_cfg,
@@ -421,9 +421,9 @@ pub async fn connect<L, B>(
 	rpc_middleware: RpcServiceBuilder<L>,
 ) -> Result<(HttpResponse, impl Future<Output = ()>), HttpResponse>
 where
-	L: for<'a> tower::Layer<RpcService>,
+	L: tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a, Response = MethodResponse>,
+	<L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse>,
 {
 	let mut server = soketto::handshake::http::Server::new();
 

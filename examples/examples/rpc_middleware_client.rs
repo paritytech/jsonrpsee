@@ -38,7 +38,6 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
-use futures::future::BoxFuture;
 use jsonrpsee::core::client::{ClientT, MethodResponse, MethodResponseKind};
 use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
@@ -80,15 +79,17 @@ impl<S> Metrics<S> {
 // NOTE: We are using MethodResponse as the response type here to be able to inspect the response
 // and not just the serialized JSON-RPC response. This is not necessary if you only care about
 // the serialized JSON-RPC response.
-impl<'a, S> RpcServiceT<'a> for Metrics<S>
+impl<S> RpcServiceT for Metrics<S>
 where
-	S: RpcServiceT<'a, Response = MethodResponse> + Send + Sync + Clone + 'static,
+	S: RpcServiceT<Response = MethodResponse> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, Result<Self::Response, Self::Error>>;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let m = self.metrics.clone();
 		let service = self.service.clone();
 
@@ -116,12 +117,18 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.metrics.lock().unwrap().batch_calls += 1;
 		Box::pin(self.service.batch(batch))
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.metrics.lock().unwrap().notifications += 1;
 		Box::pin(self.service.notification(n))
 	}

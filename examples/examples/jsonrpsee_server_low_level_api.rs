@@ -45,7 +45,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
-use futures::future::BoxFuture;
 use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
@@ -73,16 +72,18 @@ struct CallLimit<S> {
 	state: mpsc::Sender<()>,
 }
 
-impl<'a, S> RpcServiceT<'a> for CallLimit<S>
+impl<S> RpcServiceT for CallLimit<S>
 where
-	S: Send + Sync + RpcServiceT<'a, Response = MethodResponse> + Clone + 'static,
+	S: Send + Sync + RpcServiceT<Response = MethodResponse> + Clone + 'static,
 	S::Error: Into<BoxError>,
 {
-	type Future = BoxFuture<'a, Result<S::Response, Self::Error>>;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let state = self.state.clone();
 		let service = self.service.clone();
@@ -102,11 +103,17 @@ where
 		.boxed()
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		Box::pin(self.service.batch(batch))
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		Box::pin(self.service.notification(n))
 	}
 }

@@ -70,17 +70,19 @@ struct AuthorizationMiddleware<S> {
 	transport_label: &'static str,
 }
 
-impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
+impl<S> RpcServiceT for AuthorizationMiddleware<S>
 where
-	S: Send + Clone + Sync + RpcServiceT<'a, Response = MethodResponse>,
-	S::Error: Into<BoxError> + Send,
+	S: Send + Clone + Sync + RpcServiceT<Response = MethodResponse>,
+	S::Error: Into<BoxError> + Send + 'static,
 	S::Response: Send,
 {
-	type Future = ResponseFuture<S::Future, Self::Response, Self::Error>;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		if req.method_name() == "trusted_call" {
 			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else {
 				let rp = MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
@@ -96,11 +98,17 @@ where
 		}
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		ResponseFuture::future(self.inner.batch(batch))
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		ResponseFuture::future(self.inner.notification(n))
 	}
 }

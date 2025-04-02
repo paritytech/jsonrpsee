@@ -45,8 +45,8 @@ where
 	B::Error: Into<BoxError>,
 	L: for<'a> tower::Layer<RpcService>,
 	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a, Response = MethodResponse> + Send,
-	for<'a> <<L as tower::Layer<RpcService>>::Service as RpcServiceT<'a>>::Error: std::fmt::Debug,
+	<L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse> + Send,
+	<<L as tower::Layer<RpcService>>::Service as RpcServiceT>::Error: std::fmt::Debug,
 {
 	let ServerConfig { max_response_body_size, batch_requests_config, max_request_body_size, .. } = server_cfg;
 
@@ -77,8 +77,8 @@ where
 	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
-	for<'a> S: RpcServiceT<'a, Response = MethodResponse> + Send,
-	for<'a> <S as RpcServiceT<'a>>::Error: std::fmt::Debug,
+	S: RpcServiceT<Response = MethodResponse> + Send,
+	<S as RpcServiceT>::Error: std::fmt::Debug,
 {
 	// Only the `POST` method is allowed.
 	match *request.method() {

@@ -5,7 +5,7 @@ use crate::{
 		BatchMessage, Error as ClientError, FrontToBack, MethodResponse, RequestMessage, SubscriptionMessage,
 		SubscriptionResponse, async_client::helpers::call_with_timeout,
 	},
-	middleware::{Batch, IsSubscription, Notification, Request, ResponseBoxFuture, RpcServiceT},
+	middleware::{Batch, IsSubscription, Notification, Request, RpcServiceT},
 };
 
 use futures_timer::Delay;
@@ -59,12 +59,11 @@ impl RpcService {
 	}
 }
 
-impl<'a> RpcServiceT<'a> for RpcService {
-	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
+impl RpcServiceT for RpcService {
 	type Response = MethodResponse;
 	type Error = Error;
 
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let tx = self.tx.clone();
 		let request_timeout = self.request_timeout;
 
@@ -116,7 +115,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		.boxed()
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let tx = self.tx.clone();
 		let request_timeout = self.request_timeout;
 
@@ -142,7 +141,10 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		.boxed()
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let tx = self.tx.clone();
 		let request_timeout = self.request_timeout;
 

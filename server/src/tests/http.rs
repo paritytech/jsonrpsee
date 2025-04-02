@@ -33,7 +33,7 @@ use crate::{
 };
 use futures_util::future::{Future, FutureExt};
 use hyper::body::Bytes;
-use jsonrpsee_core::middleware::{Batch, Notification, ResponseBoxFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::{BoxError, RpcResult};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
@@ -57,15 +57,14 @@ struct InjectExt<S> {
 	service: S,
 }
 
-impl<'a, S> RpcServiceT<'a> for InjectExt<S>
+impl<S> RpcServiceT for InjectExt<S>
 where
-	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
+	S: Send + Sync + RpcServiceT + Clone + 'static,
 {
-	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, mut req: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, mut req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		if req.method_name().contains("err") {
 			req.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
 		} else {
@@ -75,7 +74,7 @@ where
 		self.service.call(req).boxed()
 	}
 
-	fn batch(&self, mut batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		if let Some(last) = batch.as_mut_batch_entries().last_mut() {
 			if last.method_name().contains("err") {
 				last.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
@@ -87,7 +86,10 @@ where
 		self.service.batch(batch).boxed()
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		self.service.notification(n).boxed()
 	}
 }

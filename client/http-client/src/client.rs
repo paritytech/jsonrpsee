@@ -249,7 +249,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 impl<B, S, S2, HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: Layer<RpcService<S>, Service = S2>,
-	for<'a> <RpcMiddleware as Layer<RpcService<S>>>::Service: RpcServiceT<'a>,
+	for<'a> <RpcMiddleware as Layer<RpcService<S>>>::Service: RpcServiceT,
 	HttpMiddleware: Layer<transport::HttpBackend, Service = S>,
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Clone,
 	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
@@ -351,7 +351,7 @@ impl HttpClient<HttpBackend> {
 #[async_trait]
 impl<S> ClientT for HttpClient<S>
 where
-	for<'a> S: RpcServiceT<'a, Error = Error, Response = MethodResponse> + Send + Sync,
+	S: RpcServiceT<Error = Error, Response = MethodResponse> + Send + Sync,
 {
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
 	where
@@ -458,7 +458,7 @@ where
 #[async_trait]
 impl<S> SubscriptionClientT for HttpClient<S>
 where
-	for<'a> S: RpcServiceT<'a, Error = Error, Response = MethodResponse> + Send + Sync,
+	S: RpcServiceT<Error = Error, Response = MethodResponse> + Send + Sync,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].

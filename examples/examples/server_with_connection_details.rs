@@ -49,23 +49,31 @@ pub trait Rpc {
 
 struct LoggingMiddleware<S>(S);
 
-impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LoggingMiddleware<S> {
-	type Future = S::Future;
+impl<S: RpcServiceT> RpcServiceT for LoggingMiddleware<S> {
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		request: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		tracing::info!("Received request: {:?}", request);
 		assert!(request.extensions().get::<ConnectionId>().is_some());
 
 		self.0.call(request)
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.0.batch(batch)
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.0.notification(n)
 	}
 }

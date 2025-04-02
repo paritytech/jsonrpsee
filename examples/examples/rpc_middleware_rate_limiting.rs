@@ -80,19 +80,18 @@ impl<S> RateLimit<S> {
 	}
 }
 
-impl<'a, S> RpcServiceT<'a> for RateLimit<S>
+impl<S> RpcServiceT for RateLimit<S>
 where
-	S: Send + RpcServiceT<'a, Response = MethodResponse> + 'static,
+	S: Send + RpcServiceT<Response = MethodResponse> + 'static,
 	S::Error: Send,
 {
-	// Instead of `Boxing` the future in this example
-	// we are using a jsonrpsee's ResponseFuture future
-	// type to avoid those extra allocations.
-	type Future = ResponseFuture<S::Future, Self::Response, Self::Error>;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let now = Instant::now();
 
 		let is_denied = {
@@ -130,11 +129,17 @@ where
 		}
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		ResponseFuture::future(self.service.batch(batch))
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		ResponseFuture::future(self.service.notification(n))
 	}
 }

@@ -36,15 +36,17 @@ use std::net::SocketAddr;
 #[derive(Clone)]
 pub struct ModifyRequestIf<S>(S);
 
-impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
+impl<S> RpcServiceT for ModifyRequestIf<S>
 where
-	S: Send + Sync + RpcServiceT<'a>,
+	S: Send + Sync + RpcServiceT,
 {
-	type Future = S::Future;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, mut req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		mut req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		// Example how to modify the params in the call.
 		if req.method == "say_hello" {
 			// It's a bit awkward to create new params in the request
@@ -60,11 +62,17 @@ where
 		self.0.call(req)
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.0.batch(batch)
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		self.0.notification(n)
 	}
 }

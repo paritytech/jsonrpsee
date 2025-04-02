@@ -197,7 +197,7 @@ and it is possible to fetch it as follows:
 ```rust
 struct LogConnectionId<S>(S);
 
-impl<'a, S: RpcServiceT<'a>> RpcServiceT<'a> for LogConnectionId<S> {
+impl<'a, S: RpcServiceT> RpcServiceT for LogConnectionId<S> {
 	type Future = S::Future;
 
 	fn call(&self, request: jsonrpsee::types::Request<'a>) -> Self::Future {
@@ -435,9 +435,9 @@ An example how write such middleware:
 #[derive(Clone)]
 pub struct ModifyRequestIf<S>(S);
 
-impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
+impl<'a, S> RpcServiceT for ModifyRequestIf<S>
 where
-	S: Send + Sync + RpcServiceT<'a>,
+	S: Send + Sync + RpcServiceT,
 {
 	type Future = S::Future;
 

@@ -100,7 +100,7 @@ impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 impl<HttpMiddleware, RpcMiddleware, Body> Server<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
 		Send + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
@@ -673,8 +673,8 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///     count: Arc<AtomicUsize>,
 	/// }
 	///
-	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
-	/// where S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	/// impl<'a, S> RpcServiceT for MyMiddleware<S>
+	/// where S: RpcServiceT + Send + Sync + Clone + 'static,
 	/// {
 	///    type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
 	///    type Error = S::Error;
@@ -937,7 +937,7 @@ impl<RequestBody, ResponseBody, RpcMiddleware, HttpMiddleware> Service<HttpReque
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
 		Send + Service<HttpRequest<RequestBody>, Response = HttpResponse<ResponseBody>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
@@ -974,8 +974,8 @@ impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcM
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a, Response = MethodResponse>,
-	for<'a> <<RpcMiddleware as Layer<RpcService>>::Service as RpcServiceT<'a>>::Error: std::fmt::Debug,
+	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse>,
+	<<RpcMiddleware as Layer<RpcService>>::Service as RpcServiceT>::Error: std::fmt::Debug,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	Body::Error: Into<BoxError>,
 {
@@ -1241,8 +1241,8 @@ pub(crate) async fn handle_rpc_call<S>(
 	extensions: Extensions,
 ) -> MethodResponse
 where
-	for<'a> S: RpcServiceT<'a, Response = MethodResponse> + Send,
-	for<'a> <S as RpcServiceT<'a>>::Error: std::fmt::Debug,
+	S: RpcServiceT<Response = MethodResponse> + Send,
+	<S as RpcServiceT>::Error: std::fmt::Debug,
 {
 	// Single request or notification
 	if is_single {

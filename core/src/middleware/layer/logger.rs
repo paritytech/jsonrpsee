@@ -39,7 +39,7 @@ use crate::{
 use futures_util::Future;
 use jsonrpsee_types::Request;
 use pin_project::pin_project;
-use tracing::{Instrument, instrument::Instrumented};
+use tracing::Instrument;
 
 /// RPC logger layer.
 #[derive(Copy, Clone, Debug)]
@@ -67,18 +67,17 @@ pub struct RpcLogger<S> {
 	service: S,
 }
 
-impl<'a, S> RpcServiceT<'a> for RpcLogger<S>
+impl<S> RpcServiceT for RpcLogger<S>
 where
-	S: RpcServiceT<'a>,
+	S: RpcServiceT,
 	S::Error: std::fmt::Debug + Send,
 	S::Response: ToJson,
 {
-	type Future = Instrumented<ResponseFuture<S::Future>>;
 	type Error = S::Error;
 	type Response = S::Response;
 
 	#[tracing::instrument(name = "method_call", skip_all, fields(method = request.method_name()), level = "trace")]
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let json = serde_json::to_string(&request).unwrap_or_default();
 		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(&json, self.max as usize));
 
@@ -86,7 +85,7 @@ where
 	}
 
 	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let json = serde_json::to_string(&batch).unwrap_or_default();
 		tracing::trace!(target: "jsonrpsee", "batch request = {}", truncate_at_char_boundary(&json, self.max as usize));
 
@@ -94,7 +93,10 @@ where
 	}
 
 	#[tracing::instrument(name = "notification", skip_all, fields(method = &*n.method), level = "trace")]
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let json = serde_json::to_string(&n).unwrap_or_default();
 		tracing::trace!(target: "jsonrpsee", "notification = {}", truncate_at_char_boundary(&json, self.max as usize));
 

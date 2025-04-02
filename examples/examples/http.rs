@@ -40,25 +40,33 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 struct Logger<S>(S);
 
-impl<'a, S> RpcServiceT<'a> for Logger<S>
+impl<S> RpcServiceT for Logger<S>
 where
-	S: RpcServiceT<'a>,
+	S: RpcServiceT,
 {
-	type Future = S::Future;
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		println!("logger layer : {:?}", req);
 		self.0.call(req)
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(
+		&self,
+		batch: Batch<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		println!("logger layer : {:?}", batch);
 		self.0.batch(batch)
 	}
 
-	fn notification(&self, n: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		println!("logger layer : {:?}", n);
 		self.0.notification(n)
 	}

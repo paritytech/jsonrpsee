@@ -76,14 +76,11 @@ impl RpcService {
 	}
 }
 
-impl<'a> RpcServiceT<'a> for RpcService {
-	// The rpc module is already boxing the futures and
-	// it's used to under the hood by the RpcService.
-	type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
+impl RpcServiceT for RpcService {
 	type Error = Infallible;
 	type Response = MethodResponse;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let conn_id = self.conn_id;
 		let max_response_body_size = self.max_response_body_size;
 
@@ -150,7 +147,7 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		}
 	}
 
-	fn batch(&self, batch: Batch<'a>) -> Self::Future {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let mut batch_rp = BatchResponseBuilder::new_with_limit(self.max_response_body_size);
 		let service = self.clone();
 		async move {
@@ -195,7 +192,10 @@ impl<'a> RpcServiceT<'a> for RpcService {
 		.boxed()
 	}
 
-	fn notification(&self, _: Notification<'a>) -> Self::Future {
+	fn notification<'a>(
+		&self,
+		_: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		async move { Ok(MethodResponse::notification()) }.boxed()
 	}
 }
