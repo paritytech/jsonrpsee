@@ -48,6 +48,7 @@ use jsonrpsee_types::{
 };
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
+use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
 
 use super::IntoResponse;
@@ -94,7 +95,7 @@ pub type MaxResponseSize = usize;
 /// A tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-pub type RawRpcResponse = (String, mpsc::Receiver<String>);
+pub type RawRpcResponse = (Box<RawValue>, mpsc::Receiver<String>);
 
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
@@ -310,7 +311,7 @@ impl Methods {
 		tracing::trace!(target: LOG_TARGET, "[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (rp, _) = self.inner_call(req, 1, mock_subscription_permit()).await;
 
-		let rp = serde_json::from_str::<Response<T>>(&rp)?;
+		let rp = serde_json::from_str::<Response<T>>(rp.get())?;
 		ResponseSuccess::try_from(rp).map(|s| s.result).map_err(|e| MethodsError::JsonRpc(e.into_owned()))
 	}
 
@@ -338,7 +339,7 @@ impl Methods {
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#, 1).await.unwrap();
 	///     // If the response is an error converting it to `Success` will fail.
-	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(&resp).unwrap().try_into().unwrap();
+	///     let resp: Success<u64> = serde_json::from_str::<Response<u64>>(resp.get()).unwrap().try_into().unwrap();
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
@@ -350,7 +351,7 @@ impl Methods {
 		&self,
 		request: &str,
 		buf_size: usize,
-	) -> Result<(String, mpsc::Receiver<String>), serde_json::Error> {
+	) -> Result<(Box<RawValue>, mpsc::Receiver<String>), serde_json::Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
@@ -459,13 +460,10 @@ impl Methods {
 		tracing::trace!(target: LOG_TARGET, "[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
+		let as_success: ResponseSuccess<&RawValue> = serde_json::from_str::<Response<_>>(resp.get())?.try_into()?;
+		let sub_id: RpcSubscriptionId = serde_json::from_str(as_success.result.get())?;
 
-		// TODO: hack around the lifetime on the `SubscriptionId` by deserialize first to serde_json::Value.
-		let as_success: ResponseSuccess<serde_json::Value> = serde_json::from_str::<Response<_>>(&resp)?.try_into()?;
-
-		let sub_id = as_success.result.try_into().map_err(|_| MethodsError::InvalidSubscriptionId(resp.clone()))?;
-
-		Ok(Subscription { sub_id, rx })
+		Ok(Subscription { sub_id: sub_id.into_owned(), rx })
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.

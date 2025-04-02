@@ -262,7 +262,7 @@ async fn macro_optional_param_parsing() {
 		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_optional_params","params":{"a":22,"c":50},"id":0}"#, 1)
 		.await
 		.unwrap();
-	assert_eq!(resp, r#"{"jsonrpc":"2.0","id":0,"result":"Called with: 22, None, Some(50)"}"#);
+	assert_eq!(resp.get(), r#"{"jsonrpc":"2.0","id":0,"result":"Called with: 22, None, Some(50)"}"#);
 }
 
 #[tokio::test]
@@ -286,14 +286,14 @@ async fn macro_zero_copy_cow() {
 		.unwrap();
 
 	// std::borrow::Cow<str> always deserialized to owned variant here
-	assert_eq!(resp, r#"{"jsonrpc":"2.0","id":0,"result":"Zero copy params: false"}"#);
+	assert_eq!(resp.get(), r#"{"jsonrpc":"2.0","id":0,"result":"Zero copy params: false"}"#);
 
 	// serde_json will have to allocate a new string to replace `\t` with byte 0x09 (tab)
 	let (resp, _) = module
 		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo"],"id":0}"#, 1)
 		.await
 		.unwrap();
-	assert_eq!(resp, r#"{"jsonrpc":"2.0","id":0,"result":"Zero copy params: false"}"#);
+	assert_eq!(resp.get(), r#"{"jsonrpc":"2.0","id":0,"result":"Zero copy params: false"}"#);
 }
 
 // Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.

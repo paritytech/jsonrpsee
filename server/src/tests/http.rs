@@ -314,7 +314,7 @@ async fn batched_notifications() {
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	// Note: on HTTP acknowledge the notification with an empty response.
-	assert_eq!(response.body, "");
+	assert_eq!(response.body, "null");
 }
 
 #[tokio::test]
@@ -510,7 +510,7 @@ async fn notif_works() {
 	let req = r#"{"jsonrpc":"2.0","method":"bar"}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, "");
+	assert_eq!(response.body, "null");
 }
 
 #[tokio::test]

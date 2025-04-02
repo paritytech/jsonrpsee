@@ -164,10 +164,10 @@ where
 			// "ordinary notifications" should not be sent back to the client.
 			if rp.is_method_call() || rp.is_batch() {
 				let is_success = rp.is_success();
-				let (serialized_rp, mut on_close, _) = rp.into_parts();
+				let (json, mut on_close, _) = rp.into_parts();
 
 				// The connection is closed, just quit.
-				if sink.send(serialized_rp).await.is_err() {
+				if sink.send(String::from(Box::<str>::from(json))).await.is_err() {
 					return;
 				}
 

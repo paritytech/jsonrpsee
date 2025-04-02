@@ -237,7 +237,7 @@ pub trait RpcServiceT<'a> {
 /// Interface for types that can be serialized into JSON.
 pub trait ToJson {
 	/// Convert the type into a JSON value.
-	fn to_json(&self) -> Result<String, serde_json::Error>;
+	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error>;
 }
 
 /// Similar to [`tower::ServiceBuilder`] but doesn't

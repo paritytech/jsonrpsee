@@ -784,12 +784,12 @@ impl std::ops::Deref for MethodResponse {
 }
 
 impl ToJson for MethodResponse {
-	fn to_json(&self) -> Result<String, serde_json::Error> {
+	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
 		match &self.inner {
 			MethodResponseKind::MethodCall(call) => call.to_json(),
-			MethodResponseKind::Notification => Ok(String::new()),
-			MethodResponseKind::Batch(json) => serde_json::to_string(json),
-			MethodResponseKind::Subscription(s) => serde_json::to_string(&s.rp),
+			MethodResponseKind::Notification => Ok(RawValue::NULL.to_owned()),
+			MethodResponseKind::Batch(json) => serde_json::value::to_raw_value(json),
+			MethodResponseKind::Subscription(s) => serde_json::value::to_raw_value(&s.rp),
 		}
 	}
 }
@@ -860,7 +860,7 @@ impl<'a> RawResponse<'a> {
 }
 
 impl ToJson for RawResponse<'_> {
-	fn to_json(&self) -> Result<String, serde_json::Error> {
-		serde_json::to_string(&self.0)
+	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
+		serde_json::value::to_raw_value(&self.0)
 	}
 }

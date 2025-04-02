@@ -137,9 +137,9 @@ where
 
 		match fut.poll(cx) {
 			Poll::Ready(Ok(rp)) => {
-				let as_json = rp.to_json();
-				let json = as_json.as_ref().map_or("<invalid JSON>", |j| j.as_str());
-				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(json, max as usize));
+				let json = rp.to_json();
+				let json_str = json.as_ref().map_or("<invalid JSON>", |j| j.get());
+				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(json_str, max as usize));
 				Poll::Ready(Ok(rp))
 			}
 			Poll::Ready(Err(e)) => Poll::Ready(Err(e)),

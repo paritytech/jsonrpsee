@@ -189,8 +189,7 @@ pub mod response {
 	/// This will include the body and extensions from the method response.
 	pub fn from_method_response(rp: MethodResponse) -> HttpResponse {
 		let (body, _, extensions) = rp.into_parts();
-
-		let mut rp = from_template(hyper::StatusCode::OK, body, JSON);
+		let mut rp = from_template(hyper::StatusCode::OK, String::from(Box::<str>::from(body)), JSON);
 		rp.extensions_mut().extend(extensions);
 		rp
 	}

@@ -383,13 +383,13 @@ async fn subscribe_unsubscribe_without_server() {
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
 		let (resp, _) = module.raw_json_request(&unsub_req, 1).await.unwrap();
 
-		assert_eq!(resp, r#"{"jsonrpc":"2.0","id":1,"result":true}"#);
+		assert_eq!(resp.get(), r#"{"jsonrpc":"2.0","id":1,"result":true}"#);
 
 		// Unsubscribe already performed; should be error.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
 		let (resp, _) = module.raw_json_request(&unsub_req, 2).await.unwrap();
 
-		assert_eq!(resp, r#"{"jsonrpc":"2.0","id":1,"result":false}"#);
+		assert_eq!(resp.get(), r#"{"jsonrpc":"2.0","id":1,"result":false}"#);
 	}
 
 	let sub1 = subscribe_and_assert(&module);
@@ -429,7 +429,7 @@ async fn reject_works() {
 		.unwrap();
 
 	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
-	assert_eq!(rp, r#"{"jsonrpc":"2.0","id":0,"error":{"code":-32700,"message":"rejected"}}"#);
+	assert_eq!(rp.get(), r#"{"jsonrpc":"2.0","id":0,"error":{"code":-32700,"message":"rejected"}}"#);
 	assert!(stream.recv().await.is_none());
 }
 
@@ -520,7 +520,7 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 		.unwrap();
 
 	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
-	let resp = serde_json::from_str::<Response<u64>>(&rp).unwrap();
+	let resp = serde_json::from_str::<Response<u64>>(rp.get()).unwrap();
 	let sub_resp = stream.recv().await.unwrap();
 
 	let resp = match resp.payload {
@@ -565,7 +565,7 @@ async fn subscription_close_response_works() {
 	{
 		let (rp, mut stream) =
 			module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","params":[1],"id":0}"#, 1).await.unwrap();
-		let resp = serde_json::from_str::<Response<u64>>(&rp).unwrap();
+		let resp = serde_json::from_str::<Response<u64>>(rp.get()).unwrap();
 
 		let sub_id = match resp.payload {
 			ResponsePayload::Success(val) => val,
@@ -629,7 +629,7 @@ async fn method_response_notify_on_completion() {
 	// Low level call should also work.
 	let (rp, _) =
 		module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hey","params":["success"],"id":0}"#, 1).await.unwrap();
-	assert_eq!(rp, r#"{"jsonrpc":"2.0","id":0,"result":"lo"}"#);
+	assert_eq!(rp.get(), r#"{"jsonrpc":"2.0","id":0,"result":"lo"}"#);
 	assert!(matches!(rx.recv().await, Some(Ok(_))));
 
 	// Error call should return a failed notification.
