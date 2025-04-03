@@ -133,6 +133,9 @@ impl RpcServiceT for RpcService {
 			let mut extensions = Extensions::new();
 
 			for entry in batch.into_batch_entries() {
+				let Ok(entry) = entry else {
+					continue;
+				};
 				extensions.extend(entry.into_extensions());
 			}
 

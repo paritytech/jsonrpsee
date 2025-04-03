@@ -155,7 +155,7 @@ impl RpcServiceT for RpcService {
 
 			for batch_entry in batch.into_batch_entries() {
 				match batch_entry {
-					BatchEntry::Call(req) => {
+					Ok(BatchEntry::Call(req)) => {
 						let rp = match service.call(req).await {
 							Ok(rp) => rp,
 							Err(e) => match e {},
@@ -164,15 +164,16 @@ impl RpcServiceT for RpcService {
 							return Ok(err);
 						}
 					}
-					BatchEntry::Notification(n) => {
+					Ok(BatchEntry::Notification(n)) => {
 						got_notification = true;
 						match service.notification(n).await {
 							Ok(rp) => rp,
 							Err(e) => match e {},
 						};
 					}
-					BatchEntry::InvalidRequest(id) => {
-						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest));
+					Err(err) => {
+						let (err, id) = err.into_parts();
+						let rp = MethodResponse::error(id, err);
 						if let Err(err) = batch_rp.append(rp) {
 							return Ok(err);
 						}

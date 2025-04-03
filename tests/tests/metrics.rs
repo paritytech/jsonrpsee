@@ -70,7 +70,7 @@ where
 	fn call<'a>(
 		&self,
 		request: Request<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 		let counter = self.counter.clone();
 		let service = self.service.clone();
 
@@ -103,14 +103,14 @@ where
 	fn batch<'a>(
 		&self,
 		batch: Batch<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 		self.service.batch(batch).boxed()
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 		self.service.notification(n).boxed()
 	}
 }

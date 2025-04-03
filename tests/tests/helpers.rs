@@ -159,7 +159,7 @@ pub async fn server() -> SocketAddr {
 		fn call<'a>(
 			&self,
 			mut request: jsonrpsee::types::Request<'a>,
-		) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+		) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 			request.extensions_mut().insert(self.connection_id);
 			self.inner.call(request)
 		}
@@ -167,14 +167,14 @@ pub async fn server() -> SocketAddr {
 		fn batch<'a>(
 			&self,
 			batch: Batch<'a>,
-		) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+		) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 			self.inner.batch(batch)
 		}
 
 		fn notification<'a>(
 			&self,
 			n: Notification<'a>,
-		) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+		) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 			self.inner.notification(n)
 		}
 	}

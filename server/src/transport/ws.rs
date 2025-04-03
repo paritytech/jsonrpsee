@@ -393,9 +393,8 @@ async fn graceful_shutdown<S>(
 ///     mut disconnect: tokio::sync::mpsc::Receiver<()>
 /// ) -> HttpResponse
 /// where
-///     L: for<'a> tower::Layer<RpcService> + 'static,
-///     <L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-///     for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a, Response = MethodResponse> + 'static,
+///     L: tower::Layer<RpcService> + 'static,
+///     <L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse> + Send + Sync + 'static,
 /// {
 ///   match ws::connect(req, server_cfg, methods, conn, rpc_middleware).await {
 ///     Ok((rp, conn_fut)) => {

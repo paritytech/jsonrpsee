@@ -146,6 +146,11 @@ impl<'a, T> Notification<'a, T> {
 		&self.extensions
 	}
 
+	/// Get the params of the request.
+	pub fn params(&self) -> &T {
+		&self.params
+	}
+
 	/// Returns a reference to the associated extensions.
 	pub fn extensions_mut(&mut self) -> &mut Extensions {
 		&mut self.extensions

@@ -47,18 +47,12 @@ where
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call<'a>(
-		&self,
-		req: Request<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		println!("logger layer : {:?}", req);
 		self.0.call(req)
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		println!("logger layer : {:?}", batch);
 		self.0.batch(batch)
 	}
@@ -66,7 +60,7 @@ where
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		println!("logger layer : {:?}", n);
 		self.0.notification(n)
 	}

@@ -56,7 +56,7 @@ impl<S: RpcServiceT> RpcServiceT for LoggingMiddleware<S> {
 	fn call<'a>(
 		&self,
 		request: Request<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 		tracing::info!("Received request: {:?}", request);
 		assert!(request.extensions().get::<ConnectionId>().is_some());
 
@@ -66,14 +66,14 @@ impl<S: RpcServiceT> RpcServiceT for LoggingMiddleware<S> {
 	fn batch<'a>(
 		&self,
 		batch: Batch<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 		self.0.batch(batch)
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
 		self.0.notification(n)
 	}
 }

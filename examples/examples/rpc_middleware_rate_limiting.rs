@@ -78,6 +78,31 @@ impl<S> RateLimit<S> {
 			state: Arc::new(Mutex::new(State::Allow { until: Instant::now() + period, rem: num + 1 })),
 		}
 	}
+
+	fn rate_limit_deny(&self) -> bool {
+		let now = Instant::now();
+		let mut lock = self.state.lock().unwrap();
+		let next_state = match *lock {
+			State::Deny { until } => {
+				if now > until {
+					State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
+				} else {
+					State::Deny { until }
+				}
+			}
+			State::Allow { until, rem } => {
+				if now > until {
+					State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
+				} else {
+					let n = rem - 1;
+					if n > 0 { State::Allow { until: now + self.rate.period, rem: n } } else { State::Deny { until } }
+				}
+			}
+		};
+
+		*lock = next_state;
+		matches!(next_state, State::Deny { .. })
+	}
 }
 
 impl<S> RpcServiceT for RateLimit<S>
@@ -88,59 +113,37 @@ where
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call<'a>(
-		&self,
-		req: Request<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
-		let now = Instant::now();
-
-		let is_denied = {
-			let mut lock = self.state.lock().unwrap();
-			let next_state = match *lock {
-				State::Deny { until } => {
-					if now > until {
-						State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
-					} else {
-						State::Deny { until }
-					}
-				}
-				State::Allow { until, rem } => {
-					if now > until {
-						State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
-					} else {
-						let n = rem - 1;
-						if n > 0 {
-							State::Allow { until: now + self.rate.period, rem: n }
-						} else {
-							State::Deny { until }
-						}
-					}
-				}
-			};
-
-			*lock = next_state;
-			matches!(next_state, State::Deny { .. })
-		};
-
-		if is_denied {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		if self.rate_limit_deny() {
 			ResponseFuture::ready(MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 		} else {
 			ResponseFuture::future(self.service.call(req))
 		}
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
-		ResponseFuture::future(self.service.batch(batch))
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		if self.rate_limit_deny() {
+			let error = ErrorObject::borrowed(-32000, "RPC rate limit", None);
+			let error = MethodResponse::error(jsonrpsee::types::Id::Null, error);
+			return ResponseFuture::ready(error);
+		} else {
+			// NOTE: this count as batch call a single call which may not
+			// be the desired behavior.
+			ResponseFuture::future(self.service.batch(batch))
+		}
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
-		ResponseFuture::future(self.service.notification(n))
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		if self.rate_limit_deny() {
+			// Notifications are not expected to return a response so just ignore
+			// if the rate limit is reached.
+			ResponseFuture::ready(MethodResponse::notification())
+		} else {
+			ResponseFuture::future(self.service.notification(n))
+		}
 	}
 }
 

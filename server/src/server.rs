@@ -45,7 +45,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::{Batch, BatchEntry, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{Batch, BatchEntry, InvalidRequest, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
@@ -55,7 +55,7 @@ use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
 	rpc_middleware_error,
 };
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, deserialize_with_ext};
+use jsonrpsee_types::{ErrorObject, Id, deserialize_with_ext};
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, watch};
@@ -664,7 +664,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use std::{time::Instant, net::SocketAddr, sync::Arc};
 	/// use std::sync::atomic::{Ordering, AtomicUsize};
 	///
-	/// use jsonrpsee_server::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceT, MethodResponse, ResponseBoxFuture, Notification, Request, Batch};
+	/// use jsonrpsee_server::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceT, MethodResponse, Notification, Request, Batch};
 	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -673,32 +673,31 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///     count: Arc<AtomicUsize>,
 	/// }
 	///
-	/// impl<'a, S> RpcServiceT for MyMiddleware<S>
+	/// impl<S> RpcServiceT for MyMiddleware<S>
 	/// where S: RpcServiceT + Send + Sync + Clone + 'static,
 	/// {
-	///    type Future = ResponseBoxFuture<'a, Self::Response, Self::Error>;
 	///    type Error = S::Error;
 	///    type Response = S::Response;
 	///
-	///    fn call(&self, req: Request<'a>) -> Self::Future {
+	///    fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         let count = self.count.clone();
 	///         let service = self.service.clone();
 	///
-	///         Box::pin(async move {
+	///         async move {
 	///             let rp = service.call(req).await;
 	///             // Modify the state.
 	///             count.fetch_add(1, Ordering::Relaxed);
 	///             rp
-	///         })
+	///         }
 	///    }
 	///
-	///    fn batch(&self, batch: Batch<'a>) -> Self::Future {
-	///          Box::pin(self.service.batch(batch))
+	///    fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	///          self.service.batch(batch)
 	///    }
 	///
-	///    fn notification(&self, notif: Notification<'a>) -> Self::Future {
-	///          Box::pin(self.service.notification(notif))
+	///    fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	///          self.service.notification(notif)
 	///    }
 	///
 	/// }
@@ -936,8 +935,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 impl<RequestBody, ResponseBody, RpcMiddleware, HttpMiddleware> Service<HttpRequest<RequestBody>> for TowerService<RpcMiddleware, HttpMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
-	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT,
+	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT + Send + Sync + 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
 		Send + Service<HttpRequest<RequestBody>, Response = HttpResponse<ResponseBody>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
@@ -1290,16 +1288,16 @@ where
 
 			for call in unchecked_batch {
 				if let Ok(req) = deserialize_with_ext::call::from_str(call.get(), &extensions) {
-					batch.push(BatchEntry::Call(req));
+					batch.push(Ok(BatchEntry::Call(req)));
 				} else if let Ok(notif) = deserialize_with_ext::notif::from_str::<Notif>(call.get(), &extensions) {
-					batch.push(BatchEntry::Notification(notif));
+					batch.push(Ok(BatchEntry::Notification(notif)));
 				} else {
-					let id = match serde_json::from_str::<InvalidRequest>(call.get()) {
+					let id = match serde_json::from_str::<jsonrpsee_types::InvalidRequest>(call.get()) {
 						Ok(err) => err.id,
 						Err(_) => Id::Null,
 					};
 
-					batch.push(BatchEntry::InvalidRequest(id));
+					batch.push(Err(InvalidRequest::new(id)));
 				}
 			}
 

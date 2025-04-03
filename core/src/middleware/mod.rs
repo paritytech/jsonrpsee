@@ -2,8 +2,8 @@
 
 pub mod layer;
 
-use futures_util::future::{BoxFuture, Either, Future};
-use jsonrpsee_types::{Id, InvalidRequestId};
+use futures_util::future::{Either, Future};
+use jsonrpsee_types::{ErrorCode, ErrorObject, Id, InvalidRequestId, Response};
 use pin_project::pin_project;
 use serde::Serialize;
 use serde_json::value::RawValue;
@@ -18,13 +18,41 @@ use std::task::{Context, Poll};
 pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, RawValue>>>;
 /// Re-export types from `jsonrpsee_types` crate for convenience.
 pub use jsonrpsee_types::{Extensions, Request};
-/// Type alias for a boxed future that resolves to Result<R, E>.
-pub type ResponseBoxFuture<'a, R, E> = BoxFuture<'a, Result<R, E>>;
+
+#[derive(Debug)]
+/// A JSON-RPC error response indicating an invalid request.
+pub struct InvalidRequest<'a>(Response<'a, ()>);
+
+impl<'a> InvalidRequest<'a> {
+	/// Create a new `InvalidRequest` error response.
+	pub fn new(id: Id<'a>) -> Self {
+		let payload = jsonrpsee_types::ResponsePayload::error(ErrorObject::from(ErrorCode::InvalidRequest));
+		let response = Response::new(payload.into(), id);
+		Self(response)
+	}
+
+	/// Consume the `InvalidRequest` to get the error object and id.
+	pub fn into_parts(self) -> (ErrorObject<'a>, Id<'a>) {
+		match self.0.payload {
+			jsonrpsee_types::ResponsePayload::Error(err) => (err, self.0.id),
+			_ => unreachable!("InvalidRequest::new should only create an error response; qed"),
+		}
+	}
+}
+
+impl Serialize for InvalidRequest<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.0.serialize(serializer)
+	}
+}
 
 /// A batch of JSON-RPC calls and notifications.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Batch<'a> {
-	inner: Vec<BatchEntry<'a>>,
+	inner: Vec<Result<BatchEntry<'a>, InvalidRequest<'a>>>,
 	id_range: Option<std::ops::Range<u64>>,
 }
 
@@ -33,8 +61,20 @@ impl Serialize for Batch<'_> {
 	where
 		S: serde::Serializer,
 	{
-		// Serialize the batch entries directly without the Batch wrapper.
-		serde::Serialize::serialize(&self.inner, serializer)
+		// Err(InvalidRequest) is just an internal error type and should not be serialized.
+		//
+		// It is used to indicate the RpcServiceT::batch method that the request is invalid
+		// and should replied with an error entry.
+		let only_ok: Vec<&BatchEntry> = self
+			.inner
+			.iter()
+			.filter_map(|entry| match entry {
+				Ok(entry) => Some(entry),
+				Err(_) => None,
+			})
+			.collect();
+
+		serde::Serialize::serialize(&only_ok, serializer)
 	}
 }
 
@@ -52,7 +92,7 @@ impl<'a> Batch<'a> {
 	}
 
 	/// Create a new batch from a list of batch entries without an id range.
-	pub fn from_batch_entries(inner: Vec<BatchEntry<'a>>) -> Self {
+	pub fn from_batch_entries(inner: Vec<Result<BatchEntry<'a>, InvalidRequest<'a>>>) -> Self {
 		Self { inner, id_range: None }
 	}
 
@@ -72,23 +112,23 @@ impl<'a> Batch<'a> {
 				self.id_range = Some(id..id);
 			}
 		}
-		self.inner.push(BatchEntry::Call(req));
+		self.inner.push(Ok(BatchEntry::Call(req)));
 
 		Ok(())
 	}
 
 	/// Get an iterator over the batch entries.
-	pub fn as_batch_entries(&self) -> &[BatchEntry<'a>] {
+	pub fn as_batch_entries(&self) -> &[Result<BatchEntry<'a>, InvalidRequest<'a>>] {
 		&self.inner
 	}
 
 	/// Get a mutable iterator over the batch entries.
-	pub fn as_mut_batch_entries(&mut self) -> &mut [BatchEntry<'a>] {
+	pub fn as_mut_batch_entries(&mut self) -> &mut [Result<BatchEntry<'a>, InvalidRequest<'a>>] {
 		&mut self.inner
 	}
 
 	/// Consume the batch and return the inner entries.
-	pub fn into_batch_entries(self) -> Vec<BatchEntry<'a>> {
+	pub fn into_batch_entries(self) -> Vec<Result<BatchEntry<'a>, InvalidRequest<'a>>> {
 		self.inner
 	}
 
@@ -139,33 +179,14 @@ pub enum BatchEntry<'a> {
 	Call(Request<'a>),
 	/// A JSON-RPC notification.
 	Notification(Notification<'a>),
-	/// The representation of an invalid request and kept to maintain the batch order.
-	///
-	/// WARNING: This is an internal state and should be NOT be used by external users
-	///
-	#[serde(skip)]
-	#[doc(hidden)]
-	InvalidRequest(Id<'a>),
 }
 
-/// Internal InvalidRequest that can't be instantiated by the user.
-#[derive(Debug, Clone)]
-pub struct InvalidRequest<'a>(Id<'a>);
-
-impl<'a> InvalidRequest<'a> {
-	/// Consume the invalid request and extract the id.
-	pub fn into_id(self) -> Id<'a> {
-		self.0
-	}
-}
-
-impl BatchEntry<'_> {
+impl<'a> BatchEntry<'a> {
 	/// Get a reference to extensions of the batch entry.
 	pub fn extensions(&self) -> &Extensions {
 		match self {
 			BatchEntry::Call(req) => req.extensions(),
 			BatchEntry::Notification(n) => n.extensions(),
-			BatchEntry::InvalidRequest(_) => panic!("BatchEntry::InvalidRequest should not be used"),
 		}
 	}
 
@@ -174,7 +195,6 @@ impl BatchEntry<'_> {
 		match self {
 			BatchEntry::Call(req) => req.extensions_mut(),
 			BatchEntry::Notification(n) => n.extensions_mut(),
-			BatchEntry::InvalidRequest(_) => panic!("BatchEntry::InvalidRequest should not be used"),
 		}
 	}
 
@@ -183,7 +203,38 @@ impl BatchEntry<'_> {
 		match self {
 			BatchEntry::Call(req) => req.method_name(),
 			BatchEntry::Notification(n) => n.method_name(),
-			BatchEntry::InvalidRequest(_) => panic!("BatchEntry::InvalidRequest should not be used"),
+		}
+	}
+
+	/// Set the method name of the batch entry.
+	pub fn set_method_name(&mut self, name: impl Into<Cow<'a, str>>) {
+		match self {
+			BatchEntry::Call(req) => {
+				req.method = name.into();
+			}
+			BatchEntry::Notification(n) => {
+				n.method = name.into();
+			}
+		}
+	}
+
+	/// Get the params of the batch entry (may be empty).
+	pub fn params(&self) -> Option<&Cow<'a, RawValue>> {
+		match self {
+			BatchEntry::Call(req) => req.params.as_ref(),
+			BatchEntry::Notification(n) => n.params.as_ref(),
+		}
+	}
+
+	/// Set the params of the batch entry.
+	pub fn set_params(&mut self, params: Option<Box<RawValue>>) {
+		match self {
+			BatchEntry::Call(req) => {
+				req.params = params.map(Cow::Owned);
+			}
+			BatchEntry::Notification(n) => {
+				n.params = params.map(Cow::Owned);
+			}
 		}
 	}
 
@@ -192,7 +243,6 @@ impl BatchEntry<'_> {
 		match self {
 			BatchEntry::Call(req) => req.extensions,
 			BatchEntry::Notification(n) => n.extensions,
-			BatchEntry::InvalidRequest(_) => panic!("BatchEntry::InvalidRequest should not be used"),
 		}
 	}
 }
@@ -348,6 +398,24 @@ mod tests {
 		assert_eq!(
 			serde_json::to_string(&batch_entry).unwrap(),
 			"{\"jsonrpc\":\"2.0\",\"method\":\"say_hello\",\"params\":null}",
+		);
+	}
+
+	#[test]
+	fn serialize_batch_works() {
+		use super::{Batch, BatchEntry, InvalidRequest, Notification, Request};
+		use jsonrpsee_types::Id;
+
+		let req = Request::borrowed("say_hello", None, Id::Number(1));
+		let notification = Notification::new("say_hello".into(), None);
+		let batch = Batch::from_batch_entries(vec![
+			Ok(BatchEntry::Call(req)),
+			Ok(BatchEntry::Notification(notification)),
+			Err(InvalidRequest::new(Id::Null)),
+		]);
+		assert_eq!(
+			serde_json::to_string(&batch).unwrap(),
+			r#"[{"jsonrpc":"2.0","id":1,"method":"say_hello"},{"jsonrpc":"2.0","method":"say_hello","params":null}]"#,
 		);
 	}
 }

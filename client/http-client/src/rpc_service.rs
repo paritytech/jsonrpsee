@@ -64,6 +64,10 @@ where
 			let mut extensions = Extensions::new();
 
 			for call in batch.into_batch_entries() {
+				let Ok(call) = call else {
+					continue;
+				};
+
 				extensions.extend(call.into_extensions());
 			}
 

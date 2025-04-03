@@ -53,7 +53,7 @@ use jsonrpsee::server::{
 	ConnectionGuard, ConnectionState, ServerConfig, ServerHandle, StopHandle, http, serve_with_graceful_shutdown,
 	stop_channel, ws,
 };
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{MethodResponse, Methods};
 use tokio::net::TcpListener;
@@ -80,10 +80,7 @@ where
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call<'a>(
-		&self,
-		req: Request<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let state = self.state.clone();
 		let service = self.service.clone();
@@ -100,21 +97,39 @@ where
 				rp
 			}
 		}
-		.boxed()
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
-		Box::pin(self.service.batch(batch))
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		let count = self.count.clone();
+		let state = self.state.clone();
+		let service = self.service.clone();
+
+		async move {
+			let mut lock = count.lock().await;
+
+			if *lock >= 10 {
+				let _ = state.try_send(());
+				Ok(MethodResponse::error(Id::Null, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
+			} else {
+				let rp = service.batch(batch).await;
+				*lock += 10;
+				rp
+			}
+		}
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
-		Box::pin(self.service.notification(n))
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		let count = self.count.clone();
+		let service = self.service.clone();
+
+		// A notification is not expected to return a response so the result here doesn't matter
+		// rather than other middlewares may not be invoked.
+		async move {
+			if *count.lock().await >= 10 { Ok(MethodResponse::notification()) } else { service.notification(n).await }
+		}
 	}
 }
 

@@ -73,7 +73,7 @@ where
 	fn call<'a>(
 		&self,
 		req: Request<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let service = self.service.clone();
 		let role = self.role;
@@ -87,10 +87,7 @@ where
 		.boxed()
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let len = batch.as_batch_entries().len();
 		self.count.fetch_add(len, Ordering::SeqCst);
 		println!("{} processed calls={} on the connection", self.role, self.count.load(Ordering::SeqCst));
@@ -100,7 +97,7 @@ where
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		Box::pin(self.service.notification(n))
 	}
 }
@@ -119,10 +116,7 @@ where
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call<'a>(
-		&self,
-		req: Request<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let service = self.service.clone();
 		let role = self.role;
@@ -137,10 +131,7 @@ where
 		.boxed()
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let len = batch.as_batch_entries().len();
 		self.count.fetch_add(len, Ordering::SeqCst);
 		println!("{}, processed calls={} in total", self.role, self.count.load(Ordering::SeqCst));
@@ -150,7 +141,7 @@ where
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		Box::pin(self.service.notification(n))
 	}
 }
@@ -168,25 +159,19 @@ where
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call<'a>(
-		&self,
-		req: Request<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		println!("{} logger middleware: method `{}`", self.role, req.method);
 		self.service.call(req)
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		println!("{} logger middleware: batch {batch}", self.role);
 		self.service.batch(batch)
 	}
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<<S as RpcServiceT>::Response, <S as RpcServiceT>::Error>> + Send + 'a {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		self.service.notification(n)
 	}
 }
