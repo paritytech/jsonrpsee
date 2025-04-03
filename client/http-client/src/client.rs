@@ -36,7 +36,7 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{
-	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT, generate_batch_id_range,
+	BatchResponse, ClientT, Error, IdKind, RequestIdManager, Subscription, SubscriptionClientT,
 };
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
@@ -414,18 +414,18 @@ where
 			None => None,
 		};
 		let batch = batch.build()?;
-		let id = self.id_manager.next_request_id();
-		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
+		let mut ids = Vec::new();
 
 		let mut batch_request = Vec::with_capacity(batch.len());
-		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.as_id_kind().into_id(id);
+		for (method, params) in batch.into_iter() {
+			let id = self.id_manager.next_request_id();
 			batch_request.push(RequestSer {
 				jsonrpc: TwoPointZero,
-				id,
+				id: id.clone(),
 				method: method.into(),
 				params: params.map(StdCow::Owned),
 			});
+			ids.push(id);
 		}
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
@@ -447,7 +447,7 @@ where
 		}
 
 		for rp in json_rps {
-			let id = rp.id.try_parse_inner_as_number()?;
+			let id = rp.id.clone();
 
 			let res = match ResponseSuccess::try_from(rp) {
 				Ok(r) => {
@@ -461,13 +461,8 @@ where
 				}
 			};
 
-			let maybe_elem = id
-				.checked_sub(id_range.start)
-				.and_then(|p| p.try_into().ok())
-				.and_then(|p: usize| responses.get_mut(p));
-
-			if let Some(elem) = maybe_elem {
-				*elem = res;
+			if let Some(pos) = ids.iter().position(|stored_id| stored_id == &id) {
+				responses[pos] = res;
 			} else {
 				return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
 			}
