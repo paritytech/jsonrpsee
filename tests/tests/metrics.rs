@@ -34,7 +34,6 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use futures::FutureExt;
 use helpers::init_logger;
 use jsonrpsee::core::middleware::{Batch, Notification, Request, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{ClientError, client::ClientT};
@@ -67,10 +66,7 @@ where
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call<'a>(
-		&self,
-		request: Request<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let counter = self.counter.clone();
 		let service = self.service.clone();
 
@@ -90,28 +86,24 @@ where
 			{
 				let mut n = counter.lock().unwrap();
 				n.requests.1 += 1;
-				if rp.as_ref().map_or(false, |r| r.is_success()) {
+				if rp.as_ref().is_ok_and(|r| r.is_success()) {
 					n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
 				}
 			}
 
 			rp
 		}
-		.boxed()
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
-		self.service.batch(batch).boxed()
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.service.batch(batch)
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
-		self.service.notification(n).boxed()
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.service.notification(n)
 	}
 }
 

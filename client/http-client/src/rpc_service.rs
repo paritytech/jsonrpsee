@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures_util::FutureExt;
 use hyper::{body::Bytes, http::Extensions};
 use jsonrpsee_core::{
 	BoxError, JsonRawValue,
@@ -47,7 +46,6 @@ where
 			let json_rp: Response<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
 			Ok(MethodResponse::method_call(json_rp.into_owned().into(), request.extensions))
 		}
-		.boxed()
 	}
 
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
@@ -73,7 +71,6 @@ where
 
 			Ok(MethodResponse::batch(rp, extensions))
 		}
-		.boxed()
 	}
 
 	fn notification<'a>(
@@ -87,6 +84,5 @@ where
 			service.send(raw).await.map_err(|e| Error::Transport(e.into()))?;
 			Ok(MethodResponse::notification(notif.extensions))
 		}
-		.boxed()
 	}
 }

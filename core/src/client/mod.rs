@@ -787,7 +787,7 @@ impl ToJson for MethodResponse {
 	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
 		match &self.inner {
 			MethodResponseKind::MethodCall(call) => call.to_json(),
-			MethodResponseKind::Notification => Ok(RawValue::NULL.to_owned()),
+			MethodResponseKind::Notification => Ok(Box::<RawValue>::default()),
 			MethodResponseKind::Batch(json) => serde_json::value::to_raw_value(json),
 			MethodResponseKind::Subscription(s) => serde_json::value::to_raw_value(&s.rp),
 		}

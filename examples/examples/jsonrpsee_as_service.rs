@@ -79,10 +79,7 @@ where
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call<'a>(
-		&self,
-		req: Request<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		if req.method_name() == "trusted_call" {
 			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else {
 				let rp = MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
@@ -98,17 +95,14 @@ where
 		}
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		ResponseFuture::future(self.inner.batch(batch))
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		ResponseFuture::future(self.inner.notification(n))
 	}
 }

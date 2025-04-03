@@ -767,15 +767,9 @@ async fn ws_batch_works() {
 	assert_eq!(res.num_failed_calls(), 1);
 
 	let ok_responses: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
-	let err_responses: Vec<_> = res
-		.iter()
-		.filter_map(|r| match r {
-			Err(e) => Some(e),
-			_ => None,
-		})
-		.collect();
+	let err_responses: Vec<_> = res.iter().filter_map(|r| r.clone().err()).collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
+	assert_eq!(err_responses, vec![ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
 }
 
 #[tokio::test]
@@ -807,15 +801,9 @@ async fn http_batch_works() {
 	assert_eq!(res.num_failed_calls(), 1);
 
 	let ok_responses: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
-	let err_responses: Vec<_> = res
-		.iter()
-		.filter_map(|r| match r {
-			Err(e) => Some(e),
-			_ => None,
-		})
-		.collect();
+	let err_responses: Vec<_> = res.iter().filter_map(|r| r.clone().err()).collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
+	assert_eq!(err_responses, vec![ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
 }
 
 #[tokio::test]

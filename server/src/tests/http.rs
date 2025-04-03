@@ -71,7 +71,7 @@ where
 			req.extensions_mut().insert(StatusCode::OK);
 		}
 
-		self.service.call(req).boxed()
+		self.service.call(req)
 	}
 
 	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
@@ -83,14 +83,14 @@ where
 			}
 		}
 
-		self.service.batch(batch).boxed()
+		self.service.batch(batch)
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		self.service.notification(n).boxed()
+		self.service.notification(n)
 	}
 }
 

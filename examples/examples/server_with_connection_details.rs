@@ -53,27 +53,21 @@ impl<S: RpcServiceT> RpcServiceT for LoggingMiddleware<S> {
 	type Error = S::Error;
 	type Response = S::Response;
 
-	fn call<'a>(
-		&self,
-		request: Request<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		tracing::info!("Received request: {:?}", request);
 		assert!(request.extensions().get::<ConnectionId>().is_some());
 
 		self.0.call(request)
 	}
 
-	fn batch<'a>(
-		&self,
-		batch: Batch<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		self.0.batch(batch)
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a  {
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		self.0.notification(n)
 	}
 }

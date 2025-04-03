@@ -125,7 +125,7 @@ where
 		if self.rate_limit_deny() {
 			let error = ErrorObject::borrowed(-32000, "RPC rate limit", None);
 			let error = MethodResponse::error(jsonrpsee::types::Id::Null, error);
-			return ResponseFuture::ready(error);
+			ResponseFuture::ready(error)
 		} else {
 			// NOTE: this count as batch call a single call which may not
 			// be the desired behavior.

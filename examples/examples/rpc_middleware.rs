@@ -46,7 +46,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use futures::FutureExt;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
@@ -84,14 +83,13 @@ where
 			println!("{role} processed calls={} on the connection", count.load(Ordering::SeqCst));
 			rp
 		}
-		.boxed()
 	}
 
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let len = batch.as_batch_entries().len();
 		self.count.fetch_add(len, Ordering::SeqCst);
 		println!("{} processed calls={} on the connection", self.role, self.count.load(Ordering::SeqCst));
-		Box::pin(self.service.batch(batch))
+		self.service.batch(batch)
 	}
 
 	fn notification<'a>(
@@ -128,21 +126,20 @@ where
 
 			rp
 		}
-		.boxed()
 	}
 
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let len = batch.as_batch_entries().len();
 		self.count.fetch_add(len, Ordering::SeqCst);
 		println!("{}, processed calls={} in total", self.role, self.count.load(Ordering::SeqCst));
-		Box::pin(self.service.batch(batch))
+		self.service.batch(batch)
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		Box::pin(self.service.notification(n))
+		self.service.notification(n)
 	}
 }
 
