@@ -271,23 +271,10 @@ pub(crate) fn build_unsubscribe_message(
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
 	timeout: std::time::Duration,
-	rx: oneshot::Receiver<Result<T, InvalidRequestId>>,
-) -> Result<Result<T, Error>, oneshot::error::RecvError> {
-	match future::select(rx, Delay::new(timeout)).await {
-		Either::Left((Ok(Ok(r)), _)) => Ok(Ok(r)),
-		Either::Left((Ok(Err(e)), _)) => Ok(Err(Error::InvalidRequestId(e))),
-		Either::Left((Err(e), _)) => Err(e),
-		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
-	}
-}
-
-/// Wait for a stream to complete within the given timeout.
-pub(crate) async fn call_with_timeout_sub<T>(
-	timeout: std::time::Duration,
 	rx: oneshot::Receiver<Result<T, Error>>,
 ) -> Result<Result<T, Error>, oneshot::error::RecvError> {
 	match future::select(rx, Delay::new(timeout)).await {
-		Either::Left((r, _)) => r,
+		Either::Left((res, _)) => res,
 		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
 	}
 }

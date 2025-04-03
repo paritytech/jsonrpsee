@@ -280,7 +280,6 @@ where
 			service_builder,
 			#[cfg(feature = "tls")]
 			certificate_store,
-			request_timeout,
 		}
 		.build(target)
 		.map_err(|e| Error::Transport(e.into()))?;
@@ -362,7 +361,13 @@ where
 			None => None,
 		};
 		let params = params.to_rpc_params()?.map(StdCow::Owned);
-		self.transport.notification(Notification::new(method.into(), params)).await?;
+
+		run_future_until_timeout(
+			self.transport.notification(Notification::new(method.into(), params)),
+			self.request_timeout,
+		)
+		.await
+		.map_err(|e| Error::Transport(e.into()))?;
 		Ok(())
 	}
 
@@ -378,10 +383,15 @@ where
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
 
-		let request = Request::borrowed(method, params.as_deref(), id.clone());
-		let rp =
-			self.transport.call(request).await?.into_method_call().expect("Transport::call must return a method call");
-		let rp = ResponseSuccess::try_from(rp.into_inner())?;
+		let method_response = run_future_until_timeout(
+			self.transport.call(Request::borrowed(method, params.as_deref(), id.clone())),
+			self.request_timeout,
+		)
+		.await?
+		.into_method_call()
+		.expect("Method call must return a method call reponse; qed");
+
+		let rp = ResponseSuccess::try_from(method_response.into_inner())?;
 
 		let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
 		if rp.id == id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into()) }
@@ -412,8 +422,8 @@ where
 			batch_request.push(req)?;
 		}
 
-		let json_rps =
-			self.transport.batch(batch_request).await?.into_batch().expect("Transport::batch must return a batch");
+		let rp = run_future_until_timeout(self.transport.batch(batch_request), self.request_timeout).await?;
+		let json_rps = rp.into_batch().expect("Batch must return a batch reponse; qed");
 
 		let mut batch_response = Vec::new();
 		let mut success = 0;
@@ -481,5 +491,16 @@ where
 		N: DeserializeOwned,
 	{
 		Err(Error::HttpNotImplemented)
+	}
+}
+
+async fn run_future_until_timeout<F>(fut: F, timeout: Duration) -> Result<MethodResponse, Error>
+where
+	F: std::future::Future<Output = Result<MethodResponse, Error>>,
+{
+	match tokio::time::timeout(timeout, fut).await {
+		Ok(Ok(r)) => Ok(r),
+		Err(_) => Err(Error::RequestTimeout),
+		Ok(Err(e)) => Err(e),
 	}
 }

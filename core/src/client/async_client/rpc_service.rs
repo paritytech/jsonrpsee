@@ -1,23 +1,14 @@
-use std::time::Duration;
-
 use crate::{
 	client::{
 		BatchMessage, Error as ClientError, FrontToBack, MethodResponse, RequestMessage, SubscriptionMessage,
-		SubscriptionResponse, async_client::helpers::call_with_timeout,
+		SubscriptionResponse,
 	},
 	middleware::{Batch, IsSubscription, Notification, Request, RpcServiceT},
 };
 
-use futures_timer::Delay;
-use futures_util::{
-	FutureExt,
-	future::{self, Either},
-};
 use http::Extensions;
 use jsonrpsee_types::{InvalidRequestId, Response, ResponsePayload};
 use tokio::sync::{mpsc, oneshot};
-
-use super::helpers::call_with_timeout_sub;
 
 /// RpcService error.
 #[derive(Debug, thiserror::Error)]
@@ -45,17 +36,14 @@ impl From<oneshot::error::RecvError> for Error {
 
 /// RpcService implementation for the async client.
 #[derive(Debug, Clone)]
-pub struct RpcService {
-	tx: mpsc::Sender<FrontToBack>,
-	request_timeout: Duration,
-}
+pub struct RpcService(mpsc::Sender<FrontToBack>);
 
 impl RpcService {
 	// This is a private interface but we need to expose it for the async client
 	// to be able to create the service.
 	#[allow(private_interfaces)]
-	pub(crate) fn new(tx: mpsc::Sender<FrontToBack>, request_timeout: Duration) -> Self {
-		Self { tx, request_timeout }
+	pub(crate) fn new(tx: mpsc::Sender<FrontToBack>) -> Self {
+		Self(tx)
 	}
 }
 
@@ -64,8 +52,7 @@ impl RpcServiceT for RpcService {
 	type Error = Error;
 
 	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		let tx = self.tx.clone();
-		let request_timeout = self.request_timeout;
+		let tx = self.0.clone();
 
 		async move {
 			let raw = serde_json::to_string(&request).map_err(client_err)?;
@@ -84,7 +71,7 @@ impl RpcServiceT for RpcService {
 						}))
 						.await?;
 
-					let (subscribe_rx, sub_id) = call_with_timeout_sub(request_timeout, send_back_rx).await??;
+					let (subscribe_rx, sub_id) = send_back_rx.await??;
 
 					let s = serde_json::value::to_raw_value(&sub_id).map_err(client_err)?;
 
@@ -106,18 +93,16 @@ impl RpcServiceT for RpcService {
 						id: request.id.clone().into_owned(),
 					}))
 					.await?;
-					let rp = call_with_timeout(request_timeout, send_back_rx).await??;
+					let rp = send_back_rx.await?.map_err(|e| ClientError::InvalidRequestId(e))?;
 
 					Ok(MethodResponse::method_call(rp, request.extensions))
 				}
 			}
 		}
-		.boxed()
 	}
 
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		let tx = self.tx.clone();
-		let request_timeout = self.request_timeout;
+		let tx = self.0.clone();
 
 		async move {
 			let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -128,7 +113,7 @@ impl RpcServiceT for RpcService {
 			)))?;
 
 			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx })).await?;
-			let json = call_with_timeout(request_timeout, send_back_rx).await??;
+			let json = send_back_rx.await?.map_err(|e| ClientError::InvalidRequestId(e))?;
 
 			let mut extensions = Extensions::new();
 
@@ -141,29 +126,19 @@ impl RpcServiceT for RpcService {
 
 			Ok(MethodResponse::batch(json, extensions))
 		}
-		.boxed()
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		let tx = self.tx.clone();
-		let request_timeout = self.request_timeout;
+		let tx = self.0.clone();
 
 		async move {
 			let raw = serde_json::to_string(&n).map_err(client_err)?;
-			let fut = tx.send(FrontToBack::Notification(raw));
-
-			tokio::pin!(fut);
-
-			match future::select(fut, Delay::new(request_timeout)).await {
-				Either::Left((Ok(()), _)) => Ok(MethodResponse::notification(n.extensions)),
-				Either::Left((Err(e), _)) => Err(e.into()),
-				Either::Right((_, _)) => Err(ClientError::RequestTimeout.into()),
-			}
+			tx.send(FrontToBack::Notification(raw)).await?;
+			Ok(MethodResponse::notification(n.extensions))
 		}
-		.boxed()
 	}
 }
 

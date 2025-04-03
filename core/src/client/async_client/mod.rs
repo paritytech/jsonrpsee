@@ -52,7 +52,7 @@ use futures_util::Stream;
 use futures_util::future::{self, Either};
 use futures_util::stream::StreamExt;
 use helpers::{
-	build_unsubscribe_message, call_with_timeout_sub, process_batch_response, process_notification,
+	build_unsubscribe_message, call_with_timeout, process_batch_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
 use http::Extensions;
@@ -357,7 +357,7 @@ impl<L> ClientBuilder<L> {
 
 		Client {
 			to_back: to_back.clone(),
-			service: self.service_builder.service(RpcService::new(to_back.clone(), self.request_timeout)),
+			service: self.service_builder.service(RpcService::new(to_back.clone())),
 			request_timeout: self.request_timeout,
 			error: ErrorFromBack::new(to_back, disconnect_reason),
 			id_manager: RequestIdManager::new(self.id_kind),
@@ -453,14 +453,15 @@ impl<L> Client<L> {
 		!self.to_back.is_closed()
 	}
 
-	async fn map_rpc_service_err(
+	async fn run_future_until_timeout(
 		&self,
 		fut: impl Future<Output = Result<MethodResponse, RpcServiceError>>,
 	) -> Result<MethodResponse, Error> {
-		match fut.await {
-			Ok(r) => Ok(r),
-			Err(RpcServiceError::Client(e)) => Err(e),
-			Err(RpcServiceError::FetchFromBackend) => Err(self.on_disconnect().await),
+		match tokio::time::timeout(self.request_timeout, fut).await {
+			Ok(Ok(r)) => Ok(r),
+			Ok(Err(RpcServiceError::Client(e))) => Err(e),
+			Ok(Err(RpcServiceError::FetchFromBackend)) => Err(self.on_disconnect().await),
+			Err(_) => Err(Error::RequestTimeout),
 		}
 	}
 
@@ -501,7 +502,7 @@ where
 		let _req_id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?.map(StdCow::Owned);
 		let fut = self.service.notification(jsonrpsee_types::Notification::new(method.into(), params));
-		self.map_rpc_service_err(fut).await?;
+		self.run_future_until_timeout(fut).await?;
 		Ok(())
 	}
 
@@ -512,10 +513,8 @@ where
 	{
 		let id = self.id_manager.next_request_id();
 		let params = params.to_rpc_params()?;
-
-		let request = Request::borrowed(method, params.as_deref(), id.clone());
-		let fut = self.service.call(request);
-		let rp = self.map_rpc_service_err(fut).await?.into_method_call().expect("Method call response");
+		let fut = self.service.call(Request::borrowed(method, params.as_deref(), id.clone()));
+		let rp = self.run_future_until_timeout(fut).await?.into_method_call().expect("Method call response");
 		let success = ResponseSuccess::try_from(rp.into_inner())?;
 
 		serde_json::from_str(success.result.get()).map_err(Into::into)
@@ -542,7 +541,7 @@ where
 		}
 
 		let fut = self.service.batch(b);
-		let json_values = self.map_rpc_service_err(fut).await?.into_batch().expect("Batch response");
+		let json_values = self.run_future_until_timeout(fut).await?.into_batch().expect("Batch response");
 
 		let mut responses = Vec::with_capacity(json_values.len());
 		let mut successful_calls = 0;
@@ -605,7 +604,7 @@ where
 
 		let fut = self.service.call(req);
 		let (sub_id, notifs_rx) =
-			self.map_rpc_service_err(fut).await?.into_subscription().expect("Subscription response");
+			self.run_future_until_timeout(fut).await?.into_subscription().expect("Subscription response");
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
@@ -629,7 +628,7 @@ where
 			return Err(self.on_disconnect().await);
 		}
 
-		let res = call_with_timeout_sub(self.request_timeout, send_back_rx).await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
 		let (rx, method) = match res {
 			Ok(Ok(val)) => val,
