@@ -457,11 +457,13 @@ impl<L> Client<L> {
 		&self,
 		fut: impl Future<Output = Result<MethodResponse, RpcServiceError>>,
 	) -> Result<MethodResponse, Error> {
-		match tokio::time::timeout(self.request_timeout, fut).await {
-			Ok(Ok(r)) => Ok(r),
-			Ok(Err(RpcServiceError::Client(e))) => Err(e),
-			Ok(Err(RpcServiceError::FetchFromBackend)) => Err(self.on_disconnect().await),
-			Err(_) => Err(Error::RequestTimeout),
+		tokio::pin!(fut);
+
+		match futures_util::future::select(fut, futures_timer::Delay::new(self.request_timeout)).await {
+			Either::Left((Ok(r), _)) => Ok(r),
+			Either::Left((Err(RpcServiceError::Client(e)), _)) => Err(e),
+			Either::Left((Err(RpcServiceError::FetchFromBackend), _)) => Err(self.on_disconnect().await),
+			Either::Right(_) => Err(Error::RequestTimeout),
 		}
 	}
 

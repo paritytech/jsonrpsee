@@ -44,7 +44,7 @@ impl<'a> ErrorResponse<'a> {
 }
 
 /// A batch of JSON-RPC requests.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Batch<'a> {
 	inner: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>,
 	extensions: Extensions,
@@ -84,6 +84,11 @@ impl<'a> Batch<'a> {
 	/// Get the length of the batch.
 	pub fn len(&self) -> usize {
 		self.inner.len()
+	}
+
+	/// Returns whether the batch is empty.
+	pub fn is_empty(&self) -> bool {
+		self.inner.is_empty()
 	}
 
 	/// Get an iterator over the batch.
