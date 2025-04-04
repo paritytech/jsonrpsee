@@ -77,7 +77,7 @@ where
 	}
 
 	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		for call in batch.as_mut_batch_entries() {
+		for call in batch.iter_mut() {
 			match call {
 				Ok(BatchEntry::Call(call)) => {
 					modify_method_call(call);

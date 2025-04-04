@@ -1301,7 +1301,7 @@ where
 				}
 			}
 
-			match rpc_service.batch(Batch::from_batch_entries(batch)).await {
+			match rpc_service.batch(Batch::from(batch)).await {
 				Ok(rp) => rp,
 				Err(e) => MethodResponse::error(Id::Null, rpc_middleware_error(e)),
 			}

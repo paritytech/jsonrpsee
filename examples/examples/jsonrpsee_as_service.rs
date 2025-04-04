@@ -132,7 +132,6 @@ where
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		// Check the authorization header for each entry in the batch.
 		let entries: Vec<_> = batch
-			.into_batch_entries()
 			.into_iter()
 			.filter_map(|entry| match entry {
 				Ok(BatchEntry::Call(req)) => {
@@ -159,7 +158,7 @@ where
 			})
 			.collect();
 
-		self.inner.batch(Batch::from_batch_entries(entries)).boxed()
+		self.inner.batch(Batch::from(entries)).boxed()
 	}
 
 	fn notification<'a>(

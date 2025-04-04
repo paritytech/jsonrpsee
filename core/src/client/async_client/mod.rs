@@ -41,7 +41,7 @@ use crate::client::{
 	SubscriptionKind, TransportReceiverT, TransportSenderT,
 };
 use crate::error::RegisterMethodError;
-use crate::middleware::{Batch, IsSubscription, Request, RpcServiceBuilder, RpcServiceT};
+use crate::middleware::{Batch, IsBatch, IsSubscription, Request, RpcServiceBuilder, RpcServiceT};
 use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::traits::ToRpcParams;
 use std::borrow::Cow as StdCow;
@@ -537,8 +537,10 @@ where
 				method: method.into(),
 				params: params.map(StdCow::Owned),
 				extensions: Extensions::new(),
-			})?;
+			});
 		}
+
+		b.extensions_mut().insert(IsBatch { id_range });
 
 		let fut = self.service.batch(b);
 		let json_values = self.run_future_until_timeout(fut).await?.into_batch().expect("Batch response");

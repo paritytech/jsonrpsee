@@ -3,9 +3,10 @@
 pub mod layer;
 
 use futures_util::future::{Either, Future};
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequestId};
+use jsonrpsee_types::{ErrorObject, Id};
 use pin_project::pin_project;
 use serde::Serialize;
+use serde::ser::SerializeSeq;
 use serde_json::value::RawValue;
 use tower::layer::LayerFn;
 use tower::layer::util::{Identity, Stack};
@@ -42,107 +43,42 @@ impl<'a> ErrorResponse<'a> {
 	}
 }
 
-impl<'a> Serialize for ErrorResponse<'a> {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		serde::Serialize::serialize(&self.0, serializer)
-	}
-}
-
-/// A batch of JSON-RPC calls and notifications.
-#[derive(Debug, Default)]
+/// A batch of JSON-RPC requests.
+#[derive(Debug)]
 pub struct Batch<'a> {
 	inner: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>,
-	id_range: Option<std::ops::Range<u64>>,
-}
-
-impl Serialize for Batch<'_> {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		// Err(InvalidRequest) is just an internal error type and should not be serialized.
-		//
-		// It is used to indicate the RpcServiceT::batch method that the request is invalid
-		// and should replied with an error entry.
-		//
-		// This clippy lint is faulty because `Result::ok` consumes the value
-		// and we don't want to consume the value here.
-		#[allow(clippy::manual_ok_err)]
-		let only_ok: Vec<&BatchEntry> = self
-			.inner
-			.iter()
-			.filter_map(|entry| match entry {
-				Ok(entry) => Some(entry),
-				Err(_) => None,
-			})
-			.collect();
-
-		serde::Serialize::serialize(&only_ok, serializer)
-	}
+	extensions: Extensions,
 }
 
 impl std::fmt::Display for Batch<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let s = serde_json::to_string(&self.inner).expect("Batch serialization failed");
-		f.write_str(&s)
+		let fmt = serde_json::to_string(self).map_err(|_| std::fmt::Error)?;
+		f.write_str(&fmt)
 	}
 }
 
 impl<'a> Batch<'a> {
-	/// Create a new empty batch.
-	pub fn new() -> Self {
-		Self::default()
-	}
-
-	/// Create a new batch from a list of batch entries without an id range.
-	pub fn from_batch_entries(inner: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>) -> Self {
-		Self { inner, id_range: None }
-	}
-
-	/// Insert a new batch entry into the batch.
-	///
-	/// Fails if the request id is not a number or the id range overflows.
-	pub fn push(&mut self, req: Request<'a>) -> Result<(), InvalidRequestId> {
-		let id = req.id().try_parse_inner_as_number()?;
-
-		match self.id_range {
-			Some(ref mut range) => {
-				debug_assert!(id + 1 > range.end);
-				range.end =
-					id.checked_add(1).ok_or_else(|| InvalidRequestId::Invalid("Id range overflow".to_string()))?;
-			}
-			None => {
-				self.id_range = Some(id..id);
+	/// Create a new batch from a vector of batch entries.
+	pub fn from(entries: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>) -> Self {
+		let mut extensions = Extensions::new();
+		for entry in &entries {
+			if let Ok(entry) = entry {
+				extensions.extend(entry.extensions().clone());
 			}
 		}
+
+		Self { inner: entries, extensions }
+	}
+
+	/// Create a new empty batch.
+	pub fn new() -> Self {
+		Self { inner: Vec::new(), extensions: Extensions::new() }
+	}
+
+	/// Push a new batch entry to the batch.
+	pub fn push(&mut self, req: Request<'a>) {
+		self.extensions.extend(req.extensions().clone());
 		self.inner.push(Ok(BatchEntry::Call(req)));
-
-		Ok(())
-	}
-
-	/// Get an iterator over the batch entries.
-	pub fn as_batch_entries(&self) -> &[Result<BatchEntry<'a>, ErrorResponse<'a>>] {
-		&self.inner
-	}
-
-	/// Get a mutable iterator over the batch entries.
-	pub fn as_mut_batch_entries(&mut self) -> &mut [Result<BatchEntry<'a>, ErrorResponse<'a>>] {
-		&mut self.inner
-	}
-
-	/// Consume the batch and return the inner entries.
-	pub fn into_batch_entries(self) -> Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>> {
-		self.inner
-	}
-
-	/// Get the id range of the batch.
-	///
-	/// This is only available if the batch has been constructed using `Batch::push`.
-	pub fn id_range(&self) -> Option<std::ops::Range<u64>> {
-		self.id_range.clone()
 	}
 
 	/// Get the length of the batch.
@@ -150,9 +86,50 @@ impl<'a> Batch<'a> {
 		self.inner.len()
 	}
 
-	/// Check if the batch is empty.
-	pub fn is_empty(&self) -> bool {
-		self.inner.is_empty()
+	/// Get an iterator over the batch.
+	pub fn iter(&self) -> impl Iterator<Item = &Result<BatchEntry<'a>, ErrorResponse<'a>>> {
+		self.inner.iter()
+	}
+
+	/// Get a mutuable iterator over the batch.
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Result<BatchEntry<'a>, ErrorResponse<'a>>> {
+		self.inner.iter_mut()
+	}
+
+	/// Convert the batch into an iterator.
+	pub fn into_iter(self) -> impl Iterator<Item = Result<BatchEntry<'a>, ErrorResponse<'a>>> {
+		self.inner.into_iter()
+	}
+
+	/// Consume the batch and and return the parts.
+	pub fn into_parts(self) -> (Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>, Extensions) {
+		(self.inner, self.extensions)
+	}
+
+	/// Get a reference to the extensions of the batch.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Get a mutable reference to the extensions of the batch.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
+	}
+}
+
+impl Serialize for Batch<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		let mut seq = serializer.serialize_seq(Some(self.inner.len()))?;
+		for entry in &self.inner {
+			match entry {
+				Ok(entry) => seq.serialize_element(entry)?,
+				Err(err) => seq.serialize_element(&err.0)?,
+			}
+		}
+		seq.end()
 	}
 }
 
@@ -184,6 +161,13 @@ impl IsSubscription {
 	pub fn unsubscribe_method(&self) -> &str {
 		&self.unsub_method
 	}
+}
+
+/// An extension type for the [`RpcServiceT::batch`] for the expected id range of the batch entries.
+#[derive(Debug, Clone)]
+pub struct IsBatch {
+	/// The range of ids for the batch entries.
+	pub id_range: std::ops::Range<u64>,
 }
 
 /// A batch entry specific for the [`RpcServiceT::batch`] method to support both
@@ -426,14 +410,14 @@ mod tests {
 
 		let req = Request::borrowed("say_hello", None, Id::Number(1));
 		let notification = Notification::new("say_hello".into(), None);
-		let batch = Batch::from_batch_entries(vec![
+		let batch = Batch::from(vec![
 			Ok(BatchEntry::Call(req)),
 			Ok(BatchEntry::Notification(notification)),
 			Err(ErrorResponse::new(Id::Number(2), ErrorObject::from(ErrorCode::InvalidRequest))),
 		]);
 		assert_eq!(
 			serde_json::to_string(&batch).unwrap(),
-			r#"[{"jsonrpc":"2.0","id":1,"method":"say_hello"},{"jsonrpc":"2.0","method":"say_hello","params":null}]"#,
+			r#"[{"jsonrpc":"2.0","id":1,"method":"say_hello"},{"jsonrpc":"2.0","method":"say_hello","params":null},{"jsonrpc":"2.0","id":2,"error":{"code":-32600,"message":"Invalid request"}}]"#,
 		);
 	}
 }

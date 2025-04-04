@@ -86,7 +86,7 @@ where
 	}
 
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		let len = batch.as_batch_entries().len();
+		let len = batch.len();
 		self.count.fetch_add(len, Ordering::SeqCst);
 		println!("{} processed calls={} on the connection", self.role, self.count.load(Ordering::SeqCst));
 		self.service.batch(batch)
@@ -129,7 +129,7 @@ where
 	}
 
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		let len = batch.as_batch_entries().len();
+		let len = batch.len();
 		self.count.fetch_add(len, Ordering::SeqCst);
 		println!("{}, processed calls={} in total", self.role, self.count.load(Ordering::SeqCst));
 		self.service.batch(batch)

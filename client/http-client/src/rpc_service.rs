@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use hyper::{body::Bytes, http::Extensions};
+use hyper::body::Bytes;
 use jsonrpsee_core::{
 	BoxError, JsonRawValue,
 	client::{Error, MethodResponse},
@@ -59,15 +59,7 @@ where
 				.map(|r| r.into_owned().into())
 				.collect();
 
-			let mut extensions = Extensions::new();
-
-			for call in batch.into_batch_entries() {
-				let Ok(call) = call else {
-					continue;
-				};
-
-				extensions.extend(call.into_extensions());
-			}
+			let (_, extensions) = batch.into_parts();
 
 			Ok(MethodResponse::batch(rp, extensions))
 		}

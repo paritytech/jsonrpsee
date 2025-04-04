@@ -3,11 +3,10 @@ use crate::{
 		BatchMessage, Error as ClientError, FrontToBack, MethodResponse, RequestMessage, SubscriptionMessage,
 		SubscriptionResponse,
 	},
-	middleware::{Batch, IsSubscription, Notification, Request, RpcServiceT},
+	middleware::{Batch, IsBatch, IsSubscription, Notification, Request, RpcServiceT},
 };
 
-use http::Extensions;
-use jsonrpsee_types::{InvalidRequestId, Response, ResponsePayload};
+use jsonrpsee_types::{Response, ResponsePayload};
 use tokio::sync::{mpsc, oneshot};
 
 /// RpcService error.
@@ -108,21 +107,16 @@ impl RpcServiceT for RpcService {
 			let (send_back_tx, send_back_rx) = oneshot::channel();
 
 			let raw = serde_json::to_string(&batch).map_err(client_err)?;
-			let id_range = batch.id_range().ok_or(ClientError::InvalidRequestId(InvalidRequestId::Invalid(
-				"Batch request id range missing".to_owned(),
-			)))?;
+			let id_range = batch
+				.extensions()
+				.get::<IsBatch>()
+				.map(|b| b.id_range.clone())
+				.expect("Batch ID range must be set in extensions");
 
 			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx })).await?;
 			let json = send_back_rx.await?.map_err(client_err)?;
 
-			let mut extensions = Extensions::new();
-
-			for entry in batch.into_batch_entries() {
-				let Ok(entry) = entry else {
-					continue;
-				};
-				extensions.extend(entry.into_extensions());
-			}
+			let (_, extensions) = batch.into_parts();
 
 			Ok(MethodResponse::batch(json, extensions))
 		}

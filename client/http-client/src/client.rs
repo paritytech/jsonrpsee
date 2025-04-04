@@ -419,7 +419,7 @@ where
 				id,
 				extensions: Extensions::new(),
 			};
-			batch_request.push(req)?;
+			batch_request.push(req);
 		}
 
 		let rp = run_future_until_timeout(self.transport.batch(batch_request), self.request_timeout).await?;
