@@ -262,6 +262,8 @@ pub struct RpcDescription {
 	pub(crate) needs_client: bool,
 	/// Optional prefix for RPC namespace.
 	pub(crate) namespace: Option<String>,
+	/// Optional separator between namespace and method name. Defaults to `_`.
+	pub(crate) namespace_separator: Option<String>,
 	/// Trait definition in which all the attributes were stripped.
 	pub(crate) trait_def: syn::ItemTrait,
 	/// List of RPC methods defined in the trait.
@@ -276,12 +278,13 @@ pub struct RpcDescription {
 
 impl RpcDescription {
 	pub fn from_item(attr: Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
-		let [client, server, namespace, client_bounds, server_bounds] =
-			AttributeMeta::parse(attr)?.retain(["client", "server", "namespace", "client_bounds", "server_bounds"])?;
+		let [client, server, namespace, namespace_separator, client_bounds, server_bounds] =
+			AttributeMeta::parse(attr)?.retain(["client", "server", "namespace", "namespace_separator", "client_bounds", "server_bounds"])?;
 
 		let needs_server = optional(server, Argument::flag)?.is_some();
 		let needs_client = optional(client, Argument::flag)?.is_some();
 		let namespace = optional(namespace, Argument::string)?;
+		let namespace_separator = optional(namespace_separator, Argument::string)?;
 		let client_bounds = optional(client_bounds, Argument::group)?;
 		let server_bounds = optional(server_bounds, Argument::group)?;
 		if !needs_server && !needs_client {
@@ -368,6 +371,7 @@ impl RpcDescription {
 			needs_server,
 			needs_client,
 			namespace,
+			namespace_separator,
 			trait_def: item,
 			methods,
 			subscriptions,
@@ -400,12 +404,18 @@ impl RpcDescription {
 		quote! { #jsonrpsee::#item }
 	}
 
-	/// Based on the namespace, renders the full name of the RPC method/subscription.
+	/// Based on the namespace and separator, renders the full name of the RPC method/subscription.
 	/// Examples:
-	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
-	/// For no namespace and method `makeSpam` it will be just `makeSpam`.
+	/// For namespace `foo`, method `makeSpam`, and separator `_`, result will be `foo_makeSpam`.
+	/// For separator `.`, result will be `foo.makeSpam`.
+	/// For no namespace, returns just `makeSpam`.
 	pub(crate) fn rpc_identifier<'a>(&self, method: &'a str) -> Cow<'a, str> {
-		if let Some(ns) = &self.namespace { format!("{ns}_{method}").into() } else { Cow::Borrowed(method) }
+		if let Some(ns) = &self.namespace {
+			let sep = self.namespace_separator.as_deref().unwrap_or("_");
+			format!("{ns}{sep}{method}").into()
+		} else {
+			Cow::Borrowed(method)
+		}
 	}
 }
 

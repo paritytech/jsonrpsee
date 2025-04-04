@@ -296,6 +296,15 @@ async fn macro_zero_copy_cow() {
 	assert_eq!(resp, r#"{"jsonrpc":"2.0","id":0,"result":"Zero copy params: false"}"#);
 }
 
+#[tokio::test]
+async fn namespace_separator_dot_formatting_works() {
+	let module = RpcServerImpl.into_rpc();
+
+	let res: String = module.call("foo.params", [json!(1_u64), json!("test")]).await.unwrap();
+
+	assert_eq!(&res, "Called with: 1, test");
+}
+
 // Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.
 #[cfg(not(target_os = "macos"))]
 #[ignore]
