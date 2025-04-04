@@ -31,6 +31,7 @@
 //! The typical use-case for this is when one wants to have
 //! access to HTTP related things.
 
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -38,14 +39,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
-use jsonrpsee::core::middleware::{Batch, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, BatchEntry, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{
 	ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder, serve_with_graceful_shutdown, stop_channel,
 };
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};
 use jsonrpsee::{MethodResponse, Methods};
 use tokio::net::TcpListener;
@@ -62,6 +63,10 @@ struct Metrics {
 	success_http_calls: Arc<AtomicUsize>,
 }
 
+fn auth_reject_error() -> ErrorObjectOwned {
+	ErrorObject::owned(-32999, "HTTP Authorization header is missing", None::<()>)
+}
+
 #[derive(Clone)]
 struct AuthorizationMiddleware<S> {
 	headers: HeaderMap,
@@ -70,9 +75,37 @@ struct AuthorizationMiddleware<S> {
 	transport_label: &'static str,
 }
 
+impl<S> AuthorizationMiddleware<S> {
+	/// Authorize the request by checking the `Authorization` header.
+	///
+	///
+	/// In this example for simplicity, the authorization value is not checked
+	// and used because it's just a toy example.
+	fn auth_method_call(&self, req: &Request<'_>) -> bool {
+		if req.method_name() == "trusted_call" {
+			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else { return false };
+		}
+
+		true
+	}
+
+	/// Authorize the notification by checking the `Authorization` header.
+	///
+	/// Because notifications are not expected to return a response, we
+	/// return a `MethodResponse` by injecting an error into the extensions
+	/// which could be read by other middleware or the server.
+	fn auth_notif(&self, notif: &Notification<'_>) -> bool {
+		if notif.method_name() == "trusted_call" {
+			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else { return false };
+		}
+
+		true
+	}
+}
+
 impl<S> RpcServiceT for AuthorizationMiddleware<S>
 where
-	S: Send + Clone + Sync + RpcServiceT<Response = MethodResponse>,
+	S: Send + Clone + Sync + RpcServiceT<Response = MethodResponse, Error = Infallible> + 'static,
 	S::Error: Into<BoxError> + Send + 'static,
 	S::Response: Send,
 {
@@ -80,30 +113,53 @@ where
 	type Response = S::Response;
 
 	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		if req.method_name() == "trusted_call" {
-			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else {
-				let rp = MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
-				return ResponseFuture::ready(rp);
-			};
+		let this = self.clone();
+		let auth_ok = this.auth_method_call(&req);
 
-			// In this example for simplicity, the authorization value is not checked
-			// and used because it's just a toy example.
-
-			ResponseFuture::future(self.inner.call(req))
-		} else {
-			ResponseFuture::future(self.inner.call(req))
+		async move {
+			// If the authorization header is missing, it's recommended to
+			// to return the response as MethodResponse::error instead of
+			// returning an error from the service.
+			//
+			// This way the error is returned as a JSON-RPC error
+			if !auth_ok {
+				return Ok(MethodResponse::error(req.id, auth_reject_error()));
+			}
+			this.inner.call(req).await
 		}
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		ResponseFuture::future(self.inner.batch(batch))
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		// Check the authorization header for each entry in the batch.
+		// If any entry is unauthorized, return an error.
+		//
+		// It might be better to return an error for each entry
+		// instead of returning an error for the whole batch.
+		for entry in batch.as_mut_batch_entries() {
+			match entry {
+				Ok(BatchEntry::Call(req)) => {
+					if self.auth_method_call(req) {
+						return async { Ok(MethodResponse::error(Id::Null, auth_reject_error())) }.boxed();
+					}
+				}
+				Ok(BatchEntry::Notification(notif)) => {
+					if self.auth_notif(notif) {
+						return async { Ok(MethodResponse::error(Id::Null, auth_reject_error())) }.boxed();
+					}
+				}
+				// Ignore parse error.
+				Err(_err) => {}
+			}
+		}
+
+		self.inner.batch(batch).boxed()
 	}
 
 	fn notification<'a>(
 		&self,
 		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		ResponseFuture::future(self.inner.notification(n))
+		self.inner.notification(n)
 	}
 }
 
@@ -248,10 +304,7 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 					async move {
 						tracing::info!("Opened WebSocket connection");
 						metrics.opened_ws_connections.fetch_add(1, Ordering::Relaxed);
-						// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-						// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-						// as workaround.
-						svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
+						svc.call(req).await
 					}
 					.boxed()
 				} else {
@@ -266,10 +319,7 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 						}
 
 						tracing::info!("Closed HTTP connection");
-						// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-						// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-						// as workaround.
-						rp.map_err(|e| anyhow::anyhow!("{:?}", e))
+						rp
 					}
 					.boxed()
 				}

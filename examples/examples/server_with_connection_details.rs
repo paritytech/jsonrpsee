@@ -61,6 +61,7 @@ impl<S: RpcServiceT> RpcServiceT for LoggingMiddleware<S> {
 	}
 
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		tracing::info!("Received batch: {:?}", batch);
 		self.0.batch(batch)
 	}
 
@@ -68,6 +69,7 @@ impl<S: RpcServiceT> RpcServiceT for LoggingMiddleware<S> {
 		&self,
 		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		tracing::info!("Received notif: {:?}", n);
 		self.0.notification(n)
 	}
 }

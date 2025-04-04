@@ -96,7 +96,7 @@ where
 		&self,
 		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		Box::pin(self.service.notification(n))
+		self.service.notification(n)
 	}
 }
 

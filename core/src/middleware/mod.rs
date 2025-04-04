@@ -27,7 +27,7 @@ impl<'a> InvalidRequest<'a> {
 	/// Create a new `InvalidRequest` error response.
 	pub fn new(id: Id<'a>) -> Self {
 		let payload = jsonrpsee_types::ResponsePayload::error(ErrorObject::from(ErrorCode::InvalidRequest));
-		let response = Response::new(payload.into(), id);
+		let response = Response::new(payload, id);
 		Self(response)
 	}
 
@@ -65,6 +65,10 @@ impl Serialize for Batch<'_> {
 		//
 		// It is used to indicate the RpcServiceT::batch method that the request is invalid
 		// and should replied with an error entry.
+		//
+		// This clippy lint is faulty because `Result::ok` consumes the value
+		// and we don't want to consume the value here.
+		#[allow(clippy::manual_ok_err)]
 		let only_ok: Vec<&BatchEntry> = self
 			.inner
 			.iter()
@@ -137,6 +141,16 @@ impl<'a> Batch<'a> {
 	/// This is only available if the batch has been constructed using `Batch::push`.
 	pub fn id_range(&self) -> Option<std::ops::Range<u64>> {
 		self.id_range.clone()
+	}
+
+	/// Get the length of the batch.
+	pub fn len(&self) -> usize {
+		self.inner.len()
+	}
+
+	/// Check if the batch is empty.
+	pub fn is_empty(&self) -> bool {
+		self.inner.is_empty()
 	}
 }
 

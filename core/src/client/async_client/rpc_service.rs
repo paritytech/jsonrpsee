@@ -93,7 +93,7 @@ impl RpcServiceT for RpcService {
 						id: request.id.clone().into_owned(),
 					}))
 					.await?;
-					let rp = send_back_rx.await?.map_err(|e| ClientError::InvalidRequestId(e))?;
+					let rp = send_back_rx.await?.map_err(client_err)?;
 
 					Ok(MethodResponse::method_call(rp, request.extensions))
 				}
@@ -113,7 +113,7 @@ impl RpcServiceT for RpcService {
 			)))?;
 
 			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx })).await?;
-			let json = send_back_rx.await?.map_err(|e| ClientError::InvalidRequestId(e))?;
+			let json = send_back_rx.await?.map_err(client_err)?;
 
 			let mut extensions = Extensions::new();
 

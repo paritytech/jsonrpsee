@@ -111,8 +111,9 @@ where
 				let _ = state.try_send(());
 				Ok(MethodResponse::error(Id::Null, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 			} else {
+				let batch_len = batch.len();
 				let rp = service.batch(batch).await;
-				*lock += 10;
+				*lock += batch_len;
 				rp
 			}
 		}

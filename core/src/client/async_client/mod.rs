@@ -416,7 +416,7 @@ impl<L> ClientBuilder<L> {
 
 		Client {
 			to_back: to_back.clone(),
-			service: self.service_builder.service(RpcService::new(to_back.clone(), self.request_timeout)),
+			service: self.service_builder.service(RpcService::new(to_back.clone())),
 			request_timeout: self.request_timeout,
 			error: ErrorFromBack::new(to_back, disconnect_reason),
 			id_manager: RequestIdManager::new(self.id_kind),
