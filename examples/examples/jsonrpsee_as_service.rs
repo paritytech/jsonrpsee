@@ -39,14 +39,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
-use jsonrpsee::core::middleware::{Batch, BatchEntry, Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, BatchEntry, ErrorResponse, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{
 	ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder, serve_with_graceful_shutdown, stop_channel,
 };
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
 use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};
 use jsonrpsee::{MethodResponse, Methods};
 use tokio::net::TcpListener;
@@ -129,30 +129,37 @@ where
 		}
 	}
 
-	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		// Check the authorization header for each entry in the batch.
-		// If any entry is unauthorized, return an error.
-		//
-		// It might be better to return an error for each entry
-		// instead of returning an error for the whole batch.
-		for entry in batch.as_mut_batch_entries() {
-			match entry {
+		let entries: Vec<_> = batch
+			.into_batch_entries()
+			.into_iter()
+			.filter_map(|entry| match entry {
 				Ok(BatchEntry::Call(req)) => {
-					if self.auth_method_call(req) {
-						return async { Ok(MethodResponse::error(Id::Null, auth_reject_error())) }.boxed();
+					if self.auth_method_call(&req) {
+						Some(Ok(BatchEntry::Call(req)))
+					} else {
+						// If the authorization header is missing, we return
+						// a JSON-RPC error instead of an error from the service.
+						Some(Err(ErrorResponse::new(req.id, auth_reject_error())))
 					}
 				}
 				Ok(BatchEntry::Notification(notif)) => {
-					if self.auth_notif(notif) {
-						return async { Ok(MethodResponse::error(Id::Null, auth_reject_error())) }.boxed();
+					if self.auth_notif(&notif) {
+						Some(Ok(BatchEntry::Notification(notif)))
+					} else {
+						// Just filter out the notification if the auth fails
+						// because notifications are not expected to return a response.
+						None
 					}
 				}
-				// Ignore parse error.
-				Err(_err) => {}
-			}
-		}
+				// Errors which could happen such as invalid JSON-RPC call
+				// or invalid JSON are just passed through.
+				Err(err) => Some(Err(err)),
+			})
+			.collect();
 
-		self.inner.batch(batch).boxed()
+		self.inner.batch(Batch::from_batch_entries(entries)).boxed()
 	}
 
 	fn notification<'a>(

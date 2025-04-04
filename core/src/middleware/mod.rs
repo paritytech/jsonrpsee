@@ -3,7 +3,7 @@
 pub mod layer;
 
 use futures_util::future::{Either, Future};
-use jsonrpsee_types::{ErrorCode, ErrorObject, Id, InvalidRequestId, Response};
+use jsonrpsee_types::{ErrorObject, Id, InvalidRequestId};
 use pin_project::pin_project;
 use serde::Serialize;
 use serde_json::value::RawValue;
@@ -19,40 +19,42 @@ pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, Raw
 /// Re-export types from `jsonrpsee_types` crate for convenience.
 pub use jsonrpsee_types::{Extensions, Request};
 
+/// Error response that can used to indicate an error in JSON-RPC request batch request.
+/// This is used in the [`Batch`] type to indicate an error in the batch entry.
 #[derive(Debug)]
-/// A JSON-RPC error response indicating an invalid request.
-pub struct InvalidRequest<'a>(Response<'a, ()>);
+pub struct ErrorResponse<'a>(jsonrpsee_types::Response<'a, ()>);
 
-impl<'a> InvalidRequest<'a> {
-	/// Create a new `InvalidRequest` error response.
-	pub fn new(id: Id<'a>) -> Self {
-		let payload = jsonrpsee_types::ResponsePayload::error(ErrorObject::from(ErrorCode::InvalidRequest));
-		let response = Response::new(payload, id);
+impl<'a> ErrorResponse<'a> {
+	/// Create a new error response.
+	pub fn new(id: Id<'a>, err: ErrorObject<'a>) -> Self {
+		let payload = jsonrpsee_types::ResponsePayload::Error(err);
+		let response = jsonrpsee_types::Response::new(payload, id);
 		Self(response)
 	}
 
-	/// Consume the `InvalidRequest` to get the error object and id.
+	/// Get the parts of the error response.q
 	pub fn into_parts(self) -> (ErrorObject<'a>, Id<'a>) {
-		match self.0.payload {
-			jsonrpsee_types::ResponsePayload::Error(err) => (err, self.0.id),
-			_ => unreachable!("InvalidRequest::new should only create an error response; qed"),
-		}
+		let err = match self.0.payload {
+			jsonrpsee_types::ResponsePayload::Error(err) => err,
+			_ => unreachable!("ErrorResponse can only be created from error payload; qed"),
+		};
+		(err, self.0.id)
 	}
 }
 
-impl Serialize for InvalidRequest<'_> {
+impl<'a> Serialize for ErrorResponse<'a> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: serde::Serializer,
 	{
-		self.0.serialize(serializer)
+		serde::Serialize::serialize(&self.0, serializer)
 	}
 }
 
 /// A batch of JSON-RPC calls and notifications.
 #[derive(Debug, Default)]
 pub struct Batch<'a> {
-	inner: Vec<Result<BatchEntry<'a>, InvalidRequest<'a>>>,
+	inner: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>,
 	id_range: Option<std::ops::Range<u64>>,
 }
 
@@ -96,7 +98,7 @@ impl<'a> Batch<'a> {
 	}
 
 	/// Create a new batch from a list of batch entries without an id range.
-	pub fn from_batch_entries(inner: Vec<Result<BatchEntry<'a>, InvalidRequest<'a>>>) -> Self {
+	pub fn from_batch_entries(inner: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>) -> Self {
 		Self { inner, id_range: None }
 	}
 
@@ -122,17 +124,17 @@ impl<'a> Batch<'a> {
 	}
 
 	/// Get an iterator over the batch entries.
-	pub fn as_batch_entries(&self) -> &[Result<BatchEntry<'a>, InvalidRequest<'a>>] {
+	pub fn as_batch_entries(&self) -> &[Result<BatchEntry<'a>, ErrorResponse<'a>>] {
 		&self.inner
 	}
 
 	/// Get a mutable iterator over the batch entries.
-	pub fn as_mut_batch_entries(&mut self) -> &mut [Result<BatchEntry<'a>, InvalidRequest<'a>>] {
+	pub fn as_mut_batch_entries(&mut self) -> &mut [Result<BatchEntry<'a>, ErrorResponse<'a>>] {
 		&mut self.inner
 	}
 
 	/// Consume the batch and return the inner entries.
-	pub fn into_batch_entries(self) -> Vec<Result<BatchEntry<'a>, InvalidRequest<'a>>> {
+	pub fn into_batch_entries(self) -> Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>> {
 		self.inner
 	}
 
@@ -395,6 +397,8 @@ where
 
 #[cfg(test)]
 mod tests {
+	use jsonrpsee_types::{ErrorCode, ErrorObject};
+
 	#[test]
 	fn serialize_batch_entry() {
 		use super::{BatchEntry, Notification, Request};
@@ -417,7 +421,7 @@ mod tests {
 
 	#[test]
 	fn serialize_batch_works() {
-		use super::{Batch, BatchEntry, InvalidRequest, Notification, Request};
+		use super::{Batch, BatchEntry, ErrorResponse, Notification, Request};
 		use jsonrpsee_types::Id;
 
 		let req = Request::borrowed("say_hello", None, Id::Number(1));
@@ -425,7 +429,7 @@ mod tests {
 		let batch = Batch::from_batch_entries(vec![
 			Ok(BatchEntry::Call(req)),
 			Ok(BatchEntry::Notification(notification)),
-			Err(InvalidRequest::new(Id::Null)),
+			Err(ErrorResponse::new(Id::Number(2), ErrorObject::from(ErrorCode::InvalidRequest))),
 		]);
 		assert_eq!(
 			serde_json::to_string(&batch).unwrap(),

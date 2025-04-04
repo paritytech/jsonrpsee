@@ -45,7 +45,7 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::{Batch, BatchEntry, InvalidRequest, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee_core::middleware::{Batch, BatchEntry, ErrorResponse, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
@@ -1297,7 +1297,7 @@ where
 						Err(_) => Id::Null,
 					};
 
-					batch.push(Err(InvalidRequest::new(id)));
+					batch.push(Err(ErrorResponse::new(id, ErrorCode::InvalidRequest.into())));
 				}
 			}
 
