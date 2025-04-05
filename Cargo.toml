@@ -98,3 +98,6 @@ rust_2024_compatibility = { level = "warn", priority = -1 }
 missing_docs = { level = "warn", priority = -1 }
 missing_debug_implementations = { level = "warn", priority = -1 }
 missing_copy_implementations = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+manual_async_fn = { level = "allow", priority = -1 }

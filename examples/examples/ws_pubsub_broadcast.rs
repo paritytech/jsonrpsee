@@ -32,6 +32,7 @@ use futures::StreamExt;
 use futures::future::{self, Either};
 use jsonrpsee::PendingSubscriptionSink;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
+use jsonrpsee::core::middleware::RpcServiceBuilder;
 use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server, ServerConfig};
@@ -51,8 +52,10 @@ async fn main() -> anyhow::Result<()> {
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
-	let client1 = WsClientBuilder::default().build(&url).await?;
-	let client2 = WsClientBuilder::default().build(&url).await?;
+	let client1 =
+		WsClientBuilder::default().set_rpc_middleware(RpcServiceBuilder::new().rpc_logger(1024)).build(&url).await?;
+	let client2 =
+		WsClientBuilder::default().set_rpc_middleware(RpcServiceBuilder::new().rpc_logger(1024)).build(&url).await?;
 	let sub1: Subscription<i32> = client1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 	let sub2: Subscription<i32> = client2.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 
@@ -67,7 +70,11 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	// let's configure the server only hold 5 messages in memory.
 	let config = ServerConfig::builder().set_message_buffer_capacity(5).build();
-	let server = Server::builder().set_config(config).build("127.0.0.1:0").await?;
+	let server = Server::builder()
+		.set_config(config)
+		.set_rpc_middleware(RpcServiceBuilder::new().rpc_logger(1024))
+		.build("127.0.0.1:0")
+		.await?;
 	let (tx, _rx) = broadcast::channel::<usize>(16);
 
 	let mut module = RpcModule::new(tx.clone());

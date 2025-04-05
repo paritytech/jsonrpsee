@@ -767,15 +767,9 @@ async fn ws_batch_works() {
 	assert_eq!(res.num_failed_calls(), 1);
 
 	let ok_responses: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
-	let err_responses: Vec<_> = res
-		.iter()
-		.filter_map(|r| match r {
-			Err(e) => Some(e),
-			_ => None,
-		})
-		.collect();
+	let err_responses: Vec<_> = res.iter().filter_map(|r| r.clone().err()).collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
+	assert_eq!(err_responses, vec![ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
 }
 
 #[tokio::test]
@@ -807,15 +801,9 @@ async fn http_batch_works() {
 	assert_eq!(res.num_failed_calls(), 1);
 
 	let ok_responses: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
-	let err_responses: Vec<_> = res
-		.iter()
-		.filter_map(|r| match r {
-			Err(e) => Some(e),
-			_ => None,
-		})
-		.collect();
+	let err_responses: Vec<_> = res.iter().filter_map(|r| r.clone().err()).collect();
 	assert_eq!(ok_responses, vec!["hello"]);
-	assert_eq!(err_responses, vec![&ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
+	assert_eq!(err_responses, vec![ErrorObject::borrowed(UNKNOWN_ERROR_CODE, "err", None)]);
 }
 
 #[tokio::test]
@@ -1466,10 +1454,10 @@ async fn server_ws_low_api_works() {
 
 	async fn run_server() -> anyhow::Result<SocketAddr> {
 		use futures_util::future::FutureExt;
-		use jsonrpsee::core::BoxError;
+		use jsonrpsee::core::{BoxError, middleware::RpcServiceBuilder};
 		use jsonrpsee::server::{
-			ConnectionGuard, ConnectionState, Methods, ServerConfig, StopHandle, http,
-			middleware::rpc::RpcServiceBuilder, serve_with_graceful_shutdown, stop_channel, ws,
+			ConnectionGuard, ConnectionState, Methods, ServerConfig, StopHandle, http, serve_with_graceful_shutdown,
+			stop_channel, ws,
 		};
 
 		let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from(([127, 0, 0, 1], 0))).await?;

@@ -34,6 +34,7 @@ use crate::error::ErrorCode;
 use crate::params::{Id, SubscriptionId, TwoPointZero};
 use crate::request::Notification;
 use crate::{ErrorObject, ErrorObjectOwned};
+use http::Extensions;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -45,17 +46,39 @@ pub struct Response<'a, T: Clone> {
 	pub payload: ResponsePayload<'a, T>,
 	/// Request ID
 	pub id: Id<'a>,
+	/// Extensions
+	pub extensions: Extensions,
 }
 
 impl<'a, T: Clone> Response<'a, T> {
 	/// Create a new [`Response`].
 	pub fn new(payload: ResponsePayload<'a, T>, id: Id<'a>) -> Response<'a, T> {
-		Response { jsonrpc: Some(TwoPointZero), payload, id }
+		Response { jsonrpc: Some(TwoPointZero), payload, id, extensions: Extensions::new() }
+	}
+
+	/// Create a new [`Response`] with extensions
+	pub fn new_with_extensions(payload: ResponsePayload<'a, T>, id: Id<'a>, ext: Extensions) -> Response<'a, T> {
+		Response { jsonrpc: Some(TwoPointZero), payload, id, extensions: ext }
 	}
 
 	/// Create an owned [`Response`].
 	pub fn into_owned(self) -> Response<'static, T> {
-		Response { jsonrpc: self.jsonrpc, payload: self.payload.into_owned(), id: self.id.into_owned() }
+		Response {
+			jsonrpc: self.jsonrpc,
+			payload: self.payload.into_owned(),
+			id: self.id.into_owned(),
+			extensions: self.extensions,
+		}
+	}
+
+	/// Get the extensions of the response.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Get the mutable ref to the extensions of the response.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 
@@ -293,14 +316,27 @@ where
 					(_, Some(_), Some(_)) => {
 						return Err(serde::de::Error::duplicate_field("result and error are mutually exclusive"));
 					}
-					(Some(jsonrpc), Some(result), None) => {
-						Response { jsonrpc, payload: ResponsePayload::Success(result), id }
+					(Some(jsonrpc), Some(result), None) => Response {
+						jsonrpc,
+						payload: ResponsePayload::Success(result),
+						id,
+						extensions: Extensions::new(),
+					},
+					(Some(jsonrpc), None, Some(err)) => {
+						Response { jsonrpc, payload: ResponsePayload::Error(err), id, extensions: Extensions::new() }
 					}
-					(Some(jsonrpc), None, Some(err)) => Response { jsonrpc, payload: ResponsePayload::Error(err), id },
-					(None, Some(result), _) => {
-						Response { jsonrpc: None, payload: ResponsePayload::Success(result), id }
-					}
-					(None, _, Some(err)) => Response { jsonrpc: None, payload: ResponsePayload::Error(err), id },
+					(None, Some(result), _) => Response {
+						jsonrpc: None,
+						payload: ResponsePayload::Success(result),
+						id,
+						extensions: Extensions::new(),
+					},
+					(None, _, Some(err)) => Response {
+						jsonrpc: None,
+						payload: ResponsePayload::Error(err),
+						id,
+						extensions: Extensions::new(),
+					},
 					(_, None, None) => return Err(serde::de::Error::missing_field("result/error")),
 				};
 
@@ -340,6 +376,8 @@ where
 
 #[cfg(test)]
 mod tests {
+	use http::Extensions;
+
 	use super::{Id, Response, TwoPointZero};
 	use crate::{ErrorObjectOwned, response::ResponsePayload};
 
@@ -349,6 +387,7 @@ mod tests {
 			jsonrpc: Some(TwoPointZero),
 			payload: ResponsePayload::success("ok"),
 			id: Id::Number(1),
+			extensions: Extensions::new(),
 		})
 		.unwrap();
 		let exp = r#"{"jsonrpc":"2.0","id":1,"result":"ok"}"#;
@@ -361,6 +400,7 @@ mod tests {
 			jsonrpc: Some(TwoPointZero),
 			payload: ResponsePayload::<()>::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
 			id: Id::Number(1),
+			extensions: Extensions::new(),
 		})
 		.unwrap();
 		let exp = r#"{"jsonrpc":"2.0","id":1,"error":{"code":1,"message":"lo"}}"#;
@@ -373,6 +413,7 @@ mod tests {
 			jsonrpc: None,
 			payload: ResponsePayload::success("ok"),
 			id: Id::Number(1),
+			extensions: Extensions::new(),
 		})
 		.unwrap();
 		let exp = r#"{"id":1,"result":"ok"}"#;
@@ -381,8 +422,12 @@ mod tests {
 
 	#[test]
 	fn deserialize_success_call() {
-		let exp =
-			Response { jsonrpc: Some(TwoPointZero), payload: ResponsePayload::success(99_u64), id: Id::Number(11) };
+		let exp = Response {
+			jsonrpc: Some(TwoPointZero),
+			payload: ResponsePayload::success(99_u64),
+			id: Id::Number(11),
+			extensions: Extensions::new(),
+		};
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.payload, exp.payload);
@@ -395,6 +440,7 @@ mod tests {
 			jsonrpc: Some(TwoPointZero),
 			payload: ResponsePayload::error(ErrorObjectOwned::owned(1, "lo", None::<()>)),
 			id: Id::Number(11),
+			extensions: Extensions::new(),
 		};
 		let dsr: Response<()> =
 			serde_json::from_str(r#"{"jsonrpc":"2.0","error":{"code":1,"message":"lo"},"id":11}"#).unwrap();
@@ -405,7 +451,12 @@ mod tests {
 
 	#[test]
 	fn deserialize_call_missing_version_field() {
-		let exp = Response { jsonrpc: None, payload: ResponsePayload::success(99_u64), id: Id::Number(11) };
+		let exp = Response {
+			jsonrpc: None,
+			payload: ResponsePayload::success(99_u64),
+			id: Id::Number(11),
+			extensions: Extensions::new(),
+		};
 		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":null, "result":99, "id":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
 		assert_eq!(dsr.payload, exp.payload);
@@ -414,7 +465,12 @@ mod tests {
 
 	#[test]
 	fn deserialize_with_unknown_field() {
-		let exp = Response { jsonrpc: None, payload: ResponsePayload::success(99_u64), id: Id::Number(11) };
+		let exp = Response {
+			jsonrpc: None,
+			payload: ResponsePayload::success(99_u64),
+			id: Id::Number(11),
+			extensions: Extensions::new(),
+		};
 		let dsr: Response<u64> =
 			serde_json::from_str(r#"{"jsonrpc":null, "result":99, "id":11, "unknown":11}"#).unwrap();
 		assert_eq!(dsr.jsonrpc, exp.jsonrpc);

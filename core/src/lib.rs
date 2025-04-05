@@ -56,8 +56,10 @@ cfg_client! {
 	pub use client::Error as ClientError;
 }
 
-/// Shared tracing helpers to trace RPC calls.
-pub mod tracing;
+cfg_client_or_server! {
+	pub mod middleware;
+}
+
 pub use async_trait::async_trait;
 pub use error::{RegisterMethodError, StringError};
 

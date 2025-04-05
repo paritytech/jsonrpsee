@@ -41,12 +41,15 @@ mod tests;
 pub use http::{HeaderMap, HeaderValue};
 pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_core::client::async_client::PingConfig;
+pub use jsonrpsee_core::client::async_client::RpcService;
+pub use jsonrpsee_core::middleware::RpcServiceBuilder;
 pub use jsonrpsee_types as types;
 
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::client::{ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT};
 use std::time::Duration;
+use tower::layer::util::Identity;
 use url::Url;
 
 #[cfg(feature = "tls")]
@@ -81,7 +84,7 @@ use jsonrpsee_client_transport::ws::CertificateStore;
 ///
 /// ```
 #[derive(Clone, Debug)]
-pub struct WsClientBuilder {
+pub struct WsClientBuilder<RpcMiddleware = Identity> {
 	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	max_request_size: u32,
@@ -94,11 +97,11 @@ pub struct WsClientBuilder {
 	max_buffer_capacity_per_subscription: usize,
 	max_redirections: usize,
 	id_kind: IdKind,
-	max_log_length: u32,
 	tcp_no_delay: bool,
+	service_builder: RpcServiceBuilder<RpcMiddleware>,
 }
 
-impl Default for WsClientBuilder {
+impl Default for WsClientBuilder<Identity> {
 	fn default() -> Self {
 		Self {
 			#[cfg(feature = "tls")]
@@ -113,18 +116,20 @@ impl Default for WsClientBuilder {
 			max_buffer_capacity_per_subscription: 1024,
 			max_redirections: 5,
 			id_kind: IdKind::Number,
-			max_log_length: 4096,
 			tcp_no_delay: true,
+			service_builder: RpcServiceBuilder::default(),
 		}
 	}
 }
 
-impl WsClientBuilder {
+impl WsClientBuilder<Identity> {
 	/// Create a new WebSocket client builder.
-	pub fn new() -> WsClientBuilder {
+	pub fn new() -> WsClientBuilder<Identity> {
 		WsClientBuilder::default()
 	}
+}
 
+impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 	/// Force to use a custom certificate store.
 	///
 	/// # Optional
@@ -259,18 +264,30 @@ impl WsClientBuilder {
 		self
 	}
 
-	/// Set maximum length for logging calls and responses.
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub fn set_max_logging_length(mut self, max: u32) -> Self {
-		self.max_log_length = max;
-		self
-	}
-
 	/// See documentation [`ClientBuilder::set_tcp_no_delay`] (default is true).
 	pub fn set_tcp_no_delay(mut self, no_delay: bool) -> Self {
 		self.tcp_no_delay = no_delay;
 		self
+	}
+
+	/// Set the RPC service builder.
+	pub fn set_rpc_middleware<T>(self, service_builder: RpcServiceBuilder<T>) -> WsClientBuilder<T> {
+		WsClientBuilder {
+			#[cfg(feature = "tls")]
+			certificate_store: self.certificate_store,
+			max_request_size: self.max_request_size,
+			max_response_size: self.max_response_size,
+			request_timeout: self.request_timeout,
+			connection_timeout: self.connection_timeout,
+			ping_config: self.ping_config,
+			headers: self.headers,
+			max_concurrent_requests: self.max_concurrent_requests,
+			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+			max_redirections: self.max_redirections,
+			id_kind: self.id_kind,
+			tcp_no_delay: self.tcp_no_delay,
+			service_builder,
+		}
 	}
 
 	/// Build the [`WsClient`] with specified [`TransportSenderT`] [`TransportReceiverT`] parameters
@@ -278,10 +295,11 @@ impl WsClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub fn build_with_transport<S, R>(self, sender: S, receiver: R) -> WsClient
+	pub fn build_with_transport<S, R, Svc>(self, sender: S, receiver: R) -> WsClient<Svc>
 	where
 		S: TransportSenderT + Send,
 		R: TransportReceiverT + Send,
+		RpcMiddleware: tower::Layer<RpcService, Service = Svc> + Clone + Send + Sync + 'static,
 	{
 		let Self {
 			max_concurrent_requests,
@@ -289,8 +307,8 @@ impl WsClientBuilder {
 			ping_config,
 			max_buffer_capacity_per_subscription,
 			id_kind,
-			max_log_length,
 			tcp_no_delay,
+			service_builder,
 			..
 		} = self;
 
@@ -299,8 +317,8 @@ impl WsClientBuilder {
 			.request_timeout(request_timeout)
 			.max_concurrent_requests(max_concurrent_requests)
 			.id_format(id_kind)
-			.set_max_logging_length(max_log_length)
-			.set_tcp_no_delay(tcp_no_delay);
+			.set_tcp_no_delay(tcp_no_delay)
+			.set_rpc_middleware(service_builder);
 
 		if let Some(cfg) = ping_config {
 			client = client.enable_ws_ping(cfg);
@@ -314,9 +332,10 @@ impl WsClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build_with_stream<T>(self, url: impl AsRef<str>, data_stream: T) -> Result<WsClient, Error>
+	pub async fn build_with_stream<S, T>(self, url: impl AsRef<str>, data_stream: T) -> Result<WsClient<S>, Error>
 	where
 		T: AsyncRead + AsyncWrite + Unpin + MaybeSend + 'static,
+		RpcMiddleware: tower::Layer<RpcService, Service = S> + Clone + Send + Sync + 'static,
 	{
 		let transport_builder = WsTransportClientBuilder {
 			#[cfg(feature = "tls")]
@@ -343,7 +362,10 @@ impl WsClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
+	pub async fn build<S>(self, url: impl AsRef<str>) -> Result<WsClient<S>, Error>
+	where
+		RpcMiddleware: tower::Layer<RpcService, Service = S> + Clone + Send + Sync + 'static,
+	{
 		let transport_builder = WsTransportClientBuilder {
 			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store.clone(),

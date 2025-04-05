@@ -173,16 +173,10 @@ async fn batch_request_with_failed_call_works() {
 	assert_eq!(res.len(), 3);
 
 	let successful_calls: Vec<_> = res.iter().filter_map(|r| r.as_ref().ok()).collect();
-	let failed_calls: Vec<_> = res
-		.iter()
-		.filter_map(|r| match r {
-			Err(e) => Some(e),
-			_ => None,
-		})
-		.collect();
+	let failed_calls: Vec<_> = res.iter().filter_map(|r| r.clone().err()).collect();
 
 	assert_eq!(successful_calls, vec!["hello", "here's your swag"]);
-	assert_eq!(failed_calls, vec![&ErrorObject::from(ErrorCode::MethodNotFound)]);
+	assert_eq!(failed_calls, vec![ErrorObject::from(ErrorCode::MethodNotFound)]);
 }
 
 #[tokio::test]

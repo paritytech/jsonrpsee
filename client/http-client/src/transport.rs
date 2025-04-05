@@ -13,7 +13,6 @@ use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee_core::BoxError;
-use jsonrpsee_core::tracing::client::{rx_log_from_bytes, tx_log_from_str};
 use jsonrpsee_core::{
 	TEN_MB_SIZE_BYTES,
 	http_helpers::{self, HttpError},
@@ -93,10 +92,6 @@ pub struct HttpTransportClientBuilder<L> {
 	pub(crate) max_request_size: u32,
 	/// Configurable max response body size
 	pub(crate) max_response_size: u32,
-	/// Max length for logging for requests and responses
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub(crate) max_log_length: u32,
 	/// Custom headers to pass with every request.
 	pub(crate) headers: HeaderMap,
 	/// Service builder
@@ -119,7 +114,6 @@ impl HttpTransportClientBuilder<Identity> {
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
-			max_log_length: 1024,
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
 			tcp_no_delay: true,
@@ -163,21 +157,12 @@ impl<L> HttpTransportClientBuilder<L> {
 		self
 	}
 
-	/// Max length for logging for requests and responses in number characters.
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub fn set_max_logging_length(mut self, max: u32) -> Self {
-		self.max_log_length = max;
-		self
-	}
-
 	/// Configure a tower service.
 	pub fn set_service<T>(self, service: tower::ServiceBuilder<T>) -> HttpTransportClientBuilder<T> {
 		HttpTransportClientBuilder {
 			#[cfg(feature = "tls")]
 			certificate_store: self.certificate_store,
 			headers: self.headers,
-			max_log_length: self.max_log_length,
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
 			service_builder: service,
@@ -199,7 +184,6 @@ impl<L> HttpTransportClientBuilder<L> {
 			certificate_store,
 			max_request_size,
 			max_response_size,
-			max_log_length,
 			headers,
 			service_builder,
 			tcp_no_delay,
@@ -286,7 +270,6 @@ impl<L> HttpTransportClientBuilder<L> {
 			client: service_builder.service(client),
 			max_request_size,
 			max_response_size,
-			max_log_length,
 			headers: cached_headers,
 		})
 	}
@@ -303,10 +286,6 @@ pub struct HttpTransportClient<S> {
 	max_request_size: u32,
 	/// Configurable max response body size
 	max_response_size: u32,
-	/// Max length for logging for requests and responses
-	///
-	/// Logs bigger than this limit will be truncated.
-	max_log_length: u32,
 	/// Custom headers to pass with every request.
 	headers: HeaderMap,
 }
@@ -340,22 +319,17 @@ where
 
 	/// Send serialized message and wait until all bytes from the HTTP message body have been read.
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
-		tx_log_from_str(&body, self.max_log_length);
-
 		let response = self.inner_send(body).await?;
+
 		let (parts, body) = response.into_parts();
-
 		let (body, _is_single) = http_helpers::read_body(&parts.headers, body, self.max_response_size).await?;
-
-		rx_log_from_bytes(&body, self.max_log_length);
 
 		Ok(body)
 	}
 
 	/// Send serialized message without reading the HTTP message body.
 	pub(crate) async fn send(&self, body: String) -> Result<(), Error> {
-		let _ = self.inner_send(body).await?;
-
+		self.inner_send(body).await?;
 		Ok(())
 	}
 }
