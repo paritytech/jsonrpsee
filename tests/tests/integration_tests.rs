@@ -43,11 +43,11 @@ use helpers::{
 use http_body_util::BodyExt;
 use hyper::http::HeaderValue;
 use hyper_util::rt::TokioExecutor;
+use jsonrpsee::core::StringError;
 use jsonrpsee::core::client::SubscriptionCloseReason;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::{JsonValue, StringError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ConnectionGuard, ServerBuilder, ServerConfig, ServerHandle};

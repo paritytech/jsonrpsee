@@ -29,42 +29,13 @@ use std::time::Duration;
 
 use hyper::body::Bytes;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::RpcServiceBuilder;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
-use jsonrpsee::types::Request;
 use tower_http::LatencyUnit;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing_subscriber::util::SubscriberInitExt;
-
-struct Logger<S>(S);
-
-impl<S> RpcServiceT for Logger<S>
-where
-	S: RpcServiceT,
-{
-	type Error = S::Error;
-	type Response = S::Response;
-
-	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		println!("logger layer : {:?}", req);
-		self.0.call(req)
-	}
-
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		println!("logger layer : {:?}", batch);
-		self.0.batch(batch)
-	}
-
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		println!("logger layer : {:?}", n);
-		self.0.notification(n)
-	}
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -88,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 			.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
 	);
 
-	let rpc = RpcServiceBuilder::new().layer_fn(|service| Logger(service)).rpc_logger(1024);
+	let rpc = RpcServiceBuilder::new().rpc_logger(1024);
 
 	let client = HttpClient::builder().set_http_middleware(middleware).set_rpc_middleware(rpc).build(url)?;
 	let params = rpc_params![1_u64, 2, 3];

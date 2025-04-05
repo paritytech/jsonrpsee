@@ -26,13 +26,11 @@
 
 //! RPC Logger layer.
 
-use crate::{
-	middleware::{Batch, Notification, RpcServiceT, ToJson},
-	tracing::truncate_at_char_boundary,
-};
+use crate::middleware::{Batch, Notification, RpcServiceT, ToJson};
 
 use futures_util::Future;
 use jsonrpsee_types::Request;
+use serde_json::value::RawValue;
 use tracing::Instrument;
 
 /// RPC logger layer.
@@ -72,8 +70,10 @@ where
 
 	#[tracing::instrument(name = "method_call", skip_all, fields(method = request.method_name()), level = "trace")]
 	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		let json = serde_json::to_string(&request).unwrap_or_default();
-		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(&json, self.max as usize));
+		let json = serde_json::value::to_raw_value(&request);
+		let json_str = unwrap_json_str_or_invalid(&json);
+		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(&json_str, self.max as usize));
+
 		let service = self.service.clone();
 		let max = self.max;
 
@@ -82,7 +82,7 @@ where
 
 			if let Ok(ref rp) = rp {
 				let json = rp.to_json();
-				let json_str = json.as_ref().map_or("<invalid JSON>", |j| j.get());
+				let json_str = unwrap_json_str_or_invalid(&json);
 				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(json_str, max as usize));
 			}
 			rp
@@ -102,7 +102,7 @@ where
 
 			if let Ok(ref rp) = rp {
 				let json = rp.to_json();
-				let json_str = json.as_ref().map_or("<invalid JSON>", |j| j.get());
+				let json_str = unwrap_json_str_or_invalid(&json);
 				tracing::trace!(target: "jsonrpsee", "batch response = {}", truncate_at_char_boundary(json_str, max as usize));
 			}
 			rp
@@ -115,9 +115,42 @@ where
 		&self,
 		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		let json = serde_json::to_string(&n).unwrap_or_default();
-		tracing::trace!(target: "jsonrpsee", "notification request = {}", truncate_at_char_boundary(&json, self.max as usize));
+		let json = serde_json::value::to_raw_value(&n);
+		let json_str = unwrap_json_str_or_invalid(&json);
+		tracing::trace!(target: "jsonrpsee", "notification request = {}", truncate_at_char_boundary(json_str, self.max as usize));
 
 		self.service.notification(n).in_current_span()
+	}
+}
+
+fn unwrap_json_str_or_invalid(json: &Result<Box<RawValue>, serde_json::Error>) -> &str {
+	match json {
+		Ok(s) => s.get(),
+		Err(_) => "<invalid JSON>",
+	}
+}
+
+/// Find the next char boundary to truncate at.
+fn truncate_at_char_boundary(s: &str, max: usize) -> &str {
+	if s.len() < max {
+		return s;
+	}
+
+	match s.char_indices().nth(max) {
+		None => s,
+		Some((idx, _)) => &s[..idx],
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::truncate_at_char_boundary;
+
+	#[test]
+	fn truncate_at_char_boundary_works() {
+		assert_eq!(truncate_at_char_boundary("ボルテックス", 0), "");
+		assert_eq!(truncate_at_char_boundary("ボルテックス", 4), "ボルテッ");
+		assert_eq!(truncate_at_char_boundary("ボルテックス", 100), "ボルテックス");
+		assert_eq!(truncate_at_char_boundary("hola-hola", 4), "hola");
 	}
 }
