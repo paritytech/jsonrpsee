@@ -100,7 +100,7 @@ impl RpcServiceT for RpcService {
 		}
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let tx = self.0.clone();
 
 		async move {
@@ -116,9 +116,7 @@ impl RpcServiceT for RpcService {
 			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx })).await?;
 			let json = send_back_rx.await?.map_err(client_err)?;
 
-			let (_, extensions) = batch.into_parts();
-
-			Ok(MethodResponse::batch(json, extensions))
+			Ok(MethodResponse::batch(json, batch.into_extensions()))
 		}
 	}
 

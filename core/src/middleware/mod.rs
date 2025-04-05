@@ -47,7 +47,7 @@ impl<'a> ErrorResponse<'a> {
 #[derive(Debug, Default)]
 pub struct Batch<'a> {
 	inner: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>,
-	extensions: Extensions,
+	extensions: Option<Extensions>,
 }
 
 impl std::fmt::Display for Batch<'_> {
@@ -57,27 +57,42 @@ impl std::fmt::Display for Batch<'_> {
 	}
 }
 
+impl<'a> IntoIterator for Batch<'a> {
+	type Item = Result<BatchEntry<'a>, ErrorResponse<'a>>;
+	type IntoIter = std::vec::IntoIter<Self::Item>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.inner.into_iter()
+	}
+}
+
 impl<'a> Batch<'a> {
 	/// Create a new batch from a vector of batch entries.
 	pub fn from(entries: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>) -> Self {
-		let mut extensions = Extensions::new();
-		for entry in &entries {
-			if let Ok(entry) = entry {
-				extensions.extend(entry.extensions().clone());
-			}
-		}
-
-		Self { inner: entries, extensions }
+		Self { inner: entries, extensions: None }
 	}
 
 	/// Create a new empty batch.
 	pub fn new() -> Self {
-		Self { inner: Vec::new(), extensions: Extensions::new() }
+		Self { inner: Vec::new(), extensions: None }
+	}
+
+	/// Create a new empty batch with the at least capacity.
+	pub fn with_capacity(capacity: usize) -> Self {
+		Self { inner: Vec::with_capacity(capacity), extensions: None }
 	}
 
 	/// Push a new batch entry to the batch.
 	pub fn push(&mut self, req: Request<'a>) {
-		self.extensions.extend(req.extensions().clone());
+		match self.extensions {
+			Some(ref mut ext) => {
+				ext.extend(req.extensions().clone());
+			}
+			None => {
+				self.extensions = Some(req.extensions().clone());
+			}
+		};
+
 		self.inner.push(Ok(BatchEntry::Call(req)));
 	}
 
@@ -96,29 +111,43 @@ impl<'a> Batch<'a> {
 		self.inner.iter()
 	}
 
-	/// Get a mutuable iterator over the batch.
+	/// Get a mutable iterator over the batch.
 	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Result<BatchEntry<'a>, ErrorResponse<'a>>> {
 		self.inner.iter_mut()
 	}
 
-	/// Convert the batch into an iterator.
-	pub fn into_iter(self) -> impl Iterator<Item = Result<BatchEntry<'a>, ErrorResponse<'a>>> {
-		self.inner.into_iter()
-	}
-
 	/// Consume the batch and and return the parts.
-	pub fn into_parts(self) -> (Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>, Extensions) {
-		(self.inner, self.extensions)
+	pub fn into_extensions(self) -> Extensions {
+		match self.extensions {
+			Some(ext) => ext,
+			None => self.extensions_from_iter(),
+		}
 	}
 
 	/// Get a reference to the extensions of the batch.
-	pub fn extensions(&self) -> &Extensions {
-		&self.extensions
+	pub fn extensions(&mut self) -> &Extensions {
+		if self.extensions.is_none() {
+			self.extensions = Some(self.extensions_from_iter());
+		}
+
+		self.extensions.as_ref().expect("Extensions inserted above; qed")
 	}
 
 	/// Get a mutable reference to the extensions of the batch.
 	pub fn extensions_mut(&mut self) -> &mut Extensions {
-		&mut self.extensions
+		if self.extensions.is_none() {
+			self.extensions = Some(self.extensions_from_iter());
+		}
+
+		self.extensions.as_mut().expect("Extensions inserted above; qed")
+	}
+
+	fn extensions_from_iter(&self) -> Extensions {
+		let mut ext = Extensions::new();
+		for entry in self.inner.iter().flatten() {
+			ext.extend(entry.extensions().clone());
+		}
+		ext
 	}
 }
 

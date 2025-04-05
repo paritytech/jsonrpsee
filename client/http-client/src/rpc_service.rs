@@ -59,9 +59,7 @@ where
 				.map(|r| r.into_owned().into())
 				.collect();
 
-			let (_, extensions) = batch.into_parts();
-
-			Ok(MethodResponse::batch(rp, extensions))
+			Ok(MethodResponse::batch(rp, batch.into_extensions()))
 		}
 	}
 

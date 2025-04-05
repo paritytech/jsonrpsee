@@ -72,7 +72,7 @@ where
 	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let json = serde_json::value::to_raw_value(&request);
 		let json_str = unwrap_json_str_or_invalid(&json);
-		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(&json_str, self.max as usize));
+		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(json_str, self.max as usize));
 
 		let service = self.service.clone();
 		let max = self.max;
@@ -92,8 +92,9 @@ where
 
 	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		let json = serde_json::to_string(&batch).unwrap_or_default();
-		tracing::trace!(target: "jsonrpsee", "batch request = {}", truncate_at_char_boundary(&json, self.max as usize));
+		let json = serde_json::value::to_raw_value(&batch);
+		let json_str = unwrap_json_str_or_invalid(&json);
+		tracing::trace!(target: "jsonrpsee", "batch request = {}", truncate_at_char_boundary(json_str, self.max as usize));
 		let service = self.service.clone();
 		let max = self.max;
 

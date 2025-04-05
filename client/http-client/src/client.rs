@@ -409,7 +409,7 @@ where
 		let id = self.id_manager.next_request_id();
 		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
 
-		let mut batch_request = Batch::new();
+		let mut batch_request = Batch::with_capacity(batch.len());
 		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
 			let id = self.id_manager.as_id_kind().into_id(id);
 			let req = Request {
