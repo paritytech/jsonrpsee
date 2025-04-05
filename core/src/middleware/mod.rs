@@ -252,7 +252,7 @@ impl<'a> BatchEntry<'a> {
 	}
 }
 
-/// Present a JSON-RPC service that can process JSON-RPC calls, notifications, and batch requests.
+/// Represent a JSON-RPC service that can process JSON-RPC calls, notifications, and batch requests.
 ///
 /// This trait is similar to [`tower::Service`] but it's specialized for JSON-RPC operations.
 ///
