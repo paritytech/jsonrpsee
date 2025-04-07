@@ -34,7 +34,7 @@ use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::server::subscription::{
-	BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubNotifResultOrError, Subscribers,
+	BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubNotifKind, Subscribers,
 	Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit, SubscriptionState,
 	sub_message_to_json,
 };
@@ -95,7 +95,7 @@ pub type MaxResponseSize = usize;
 /// A tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-pub type RawRpcResponse = (Box<RawValue>, mpsc::Receiver<String>);
+pub type RawRpcResponse = (Box<RawValue>, mpsc::Receiver<Box<RawValue>>);
 
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
@@ -343,7 +343,7 @@ impl Methods {
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
-	///         sub_resp
+	///         sub_resp.get()
 	///     );
 	/// }
 	/// ```
@@ -351,7 +351,7 @@ impl Methods {
 		&self,
 		request: &str,
 		buf_size: usize,
-	) -> Result<(Box<RawValue>, mpsc::Receiver<String>), serde_json::Error> {
+	) -> Result<(Box<RawValue>, mpsc::Receiver<Box<RawValue>>), serde_json::Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
@@ -838,11 +838,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 						match response {
 							SubscriptionCloseResponse::Notif(msg) => {
-								let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &sub_id, method);
+								let json = sub_message_to_json(msg, SubNotifKind::Result, &sub_id, method);
 								let _ = method_sink.send(json).await;
 							}
 							SubscriptionCloseResponse::NotifErr(msg) => {
-								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
+								let json = sub_message_to_json(msg, SubNotifKind::Error, &sub_id, method);
 								let _ = method_sink.send(json).await;
 							}
 							SubscriptionCloseResponse::None => (),

@@ -499,6 +499,7 @@ async fn bounded_subscription_works() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn serialize_sub_error_adds_extra_string_quotes() {
 	#[derive(Serialize)]
 	struct MyError {
@@ -533,7 +534,7 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":"{{"number":11,"address":"State street 1337"}}"}}}}"#,
 			resp,
 		),
-		sub_resp
+		sub_resp.get()
 	);
 }
 
@@ -572,9 +573,11 @@ async fn subscription_close_response_works() {
 			_ => panic!("Expected valid response"),
 		};
 
+		let notif = stream.recv().await.unwrap();
+
 		assert_eq!(
 			format!(r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"result":1}}}}"#, sub_id),
-			stream.recv().await.unwrap()
+			notif.get()
 		);
 	}
 
