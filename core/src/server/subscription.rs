@@ -31,9 +31,8 @@ use super::{MethodResponse, MethodsError, ResponsePayload};
 use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{error::StringError, traits::IdProvider};
+use crate::{error::SubscriptionErr, traits::IdProvider};
 use jsonrpsee_types::SubscriptionPayload;
-use jsonrpsee_types::response::SubscriptionPayloadError;
 use jsonrpsee_types::{ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse, response::SubscriptionError};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -90,14 +89,14 @@ pub enum SubscriptionCloseResponse {
 	///  }
 	/// }
 	/// ```
-	NotifErr(SubscriptionMessage),
+	NotifErr(SubscriptionErr),
 }
 
-impl IntoSubscriptionCloseResponse for Result<(), StringError> {
+impl IntoSubscriptionCloseResponse for Result<(), SubscriptionErr> {
 	fn into_response(self) -> SubscriptionCloseResponse {
 		match self {
 			Ok(()) => SubscriptionCloseResponse::None,
-			Err(e) => SubscriptionCloseResponse::NotifErr(e.0.into()),
+			Err(e) => SubscriptionCloseResponse::NotifErr(e),
 		}
 	}
 }
@@ -156,28 +155,11 @@ impl SubscriptionMessage {
 	}
 }
 
-impl<T> From<T> for SubscriptionMessage
-where
-	T: AsRef<str>,
-{
-	fn from(s: T) -> Self {
-		// Add "<s.as_ref()>"
-		let res = serde_json::value::to_raw_value(s.as_ref()).expect("Valid JSON; qed");
-		SubscriptionMessage(SubscriptionMessageInner::NeedsData(res))
-	}
-}
-
 /// Represent a unique subscription entry based on [`SubscriptionId`] and [`ConnectionId`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SubscriptionKey {
 	pub(crate) conn_id: ConnectionId,
 	pub(crate) sub_id: SubscriptionId<'static>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum SubNotifKind {
-	Result,
-	Error,
 }
 
 /// Represents a subscription until it is unsubscribed.
@@ -358,7 +340,7 @@ impl SubscriptionSink {
 			return Err(DisconnectError(msg));
 		}
 
-		let json = sub_message_to_json(msg, SubNotifKind::Result, &self.uniq_sub.sub_id, self.method);
+		let json = sub_message_to_json(msg, &self.uniq_sub.sub_id, self.method);
 		self.inner.send(json).await
 	}
 
@@ -369,7 +351,7 @@ impl SubscriptionSink {
 			return Err(SendTimeoutError::Closed(msg));
 		}
 
-		let json = sub_message_to_json(msg, SubNotifKind::Result, &self.uniq_sub.sub_id, self.method);
+		let json = sub_message_to_json(msg, &self.uniq_sub.sub_id, self.method);
 		self.inner.send_timeout(json, timeout).await
 	}
 
@@ -385,7 +367,7 @@ impl SubscriptionSink {
 			return Err(TrySendError::Closed(msg));
 		}
 
-		let json = sub_message_to_json(msg, SubNotifKind::Result, &self.uniq_sub.sub_id, self.method);
+		let json = sub_message_to_json(msg, &self.uniq_sub.sub_id, self.method);
 		self.inner.try_send(json)
 	}
 
@@ -507,25 +489,26 @@ pub struct SubscriptionState<'a> {
 	pub subscription_permit: SubscriptionPermit,
 }
 
-pub(crate) fn sub_message_to_json(
-	msg: SubscriptionMessage,
-	result_or_err: SubNotifKind,
-	sub_id: &SubscriptionId,
-	method: &str,
-) -> Box<RawValue> {
+pub(crate) fn sub_message_to_json(msg: SubscriptionMessage, sub_id: &SubscriptionId, method: &str) -> Box<RawValue> {
 	match msg.0 {
 		SubscriptionMessageInner::Complete(msg) => msg,
-		SubscriptionMessageInner::NeedsData(result) => match result_or_err {
-			SubNotifKind::Result => serde_json::value::to_raw_value(&SubscriptionResponse::new(
-				method.into(),
-				SubscriptionPayload { subscription: sub_id.clone(), result },
-			))
-			.expect("valid JSON; qed"),
-			SubNotifKind::Error => serde_json::value::to_raw_value(&SubscriptionError::new(
-				method.into(),
-				SubscriptionPayloadError { subscription: sub_id.clone(), error: result },
-			))
-			.expect("valid JSON; qed"),
-		},
+		SubscriptionMessageInner::NeedsData(result) => {
+			let sub_id = serde_json::to_string(&sub_id).expect("valid JSON; qed");
+			let json_str = format!(
+				"{{\"jsonrpc\":\"2.0\",\"method\":\"{method}\",\"params\":{{\"subscription\":{sub_id},\"result\":{result}}}}}"
+			);
+			RawValue::from_string(json_str).expect("valid JSON; qed")
+		}
 	}
+}
+
+pub(crate) fn sub_err_to_json(error: SubscriptionErr, sub_id: &SubscriptionId, method: &str) -> Box<RawValue> {
+	let sub = serde_json::to_string(sub_id).expect("valid JSON; qed");
+	let err = serde_json::to_string(&error).expect("valid JSON; qed");
+
+	let json_str = format!(
+		"{{\"jsonrpc\":\"2.0\",\"method\":\"{method}\",\"params\":{{\"subscription\":{sub},\"error\":{err}}}}}"
+	);
+
+	RawValue::from_string(json_str).expect("valid JSON; qed")
 }

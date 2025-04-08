@@ -52,7 +52,8 @@ impl ApiServer for () {
 
 	async fn sub(&self, pending: PendingSubscriptionSink, _: PubSubKind, _: PubSubParams) -> SubscriptionResult {
 		let sink = pending.accept().await?;
-		sink.send(SubscriptionMessage::from("msg")).await?;
+		let msg = SubscriptionMessage::from_json(&"msg")?;
+		sink.send(msg).await?;
 		Ok(())
 	}
 

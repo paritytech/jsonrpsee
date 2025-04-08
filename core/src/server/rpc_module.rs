@@ -34,9 +34,8 @@ use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::server::subscription::{
-	BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubNotifKind, Subscribers,
-	Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit, SubscriptionState,
-	sub_message_to_json,
+	BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink, Subscribers, Subscription,
+	SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit, SubscriptionState, sub_message_to_json,
 };
 use crate::server::{LOG_TARGET, MethodResponse, ResponsePayload};
 use crate::traits::ToRpcParams;
@@ -51,7 +50,7 @@ use serde::de::DeserializeOwned;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
 
-use super::IntoResponse;
+use super::{IntoResponse, sub_err_to_json};
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -838,11 +837,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 						match response {
 							SubscriptionCloseResponse::Notif(msg) => {
-								let json = sub_message_to_json(msg, SubNotifKind::Result, &sub_id, method);
+								let json = sub_message_to_json(msg, &sub_id, method);
 								let _ = method_sink.send(json).await;
 							}
-							SubscriptionCloseResponse::NotifErr(msg) => {
-								let json = sub_message_to_json(msg, SubNotifKind::Error, &sub_id, method);
+							SubscriptionCloseResponse::NotifErr(err) => {
+								let json = sub_err_to_json(err, &sub_id, method);
 								let _ = method_sink.send(json).await;
 							}
 							SubscriptionCloseResponse::None => (),
