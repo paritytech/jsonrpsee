@@ -80,7 +80,7 @@ pub(crate) mod visitor;
 /// that generated for it by the macro.
 ///
 /// ```ignore
-/// #[rpc(client, server, namespace = "foo")]
+/// #[rpc(client, server, namespace = "foo", namespace_separator = ".")]
 /// pub trait Rpc {
 ///     #[method(name = "foo")]
 ///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
@@ -147,6 +147,8 @@ pub(crate) mod visitor;
 ///   implementation's methods conveniently.
 /// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
 ///   method `spam`, the resulting method name will be `foo_spam`.
+/// - `namespace_separator`: customize the separator used between namespace and method name. Defaults to `_`.
+///		For example, `namespace = "foo", namespace_separator = "."` results in method names like `foo.bar` instead of `foo_bar`.
 /// - `server_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the server
 ///   implementation.
 /// - `client_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the client

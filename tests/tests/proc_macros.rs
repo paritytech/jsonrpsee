@@ -296,6 +296,60 @@ async fn macro_zero_copy_cow() {
 	assert_eq!(resp, r#"{"jsonrpc":"2.0","id":0,"result":"Zero copy params: false"}"#);
 }
 
+#[tokio::test]
+async fn namespace_separator_dot_formatting_works() {
+	use jsonrpsee::core::async_trait;
+	use jsonrpsee::proc_macros::rpc;
+	use serde_json::json;
+
+	#[rpc(server, namespace = "foo", namespace_separator = ".")]
+	pub trait DotSeparatorRpc {
+		#[method(name = "dot")]
+		fn dot(&self, a: u32, b: &str) -> Result<String, jsonrpsee::types::ErrorObjectOwned>;
+	}
+
+	struct DotImpl;
+
+	#[async_trait]
+	impl DotSeparatorRpcServer for DotImpl {
+		fn dot(&self, a: u32, b: &str) -> Result<String, jsonrpsee::types::ErrorObjectOwned> {
+			Ok(format!("Called with: {}, {}", a, b))
+		}
+	}
+
+	let module = DotImpl.into_rpc();
+	let res: String = module.call("foo.dot", [json!(1_u64), json!("test")]).await.unwrap();
+
+	assert_eq!(&res, "Called with: 1, test");
+}
+
+#[tokio::test]
+async fn namespace_separator_slash_formatting_works() {
+	use jsonrpsee::core::async_trait;
+	use jsonrpsee::proc_macros::rpc;
+	use serde_json::json;
+
+	#[rpc(server, namespace = "math", namespace_separator = "/")]
+	pub trait SlashSeparatorRpc {
+		#[method(name = "add")]
+		fn add(&self, x: i32, y: i32) -> Result<i32, jsonrpsee::types::ErrorObjectOwned>;
+	}
+
+	struct SlashImpl;
+
+	#[async_trait]
+	impl SlashSeparatorRpcServer for SlashImpl {
+		fn add(&self, x: i32, y: i32) -> Result<i32, jsonrpsee::types::ErrorObjectOwned> {
+			Ok(x + y)
+		}
+	}
+
+	let module = SlashImpl.into_rpc();
+	let result: i32 = module.call("math/add", [json!(20), json!(22)]).await.unwrap();
+
+	assert_eq!(result, 42);
+}
+
 // Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.
 #[cfg(not(target_os = "macos"))]
 #[ignore]
