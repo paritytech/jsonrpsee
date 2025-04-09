@@ -164,8 +164,8 @@ pub async fn server() -> SocketAddr {
 			self.inner.call(request)
 		}
 
-		fn batch<'a>(&self, _: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-			async { panic!("Not used for tests") }
+		fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+			self.inner.batch(batch)
 		}
 
 		fn notification<'a>(
