@@ -95,15 +95,15 @@ where
 		}
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		self.service.batch(batch)
+	fn batch<'a>(&self, _: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		async { panic!("Not used for tests") }
 	}
 
 	fn notification<'a>(
 		&self,
-		n: Notification<'a>,
+		_: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		self.service.notification(n)
+		async { panic!("Not used for tests") }
 	}
 }
 

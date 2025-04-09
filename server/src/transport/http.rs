@@ -78,7 +78,6 @@ where
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
-	<S as RpcServiceT>::Error: std::fmt::Debug,
 {
 	// Only the `POST` method is allowed.
 	match *request.method() {

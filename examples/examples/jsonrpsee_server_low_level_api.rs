@@ -105,12 +105,12 @@ where
 
 		async move {
 			let mut lock = count.lock().await;
+			let batch_len = batch.len();
 
-			if *lock >= 10 {
+			if *lock >= 10 + batch_len {
 				let _ = state.try_send(());
 				Ok(MethodResponse::error(Id::Null, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 			} else {
-				let batch_len = batch.len();
 				let rp = service.batch(batch).await;
 				*lock += batch_len;
 				rp

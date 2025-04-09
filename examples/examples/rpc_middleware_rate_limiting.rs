@@ -32,7 +32,9 @@
 //! such as `Arc<Mutex>`
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{Batch, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{
+	Batch, BatchEntry, ErrorResponse, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT,
+};
 use jsonrpsee::server::Server;
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -121,16 +123,26 @@ where
 		}
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		// If the rate limit is reached then we modify each entry
+		// in the batch to be a request with an error.
+		//
+		// This makes sure that the client will receive an error
+		// for each request in the batch.
 		if self.rate_limit_deny() {
-			let error = ErrorObject::borrowed(-32000, "RPC rate limit", None);
-			let error = MethodResponse::error(jsonrpsee::types::Id::Null, error);
-			ResponseFuture::ready(error)
-		} else {
-			// NOTE: this count as batch call a single call which may not
-			// be the desired behavior.
-			ResponseFuture::future(self.service.batch(batch))
+			for entry in batch.iter_mut() {
+				let id = match entry {
+					Ok(BatchEntry::Call(req)) => req.id.clone(),
+					Ok(BatchEntry::Notification(_)) => continue,
+					Err(_) => continue,
+				};
+
+				// This will create a new error response for batch and replace the method call
+				*entry = Err(ErrorResponse::new(id, ErrorObject::borrowed(-32000, "RPC rate limit", None)));
+			}
 		}
+
+		self.service.batch(batch)
 	}
 
 	fn notification<'a>(

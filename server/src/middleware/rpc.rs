@@ -194,8 +194,11 @@ impl RpcServiceT for RpcService {
 
 	fn notification<'a>(
 		&self,
-		_: Notification<'a>,
+		n: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		async move { Ok(MethodResponse::notification()) }
+		// The notification should not be replied to with a response
+		// but we propogate the extensions to the response which can be useful
+		// for example HTTP transport to set the headers.
+		async move { Ok(MethodResponse::notification().with_extensions(n.extensions)) }
 	}
 }
