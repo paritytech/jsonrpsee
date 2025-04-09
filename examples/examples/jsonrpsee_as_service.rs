@@ -39,8 +39,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::FutureExt;
 use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
+use jsonrpsee::core::async_trait;
 use jsonrpsee::core::middleware::{Batch, BatchEntry, ErrorResponse, Notification, RpcServiceBuilder, RpcServiceT};
-use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{
@@ -105,8 +105,7 @@ impl<S> AuthorizationMiddleware<S> {
 
 impl<S> RpcServiceT for AuthorizationMiddleware<S>
 where
-	S: Send + Clone + Sync + RpcServiceT<Response = MethodResponse, Error = Infallible> + 'static,
-	S::Error: Into<BoxError> + Send + 'static,
+	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Clone + Sync + 'static,
 	S::Response: Send,
 {
 	type Error = S::Error;

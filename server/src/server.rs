@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
@@ -53,7 +54,6 @@ use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
-	rpc_middleware_error,
 };
 use jsonrpsee_types::{ErrorObject, Id, deserialize_with_ext};
 use soketto::handshake::http::is_upgrade_request;
@@ -971,9 +971,8 @@ pub struct TowerServiceNoHttp<L> {
 impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
-	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse>,
-	<<RpcMiddleware as Layer<RpcService>>::Service as RpcServiceT>::Error: std::fmt::Debug,
+	<RpcMiddleware as Layer<RpcService>>::Service:
+		RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + 'static,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	Body::Error: Into<BoxError>,
 {
@@ -1239,17 +1238,15 @@ pub(crate) async fn handle_rpc_call<S>(
 	extensions: Extensions,
 ) -> MethodResponse
 where
-	S: RpcServiceT<Response = MethodResponse> + Send,
+	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
 	<S as RpcServiceT>::Error: std::fmt::Debug,
 {
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = deserialize_with_ext::call::from_slice(body, &extensions) {
-			let id = req.id();
-
 			match rpc_service.call(req).await {
 				Ok(rp) => rp,
-				Err(err) => MethodResponse::error(id, rpc_middleware_error(err)),
+				Err(err) => match err {},
 			}
 		} else if let Ok(notif) = deserialize_with_ext::notif::from_slice::<Notif>(body, &extensions) {
 			match rpc_service.notification(notif).await {
@@ -1303,7 +1300,7 @@ where
 
 			match rpc_service.batch(Batch::from(batch)).await {
 				Ok(rp) => rp,
-				Err(e) => MethodResponse::error(Id::Null, rpc_middleware_error(e)),
+				Err(e) => match e {},
 			}
 		} else {
 			MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError))
