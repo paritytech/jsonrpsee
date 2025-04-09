@@ -40,7 +40,7 @@ use futures::FutureExt;
 use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
 use jsonrpsee::core::async_trait;
-use jsonrpsee::core::middleware::{Batch, BatchEntry, ErrorResponse, Notification, RpcServiceBuilder, RpcServiceT};
+use jsonrpsee::core::middleware::{Batch, BatchEntry, BatchEntryErr, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{

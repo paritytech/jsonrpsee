@@ -23,9 +23,9 @@ pub use jsonrpsee_types::{Extensions, Request};
 /// Error response that can used to indicate an error in JSON-RPC request batch request.
 /// This is used in the [`Batch`] type to indicate an error in the batch entry.
 #[derive(Debug)]
-pub struct ErrorResponse<'a>(jsonrpsee_types::Response<'a, ()>);
+pub struct BatchEntryErr<'a>(jsonrpsee_types::Response<'a, ()>);
 
-impl<'a> ErrorResponse<'a> {
+impl<'a> BatchEntryErr<'a> {
 	/// Create a new error response.
 	pub fn new(id: Id<'a>, err: ErrorObject<'a>) -> Self {
 		let payload = jsonrpsee_types::ResponsePayload::Error(err);
@@ -37,7 +37,7 @@ impl<'a> ErrorResponse<'a> {
 	pub fn into_parts(self) -> (ErrorObject<'a>, Id<'a>) {
 		let err = match self.0.payload {
 			jsonrpsee_types::ResponsePayload::Error(err) => err,
-			_ => unreachable!("ErrorResponse can only be created from error payload; qed"),
+			_ => unreachable!("BatchEntryErr can only be created from error payload; qed"),
 		};
 		(err, self.0.id)
 	}
@@ -46,7 +46,7 @@ impl<'a> ErrorResponse<'a> {
 /// A batch of JSON-RPC requests.
 #[derive(Debug, Default)]
 pub struct Batch<'a> {
-	inner: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>,
+	inner: Vec<Result<BatchEntry<'a>, BatchEntryErr<'a>>>,
 	extensions: Option<Extensions>,
 }
 
@@ -58,7 +58,7 @@ impl std::fmt::Display for Batch<'_> {
 }
 
 impl<'a> IntoIterator for Batch<'a> {
-	type Item = Result<BatchEntry<'a>, ErrorResponse<'a>>;
+	type Item = Result<BatchEntry<'a>, BatchEntryErr<'a>>;
 	type IntoIter = std::vec::IntoIter<Self::Item>;
 
 	fn into_iter(self) -> Self::IntoIter {
@@ -68,7 +68,7 @@ impl<'a> IntoIterator for Batch<'a> {
 
 impl<'a> Batch<'a> {
 	/// Create a new batch from a vector of batch entries.
-	pub fn from(entries: Vec<Result<BatchEntry<'a>, ErrorResponse<'a>>>) -> Self {
+	pub fn from(entries: Vec<Result<BatchEntry<'a>, BatchEntryErr<'a>>>) -> Self {
 		Self { inner: entries, extensions: None }
 	}
 
@@ -107,12 +107,12 @@ impl<'a> Batch<'a> {
 	}
 
 	/// Get an iterator over the batch.
-	pub fn iter(&self) -> impl Iterator<Item = &Result<BatchEntry<'a>, ErrorResponse<'a>>> {
+	pub fn iter(&self) -> impl Iterator<Item = &Result<BatchEntry<'a>, BatchEntryErr<'a>>> {
 		self.inner.iter()
 	}
 
 	/// Get a mutable iterator over the batch.
-	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Result<BatchEntry<'a>, ErrorResponse<'a>>> {
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Result<BatchEntry<'a>, BatchEntryErr<'a>>> {
 		self.inner.iter_mut()
 	}
 
@@ -446,7 +446,7 @@ mod tests {
 
 	#[test]
 	fn serialize_batch_works() {
-		use super::{Batch, BatchEntry, ErrorResponse, Notification, Request};
+		use super::{Batch, BatchEntry, BatchEntryErr, Notification, Request};
 		use jsonrpsee_types::Id;
 
 		let req = Request::borrowed("say_hello", None, Id::Number(1));
@@ -454,7 +454,7 @@ mod tests {
 		let batch = Batch::from(vec![
 			Ok(BatchEntry::Call(req)),
 			Ok(BatchEntry::Notification(notification)),
-			Err(ErrorResponse::new(Id::Number(2), ErrorObject::from(ErrorCode::InvalidRequest))),
+			Err(BatchEntryErr::new(Id::Number(2), ErrorObject::from(ErrorCode::InvalidRequest))),
 		]);
 		assert_eq!(
 			serde_json::to_string(&batch).unwrap(),

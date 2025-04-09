@@ -33,7 +33,7 @@
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::middleware::{
-	Batch, BatchEntry, ErrorResponse, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT,
+	Batch, BatchEntry, BatchEntryErr, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT,
 };
 use jsonrpsee::server::Server;
 use jsonrpsee::types::{ErrorObject, Request};
@@ -138,7 +138,7 @@ where
 				};
 
 				// This will create a new error response for batch and replace the method call
-				*entry = Err(ErrorResponse::new(id, ErrorObject::borrowed(-32000, "RPC rate limit", None)));
+				*entry = Err(BatchEntryErr::new(id, ErrorObject::borrowed(-32000, "RPC rate limit", None)));
 			}
 		}
 
