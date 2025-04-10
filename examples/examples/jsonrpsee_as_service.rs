@@ -139,7 +139,7 @@ where
 					} else {
 						// If the authorization header is missing, we return
 						// a JSON-RPC error instead of an error from the service.
-						Some(Err(ErrorResponse::new(req.id, auth_reject_error())))
+						Some(Err(BatchEntryErr::new(req.id, auth_reject_error())))
 					}
 				}
 				Ok(BatchEntry::Notification(notif)) => {
