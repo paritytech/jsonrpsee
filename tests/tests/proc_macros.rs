@@ -160,8 +160,10 @@ mod rpc_impl {
 
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 			let sink = pending.accept().await?;
-			sink.send("Response_A".into()).await?;
-			sink.send("Response_B".into()).await?;
+			let msg1 = SubscriptionMessage::from_json(&"Response_A")?;
+			let msg2 = SubscriptionMessage::from_json(&"Response_B")?;
+			sink.send(msg1).await?;
+			sink.send(msg2).await?;
 
 			Ok(())
 		}
@@ -177,7 +179,8 @@ mod rpc_impl {
 
 		async fn sub_not_result(&self, pending: PendingSubscriptionSink) {
 			let sink = pending.accept().await.unwrap();
-			sink.send("lo".into()).await.unwrap();
+			let msg = SubscriptionMessage::from_json(&"lo").unwrap();
+			sink.send(msg).await.unwrap();
 		}
 
 		async fn sub_custom_ret(&self, _pending: PendingSubscriptionSink, _x: usize) -> CustomSubscriptionRet {
@@ -187,7 +190,8 @@ mod rpc_impl {
 		fn sync_sub(&self, pending: PendingSubscriptionSink) {
 			tokio::spawn(async move {
 				let sink = pending.accept().await.unwrap();
-				sink.send("hello".into()).await.unwrap();
+				let msg = SubscriptionMessage::from_json(&"hello").unwrap();
+				sink.send(msg).await.unwrap();
 			});
 		}
 

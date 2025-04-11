@@ -24,13 +24,50 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-/// A type that returns the error as a `String` from `SubscriptionCallback`.
-#[derive(Debug)]
-pub struct StringError(pub(crate) String);
+use serde::Serialize;
+use serde_json::value::RawValue;
 
-impl<T: ToString> From<T> for StringError {
+#[derive(Debug)]
+pub(crate) enum InnerSubscriptionErr {
+	String(String),
+	Json(Box<RawValue>),
+}
+
+/// Error returned when a subscription fails.
+///
+/// It's recommended to use `SubscriptionErr::from_json` to create a new instance of this error
+/// because using the `String` representation may not very ergonomic for clients to parse.
+#[derive(Debug)]
+pub struct SubscriptionErr(pub(crate) InnerSubscriptionErr);
+
+impl Serialize for SubscriptionErr {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		match &self.0 {
+			InnerSubscriptionErr::String(s) => serializer.serialize_str(s),
+			InnerSubscriptionErr::Json(json) => json.serialize(serializer),
+		}
+	}
+}
+
+impl<T: ToString> From<T> for SubscriptionErr {
 	fn from(val: T) -> Self {
-		StringError(val.to_string())
+		Self(InnerSubscriptionErr::String(val.to_string()))
+	}
+}
+
+impl SubscriptionErr {
+	/// Create a new `SubscriptionErr` from a JSON value.
+	pub fn from_json(t: &impl Serialize) -> Result<Self, serde_json::Error> {
+		let json = serde_json::value::to_raw_value(t)?;
+		Ok(Self(InnerSubscriptionErr::Json(json)))
+	}
+
+	/// Create a new `SubscriptionErr` from a String.
+	pub fn from_string(s: String) -> Self {
+		SubscriptionErr::from(s)
 	}
 }
 

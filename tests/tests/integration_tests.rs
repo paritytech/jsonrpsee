@@ -47,7 +47,7 @@ use jsonrpsee::core::client::SubscriptionCloseReason;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
 use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::{JsonValue, StringError};
+use jsonrpsee::core::{JsonValue, SubscriptionErr};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ConnectionGuard, ServerBuilder, ServerConfig, ServerHandle};
@@ -1356,7 +1356,7 @@ async fn response_payload_async_api_works() {
 			.unwrap();
 
 		module
-			.register_subscription::<Result<(), StringError>, _, _>(
+			.register_subscription::<Result<(), SubscriptionErr>, _, _>(
 				"sub",
 				"s",
 				"unsub",

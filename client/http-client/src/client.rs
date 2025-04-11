@@ -392,7 +392,7 @@ where
 		)
 		.await?
 		.into_method_call()
-		.expect("Method call must return a method call reponse; qed");
+		.expect("Method call must return a method call response; qed");
 
 		let rp = ResponseSuccess::try_from(method_response.into_inner())?;
 
