@@ -27,7 +27,10 @@
 //! Types to handle JSON-RPC requests according to the [spec](https://www.jsonrpc.org/specification#request-object).
 //! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
 
-use std::borrow::Cow;
+use std::{
+	borrow::Cow,
+	fmt::{Debug, Formatter, Result},
+};
 
 use crate::{
 	Params,
@@ -170,6 +173,35 @@ impl<'a> NotificationSer<'a> {
 	/// Create an owned serializable JSON-RPC notification.
 	pub fn owned(method: impl Into<String>, params: Option<Box<RawValue>>) -> Self {
 		Self { jsonrpc: TwoPointZero, method: method.into().into(), params: params.map(Cow::Owned) }
+	}
+}
+
+/// Custom id generator function
+pub struct IdGeneratorFn(fn() -> Id<'static>);
+
+impl IdGeneratorFn {
+	/// Creates a new `IdGeneratorFn` from a function pointer.
+	pub fn new(generator: fn() -> Id<'static>) -> Self {
+		IdGeneratorFn(generator)
+	}
+
+	/// Calls the id generator function
+	pub fn call(&self) -> Id<'static> {
+		(self.0)()
+	}
+}
+
+impl Copy for IdGeneratorFn {}
+
+impl Clone for IdGeneratorFn {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+
+impl Debug for IdGeneratorFn {
+	fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+		f.write_str("<CustomIdGenerator>")
 	}
 }
 
