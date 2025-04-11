@@ -46,7 +46,6 @@ pub use jsonrpsee_core::error::RegisterMethodError;
 pub use jsonrpsee_core::server::*;
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;
-pub use middleware::rpc::RpcServiceBuilder;
 pub use server::{
 	BatchRequestConfig, Builder as ServerBuilder, ConnectionState, PingConfig, Server, ServerConfig,
 	ServerConfigBuilder, TowerService, TowerServiceBuilder,

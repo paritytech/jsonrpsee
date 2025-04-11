@@ -1,6 +1,8 @@
+use std::convert::Infallible;
+
 use crate::{
 	BatchRequestConfig, ConnectionState, HttpRequest, HttpResponse, LOG_TARGET,
-	middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT},
+	middleware::rpc::{RpcService, RpcServiceCfg},
 	server::{ServerConfig, handle_rpc_call},
 };
 use http::Method;
@@ -8,7 +10,8 @@ use hyper::body::{Body, Bytes};
 use jsonrpsee_core::{
 	BoxError,
 	http_helpers::{HttpError, read_body},
-	server::Methods,
+	middleware::{RpcServiceBuilder, RpcServiceT},
+	server::{MethodResponse, Methods},
 };
 
 /// Checks that content type of received request is valid for JSON-RPC.
@@ -42,9 +45,8 @@ where
 	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
-	L: for<'a> tower::Layer<RpcService>,
-	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <L as tower::Layer<RpcService>>::Service: RpcServiceT<'a>,
+	L: tower::Layer<RpcService>,
+	<L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
 {
 	let ServerConfig { max_response_body_size, batch_requests_config, max_request_body_size, .. } = server_cfg;
 
@@ -55,9 +57,7 @@ where
 		RpcServiceCfg::OnlyCalls,
 	));
 
-	let rp =
-		call_with_service(request, batch_requests_config, max_request_body_size, rpc_service, max_response_body_size)
-			.await;
+	let rp = call_with_service(request, batch_requests_config, max_request_body_size, rpc_service).await;
 
 	drop(conn);
 
@@ -72,13 +72,12 @@ pub async fn call_with_service<S, B>(
 	batch_config: BatchRequestConfig,
 	max_request_size: u32,
 	rpc_service: S,
-	max_response_size: u32,
 ) -> HttpResponse
 where
 	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
-	for<'a> S: RpcServiceT<'a> + Send,
+	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
 {
 	// Only the `POST` method is allowed.
 	match *request.method() {
@@ -95,15 +94,11 @@ where
 				}
 			};
 
-			if let Some(rp) =
-				handle_rpc_call(&body, is_single, batch_config, max_response_size, &rpc_service, parts.extensions).await
-			{
-				response::from_method_response(rp)
-			} else {
-				// If the response is empty it means that it was a notification or empty batch.
-				// For HTTP these are just ACK:ed with a empty body.
-				response::ok_response("")
-			}
+			let rp = handle_rpc_call(&body, is_single, batch_config, &rpc_service, parts.extensions).await;
+
+			// If the response is empty it means that it was a notification or empty batch.
+			// For HTTP these are just ACK:ed with a empty body.
+			response::from_method_response(rp)
 		}
 		// Error scenarios:
 		Method::POST => response::unsupported_content_type(),
@@ -193,8 +188,7 @@ pub mod response {
 	/// This will include the body and extensions from the method response.
 	pub fn from_method_response(rp: MethodResponse) -> HttpResponse {
 		let (body, _, extensions) = rp.into_parts();
-
-		let mut rp = from_template(hyper::StatusCode::OK, body, JSON);
+		let mut rp = from_template(hyper::StatusCode::OK, String::from(Box::<str>::from(body)), JSON);
 		rp.extensions_mut().extend(extensions);
 		rp
 	}

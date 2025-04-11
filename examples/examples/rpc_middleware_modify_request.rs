@@ -25,37 +25,80 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{Batch, BatchEntry, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::Server;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{RpcModule, rpc_params};
 use std::borrow::Cow as StdCow;
 use std::net::SocketAddr;
 
+fn modify_method_call(req: &mut Request<'_>) {
+	// Example how to modify the params in the call.
+	if req.method == "say_hello" {
+		// It's a bit awkward to create new params in the request
+		// but this shows how to do it.
+		let raw_value = serde_json::value::to_raw_value("myparams").unwrap();
+		req.params = Some(StdCow::Owned(raw_value));
+	}
+	// Re-direct all calls that isn't `say_hello` to `say_goodbye`
+	else if req.method != "say_hello" {
+		req.method = "say_goodbye".into();
+	}
+}
+
+fn modify_notif(n: &mut Notification<'_>) {
+	// Example how to modify the params in the notification.
+	if n.method == "say_hello" {
+		// It's a bit awkward to create new params in the request
+		// but this shows how to do it.
+		let raw_value = serde_json::value::to_raw_value("myparams").unwrap();
+		n.params = Some(StdCow::Owned(raw_value));
+	}
+	// Re-direct all notifs that isn't `say_hello` to `say_goodbye`
+	else if n.method != "say_hello" {
+		n.method = "say_goodbye".into();
+	}
+}
+
 #[derive(Clone)]
 pub struct ModifyRequestIf<S>(S);
 
-impl<'a, S> RpcServiceT<'a> for ModifyRequestIf<S>
+impl<S> RpcServiceT for ModifyRequestIf<S>
 where
-	S: Send + Sync + RpcServiceT<'a>,
+	S: Send + Sync + RpcServiceT,
 {
-	type Future = S::Future;
+	type Error = S::Error;
+	type Response = S::Response;
 
-	fn call(&self, mut req: Request<'a>) -> Self::Future {
-		// Example how to modify the params in the call.
-		if req.method == "say_hello" {
-			// It's a bit awkward to create new params in the request
-			// but this shows how to do it.
-			let raw_value = serde_json::value::to_raw_value("myparams").unwrap();
-			req.params = Some(StdCow::Owned(raw_value));
-		}
-		// Re-direct all calls that isn't `say_hello` to `say_goodbye`
-		else if req.method != "say_hello" {
-			req.method = "say_goodbye".into();
-		}
-
+	fn call<'a>(&self, mut req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		modify_method_call(&mut req);
 		self.0.call(req)
+	}
+
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		for call in batch.iter_mut() {
+			match call {
+				Ok(BatchEntry::Call(call)) => {
+					modify_method_call(call);
+				}
+				Ok(BatchEntry::Notification(n)) => {
+					modify_notif(n);
+				}
+				// Invalid request, we don't care about it.
+				Err(_err) => {}
+			}
+		}
+
+		self.0.batch(batch)
+	}
+
+	fn notification<'a>(
+		&self,
+		mut n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		modify_notif(&mut n);
+		self.0.notification(n)
 	}
 }
 

@@ -26,14 +26,14 @@
 
 use std::net::SocketAddr;
 
-use crate::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
 use crate::types::Request;
 use crate::{
-	BatchRequestConfig, HttpBody, HttpRequest, HttpResponse, MethodResponse, RegisterMethodError, RpcModule,
-	ServerBuilder, ServerConfig, ServerHandle,
+	BatchRequestConfig, HttpBody, HttpRequest, HttpResponse, RegisterMethodError, RpcModule, ServerBuilder,
+	ServerConfig, ServerHandle,
 };
-use futures_util::future::{BoxFuture, Future, FutureExt};
+use futures_util::future::{Future, FutureExt};
 use hyper::body::Bytes;
+use jsonrpsee_core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::{BoxError, RpcResult};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
@@ -57,20 +57,40 @@ struct InjectExt<S> {
 	service: S,
 }
 
-impl<'a, S> RpcServiceT<'a> for InjectExt<S>
+impl<S> RpcServiceT for InjectExt<S>
 where
-	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
+	S: Send + Sync + RpcServiceT + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Error = S::Error;
+	type Response = S::Response;
 
-	fn call(&self, mut req: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, mut req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		if req.method_name().contains("err") {
 			req.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
 		} else {
 			req.extensions_mut().insert(StatusCode::OK);
 		}
 
-		self.service.call(req).boxed()
+		self.service.call(req)
+	}
+
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		if let Some(Ok(last)) = batch.iter_mut().last() {
+			if last.method_name().contains("err") {
+				last.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
+			} else {
+				last.extensions_mut().insert(StatusCode::OK);
+			}
+		}
+
+		self.service.batch(batch)
+	}
+
+	fn notification<'a>(
+		&self,
+		_: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		async { panic!("Not used for tests") }
 	}
 }
 
@@ -296,7 +316,7 @@ async fn batched_notifications() {
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	// Note: on HTTP acknowledge the notification with an empty response.
-	assert_eq!(response.body, "");
+	assert_eq!(response.body, "null");
 }
 
 #[tokio::test]
@@ -492,7 +512,7 @@ async fn notif_works() {
 	let req = r#"{"jsonrpc":"2.0","method":"bar"}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, "");
+	assert_eq!(response.body, "null");
 }
 
 #[tokio::test]

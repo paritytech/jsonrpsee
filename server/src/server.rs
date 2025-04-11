@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
@@ -34,10 +35,10 @@ use std::task::Poll;
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, SessionClose, SessionClosedFuture, StopHandle, session_close};
-use crate::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceCfg, RpcServiceT};
+use crate::middleware::rpc::{RpcService, RpcServiceCfg};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::utils::deserialize;
+use crate::utils::deserialize_with_ext;
 use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
@@ -46,17 +47,16 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
+use jsonrpsee_core::middleware::{Batch, BatchEntry, BatchEntryErr, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
-use jsonrpsee_core::server::{
-	BatchResponseBuilder, BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods,
-};
+use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 
 use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
 };
-use jsonrpsee_types::{ErrorObject, Id, InvalidRequest, Notification};
+use jsonrpsee_types::{ErrorObject, Id};
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, watch};
@@ -65,10 +65,10 @@ use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::{Instrument, instrument};
 
-type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
-
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u32 = 100;
+
+type Notif<'a> = Option<std::borrow::Cow<'a, JsonRawValue>>;
 
 /// JSON RPC server.
 pub struct Server<HttpMiddleware = Identity, RpcMiddleware = Identity> {
@@ -101,7 +101,7 @@ impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 impl<HttpMiddleware, RpcMiddleware, Body> Server<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
 		Send + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
@@ -665,11 +665,8 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// use std::{time::Instant, net::SocketAddr, sync::Arc};
 	/// use std::sync::atomic::{Ordering, AtomicUsize};
 	///
-	/// use jsonrpsee_server::middleware::rpc::{RpcServiceT, RpcService, RpcServiceBuilder};
-	/// use jsonrpsee_server::{ServerBuilder, MethodResponse};
-	/// use jsonrpsee_core::async_trait;
-	/// use jsonrpsee_types::Request;
-	/// use futures_util::future::BoxFuture;
+	/// use jsonrpsee_server::middleware::rpc::{RpcService, RpcServiceBuilder, RpcServiceT, MethodResponse, Notification, Request, Batch};
+	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware<S> {
@@ -677,23 +674,33 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///     count: Arc<AtomicUsize>,
 	/// }
 	///
-	/// impl<'a, S> RpcServiceT<'a> for MyMiddleware<S>
-	/// where S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	/// impl<S> RpcServiceT for MyMiddleware<S>
+	/// where S: RpcServiceT + Send + Sync + Clone + 'static,
 	/// {
-	///    type Future = BoxFuture<'a, MethodResponse>;
+	///    type Error = S::Error;
+	///    type Response = S::Response;
 	///
-	///    fn call(&self, req: Request<'a>) -> Self::Future {
+	///    fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         let count = self.count.clone();
 	///         let service = self.service.clone();
 	///
-	///         Box::pin(async move {
+	///         async move {
 	///             let rp = service.call(req).await;
 	///             // Modify the state.
 	///             count.fetch_add(1, Ordering::Relaxed);
 	///             rp
-	///         })
+	///         }
 	///    }
+	///
+	///    fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	///          self.service.batch(batch)
+	///    }
+	///
+	///    fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	///          self.service.notification(notif)
+	///    }
+	///
 	/// }
 	///
 	/// // Create a state per connection
@@ -929,8 +936,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 impl<RequestBody, ResponseBody, RpcMiddleware, HttpMiddleware> Service<HttpRequest<RequestBody>> for TowerService<RpcMiddleware, HttpMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
-	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT + Send + Sync + 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
 		Send + Service<HttpRequest<RequestBody>, Response = HttpResponse<ResponseBody>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
@@ -966,8 +972,8 @@ pub struct TowerServiceNoHttp<L> {
 impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcMiddleware>
 where
 	RpcMiddleware: for<'a> tower::Layer<RpcService>,
-	<RpcMiddleware as Layer<RpcService>>::Service: Send + Sync + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<'a>,
+	<RpcMiddleware as Layer<RpcService>>::Service:
+		RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + 'static,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	Body::Error: Into<BoxError>,
 {
@@ -1103,9 +1109,7 @@ where
 			));
 
 			Box::pin(async move {
-				let rp =
-					http::call_with_service(request, batch_config, max_request_size, rpc_service, max_response_size)
-						.await;
+				let rp = http::call_with_service(request, batch_config, max_request_size, rpc_service).await;
 				// NOTE: The `conn guard` must be held until the response is processed
 				// to respect the `max_connections` limit.
 				drop(conn);
@@ -1231,22 +1235,32 @@ pub(crate) async fn handle_rpc_call<S>(
 	body: &[u8],
 	is_single: bool,
 	batch_config: BatchRequestConfig,
-	max_response_size: u32,
 	rpc_service: &S,
 	extensions: Extensions,
-) -> Option<MethodResponse>
+) -> MethodResponse
 where
-	for<'a> S: RpcServiceT<'a> + Send,
+	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
+	<S as RpcServiceT>::Error: std::fmt::Debug,
 {
 	// Single request or notification
 	if is_single {
-		if let Ok(req) = deserialize::from_slice_with_extensions(body, extensions) {
-			Some(rpc_service.call(req).await)
-		} else if let Ok(_notif) = serde_json::from_slice::<Notif>(body) {
-			None
+		if let Ok(req) = deserialize_with_ext::call::from_slice(body, &extensions) {
+			match rpc_service.call(req).await {
+				Ok(rp) => rp,
+				Err(err) => match err {},
+			}
+		} else if let Ok(notif) = deserialize_with_ext::notif::from_slice::<Notif>(body, &extensions) {
+			match rpc_service.notification(notif).await {
+				Ok(rp) => rp,
+				Err(e) => {
+					// We don't care about if middleware/service encountered if it's an notification.
+					tracing::debug!(target: LOG_TARGET, "Notification error: {:?}", e);
+					return MethodResponse::notification();
+				}
+			}
 		} else {
 			let (id, code) = prepare_error(body);
-			Some(MethodResponse::error(id, ErrorObject::from(code)))
+			MethodResponse::error(id, ErrorObject::from(code))
 		}
 	}
 	// Batch of requests.
@@ -1257,53 +1271,40 @@ where
 					Id::Null,
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, None),
 				);
-				return Some(rp);
+				return rp;
 			}
 			BatchRequestConfig::Limit(limit) => limit as usize,
 			BatchRequestConfig::Unlimited => usize::MAX,
 		};
 
-		if let Ok(batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(body) {
-			if batch.len() > max_len {
-				return Some(MethodResponse::error(Id::Null, reject_too_big_batch_request(max_len)));
+		if let Ok(unchecked_batch) = serde_json::from_slice::<Vec<&JsonRawValue>>(body) {
+			if unchecked_batch.len() > max_len {
+				return MethodResponse::error(Id::Null, reject_too_big_batch_request(max_len));
 			}
 
-			let mut got_notif = false;
-			let mut batch_response = BatchResponseBuilder::new_with_limit(max_response_size as usize);
+			let mut batch = Vec::with_capacity(unchecked_batch.len());
 
-			for call in batch {
-				if let Ok(req) = deserialize::from_str_with_extensions(call.get(), extensions.clone()) {
-					let rp = rpc_service.call(req).await;
-
-					if let Err(too_large) = batch_response.append(rp) {
-						return Some(too_large);
-					}
-				} else if let Ok(_notif) = serde_json::from_str::<Notif>(call.get()) {
-					// notifications should not be answered.
-					got_notif = true;
+			for call in unchecked_batch {
+				if let Ok(req) = deserialize_with_ext::call::from_str(call.get(), &extensions) {
+					batch.push(Ok(BatchEntry::Call(req)));
+				} else if let Ok(notif) = deserialize_with_ext::notif::from_str::<Notif>(call.get(), &extensions) {
+					batch.push(Ok(BatchEntry::Notification(notif)));
 				} else {
-					// valid JSON but could be not parsable as `InvalidRequest`
-					let id = match serde_json::from_str::<InvalidRequest>(call.get()) {
+					let id = match serde_json::from_str::<jsonrpsee_types::InvalidRequest>(call.get()) {
 						Ok(err) => err.id,
 						Err(_) => Id::Null,
 					};
 
-					if let Err(too_large) =
-						batch_response.append(MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidRequest)))
-					{
-						return Some(too_large);
-					}
+					batch.push(Err(BatchEntryErr::new(id, ErrorCode::InvalidRequest.into())));
 				}
 			}
 
-			if got_notif && batch_response.is_empty() {
-				None
-			} else {
-				let batch_rp = batch_response.finish();
-				Some(MethodResponse::from_batch(batch_rp))
+			match rpc_service.batch(Batch::from(batch)).await {
+				Ok(rp) => rp,
+				Err(e) => match e {},
 			}
 		} else {
-			Some(MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError)))
+			MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError))
 		}
 	}
 }

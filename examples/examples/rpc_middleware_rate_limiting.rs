@@ -32,8 +32,10 @@
 //! such as `Arc<Mutex>`
 
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{
+	Batch, BatchEntry, BatchEntryErr, Notification, ResponseFuture, RpcServiceBuilder, RpcServiceT,
+};
 use jsonrpsee::server::Server;
-use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::types::{ErrorObject, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{MethodResponse, RpcModule, rpc_params};
@@ -78,52 +80,81 @@ impl<S> RateLimit<S> {
 			state: Arc::new(Mutex::new(State::Allow { until: Instant::now() + period, rem: num + 1 })),
 		}
 	}
-}
 
-impl<'a, S> RpcServiceT<'a> for RateLimit<S>
-where
-	S: Send + RpcServiceT<'a>,
-{
-	// Instead of `Boxing` the future in this example
-	// we are using a jsonrpsee's ResponseFuture future
-	// type to avoid those extra allocations.
-	type Future = ResponseFuture<S::Future>;
-
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn rate_limit_deny(&self) -> bool {
 		let now = Instant::now();
-
-		let is_denied = {
-			let mut lock = self.state.lock().unwrap();
-			let next_state = match *lock {
-				State::Deny { until } => {
-					if now > until {
-						State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
-					} else {
-						State::Deny { until }
-					}
+		let mut lock = self.state.lock().unwrap();
+		let next_state = match *lock {
+			State::Deny { until } => {
+				if now > until {
+					State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
+				} else {
+					State::Deny { until }
 				}
-				State::Allow { until, rem } => {
-					if now > until {
-						State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
-					} else {
-						let n = rem - 1;
-						if n > 0 {
-							State::Allow { until: now + self.rate.period, rem: n }
-						} else {
-							State::Deny { until }
-						}
-					}
+			}
+			State::Allow { until, rem } => {
+				if now > until {
+					State::Allow { until: now + self.rate.period, rem: self.rate.num - 1 }
+				} else {
+					let n = rem - 1;
+					if n > 0 { State::Allow { until: now + self.rate.period, rem: n } } else { State::Deny { until } }
 				}
-			};
-
-			*lock = next_state;
-			matches!(next_state, State::Deny { .. })
+			}
 		};
 
-		if is_denied {
+		*lock = next_state;
+		matches!(next_state, State::Deny { .. })
+	}
+}
+
+impl<S> RpcServiceT for RateLimit<S>
+where
+	S: Send + RpcServiceT<Response = MethodResponse> + 'static,
+	S::Error: Send,
+{
+	type Error = S::Error;
+	type Response = S::Response;
+
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		if self.rate_limit_deny() {
 			ResponseFuture::ready(MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 		} else {
 			ResponseFuture::future(self.service.call(req))
+		}
+	}
+
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		// If the rate limit is reached then we modify each entry
+		// in the batch to be a request with an error.
+		//
+		// This makes sure that the client will receive an error
+		// for each request in the batch.
+		if self.rate_limit_deny() {
+			for entry in batch.iter_mut() {
+				let id = match entry {
+					Ok(BatchEntry::Call(req)) => req.id.clone(),
+					Ok(BatchEntry::Notification(_)) => continue,
+					Err(_) => continue,
+				};
+
+				// This will create a new error response for batch and replace the method call
+				*entry = Err(BatchEntryErr::new(id, ErrorObject::borrowed(-32000, "RPC rate limit", None)));
+			}
+		}
+
+		self.service.batch(batch)
+	}
+
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		if self.rate_limit_deny() {
+			// Notifications are not expected to return a response so just ignore
+			// if the rate limit is reached.
+			ResponseFuture::ready(MethodResponse::notification())
+		} else {
+			ResponseFuture::future(self.service.notification(n))
 		}
 	}
 }
