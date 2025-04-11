@@ -39,6 +39,7 @@ use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
 	generate_batch_id_range,
 };
+use jsonrpsee_core::middleware::layer::RpcLoggerLayer;
 use jsonrpsee_core::middleware::{Batch, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
@@ -51,6 +52,8 @@ use tower::{Layer, Service};
 
 #[cfg(feature = "tls")]
 use crate::{CertificateStore, CustomCertStore};
+
+type Logger = tower::layer::util::Stack<RpcLoggerLayer, tower::layer::util::Identity>;
 
 /// HTTP client builder.
 ///
@@ -76,7 +79,7 @@ use crate::{CertificateStore, CustomCertStore};
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Identity> {
+pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Logger> {
 	max_request_size: u32,
 	max_response_size: u32,
 	request_timeout: Duration,
@@ -289,7 +292,7 @@ where
 			.map(|max_concurrent_requests| Arc::new(Semaphore::new(max_concurrent_requests)));
 
 		Ok(HttpClient {
-			transport: rpc_middleware.service(RpcService::new(http)),
+			service: rpc_middleware.service(RpcService::new(http)),
 			id_manager: Arc::new(RequestIdManager::new(id_kind)),
 			request_guard,
 			request_timeout,
@@ -297,7 +300,7 @@ where
 	}
 }
 
-impl Default for HttpClientBuilder<Identity> {
+impl Default for HttpClientBuilder {
 	fn default() -> Self {
 		Self {
 			max_request_size: TEN_MB_SIZE_BYTES,
@@ -308,16 +311,16 @@ impl Default for HttpClientBuilder<Identity> {
 			id_kind: IdKind::Number,
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
-			rpc_middleware: RpcServiceBuilder::default(),
+			rpc_middleware: RpcServiceBuilder::default().rpc_logger(1024),
 			tcp_no_delay: true,
 			max_concurrent_requests: None,
 		}
 	}
 }
 
-impl HttpClientBuilder<Identity> {
+impl HttpClientBuilder {
 	/// Create a new builder.
-	pub fn new() -> HttpClientBuilder<Identity> {
+	pub fn new() -> HttpClientBuilder<Identity, Logger> {
 		HttpClientBuilder::default()
 	}
 }
@@ -325,8 +328,8 @@ impl HttpClientBuilder<Identity> {
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
 pub struct HttpClient<S> {
-	/// HTTP transport client.
-	transport: S,
+	/// HTTP service.
+	service: S,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
 	/// Concurrent requests limit guard.
@@ -337,7 +340,7 @@ pub struct HttpClient<S> {
 
 impl HttpClient<HttpBackend> {
 	/// Create a builder for the HttpClient.
-	pub fn builder() -> HttpClientBuilder<Identity> {
+	pub fn builder() -> HttpClientBuilder {
 		HttpClientBuilder::new()
 	}
 
@@ -363,7 +366,7 @@ where
 		let params = params.to_rpc_params()?.map(StdCow::Owned);
 
 		run_future_until_timeout(
-			self.transport.notification(Notification::new(method.into(), params)),
+			self.service.notification(Notification::new(method.into(), params)),
 			self.request_timeout,
 		)
 		.await
@@ -384,12 +387,12 @@ where
 		let params = params.to_rpc_params()?;
 
 		let method_response = run_future_until_timeout(
-			self.transport.call(Request::borrowed(method, params.as_deref(), id.clone())),
+			self.service.call(Request::borrowed(method, params.as_deref(), id.clone())),
 			self.request_timeout,
 		)
 		.await?
 		.into_method_call()
-		.expect("Method call must return a method call reponse; qed");
+		.expect("Method call must return a method call response; qed");
 
 		let rp = ResponseSuccess::try_from(method_response.into_inner())?;
 
@@ -422,7 +425,7 @@ where
 			batch_request.push(req);
 		}
 
-		let rp = run_future_until_timeout(self.transport.batch(batch_request), self.request_timeout).await?;
+		let rp = run_future_until_timeout(self.service.batch(batch_request), self.request_timeout).await?;
 		let json_rps = rp.into_batch().expect("Batch must return a batch reponse; qed");
 
 		let mut batch_response = Vec::new();

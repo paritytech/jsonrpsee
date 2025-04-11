@@ -88,9 +88,9 @@ where
 
 	fn notification<'a>(
 		&self,
-		n: Notification<'a>,
+		_: Notification<'a>,
 	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
-		self.service.notification(n)
+		async { panic!("Not used for tests") }
 	}
 }
 

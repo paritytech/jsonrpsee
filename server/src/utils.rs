@@ -140,3 +140,59 @@ where
 		}
 	}
 }
+
+/// Deserialize calls, notifications and responses with HTTP extensions.
+pub mod deserialize_with_ext {
+	/// Method call.
+	pub mod call {
+		use jsonrpsee_types::Request;
+
+		/// Wrapper over `serde_json::from_slice` that sets the extensions.
+		pub fn from_slice<'a>(
+			data: &'a [u8],
+			extensions: &'a http::Extensions,
+		) -> Result<Request<'a>, serde_json::Error> {
+			let mut req: Request = serde_json::from_slice(data)?;
+			*req.extensions_mut() = extensions.clone();
+			Ok(req)
+		}
+
+		/// Wrapper over `serde_json::from_str` that sets the extensions.
+		pub fn from_str<'a>(data: &'a str, extensions: &'a http::Extensions) -> Result<Request<'a>, serde_json::Error> {
+			let mut req: Request = serde_json::from_str(data)?;
+			*req.extensions_mut() = extensions.clone();
+			Ok(req)
+		}
+	}
+
+	/// Notification.
+	pub mod notif {
+		use jsonrpsee_types::Notification;
+
+		/// Wrapper over `serde_json::from_slice` that sets the extensions.
+		pub fn from_slice<'a, T>(
+			data: &'a [u8],
+			extensions: &'a http::Extensions,
+		) -> Result<Notification<'a, T>, serde_json::Error>
+		where
+			T: serde::Deserialize<'a>,
+		{
+			let mut notif: Notification<T> = serde_json::from_slice(data)?;
+			*notif.extensions_mut() = extensions.clone();
+			Ok(notif)
+		}
+
+		/// Wrapper over `serde_json::from_str` that sets the extensions.
+		pub fn from_str<'a, T>(
+			data: &'a str,
+			extensions: &http::Extensions,
+		) -> Result<Notification<'a, T>, serde_json::Error>
+		where
+			T: serde::Deserialize<'a>,
+		{
+			let mut notif: Notification<T> = serde_json::from_str(data)?;
+			*notif.extensions_mut() = extensions.clone();
+			Ok(notif)
+		}
+	}
+}

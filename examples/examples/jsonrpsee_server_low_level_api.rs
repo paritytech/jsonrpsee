@@ -45,8 +45,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
+use jsonrpsee::core::async_trait;
 use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
-use jsonrpsee::core::{BoxError, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{
@@ -74,8 +74,7 @@ struct CallLimit<S> {
 
 impl<S> RpcServiceT for CallLimit<S>
 where
-	S: Send + Sync + RpcServiceT<Response = MethodResponse> + Clone + 'static,
-	S::Error: Into<BoxError>,
+	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + Clone + 'static,
 {
 	type Error = S::Error;
 	type Response = S::Response;
@@ -106,12 +105,12 @@ where
 
 		async move {
 			let mut lock = count.lock().await;
+			let batch_len = batch.len();
 
-			if *lock >= 10 {
+			if *lock >= 10 + batch_len {
 				let _ = state.try_send(());
 				Ok(MethodResponse::error(Id::Null, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 			} else {
-				let batch_len = batch.len();
 				let rp = service.batch(batch).await;
 				*lock += batch_len;
 				rp

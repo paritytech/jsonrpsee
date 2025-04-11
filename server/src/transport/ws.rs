@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -63,8 +64,7 @@ pub(crate) struct BackgroundTaskParams<S> {
 
 pub(crate) async fn background_task<S>(params: BackgroundTaskParams<S>)
 where
-	S: RpcServiceT<Response = MethodResponse> + Send + Sync + 'static,
-	<S as RpcServiceT>::Error: std::fmt::Debug,
+	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + 'static,
 {
 	let BackgroundTaskParams {
 		server_cfg,
@@ -383,6 +383,7 @@ async fn graceful_shutdown<S>(
 /// ```no_run
 /// use jsonrpsee_server::{ws, ServerConfig, Methods, ConnectionState, HttpRequest, HttpResponse};
 /// use jsonrpsee_server::middleware::rpc::{RpcServiceBuilder, RpcServiceT, RpcService, MethodResponse};
+/// use std::convert::Infallible;
 ///
 /// async fn handle_websocket_conn<L>(
 ///     req: HttpRequest,
@@ -394,7 +395,7 @@ async fn graceful_shutdown<S>(
 /// ) -> HttpResponse
 /// where
 ///     L: tower::Layer<RpcService> + 'static,
-///     <L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse> + Send + Sync + 'static,
+///     <L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + 'static,
 /// {
 ///   match ws::connect(req, server_cfg, methods, conn, rpc_middleware).await {
 ///     Ok((rp, conn_fut)) => {
@@ -421,8 +422,8 @@ pub async fn connect<L, B>(
 ) -> Result<(HttpResponse, impl Future<Output = ()>), HttpResponse>
 where
 	L: tower::Layer<RpcService>,
-	<L as tower::Layer<RpcService>>::Service: Send + Sync + 'static,
-	<L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse>,
+	<L as tower::Layer<RpcService>>::Service:
+		RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + 'static,
 {
 	let mut server = soketto::handshake::http::Server::new();
 

@@ -277,7 +277,7 @@ pub struct Subscription<Notif> {
 	is_closed: bool,
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as encoded as JSON.
+	/// Channel from which we receive notifications from the server, as encoded JSON.
 	rx: SubscriptionReceiver,
 	/// Callback kind.
 	kind: Option<SubscriptionKind>,

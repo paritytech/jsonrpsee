@@ -38,8 +38,9 @@ use std::time::Duration;
 use jsonrpsee_client_transport::web;
 use jsonrpsee_core::client::async_client::RpcService;
 use jsonrpsee_core::client::{Error, IdKind};
-use jsonrpsee_core::middleware::RpcServiceBuilder;
-use tower::layer::util::Identity;
+use jsonrpsee_core::middleware::{RpcServiceBuilder, layer::RpcLoggerLayer};
+
+type Logger = tower::layer::util::Stack<RpcLoggerLayer, tower::layer::util::Identity>;
 
 /// Builder for [`Client`].
 ///
@@ -62,7 +63,7 @@ use tower::layer::util::Identity;
 ///
 /// ```
 #[derive(Clone, Debug)]
-pub struct WasmClientBuilder<L = Identity> {
+pub struct WasmClientBuilder<L = Logger> {
 	id_kind: IdKind,
 	max_concurrent_requests: usize,
 	max_buffer_capacity_per_subscription: usize,
@@ -70,21 +71,21 @@ pub struct WasmClientBuilder<L = Identity> {
 	service_builder: RpcServiceBuilder<L>,
 }
 
-impl Default for WasmClientBuilder<Identity> {
+impl Default for WasmClientBuilder {
 	fn default() -> Self {
 		Self {
 			id_kind: IdKind::Number,
 			max_concurrent_requests: 256,
 			max_buffer_capacity_per_subscription: 1024,
 			request_timeout: Duration::from_secs(60),
-			service_builder: RpcServiceBuilder::default(),
+			service_builder: RpcServiceBuilder::default().rpc_logger(1024),
 		}
 	}
 }
 
-impl WasmClientBuilder<Identity> {
+impl WasmClientBuilder {
 	/// Create a new WASM client builder.
-	pub fn new() -> WasmClientBuilder<Identity> {
+	pub fn new() -> WasmClientBuilder {
 		WasmClientBuilder::default()
 	}
 }
