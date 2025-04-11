@@ -38,6 +38,7 @@ use crate::future::{ConnectionGuard, ServerHandle, SessionClose, SessionClosedFu
 use crate::middleware::rpc::{RpcService, RpcServiceCfg};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
+use crate::utils::deserialize_with_ext;
 use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
@@ -55,7 +56,7 @@ use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
 };
-use jsonrpsee_types::{ErrorObject, Id, deserialize_with_ext};
+use jsonrpsee_types::{ErrorObject, Id};
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, watch};

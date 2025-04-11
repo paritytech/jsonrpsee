@@ -289,7 +289,7 @@ where
 			.map(|max_concurrent_requests| Arc::new(Semaphore::new(max_concurrent_requests)));
 
 		Ok(HttpClient {
-			transport: rpc_middleware.service(RpcService::new(http)),
+			service: rpc_middleware.service(RpcService::new(http)),
 			id_manager: Arc::new(RequestIdManager::new(id_kind)),
 			request_guard,
 			request_timeout,
@@ -325,8 +325,8 @@ impl HttpClientBuilder<Identity> {
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
 pub struct HttpClient<S> {
-	/// HTTP transport client.
-	transport: S,
+	/// HTTP service.
+	service: S,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
 	/// Concurrent requests limit guard.
@@ -363,7 +363,7 @@ where
 		let params = params.to_rpc_params()?.map(StdCow::Owned);
 
 		run_future_until_timeout(
-			self.transport.notification(Notification::new(method.into(), params)),
+			self.service.notification(Notification::new(method.into(), params)),
 			self.request_timeout,
 		)
 		.await
@@ -384,7 +384,7 @@ where
 		let params = params.to_rpc_params()?;
 
 		let method_response = run_future_until_timeout(
-			self.transport.call(Request::borrowed(method, params.as_deref(), id.clone())),
+			self.service.call(Request::borrowed(method, params.as_deref(), id.clone())),
 			self.request_timeout,
 		)
 		.await?
@@ -422,7 +422,7 @@ where
 			batch_request.push(req);
 		}
 
-		let rp = run_future_until_timeout(self.transport.batch(batch_request), self.request_timeout).await?;
+		let rp = run_future_until_timeout(self.service.batch(batch_request), self.request_timeout).await?;
 		let json_rps = rp.into_batch().expect("Batch must return a batch reponse; qed");
 
 		let mut batch_response = Vec::new();

@@ -294,9 +294,6 @@ impl<'a> BatchEntry<'a> {
 /// Such that server implementations must use `std::convert::Infallible` as the error type because
 /// the underlying service requires that and otherwise one will get a compiler error that tries to
 /// explain that.
-///
-/// The reason is really that the RPC server under the hood would need to convert that error into a
-/// JSON-RPC error and it's better that the user take care of that.
 pub trait RpcServiceT {
 	/// The error type.
 	type Error: std::fmt::Debug;
