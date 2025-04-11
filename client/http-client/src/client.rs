@@ -39,6 +39,7 @@ use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
 	generate_batch_id_range,
 };
+use jsonrpsee_core::middleware::layer::RpcLoggerLayer;
 use jsonrpsee_core::middleware::{Batch, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
@@ -51,6 +52,8 @@ use tower::{Layer, Service};
 
 #[cfg(feature = "tls")]
 use crate::{CertificateStore, CustomCertStore};
+
+type Logger = tower::layer::util::Stack<RpcLoggerLayer, tower::layer::util::Identity>;
 
 /// HTTP client builder.
 ///
@@ -76,7 +79,7 @@ use crate::{CertificateStore, CustomCertStore};
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Identity> {
+pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Logger> {
 	max_request_size: u32,
 	max_response_size: u32,
 	request_timeout: Duration,
@@ -297,7 +300,7 @@ where
 	}
 }
 
-impl Default for HttpClientBuilder<Identity> {
+impl Default for HttpClientBuilder {
 	fn default() -> Self {
 		Self {
 			max_request_size: TEN_MB_SIZE_BYTES,
@@ -308,16 +311,16 @@ impl Default for HttpClientBuilder<Identity> {
 			id_kind: IdKind::Number,
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
-			rpc_middleware: RpcServiceBuilder::default(),
+			rpc_middleware: RpcServiceBuilder::default().rpc_logger(1024),
 			tcp_no_delay: true,
 			max_concurrent_requests: None,
 		}
 	}
 }
 
-impl HttpClientBuilder<Identity> {
+impl HttpClientBuilder {
 	/// Create a new builder.
-	pub fn new() -> HttpClientBuilder<Identity> {
+	pub fn new() -> HttpClientBuilder<Identity, Logger> {
 		HttpClientBuilder::default()
 	}
 }
@@ -337,7 +340,7 @@ pub struct HttpClient<S> {
 
 impl HttpClient<HttpBackend> {
 	/// Create a builder for the HttpClient.
-	pub fn builder() -> HttpClientBuilder<Identity> {
+	pub fn builder() -> HttpClientBuilder {
 		HttpClientBuilder::new()
 	}
 

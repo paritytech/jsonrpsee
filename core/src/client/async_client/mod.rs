@@ -41,6 +41,7 @@ use crate::client::{
 	SubscriptionKind, TransportReceiverT, TransportSenderT,
 };
 use crate::error::RegisterMethodError;
+use crate::middleware::layer::RpcLoggerLayer;
 use crate::middleware::{Batch, IsBatch, IsSubscription, Request, RpcServiceBuilder, RpcServiceT};
 use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::traits::ToRpcParams;
@@ -69,6 +70,8 @@ use self::utils::{InactivityCheck, IntervalStream};
 use super::{FrontToBack, IdKind, MethodResponse, RequestIdManager, generate_batch_id_range, subscription_channel};
 
 pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Box<JsonRawValue>>>;
+
+type Logger = tower::layer::util::Stack<RpcLoggerLayer, tower::layer::util::Identity>;
 
 const LOG_TARGET: &str = "jsonrpsee-client";
 const NOT_POISONED: &str = "Not poisoned; qed";
@@ -114,7 +117,7 @@ impl PingConfig {
 	}
 
 	/// Configure how long to wait for the WebSocket pong.
-	/// When this limit is expired it's regarded as inresponsive.
+	/// When this limit is expired it's regarded as unresponsive.
 	///
 	/// You may configure how many times the connection is allowed to
 	/// be inactive by [`PingConfig::max_failures`].
@@ -180,7 +183,7 @@ impl ErrorFromBack {
 
 /// Builder for [`Client`].
 #[derive(Debug, Clone)]
-pub struct ClientBuilder<L = Identity> {
+pub struct ClientBuilder<L = Logger> {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
 	max_buffer_capacity_per_subscription: usize,
@@ -190,7 +193,7 @@ pub struct ClientBuilder<L = Identity> {
 	service_builder: RpcServiceBuilder<L>,
 }
 
-impl Default for ClientBuilder<Identity> {
+impl Default for ClientBuilder {
 	fn default() -> Self {
 		Self {
 			request_timeout: Duration::from_secs(60),
@@ -199,14 +202,14 @@ impl Default for ClientBuilder<Identity> {
 			id_kind: IdKind::Number,
 			ping_config: None,
 			tcp_no_delay: true,
-			service_builder: RpcServiceBuilder::default(),
+			service_builder: RpcServiceBuilder::default().rpc_logger(1024),
 		}
 	}
 }
 
 impl ClientBuilder<Identity> {
 	/// Create a new client builder.
-	pub fn new() -> ClientBuilder<Identity> {
+	pub fn new() -> ClientBuilder {
 		ClientBuilder::default()
 	}
 }
@@ -442,8 +445,8 @@ pub struct Client<L = Identity> {
 
 impl Client<Identity> {
 	/// Create a builder for the client.
-	pub fn builder() -> ClientBuilder<Identity> {
-		ClientBuilder::<Identity>::new()
+	pub fn builder() -> ClientBuilder {
+		ClientBuilder::new()
 	}
 }
 
