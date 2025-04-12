@@ -36,6 +36,7 @@ pub mod error;
 pub use error::Error;
 
 use std::fmt;
+use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -169,29 +170,27 @@ impl<T: Send> MaybeSend for T {}
 impl<T> MaybeSend for T {}
 
 /// Transport interface to send data asynchronous.
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-pub trait TransportSenderT: MaybeSend + 'static {
+pub trait TransportSenderT: 'static {
 	/// Error that may occur during sending a message.
 	type Error: std::error::Error + Send + Sync;
 
 	/// Send.
-	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
+	fn send(&mut self, msg: String) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
 	/// This is optional because it's most likely relevant for WebSocket transports only.
 	/// You should only implement this is your transport supports sending periodic pings.
 	///
 	/// Send ping frame (opcode of 0x9).
-	async fn send_ping(&mut self) -> Result<(), Self::Error> {
-		Ok(())
+	fn send_ping(&mut self) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+		async { Ok(()) }
 	}
 
 	/// This is optional because it's most likely relevant for WebSocket transports only.
 	/// You should only implement this is your transport supports being closed.
 	///
 	/// Send customized close message.
-	async fn close(&mut self) -> Result<(), Self::Error> {
-		Ok(())
+	fn close(&mut self) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+		async { Ok(()) }
 	}
 }
 
@@ -208,14 +207,12 @@ pub enum ReceivedMessage {
 }
 
 /// Transport interface to receive data asynchronous.
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait TransportReceiverT: 'static {
 	/// Error that may occur during receiving a message.
 	type Error: std::error::Error + Send + Sync;
 
 	/// Receive.
-	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error>;
+	fn receive(&mut self) -> impl Future<Output = Result<ReceivedMessage, Self::Error>> + MaybeSend;
 }
 
 /// Convert the given values to a [`crate::params::ArrayParams`] as expected by a
