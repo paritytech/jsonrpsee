@@ -31,7 +31,7 @@ use crate::tests::helpers::{Metrics, deser_call, init_logger, server_with_contex
 use crate::types::SubscriptionId;
 use crate::{BatchRequestConfig, RegisterMethodError, ServerConfig};
 use crate::{RpcModule, ServerBuilder};
-use jsonrpsee_core::server::{SendTimeoutError, SubscriptionMessage};
+use jsonrpsee_core::server::SendTimeoutError;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::*;
@@ -729,8 +729,8 @@ async fn ws_server_backpressure_works() {
 			"unsubscribe_with_backpressure_aggregation",
 			move |_, pending, mut backpressure_tx, _| async move {
 				let sink = pending.accept().await?;
-				let n = SubscriptionMessage::from_json(&1)?;
-				let bp = SubscriptionMessage::from_json(&2)?;
+				let n = serde_json::value::to_raw_value(&1).unwrap();
+				let bp = serde_json::value::to_raw_value(&2).unwrap();
 
 				let mut msg = n.clone();
 
@@ -741,7 +741,7 @@ async fn ws_server_backpressure_works() {
 							// User closed connection.
 							break Ok(());
 						},
-						res = sink.send_timeout(msg.clone(), std::time::Duration::from_millis(100)) => {
+						res = sink.send_timeout(msg.clone().into(), std::time::Duration::from_millis(100)) => {
 							match res {
 								// msg == 1
 								Ok(_) => {

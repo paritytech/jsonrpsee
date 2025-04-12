@@ -9,7 +9,7 @@ use crate::{
 
 use futures_util::FutureExt;
 use jsonrpsee_core::server::Methods;
-use jsonrpsee_core::{DeserializeOwned, RpcResult, SubscriptionErr};
+use jsonrpsee_core::{DeserializeOwned, RpcResult, SubscriptionError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::{ErrorObject, ErrorObjectOwned, Response, ResponseSuccess, error::ErrorCode};
 use tokio::net::TcpListener;
@@ -88,7 +88,7 @@ pub(crate) async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_subscription::<Result<(), SubscriptionErr>, _, _>(
+		.register_subscription::<Result<(), SubscriptionError>, _, _>(
 			"subscribe_hello",
 			"subscribe_hello",
 			"unsubscribe_hello",

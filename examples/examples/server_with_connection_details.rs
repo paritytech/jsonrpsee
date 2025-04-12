@@ -93,7 +93,9 @@ impl RpcServer for RpcServerImpl {
 			.get::<ConnectionId>()
 			.cloned()
 			.ok_or_else(|| ErrorObject::owned(0, "No connection details found", None::<()>))?;
-		sink.send(SubscriptionMessage::from_json(&conn_id).unwrap()).await?;
+		let json = serde_json::value::to_raw_value(&conn_id)
+			.map_err(|e| ErrorObject::owned(0, format!("Failed to serialize connection ID: {e}"), None::<()>))?;
+		sink.send(SubscriptionMessage::from_json(json)).await?;
 		Ok(())
 	}
 
@@ -102,7 +104,8 @@ impl RpcServer for RpcServerImpl {
 
 		tokio::spawn(async move {
 			let sink = pending.accept().await.unwrap();
-			sink.send(SubscriptionMessage::from_json(&conn_id).unwrap()).await.unwrap();
+			let json = serde_json::value::to_raw_value(&conn_id).unwrap();
+			sink.send(SubscriptionMessage::from_json(json)).await.unwrap();
 		});
 		Ok(())
 	}

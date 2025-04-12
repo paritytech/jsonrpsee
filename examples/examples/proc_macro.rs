@@ -74,7 +74,8 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> SubscriptionResult {
 		let sink = pending.accept().await?;
-		let msg = SubscriptionMessage::from_json(&vec![[0; 32]])?;
+		let json = serde_json::value::to_raw_value(&vec![[0; 32]])?;
+		let msg = SubscriptionMessage::from_json(json);
 		sink.send(msg).await?;
 
 		Ok(())
@@ -83,7 +84,8 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 	fn s(&self, pending: PendingSubscriptionSink, _keys: Option<Vec<ExampleStorageKey>>) {
 		tokio::spawn(async move {
 			let sink = pending.accept().await.unwrap();
-			let msg = SubscriptionMessage::from_json(&vec![[0; 32]]).unwrap();
+			let json = serde_json::value::to_raw_value(&vec![[0; 32]]).unwrap();
+			let msg = SubscriptionMessage::from_json(json);
 			sink.send(msg).await.unwrap();
 		});
 	}

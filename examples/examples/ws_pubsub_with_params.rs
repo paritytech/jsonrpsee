@@ -30,7 +30,7 @@ use std::time::Duration;
 use futures::{Stream, StreamExt};
 use jsonrpsee::core::Serialize;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::server::{RpcModule, Server, ServerConfig, SubscriptionMessage, TrySendError};
+use jsonrpsee::server::{RpcModule, Server, ServerConfig, TrySendError};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{PendingSubscriptionSink, rpc_params};
 use tokio::time::interval;
@@ -125,8 +125,8 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 					Some(item) => item,
 					None => break Err(anyhow::anyhow!("Subscription was closed")),
 				};
-				let msg = SubscriptionMessage::from_json(&item)?;
-				match sink.try_send(msg) {
+				let msg = serde_json::value::to_raw_value(&item)?;
+				match sink.try_send(msg.into()) {
 					Ok(_) => (),
 					Err(TrySendError::Closed(_)) => break Err(anyhow::anyhow!("Subscription was closed")),
 					// channel is full, let's be naive an just drop the message.

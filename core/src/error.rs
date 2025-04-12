@@ -38,9 +38,9 @@ pub(crate) enum InnerSubscriptionErr {
 /// It's recommended to use `SubscriptionErr::from_json` to create a new instance of this error
 /// because using the `String` representation may not very ergonomic for clients to parse.
 #[derive(Debug)]
-pub struct SubscriptionErr(pub(crate) InnerSubscriptionErr);
+pub struct SubscriptionError(pub(crate) InnerSubscriptionErr);
 
-impl Serialize for SubscriptionErr {
+impl Serialize for SubscriptionError {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: serde::Serializer,
@@ -52,22 +52,21 @@ impl Serialize for SubscriptionErr {
 	}
 }
 
-impl<T: ToString> From<T> for SubscriptionErr {
+impl<T: ToString> From<T> for SubscriptionError {
 	fn from(val: T) -> Self {
 		Self(InnerSubscriptionErr::String(val.to_string()))
 	}
 }
 
-impl SubscriptionErr {
+impl SubscriptionError {
 	/// Create a new `SubscriptionErr` from a JSON value.
-	pub fn from_json(t: &impl Serialize) -> Result<Self, serde_json::Error> {
-		let json = serde_json::value::to_raw_value(t)?;
-		Ok(Self(InnerSubscriptionErr::Json(json)))
+	pub fn from_json(json: Box<RawValue>) -> Self {
+		Self(InnerSubscriptionErr::Json(json))
 	}
 
 	/// Create a new `SubscriptionErr` from a String.
 	pub fn from_string(s: String) -> Self {
-		SubscriptionErr::from(s)
+		Self::from(s)
 	}
 }
 

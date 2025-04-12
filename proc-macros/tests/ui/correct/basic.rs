@@ -6,10 +6,9 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::SubscriptionMessage;
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::{Extensions, PendingSubscriptionSink, rpc_params};
+use jsonrpsee::{Extensions, PendingSubscriptionSink, SubscriptionMessage, rpc_params};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -97,18 +96,21 @@ impl RpcServer for RpcServerImpl {
 	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		sink.send("Response_A".into()).await?;
-		sink.send("Response_B".into()).await?;
+		let response_a = RawValue::from_string("\"Response_A\"".into()).unwrap();
+		let response_b = RawValue::from_string("\"Response_B\"".into()).unwrap();
+
+		sink.send(response_a.into()).await?;
+		sink.send(response_b.into()).await?;
 
 		Ok(())
 	}
 
 	async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
 		let sink = pending.accept().await?;
-		let msg = SubscriptionMessage::from_json(&val)?;
+		let msg = serde_json::value::to_raw_value(&val).unwrap();
 
-		sink.send(msg.clone()).await?;
-		sink.send(msg).await?;
+		sink.send(msg.clone().into()).await?;
+		sink.send(msg.into()).await?;
 
 		Ok(())
 	}
@@ -116,8 +118,8 @@ impl RpcServer for RpcServerImpl {
 	async fn sub_with_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		let msg = SubscriptionMessage::from_json(&1)?;
-		sink.send(msg).await?;
+		let msg = serde_json::value::to_raw_value(&1).unwrap();
+		sink.send(msg.into()).await?;
 
 		Ok(())
 	}
@@ -128,7 +130,8 @@ impl RpcServer for RpcServerImpl {
 			.get::<u32>()
 			.cloned()
 			.ok_or_else(|| ErrorObject::owned(0, "No connection details found", None::<()>))?;
-		sink.send(SubscriptionMessage::from_json(&conn_id).unwrap()).await?;
+		let json = serde_json::value::to_raw_value(&conn_id).unwrap();
+		sink.send(json.into()).await?;
 		Ok(())
 	}
 }

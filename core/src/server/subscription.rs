@@ -31,9 +31,9 @@ use super::{MethodResponse, MethodsError, ResponsePayload};
 use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::{error::SubscriptionErr, traits::IdProvider};
+use crate::{error::SubscriptionError, traits::IdProvider};
 use jsonrpsee_types::SubscriptionPayload;
-use jsonrpsee_types::{ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse, response::SubscriptionError};
+use jsonrpsee_types::{ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{Serialize, de::DeserializeOwned};
@@ -89,10 +89,10 @@ pub enum SubscriptionCloseResponse {
 	///  }
 	/// }
 	/// ```
-	NotifErr(SubscriptionErr),
+	NotifErr(SubscriptionError),
 }
 
-impl IntoSubscriptionCloseResponse for Result<(), SubscriptionErr> {
+impl IntoSubscriptionCloseResponse for Result<(), SubscriptionError> {
 	fn into_response(self) -> SubscriptionCloseResponse {
 		match self {
 			Ok(()) => SubscriptionCloseResponse::None,
@@ -126,12 +126,18 @@ pub enum SubscriptionMessageInner {
 #[derive(Debug, Clone)]
 pub struct SubscriptionMessage(pub(crate) SubscriptionMessageInner);
 
+impl From<Box<RawValue>> for SubscriptionMessage {
+	fn from(json: Box<RawValue>) -> Self {
+		Self(SubscriptionMessageInner::NeedsData(json))
+	}
+}
+
 impl SubscriptionMessage {
 	/// Create a new subscription message from JSON.
 	///
 	/// Fails if the value couldn't be serialized.
-	pub fn from_json(t: &impl Serialize) -> Result<Self, serde_json::Error> {
-		serde_json::value::to_raw_value(t).map(|json| SubscriptionMessage(SubscriptionMessageInner::NeedsData(json)))
+	pub fn from_json(json: Box<RawValue>) -> Self {
+		Self(SubscriptionMessageInner::NeedsData(json))
 	}
 
 	/// Create a subscription message this is more efficient than [`SubscriptionMessage::from_json`]
@@ -437,10 +443,12 @@ impl Subscription {
 		#[allow(clippy::let_and_return)]
 		let res = match serde_json::from_str::<SubscriptionResponse<T>>(raw.get()) {
 			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
-			Err(e) => match serde_json::from_str::<SubscriptionError<&RawValue>>(raw.get()) {
-				Ok(_) => None,
-				Err(_) => Some(Err(e.into())),
-			},
+			Err(e) => {
+				match serde_json::from_str::<jsonrpsee_types::response::SubscriptionError<&RawValue>>(raw.get()) {
+					Ok(_) => None,
+					Err(_) => Some(Err(e.into())),
+				}
+			}
 		};
 		res
 	}
@@ -502,7 +510,7 @@ pub(crate) fn sub_message_to_json(msg: SubscriptionMessage, sub_id: &Subscriptio
 	}
 }
 
-pub(crate) fn sub_err_to_json(error: SubscriptionErr, sub_id: &SubscriptionId, method: &str) -> Box<RawValue> {
+pub(crate) fn sub_err_to_json(error: SubscriptionError, sub_id: &SubscriptionId, method: &str) -> Box<RawValue> {
 	let sub = serde_json::to_string(sub_id).expect("valid JSON; qed");
 	let err = serde_json::to_string(&error).expect("valid JSON; qed");
 

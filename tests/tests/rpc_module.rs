@@ -33,10 +33,9 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
-use jsonrpsee::core::{EmptyServerParams, SubscriptionErr};
+use jsonrpsee::core::{EmptyServerParams, SubscriptionError};
 use jsonrpsee::core::{RpcResult, server::*};
 use jsonrpsee::types::error::{ErrorCode, ErrorObject, INVALID_PARAMS_MSG, PARSE_ERROR_CODE};
-use jsonrpsee::types::response::SubscriptionError;
 use jsonrpsee::types::{ErrorObjectOwned, Response, ResponsePayload};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -247,8 +246,8 @@ async fn subscribing_without_server() {
 
 			while let Some(letter) = stream_data.pop() {
 				tracing::debug!("This is your friendly subscription sending data.");
-				let msg = SubscriptionMessage::from_json(&letter).unwrap();
-				sink.send(msg).await.unwrap();
+				let msg = serde_json::value::to_raw_value(&letter).unwrap();
+				sink.send(msg.into()).await.unwrap();
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
 
@@ -275,13 +274,13 @@ async fn close_test_subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let sink = pending.accept().await?;
-			let msg = SubscriptionMessage::from_json(&"lo")?;
+			let msg = RawValue::from_string("\"lo\"".into())?;
 
 			// make sure to only send one item
-			sink.send(msg.clone()).await?;
+			sink.send(msg.clone().into()).await?;
 			sink.closed().await;
 
-			sink.send(msg).await.expect("The sink should be closed");
+			sink.send(msg.into()).await.expect("The sink should be closed");
 
 			Ok(())
 		})
@@ -326,8 +325,8 @@ async fn subscribing_without_server_bad_params() {
 			};
 
 			let sink = pending.accept().await?;
-			let msg = SubscriptionMessage::from_json(&p)?;
-			sink.send(msg).await?;
+			let msg = serde_json::value::to_raw_value(&p)?;
+			sink.send(msg.into()).await?;
 
 			Ok(())
 		})
@@ -350,8 +349,8 @@ async fn subscribing_without_server_indicates_close() {
 			let sink = pending.accept().await?;
 
 			for m in 0..5 {
-				let msg = SubscriptionMessage::from_json(&m)?;
-				sink.send(msg).await?;
+				let msg = serde_json::value::to_raw_value(&m)?;
+				sink.send(msg.into()).await?;
 			}
 
 			Ok(())
@@ -454,9 +453,9 @@ async fn bounded_subscription_works() {
 			let mut buf = VecDeque::new();
 
 			while let Some(n) = stream.next().await {
-				let msg = SubscriptionMessage::from_json(&n).expect("usize infallible; qed");
+				let msg = serde_json::value::to_raw_value(&n).expect("usize serialize infallible; qed");
 
-				match sink.try_send(msg) {
+				match sink.try_send(msg.into()) {
 					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
 					Err(TrySendError::Full(m)) => {
 						buf.push_back(m);
@@ -515,7 +514,9 @@ async fn serialize_sub_error_json() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let _ = pending.accept().await?;
 			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-			Err(SubscriptionErr::from_json(&MyError { number: 11, address: "State street 1337".into() }).unwrap())
+			let json =
+				serde_json::value::to_raw_value(&MyError { number: 11, address: "State street 1337".into() }).unwrap();
+			Err(SubscriptionError::from_json(json))
 		})
 		.unwrap();
 
@@ -530,7 +531,7 @@ async fn serialize_sub_error_json() {
 		notif.get()
 	);
 
-	assert!(serde_json::from_str::<SubscriptionError<MyError>>(notif.get()).is_ok());
+	assert!(serde_json::from_str::<jsonrpsee::types::response::SubscriptionError<MyError>>(notif.get()).is_ok());
 }
 
 #[tokio::test]
@@ -563,7 +564,7 @@ async fn serialize_sub_error_str() {
 		notif.get()
 	);
 
-	assert!(serde_json::from_str::<SubscriptionError<MyError>>(notif.get()).is_err());
+	assert!(serde_json::from_str::<jsonrpsee::types::response::SubscriptionError<MyError>>(notif.get()).is_err());
 }
 
 #[tokio::test]
@@ -585,8 +586,9 @@ async fn subscription_close_response_works() {
 			};
 
 			let _sink = pending.accept().await.unwrap();
+			let msg = serde_json::value::to_raw_value(&x).unwrap();
 
-			SubscriptionCloseResponse::Notif(SubscriptionMessage::from_json(&x).unwrap())
+			SubscriptionCloseResponse::Notif(msg.into())
 		})
 		.unwrap();
 

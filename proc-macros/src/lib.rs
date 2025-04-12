@@ -247,7 +247,10 @@ pub(crate) mod visitor;
 ///                CloseResponse::None => SubscriptionCloseResponse::None,
 ///                // Send a close response as an ordinary subscription notification
 ///                // when the subscription is terminated.
-///                CloseResponse::Failed => SubscriptionCloseResponse::Notif("failed".into()),
+///                CloseResponse::Failed => {
+///                     let err = RawValue::from_string("\"Failed\"").expect("String serialization infallible; qed");
+///                     SubscriptionCloseResponse::Notif(err.into())
+///                }
 ///            }
 ///         }
 ///     }
@@ -332,7 +335,8 @@ pub(crate) mod visitor;
 ///         // as subscription responses.
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
-///             sink.send("Response_A".into()).await?;
+///             let msg = RawValue::from_string("\"Response_A\"".into()).unwrap();
+///             sink.send(msg.into()).await?;
 ///             Ok(())
 ///         }
 ///
@@ -340,11 +344,11 @@ pub(crate) mod visitor;
 ///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
-///             let msg1 = SubscriptionMessage::from("Response_A");
-///             let msg2 = SubscriptionMessage::from("Response_B");
+///             let msg1 = RawValue::from_string("\"Response_A\"".into()).unwrap();
+///             let msg2 = RawValue::from_string("\"Response_B\"".into()).unwrap();
 ///
-///             sink.send(msg1).await?;
-///             sink.send(msg2).await?;
+///             sink.send(msg1.into()).await?;
+///             sink.send(msg2.into()).await?;
 ///
 ///             Ok(())
 ///         }
@@ -357,12 +361,13 @@ pub(crate) mod visitor;
 ///                 return CloseResponse::None;
 ///             };
 ///
-///             if sink.send("Response_A".into()).await.is_ok() {
+///             let msg = RawValue::from_string("\"Response_A\"".into()).unwrap();
+///
+///             if sink.send(msg.into()).await.is_ok() {
 ///                 CloseResponse::Failed
 ///             } else {
 ///                 CloseResponse::None
 ///             }
-///
 ///         }
 ///     }
 /// }

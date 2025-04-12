@@ -33,7 +33,6 @@ use futures::future::{self, Either};
 use jsonrpsee::PendingSubscriptionSink;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::middleware::RpcServiceBuilder;
-use jsonrpsee::core::server::SubscriptionMessage;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server, ServerConfig};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -115,12 +114,12 @@ async fn pipe_from_stream_with_bounded_buffer(
 
 			// received new item from the stream.
 			Either::Right((Some(Ok(item)), c)) => {
-				let notif = SubscriptionMessage::from_json(&item)?;
+				let msg = serde_json::value::to_raw_value(&item)?;
 
 				// NOTE: this will block until there a spot in the queue
 				// and you might want to do something smarter if it's
 				// critical that "the most recent item" must be sent when it is produced.
-				if sink.send(notif).await.is_err() {
+				if sink.send(msg.into()).await.is_err() {
 					break Ok(());
 				}
 

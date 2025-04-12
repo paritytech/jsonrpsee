@@ -61,7 +61,7 @@ cfg_client_or_server! {
 }
 
 pub use async_trait::async_trait;
-pub use error::{RegisterMethodError, SubscriptionErr};
+pub use error::{RegisterMethodError, SubscriptionError};
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, jsonrpsee_types::ErrorObjectOwned>;
@@ -99,7 +99,7 @@ pub use std::borrow::Cow;
 pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 
 /// The return type if the subscription wants to return `Result`.
-pub type SubscriptionResult = Result<(), SubscriptionErr>;
+pub type SubscriptionResult = Result<(), SubscriptionError>;
 
 /// Type erased error.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

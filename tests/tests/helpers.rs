@@ -38,8 +38,8 @@ use futures::{SinkExt, Stream, StreamExt};
 use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::middleware::http::ProxyGetRequestLayer;
 use jsonrpsee::server::{
-	ConnectionGuard, PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, SubscriptionMessage,
-	TrySendError, serve_with_graceful_shutdown, stop_channel,
+	ConnectionGuard, PendingSubscriptionSink, RpcModule, Server, ServerBuilder, ServerHandle, TrySendError,
+	serve_with_graceful_shutdown, stop_channel,
 };
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::{Methods, SubscriptionCloseResponse};
@@ -329,9 +329,9 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 					Some(item) => item,
 					None => return Err(anyhow::anyhow!("Subscription executed successful")),
 				};
-				let msg = SubscriptionMessage::from_json(&item)?;
+				let msg = serde_json::value::to_raw_value(&item)?;
 
-				match sink.try_send(msg) {
+				match sink.try_send(msg.into()) {
 					Ok(_) => (),
 					Err(TrySendError::Closed(_)) => return Err(anyhow::anyhow!("Subscription executed successful")),
 					// channel is full, let's be naive an just drop the message.
