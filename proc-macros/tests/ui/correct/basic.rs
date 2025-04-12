@@ -4,11 +4,11 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait};
+use jsonrpsee::core::{JsonRawValue, RpcResult, SubscriptionResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::{Extensions, PendingSubscriptionSink, SubscriptionMessage, rpc_params};
+use jsonrpsee::{Extensions, PendingSubscriptionSink, rpc_params};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -96,11 +96,11 @@ impl RpcServer for RpcServerImpl {
 	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		let response_a = RawValue::from_string("\"Response_A\"".into()).unwrap();
-		let response_b = RawValue::from_string("\"Response_B\"".into()).unwrap();
+		let response_a = JsonRawValue::from_string("\"Response_A\"".into()).unwrap();
+		let response_b = JsonRawValue::from_string("\"Response_B\"".into()).unwrap();
 
-		sink.send(response_a.into()).await?;
-		sink.send(response_b.into()).await?;
+		sink.send(response_a).await?;
+		sink.send(response_b).await?;
 
 		Ok(())
 	}
@@ -109,8 +109,8 @@ impl RpcServer for RpcServerImpl {
 		let sink = pending.accept().await?;
 		let msg = serde_json::value::to_raw_value(&val).unwrap();
 
-		sink.send(msg.clone().into()).await?;
-		sink.send(msg.into()).await?;
+		sink.send(msg.clone()).await?;
+		sink.send(msg).await?;
 
 		Ok(())
 	}
@@ -119,7 +119,7 @@ impl RpcServer for RpcServerImpl {
 		let sink = pending.accept().await?;
 
 		let msg = serde_json::value::to_raw_value(&1).unwrap();
-		sink.send(msg.into()).await?;
+		sink.send(msg).await?;
 
 		Ok(())
 	}
@@ -131,7 +131,7 @@ impl RpcServer for RpcServerImpl {
 			.cloned()
 			.ok_or_else(|| ErrorObject::owned(0, "No connection details found", None::<()>))?;
 		let json = serde_json::value::to_raw_value(&conn_id).unwrap();
-		sink.send(json.into()).await?;
+		sink.send(json).await?;
 		Ok(())
 	}
 }

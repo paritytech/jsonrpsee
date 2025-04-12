@@ -331,7 +331,7 @@ pub async fn pipe_from_stream_and_drop<T: Serialize>(
 				};
 				let msg = serde_json::value::to_raw_value(&item)?;
 
-				match sink.try_send(msg.into()) {
+				match sink.try_send(msg) {
 					Ok(_) => (),
 					Err(TrySendError::Closed(_)) => return Err(anyhow::anyhow!("Subscription executed successful")),
 					// channel is full, let's be naive an just drop the message.

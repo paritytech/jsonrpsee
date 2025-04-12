@@ -340,7 +340,9 @@ impl SubscriptionSink {
 	/// # Cancel safety
 	///
 	/// This method is cancel-safe and dropping a future loses its spot in the waiting queue.
-	pub async fn send(&self, msg: SubscriptionMessage) -> Result<(), DisconnectError> {
+	pub async fn send(&self, msg: impl Into<SubscriptionMessage>) -> Result<(), DisconnectError> {
+		let msg = msg.into();
+
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Err(DisconnectError(msg));
@@ -351,7 +353,13 @@ impl SubscriptionSink {
 	}
 
 	/// Similar to `SubscriptionSink::send` but only waits for a limited time.
-	pub async fn send_timeout(&self, msg: SubscriptionMessage, timeout: Duration) -> Result<(), SendTimeoutError> {
+	pub async fn send_timeout(
+		&self,
+		msg: impl Into<SubscriptionMessage>,
+		timeout: Duration,
+	) -> Result<(), SendTimeoutError> {
+		let msg = msg.into();
+
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Err(SendTimeoutError::Closed(msg));
@@ -367,7 +375,9 @@ impl SubscriptionSink {
 	///
 	/// This differs from [`SubscriptionSink::send`] where it will until there is capacity
 	/// in the channel.
-	pub fn try_send(&mut self, msg: SubscriptionMessage) -> Result<(), TrySendError> {
+	pub fn try_send(&mut self, msg: impl Into<SubscriptionMessage>) -> Result<(), TrySendError> {
+		let msg = msg.into();
+
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Err(TrySendError::Closed(msg));

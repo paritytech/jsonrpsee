@@ -325,6 +325,7 @@ impl Methods {
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
 	///     use jsonrpsee::types::{response::Success, Response};
+	///     use jsonrpsee::core::JsonRawValue;
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
@@ -332,8 +333,8 @@ impl Methods {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
-	///         let msg = RawValue::from_string("\"one answer\"".into()).unwrap();  
-	///         sink.send(msg.into()).await?;
+	///         let msg = JsonRawValue::from_string("\"one answer\"".into()).unwrap();  
+	///         sink.send(msg).await?;
 	///
 	///         Ok(())
 	///     }).unwrap();
@@ -422,13 +423,13 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::core::{EmptyServerParams, RpcResult};
+	///     use jsonrpsee::core::{EmptyServerParams, RpcResult, JsonRawValue};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _, _| async move {
 	///         let sink = pending.accept().await?;
-	///         let msg = RawValue::from_string("\"one answer\"".into()).unwrap();  
-	///         sink.send(msg.into()).await?;
+	///         let msg = JsonRawValue::from_string("\"one answer\"".into()).unwrap();  
+	///         sink.send(msg).await?;
 	///         Ok(())
 	///     }).unwrap();
 	///
@@ -768,7 +769,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     //
 	///     // If you need some other behavior implement or custom format of the error field
 	///     // you need to manually handle that.
-	///     let msg = serde_json::value::to_raw_value(sum).unwrap();
+	///     let msg = serde_json::value::to_raw_value(&sum).unwrap();
 	///
 	///     // This fails only if the connection is closed
 	///     sink.send(msg).await?;
@@ -911,7 +912,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         let sink = pending.accept().await.unwrap();
 	///         let sum = val + (*ctx);
 	///
-	///         let msg = serde_json::value::to_raw_value(sum).unwrap();
+	///         let msg = serde_json::value::to_raw_value(&sum).unwrap();
 	///
 	///         // This fails only if the connection is closed
 	///         sink.send(msg).await.unwrap();

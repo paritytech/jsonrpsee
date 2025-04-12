@@ -53,7 +53,7 @@ impl ApiServer for () {
 	async fn sub(&self, pending: PendingSubscriptionSink, _: PubSubKind, _: PubSubParams) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 		let msg = JsonRawValue::from_string("\"msg\"".into())?;
-		sink.send(msg.into()).await?;
+		sink.send(msg).await?;
 		Ok(())
 	}
 

@@ -532,7 +532,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			|_, pending, mut tx, _| async move {
 				let sink = pending.accept().await?;
 				let msg = serde_json::value::to_raw_value(&1)?;
-				sink.send(msg.into()).await?;
+				sink.send(msg).await?;
 				sink.closed().await;
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed("Subscription terminated by remote peer").await.unwrap();
@@ -1343,7 +1343,7 @@ async fn response_payload_async_api_works() {
 					if let Some((sink, close)) = ctx.lock().await.take() {
 						for idx in 0..3 {
 							let msg = serde_json::value::to_raw_value(&idx).unwrap();
-							_ = sink.send(msg.into()).await;
+							_ = sink.send(msg).await;
 						}
 						drop(sink);
 						drop(close);

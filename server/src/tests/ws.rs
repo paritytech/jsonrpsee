@@ -741,7 +741,7 @@ async fn ws_server_backpressure_works() {
 							// User closed connection.
 							break Ok(());
 						},
-						res = sink.send_timeout(msg.clone().into(), std::time::Duration::from_millis(100)) => {
+						res = sink.send_timeout(msg.clone(), std::time::Duration::from_millis(100)) => {
 							match res {
 								// msg == 1
 								Ok(_) => {

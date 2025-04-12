@@ -247,7 +247,7 @@ async fn subscribing_without_server() {
 			while let Some(letter) = stream_data.pop() {
 				tracing::debug!("This is your friendly subscription sending data.");
 				let msg = serde_json::value::to_raw_value(&letter).unwrap();
-				sink.send(msg.into()).await.unwrap();
+				sink.send(msg).await.unwrap();
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
 
@@ -277,10 +277,10 @@ async fn close_test_subscribing_without_server() {
 			let msg = RawValue::from_string("\"lo\"".into())?;
 
 			// make sure to only send one item
-			sink.send(msg.clone().into()).await?;
+			sink.send(msg.clone()).await?;
 			sink.closed().await;
 
-			sink.send(msg.into()).await.expect("The sink should be closed");
+			sink.send(msg).await.expect("The sink should be closed");
 
 			Ok(())
 		})
@@ -326,7 +326,7 @@ async fn subscribing_without_server_bad_params() {
 
 			let sink = pending.accept().await?;
 			let msg = serde_json::value::to_raw_value(&p)?;
-			sink.send(msg.into()).await?;
+			sink.send(msg).await?;
 
 			Ok(())
 		})
@@ -350,7 +350,7 @@ async fn subscribing_without_server_indicates_close() {
 
 			for m in 0..5 {
 				let msg = serde_json::value::to_raw_value(&m)?;
-				sink.send(msg.into()).await?;
+				sink.send(msg).await?;
 			}
 
 			Ok(())
@@ -455,7 +455,7 @@ async fn bounded_subscription_works() {
 			while let Some(n) = stream.next().await {
 				let msg = serde_json::value::to_raw_value(&n).expect("usize serialize infallible; qed");
 
-				match sink.try_send(msg.into()) {
+				match sink.try_send(msg) {
 					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
 					Err(TrySendError::Full(m)) => {
 						buf.push_back(m);
