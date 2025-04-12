@@ -91,15 +91,14 @@ pub mod __reexports {
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
-#[async_trait]
 pub trait ClientT {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
-	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
 	where
 		Params: ToRpcParams + Send;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
 	where
 		R: DeserializeOwned,
 		Params: ToRpcParams + Send;
@@ -111,13 +110,15 @@ pub trait ClientT {
 	///
 	/// Returns `Ok` if all requests in the batch were answered.
 	/// Returns `Error` if the network failed or any of the responses could be parsed a valid JSON-RPC response.
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
 	where
 		R: DeserializeOwned + fmt::Debug + 'a;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
-#[async_trait]
 pub trait SubscriptionClientT: ClientT {
 	/// Initiate a subscription by performing a JSON-RPC method call where the server responds with
 	/// a `Subscription ID` that is used to fetch messages on that subscription,
@@ -131,12 +132,12 @@ pub trait SubscriptionClientT: ClientT {
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	async fn subscribe<'a, Notif, Params>(
+	fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<Notif>, Error>
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
 	where
 		Params: ToRpcParams + Send,
 		Notif: DeserializeOwned;
@@ -145,7 +146,10 @@ pub trait SubscriptionClientT: ClientT {
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	async fn subscribe_to_method<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
+	fn subscribe_to_method<Notif>(
+		&self,
+		method: &str,
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
 	where
 		Notif: DeserializeOwned;
 }

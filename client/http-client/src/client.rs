@@ -32,7 +32,6 @@ use std::time::Duration;
 use crate::rpc_service::RpcService;
 use crate::transport::{self, Error as TransportError, HttpBackend, HttpTransportClientBuilder};
 use crate::{HttpRequest, HttpResponse};
-use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::http::{Extensions, HeaderMap};
 use jsonrpsee_core::client::{
@@ -350,150 +349,157 @@ impl HttpClient<HttpBackend> {
 	}
 }
 
-#[async_trait]
 impl<S> ClientT for HttpClient<S>
 where
 	S: RpcServiceT<Error = Error, Response = MethodResponse> + Send + Sync,
 {
-	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
 	where
 		Params: ToRpcParams + Send,
 	{
-		let _permit = match self.request_guard.as_ref() {
-			Some(permit) => permit.acquire().await.ok(),
-			None => None,
-		};
-		let params = params.to_rpc_params()?.map(StdCow::Owned);
+		async {
+			let _permit = match self.request_guard.as_ref() {
+				Some(permit) => permit.acquire().await.ok(),
+				None => None,
+			};
+			let params = params.to_rpc_params()?.map(StdCow::Owned);
 
-		run_future_until_timeout(
-			self.service.notification(Notification::new(method.into(), params)),
-			self.request_timeout,
-		)
-		.await
-		.map_err(|e| Error::Transport(e.into()))?;
-		Ok(())
+			run_future_until_timeout(
+				self.service.notification(Notification::new(method.into(), params)),
+				self.request_timeout,
+			)
+			.await
+			.map_err(|e| Error::Transport(e.into()))?;
+			Ok(())
+		}
 	}
 
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
 	where
 		R: DeserializeOwned,
 		Params: ToRpcParams + Send,
 	{
-		let _permit = match self.request_guard.as_ref() {
-			Some(permit) => permit.acquire().await.ok(),
-			None => None,
-		};
-		let id = self.id_manager.next_request_id();
-		let params = params.to_rpc_params()?;
+		async {
+			let _permit = match self.request_guard.as_ref() {
+				Some(permit) => permit.acquire().await.ok(),
+				None => None,
+			};
+			let id = self.id_manager.next_request_id();
+			let params = params.to_rpc_params()?;
 
-		let method_response = run_future_until_timeout(
-			self.service.call(Request::borrowed(method, params.as_deref(), id.clone())),
-			self.request_timeout,
-		)
-		.await?
-		.into_method_call()
-		.expect("Method call must return a method call reponse; qed");
+			let method_response = run_future_until_timeout(
+				self.service.call(Request::borrowed(method, params.as_deref(), id.clone())),
+				self.request_timeout,
+			)
+			.await?
+			.into_method_call()
+			.expect("Method call must return a method call reponse; qed");
 
-		let rp = ResponseSuccess::try_from(method_response.into_inner())?;
+			let rp = ResponseSuccess::try_from(method_response.into_inner())?;
 
-		let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
-		if rp.id == id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into()) }
+			let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
+			if rp.id == id { Ok(result) } else { Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()).into()) }
+		}
 	}
 
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
-		let _permit = match self.request_guard.as_ref() {
-			Some(permit) => permit.acquire().await.ok(),
-			None => None,
-		};
-		let batch = batch.build()?;
-		let id = self.id_manager.next_request_id();
-		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
-
-		let mut batch_request = Batch::with_capacity(batch.len());
-		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-			let id = self.id_manager.as_id_kind().into_id(id);
-			let req = Request {
-				jsonrpc: TwoPointZero,
-				method: method.into(),
-				params: params.map(StdCow::Owned),
-				id,
-				extensions: Extensions::new(),
+		async {
+			let _permit = match self.request_guard.as_ref() {
+				Some(permit) => permit.acquire().await.ok(),
+				None => None,
 			};
-			batch_request.push(req);
-		}
+			let batch = batch.build()?;
+			let id = self.id_manager.next_request_id();
+			let id_range = generate_batch_id_range(id, batch.len() as u64)?;
 
-		let rp = run_future_until_timeout(self.service.batch(batch_request), self.request_timeout).await?;
-		let json_rps = rp.into_batch().expect("Batch must return a batch reponse; qed");
-
-		let mut batch_response = Vec::new();
-		let mut success = 0;
-		let mut failed = 0;
-
-		// Fill the batch response with placeholder values.
-		for _ in 0..json_rps.len() {
-			batch_response.push(Err(ErrorObject::borrowed(0, "", None)));
-		}
-
-		for rp in json_rps.into_iter() {
-			let id = rp.id().try_parse_inner_as_number()?;
-
-			let res = match ResponseSuccess::try_from(rp.into_inner()) {
-				Ok(r) => {
-					let v = serde_json::from_str(r.result.get()).map_err(Error::ParseError)?;
-					success += 1;
-					Ok(v)
-				}
-				Err(err) => {
-					failed += 1;
-					Err(err)
-				}
-			};
-
-			let maybe_elem = id
-				.checked_sub(id_range.start)
-				.and_then(|p| p.try_into().ok())
-				.and_then(|p: usize| batch_response.get_mut(p));
-
-			if let Some(elem) = maybe_elem {
-				*elem = res;
-			} else {
-				return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
+			let mut batch_request = Batch::with_capacity(batch.len());
+			for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+				let id = self.id_manager.as_id_kind().into_id(id);
+				let req = Request {
+					jsonrpc: TwoPointZero,
+					method: method.into(),
+					params: params.map(StdCow::Owned),
+					id,
+					extensions: Extensions::new(),
+				};
+				batch_request.push(req);
 			}
-		}
 
-		Ok(BatchResponse::new(success, batch_response, failed))
+			let rp = run_future_until_timeout(self.service.batch(batch_request), self.request_timeout).await?;
+			let json_rps = rp.into_batch().expect("Batch must return a batch reponse; qed");
+
+			let mut batch_response = Vec::new();
+			let mut success = 0;
+			let mut failed = 0;
+
+			// Fill the batch response with placeholder values.
+			for _ in 0..json_rps.len() {
+				batch_response.push(Err(ErrorObject::borrowed(0, "", None)));
+			}
+
+			for rp in json_rps.into_iter() {
+				let id = rp.id().try_parse_inner_as_number()?;
+
+				let res = match ResponseSuccess::try_from(rp.into_inner()) {
+					Ok(r) => {
+						let v = serde_json::from_str(r.result.get()).map_err(Error::ParseError)?;
+						success += 1;
+						Ok(v)
+					}
+					Err(err) => {
+						failed += 1;
+						Err(err)
+					}
+				};
+
+				let maybe_elem = id
+					.checked_sub(id_range.start)
+					.and_then(|p| p.try_into().ok())
+					.and_then(|p: usize| batch_response.get_mut(p));
+
+				if let Some(elem) = maybe_elem {
+					*elem = res;
+				} else {
+					return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
+				}
+			}
+
+			Ok(BatchResponse::new(success, batch_response, failed))
+		}
 	}
 }
 
-#[async_trait]
 impl<S> SubscriptionClientT for HttpClient<S>
 where
 	S: RpcServiceT<Error = Error, Response = MethodResponse> + Send + Sync,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].
-	async fn subscribe<'a, N, Params>(
+	fn subscribe<'a, N, Params>(
 		&self,
 		_subscribe_method: &'a str,
 		_params: Params,
 		_unsubscribe_method: &'a str,
-	) -> Result<Subscription<N>, Error>
+	) -> impl Future<Output = Result<Subscription<N>, Error>>
 	where
 		Params: ToRpcParams + Send,
 		N: DeserializeOwned,
 	{
-		Err(Error::HttpNotImplemented)
+		async { Err(Error::HttpNotImplemented) }
 	}
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
-	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
+	fn subscribe_to_method<N>(&self, _method: &str) -> impl Future<Output = Result<Subscription<N>, Error>>
 	where
 		N: DeserializeOwned,
 	{
-		Err(Error::HttpNotImplemented)
+		async { Err(Error::HttpNotImplemented) }
 	}
 }
 
