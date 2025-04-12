@@ -133,7 +133,7 @@ impl From<Box<RawValue>> for SubscriptionMessage {
 }
 
 impl SubscriptionMessage {
-	/// Create a subscription message this is more efficient than [`SubscriptionMessage::from_json`]
+	/// Create a subscription message this is more efficient than [`SubscriptionMessage::from`]
 	/// because it only allocates once.
 	///
 	/// Fails if the json `result` couldn't be serialized.

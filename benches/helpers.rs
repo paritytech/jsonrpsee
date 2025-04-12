@@ -131,7 +131,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 /// Run jsonrpsee WebSocket server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
 pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::server::ServerHandle) {
-	use jsonrpsee::server::{ServerBuilder, ServerConfig, SubscriptionMessage};
+	use jsonrpsee::server::{ServerBuilder, ServerConfig};
 	use serde_json::value::RawValue;
 
 	let config = ServerConfig::builder()
