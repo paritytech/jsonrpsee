@@ -133,13 +133,6 @@ impl From<Box<RawValue>> for SubscriptionMessage {
 }
 
 impl SubscriptionMessage {
-	/// Create a new subscription message from JSON.
-	///
-	/// Fails if the value couldn't be serialized.
-	pub fn from_json(json: Box<RawValue>) -> Self {
-		Self(SubscriptionMessageInner::NeedsData(json))
-	}
-
 	/// Create a subscription message this is more efficient than [`SubscriptionMessage::from_json`]
 	/// because it only allocates once.
 	///

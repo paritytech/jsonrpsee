@@ -29,7 +29,7 @@ use std::net::SocketAddr;
 use jsonrpsee::core::middleware::{Batch, Notification, Request, RpcServiceT};
 use jsonrpsee::core::{SubscriptionResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage};
+use jsonrpsee::server::PendingSubscriptionSink;
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{ConnectionId, Extensions};
@@ -95,7 +95,7 @@ impl RpcServer for RpcServerImpl {
 			.ok_or_else(|| ErrorObject::owned(0, "No connection details found", None::<()>))?;
 		let json = serde_json::value::to_raw_value(&conn_id)
 			.map_err(|e| ErrorObject::owned(0, format!("Failed to serialize connection ID: {e}"), None::<()>))?;
-		sink.send(SubscriptionMessage::from_json(json)).await?;
+		sink.send(json).await?;
 		Ok(())
 	}
 
@@ -105,7 +105,7 @@ impl RpcServer for RpcServerImpl {
 		tokio::spawn(async move {
 			let sink = pending.accept().await.unwrap();
 			let json = serde_json::value::to_raw_value(&conn_id).unwrap();
-			sink.send(SubscriptionMessage::from_json(json)).await.unwrap();
+			sink.send(json).await.unwrap();
 		});
 		Ok(())
 	}
