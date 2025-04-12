@@ -261,7 +261,7 @@ impl MethodResponse {
 	/// Create notification response which is a response that doesn't expect a reply.
 	pub fn notification() -> Self {
 		Self {
-			json: Box::<RawValue>::default(),
+			json: RawValue::NULL.to_owned(),
 			success_or_error: MethodResponseResult::Success,
 			kind: ResponseKind::Notification,
 			on_close: None,

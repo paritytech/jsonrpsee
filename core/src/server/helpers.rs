@@ -30,7 +30,7 @@ use jsonrpsee_types::{ErrorCode, ErrorObject, Id, InvalidRequest, Response, Resp
 use serde_json::value::RawValue;
 use tokio::sync::mpsc;
 
-use super::{DisconnectError, SendTimeoutError, SubscriptionMessage, TrySendError};
+use super::{DisconnectError, SendTimeoutError, TrySendError};
 
 /// Sink that is used to send back the result to the server for a specific method.
 #[derive(Clone, Debug)]
@@ -113,7 +113,7 @@ impl MethodSink {
 			// The permit is thrown away here because it's just
 			// a way to ensure that the return buffer has space.
 			Ok(_) => Ok(()),
-			Err(_) => Err(DisconnectError(SubscriptionMessage::empty())),
+			Err(_) => Err(DisconnectError(RawValue::NULL.to_owned().into())),
 		}
 	}
 }

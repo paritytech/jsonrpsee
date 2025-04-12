@@ -148,10 +148,6 @@ impl SubscriptionMessage {
 	pub(crate) fn from_complete_message(msg: Box<RawValue>) -> Self {
 		SubscriptionMessage(SubscriptionMessageInner::Complete(msg))
 	}
-
-	pub(crate) fn empty() -> Self {
-		Self::from_complete_message(Box::<RawValue>::default())
-	}
 }
 
 /// Represent a unique subscription entry based on [`SubscriptionId`] and [`ConnectionId`].
