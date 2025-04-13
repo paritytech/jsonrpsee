@@ -48,7 +48,6 @@ use crate::middleware::ToJson;
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
 
-use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
 use http::Extensions;
