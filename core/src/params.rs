@@ -107,7 +107,7 @@ mod params_builder {
 			Ok(())
 		}
 
-		/// Finish the building process and return a JSON compatible string.
+		/// Finish the building process and return a JSON object.
 		pub(crate) fn build(mut self) -> Option<Box<RawValue>> {
 			if self.bytes.is_empty() {
 				return None;
