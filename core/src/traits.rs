@@ -50,7 +50,7 @@ use serde_json::value::RawValue;
 /// impl ToRpcParams for ManualParam {
 ///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 ///         // Manually define a valid JSONRPC parameter.
-///         serde_json::value::to_raw_value("[1,2,3]").map(Some)
+///         serde_json::value::to_raw_value(&[1,2,3]).map(Some)
 ///     }
 /// }
 /// ```
