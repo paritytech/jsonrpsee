@@ -26,41 +26,8 @@
 
 //! Specific middleware layer implementation provided by jsonrpsee.
 
-pub mod either;
-pub mod logger;
-pub mod rpc_service;
+mod either;
+mod logger;
 
+pub use either::*;
 pub use logger::*;
-pub use rpc_service::*;
-
-use std::pin::Pin;
-use std::task::{Context, Poll};
-
-use futures_util::future::{Either, Future};
-use jsonrpsee_core::server::MethodResponse;
-use pin_project::pin_project;
-
-/// Response which may be ready or a future.
-#[derive(Debug)]
-#[pin_project]
-pub struct ResponseFuture<F>(#[pin] futures_util::future::Either<F, std::future::Ready<MethodResponse>>);
-
-impl<F> ResponseFuture<F> {
-	/// Returns a future that resolves to a response.
-	pub fn future(f: F) -> ResponseFuture<F> {
-		ResponseFuture(Either::Left(f))
-	}
-
-	/// Return a response which is already computed.
-	pub fn ready(response: MethodResponse) -> ResponseFuture<F> {
-		ResponseFuture(Either::Right(std::future::ready(response)))
-	}
-}
-
-impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
-	type Output = MethodResponse;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		self.project().0.poll(cx)
-	}
-}

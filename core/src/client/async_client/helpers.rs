@@ -24,38 +24,37 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::collections::BTreeMap;
-
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
-use crate::client::async_client::{Notification, LOG_TARGET};
-use crate::client::{subscription_channel, Error, RequestMessage, TransportSenderT, TrySubscriptionSendError};
+use crate::client::async_client::{LOG_TARGET, Notification};
+use crate::client::{
+	Error, RawResponseOwned, RequestMessage, TransportSenderT, TrySubscriptionSendError, subscription_channel,
+};
 use crate::params::ArrayParams;
 use crate::traits::ToRpcParams;
 
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
+use http::Extensions;
+use serde_json::value::RawValue;
 use tokio::sync::oneshot;
 
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
-	ErrorObject, Id, InvalidRequestId, RequestSer, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
+	ErrorObject, Id, InvalidRequestId, Request, Response, ResponseSuccess, SubscriptionId, SubscriptionResponse,
+	TwoPointZero,
 };
-use serde_json::Value as JsonValue;
-
-#[derive(Debug, Clone)]
-pub(crate) struct InnerBatchResponse {
-	pub(crate) id: Id<'static>,
-	pub(crate) result: Result<JsonValue, ErrorObject<'static>>,
-}
+use std::borrow::Cow;
 
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
 pub(crate) fn process_batch_response(
 	manager: &mut RequestManager,
-	rps: Vec<InnerBatchResponse>,
+	rps: Vec<RawResponseOwned>,
 	ids: Vec<Id<'static>>,
 ) -> Result<(), InvalidRequestId> {
+	let mut responses = Vec::with_capacity(rps.len());
+
 	let batch_state = match manager.complete_pending_batch(ids.clone()) {
 		Some(state) => state,
 		None => {
@@ -64,18 +63,19 @@ pub(crate) fn process_batch_response(
 		}
 	};
 
-	let mut responses_map: BTreeMap<Id<'static>, Result<_, ErrorObject>> =
-		ids.iter().map(|id| (id.clone(), Err(ErrorObject::borrowed(0, "", None)))).collect();
-
-	for rp in rps {
-		if let Some(entry) = responses_map.get_mut(&rp.id) {
-			*entry = rp.result;
-		} else {
-			return Err(InvalidRequestId::NotPendingRequest(rp.id.to_string()));
-		}
+	for _ in &ids {
+		let err_obj = ErrorObject::borrowed(0, "", None);
+		responses.push(Response::new(jsonrpsee_types::ResponsePayload::error(err_obj), Id::Null).into());
 	}
 
-	let responses: Vec<_> = responses_map.into_values().collect();
+	for rp in rps {
+		let response_id = rp.id();
+		if let Some(pos) = ids.iter().position(|id| id == response_id) {
+			responses[pos] = rp.into()
+		} else {
+			return Err(InvalidRequestId::NotPendingRequest(response_id.to_string()));
+		}
+	}
 
 	let _ = batch_state.send_back.send(Ok(responses));
 	Ok(())
@@ -87,7 +87,7 @@ pub(crate) fn process_batch_response(
 /// `None` is returned.
 pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
-	response: SubscriptionResponse<JsonValue>,
+	response: SubscriptionResponse<Box<RawValue>>,
 ) -> Option<SubscriptionId<'static>> {
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -122,7 +122,7 @@ pub(crate) fn process_subscription_response(
 /// It's possible that the user closed down the subscription before the actual close response is received
 pub(crate) fn process_subscription_close_response(
 	manager: &mut RequestManager,
-	response: SubscriptionError<JsonValue>,
+	response: SubscriptionError<&RawValue>,
 ) {
 	let sub_id = response.params.subscription.into_owned();
 	match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -167,11 +167,10 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 /// Returns `Err(_)` if the response couldn't be handled.
 pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
-	response: Response<JsonValue>,
+	response: RawResponseOwned,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, InvalidRequestId> {
-	let response_id = response.id.clone().into_owned();
-	let result = ResponseSuccess::try_from(response).map(|s| s.result).map_err(Error::Call);
+	let response_id = response.id().clone().into_owned();
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
@@ -181,7 +180,7 @@ pub(crate) fn process_single_response(
 				None => return Err(InvalidRequestId::NotPendingRequest(response_id.to_string())),
 			};
 
-			let _ = send_back_oneshot.send(result);
+			let _ = send_back_oneshot.send(Ok(response));
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
@@ -189,16 +188,20 @@ pub(crate) fn process_single_response(
 				.complete_pending_subscription(response_id.clone())
 				.ok_or(InvalidRequestId::NotPendingRequest(response_id.to_string()))?;
 
-			let sub_id = result.map(|r| SubscriptionId::try_from(r).ok());
+			let result = ResponseSuccess::try_from(response.into_inner());
 
-			let sub_id = match sub_id {
-				Ok(Some(sub_id)) => sub_id,
-				Ok(None) => {
-					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
+			let json = match result {
+				Ok(s) => s.result,
+				Err(e) => {
+					let _ = send_back_oneshot.send(Err(Error::Call(e)));
 					return Ok(None);
 				}
+			};
+
+			let sub_id = match serde_json::from_str::<SubscriptionId>(json.get()) {
+				Ok(s) => s.into_owned(),
 				Err(e) => {
-					let _ = send_back_oneshot.send(Err(e));
+					let _ = send_back_oneshot.send(Err(e.into()));
 					return Ok(None);
 				}
 			};
@@ -248,7 +251,14 @@ pub(crate) fn build_unsubscribe_message(
 	params.insert(sub_id).ok()?;
 	let params = params.to_rpc_params().ok()?;
 
-	let raw = serde_json::to_string(&RequestSer::owned(unsub_req_id.clone(), unsub, params)).ok()?;
+	let raw = serde_json::to_string(&Request {
+		jsonrpc: TwoPointZero,
+		id: unsub_req_id.clone(),
+		method: unsub.into(),
+		params: params.map(Cow::Owned),
+		extensions: Extensions::new(),
+	})
+	.ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 

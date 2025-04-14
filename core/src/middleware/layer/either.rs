@@ -31,7 +31,7 @@
 //! work to implement tower::Layer for
 //! external types such as future::Either.
 
-use crate::middleware::rpc::RpcServiceT;
+use crate::middleware::{Batch, Notification, RpcServiceT};
 use jsonrpsee_types::Request;
 
 /// [`tower::util::Either`] but
@@ -59,17 +59,35 @@ where
 	}
 }
 
-impl<'a, A, B> RpcServiceT<'a> for Either<A, B>
+impl<A, B> RpcServiceT for Either<A, B>
 where
-	A: RpcServiceT<'a> + Send + 'a,
-	B: RpcServiceT<'a> + Send + 'a,
+	A: RpcServiceT + Send,
+	B: RpcServiceT<Error = A::Error, Response = A::Response> + Send,
 {
-	type Future = futures_util::future::Either<A::Future, B::Future>;
+	type Error = A::Error;
+	type Response = A::Response;
 
-	fn call(&self, request: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		match self {
 			Either::Left(service) => futures_util::future::Either::Left(service.call(request)),
 			Either::Right(service) => futures_util::future::Either::Right(service.call(request)),
+		}
+	}
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		match self {
+			Either::Left(service) => futures_util::future::Either::Left(service.batch(batch)),
+			Either::Right(service) => futures_util::future::Either::Right(service.batch(batch)),
+		}
+	}
+
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		match self {
+			Either::Left(service) => futures_util::future::Either::Left(service.notification(n)),
+			Either::Right(service) => futures_util::future::Either::Right(service.notification(n)),
 		}
 	}
 }

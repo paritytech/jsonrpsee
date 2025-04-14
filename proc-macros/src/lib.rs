@@ -80,7 +80,7 @@ pub(crate) mod visitor;
 /// that generated for it by the macro.
 ///
 /// ```ignore
-/// #[rpc(client, server, namespace = "foo")]
+/// #[rpc(client, server, namespace = "foo", namespace_separator = ".")]
 /// pub trait Rpc {
 ///     #[method(name = "foo")]
 ///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
@@ -147,6 +147,8 @@ pub(crate) mod visitor;
 ///   implementation's methods conveniently.
 /// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
 ///   method `spam`, the resulting method name will be `foo_spam`.
+/// - `namespace_separator`: customize the separator used between namespace and method name. Defaults to `_`.
+///		For example, `namespace = "foo", namespace_separator = "."` results in method names like `foo.bar` instead of `foo_bar`.
 /// - `server_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the server
 ///   implementation.
 /// - `client_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the client
@@ -170,8 +172,7 @@ pub(crate) mod visitor;
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `aliases`: list of name aliases for the RPC method as a comma separated string.
-///              Aliases are processed ignoring the namespace, so add the complete name, including the
-///              namespace.
+///   Aliases are processed ignoring the namespace, so add the complete name, including the namespace.
 /// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
@@ -191,9 +192,9 @@ pub(crate) mod visitor;
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `unsubscribe` (optional): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
-///                             This is generated for you if the subscription name starts with `subscribe`.
+///   This is generated for you if the subscription name starts with `subscribe`.
 /// - `aliases` (optional): aliases for `name`. Aliases are processed ignoring the namespace,
-///                         so add the complete name, including the namespace.
+///   so add the complete name, including the namespace.
 /// - `unsubscribe_aliases` (optional): Similar to `aliases` but for `unsubscribe`.
 /// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".

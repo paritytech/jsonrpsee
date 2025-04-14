@@ -34,21 +34,21 @@ use jsonrpsee::types::{Id, IdGeneratorFn};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+	// tracing_subscriber::FmtSubscriber::builder()
+	// 	.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+	// 	.try_init()
+	// 	.expect("setting default subscriber failed");
 
-	let addr = run_server().await?;
-	let uri = Url::parse(&format!("ws://{}", addr))?;
+	// let addr = run_server().await?;
+	// let uri = Url::parse(&format!("ws://{}", addr))?;
 
-	let custom_generator = IdGeneratorFn::new(generate_timestamp_id);
+	// let custom_generator = IdGeneratorFn::new(generate_timestamp_id);
 
-	let (tx, rx) = WsTransportClientBuilder::default().build(uri).await?;
-	let client: Client = ClientBuilder::default().id_format(IdKind::Custom(custom_generator)).build_with_tokio(tx, rx);
+	// let (tx, rx) = WsTransportClientBuilder::default().build(uri).await?;
+	// let client: Client = ClientBuilder::default().id_format(IdKind::Custom(custom_generator)).build_with_tokio(tx, rx);
 
-	let response: String = client.request("say_hello", rpc_params![]).await?;
-	tracing::info!("response: {:?}", response);
+	// let response: String = client.request("say_hello", rpc_params![]).await?;
+	// tracing::info!("response: {:?}", response);
 
 	Ok(())
 }

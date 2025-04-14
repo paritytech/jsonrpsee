@@ -45,16 +45,15 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::FutureExt;
-use futures::future::BoxFuture;
 use jsonrpsee::core::async_trait;
+use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::server::{
-	ConnectionGuard, ConnectionState, RpcServiceBuilder, ServerConfig, ServerHandle, StopHandle, http,
-	serve_with_graceful_shutdown, stop_channel, ws,
+	ConnectionGuard, ConnectionState, ServerConfig, ServerHandle, StopHandle, http, serve_with_graceful_shutdown,
+	stop_channel, ws,
 };
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Request};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned, Id, Request};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::{MethodResponse, Methods};
 use tokio::net::TcpListener;
@@ -73,13 +72,14 @@ struct CallLimit<S> {
 	state: mpsc::Sender<()>,
 }
 
-impl<'a, S> RpcServiceT<'a> for CallLimit<S>
+impl<S> RpcServiceT for CallLimit<S>
 where
-	S: Send + Sync + RpcServiceT<'a> + Clone + 'static,
+	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Error = S::Error;
+	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let state = self.state.clone();
 		let service = self.service.clone();
@@ -89,14 +89,47 @@ where
 
 			if *lock >= 10 {
 				let _ = state.try_send(());
-				MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
+				Ok(MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 			} else {
 				let rp = service.call(req).await;
 				*lock += 1;
 				rp
 			}
 		}
-		.boxed()
+	}
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		let count = self.count.clone();
+		let state = self.state.clone();
+		let service = self.service.clone();
+
+		async move {
+			let mut lock = count.lock().await;
+			let batch_len = batch.len();
+
+			if *lock >= 10 + batch_len {
+				let _ = state.try_send(());
+				Ok(MethodResponse::error(Id::Null, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
+			} else {
+				let rp = service.batch(batch).await;
+				*lock += batch_len;
+				rp
+			}
+		}
+	}
+
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		let count = self.count.clone();
+		let service = self.service.clone();
+
+		// A notification is not expected to return a response so the result here doesn't matter
+		// rather than other middlewares may not be invoked.
+		async move {
+			if *count.lock().await >= 10 { Ok(MethodResponse::notification()) } else { service.notification(n).await }
+		}
 	}
 }
 

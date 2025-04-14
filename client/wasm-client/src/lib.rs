@@ -36,7 +36,11 @@ pub use jsonrpsee_types as types;
 use std::time::Duration;
 
 use jsonrpsee_client_transport::web;
-use jsonrpsee_core::client::{ClientBuilder, Error, IdKind};
+use jsonrpsee_core::client::async_client::RpcService;
+use jsonrpsee_core::client::{Error, IdKind};
+use jsonrpsee_core::middleware::{RpcServiceBuilder, layer::RpcLoggerLayer};
+
+type Logger = tower::layer::util::Stack<RpcLoggerLayer, tower::layer::util::Identity>;
 
 /// Builder for [`Client`].
 ///
@@ -58,23 +62,23 @@ use jsonrpsee_core::client::{ClientBuilder, Error, IdKind};
 /// }
 ///
 /// ```
-#[derive(Copy, Clone, Debug)]
-pub struct WasmClientBuilder {
+#[derive(Clone, Debug)]
+pub struct WasmClientBuilder<L = Logger> {
 	id_kind: IdKind,
 	max_concurrent_requests: usize,
 	max_buffer_capacity_per_subscription: usize,
-	max_log_length: u32,
 	request_timeout: Duration,
+	service_builder: RpcServiceBuilder<L>,
 }
 
 impl Default for WasmClientBuilder {
 	fn default() -> Self {
 		Self {
 			id_kind: IdKind::Number,
-			max_log_length: 4096,
 			max_concurrent_requests: 256,
 			max_buffer_capacity_per_subscription: 1024,
 			request_timeout: Duration::from_secs(60),
+			service_builder: RpcServiceBuilder::default().rpc_logger(1024),
 		}
 	}
 }
@@ -84,7 +88,9 @@ impl WasmClientBuilder {
 	pub fn new() -> WasmClientBuilder {
 		WasmClientBuilder::default()
 	}
+}
 
+impl<L> WasmClientBuilder<L> {
 	/// See documentation [`ClientBuilder::request_timeout`] (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
@@ -109,32 +115,39 @@ impl WasmClientBuilder {
 		self
 	}
 
-	/// Set maximum length for logging calls and responses.
-	///
-	/// Logs bigger than this limit will be truncated.
-	pub fn set_max_logging_length(mut self, max: u32) -> Self {
-		self.max_log_length = max;
-		self
+	/// See documentation for [`ClientBuilder::set_rpc_middleware`].
+	pub fn set_rpc_middleware<T>(self, middleware: RpcServiceBuilder<T>) -> WasmClientBuilder<T> {
+		WasmClientBuilder {
+			id_kind: self.id_kind,
+			max_concurrent_requests: self.max_concurrent_requests,
+			max_buffer_capacity_per_subscription: self.max_buffer_capacity_per_subscription,
+			request_timeout: self.request_timeout,
+			service_builder: middleware,
+		}
 	}
 
 	/// Build the client with specified URL to connect to.
-	pub async fn build(self, url: impl AsRef<str>) -> Result<Client, Error> {
+	pub async fn build<S>(self, url: impl AsRef<str>) -> Result<Client<S>, Error>
+	where
+		L: tower::Layer<RpcService, Service = S> + Clone + Send + Sync + 'static,
+	{
 		let Self {
-			max_log_length,
 			id_kind,
 			request_timeout,
 			max_concurrent_requests,
 			max_buffer_capacity_per_subscription,
+			service_builder,
 		} = self;
 		let (sender, receiver) = web::connect(url).await.map_err(|e| Error::Transport(e.into()))?;
 
-		let builder = ClientBuilder::default()
-			.set_max_logging_length(max_log_length)
+		let client = Client::builder()
 			.request_timeout(request_timeout)
 			.id_format(id_kind)
 			.max_buffer_capacity_per_subscription(max_buffer_capacity_per_subscription)
-			.max_concurrent_requests(max_concurrent_requests);
+			.max_concurrent_requests(max_concurrent_requests)
+			.set_rpc_middleware(service_builder)
+			.build_with_wasm(sender, receiver);
 
-		Ok(builder.build_with_wasm(sender, receiver))
+		Ok(client)
 	}
 }

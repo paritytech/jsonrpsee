@@ -36,17 +36,20 @@
 //! Contrary the HTTP middleware does only apply per HTTP request and
 //! may be handy in some scenarios such CORS but if you want to access
 //! to the actual JSON-RPC details this is the middleware to use.
+//!
+//! This example enables the same middleware for both the server and client which
+//! can be confusing when one runs this but it is just to demonstrate the API.
+//!
+//! That the middleware is applied to the server and client in the same way.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use futures::FutureExt;
-use futures::future::BoxFuture;
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::middleware::rpc::{RpcServiceBuilder, RpcServiceT};
-use jsonrpsee::server::{MethodResponse, RpcModule, Server};
+use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -56,26 +59,44 @@ use jsonrpsee::ws_client::WsClientBuilder;
 pub struct CallsPerConn<S> {
 	service: S,
 	count: Arc<AtomicUsize>,
+	role: &'static str,
 }
 
-impl<'a, S> RpcServiceT<'a> for CallsPerConn<S>
+impl<S> RpcServiceT for CallsPerConn<S>
 where
-	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	S: RpcServiceT + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Error = S::Error;
+	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(
+		&self,
+		req: Request<'a>,
+	) -> impl Future<Output = Result<Self::Response, <S as RpcServiceT>::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let service = self.service.clone();
+		let role = self.role;
 
 		async move {
 			let rp = service.call(req).await;
 			count.fetch_add(1, Ordering::SeqCst);
-			let count = count.load(Ordering::SeqCst);
-			println!("the server has processed calls={count} on the connection");
+			println!("{role} processed calls={} on the connection", count.load(Ordering::SeqCst));
 			rp
 		}
-		.boxed()
+	}
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		let len = batch.len();
+		self.count.fetch_add(len, Ordering::SeqCst);
+		println!("{} processed calls={} on the connection", self.role, self.count.load(Ordering::SeqCst));
+		self.service.batch(batch)
+	}
+
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.service.notification(n)
 	}
 }
 
@@ -83,41 +104,72 @@ where
 pub struct GlobalCalls<S> {
 	service: S,
 	count: Arc<AtomicUsize>,
+	role: &'static str,
 }
 
-impl<'a, S> RpcServiceT<'a> for GlobalCalls<S>
+impl<S> RpcServiceT for GlobalCalls<S>
 where
-	S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
+	S: RpcServiceT + Send + Sync + Clone + 'static,
 {
-	type Future = BoxFuture<'a, MethodResponse>;
+	type Error = S::Error;
+	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
 		let count = self.count.clone();
 		let service = self.service.clone();
+		let role = self.role;
 
 		async move {
 			let rp = service.call(req).await;
 			count.fetch_add(1, Ordering::SeqCst);
-			let count = count.load(Ordering::SeqCst);
-			println!("the server has processed calls={count} in total");
+			println!("{role} processed calls={} in total", count.load(Ordering::SeqCst));
+
 			rp
 		}
-		.boxed()
+	}
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		let len = batch.len();
+		self.count.fetch_add(len, Ordering::SeqCst);
+		println!("{}, processed calls={} in total", self.role, self.count.load(Ordering::SeqCst));
+		self.service.batch(batch)
+	}
+
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.service.notification(n)
 	}
 }
 
 #[derive(Clone)]
-pub struct Logger<S>(S);
+pub struct Logger<S> {
+	service: S,
+	role: &'static str,
+}
 
-impl<'a, S> RpcServiceT<'a> for Logger<S>
+impl<S> RpcServiceT for Logger<S>
 where
-	S: RpcServiceT<'a> + Send + Sync,
+	S: RpcServiceT + Send + Sync,
 {
-	type Future = S::Future;
+	type Error = S::Error;
+	type Response = S::Response;
 
-	fn call(&self, req: Request<'a>) -> Self::Future {
-		println!("logger middleware: method `{}`", req.method);
-		self.0.call(req)
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		println!("{} logger middleware: method `{}`", self.role, req.method);
+		self.service.call(req)
+	}
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		println!("{} logger middleware: batch {batch}", self.role);
+		self.service.batch(batch)
+	}
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.service.notification(n)
 	}
 }
 
@@ -132,7 +184,14 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	for _ in 0..2 {
-		let client = WsClientBuilder::default().build(&url).await?;
+		let global_cnt = Arc::new(AtomicUsize::new(0));
+		let rpc_middleware = RpcServiceBuilder::new()
+			.layer_fn(|service| Logger { service, role: "client" })
+			// This state is created per connection.
+			.layer_fn(|service| CallsPerConn { service, count: Default::default(), role: "client" })
+			// This state is shared by all connections.
+			.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone(), role: "client" });
+		let client = WsClientBuilder::new().set_rpc_middleware(rpc_middleware).build(&url).await?;
 		let response: String = client.request("say_hello", rpc_params![]).await?;
 		println!("response: {:?}", response);
 		let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
@@ -149,11 +208,11 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let global_cnt = Arc::new(AtomicUsize::new(0));
 
 	let rpc_middleware = RpcServiceBuilder::new()
-		.layer_fn(Logger)
+		.layer_fn(|service| Logger { service, role: "server" })
 		// This state is created per connection.
-		.layer_fn(|service| CallsPerConn { service, count: Default::default() })
+		.layer_fn(|service| CallsPerConn { service, count: Default::default(), role: "server" })
 		// This state is shared by all connections.
-		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone() });
+		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone(), role: "server" });
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _, _| "lo")?;

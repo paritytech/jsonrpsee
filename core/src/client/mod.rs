@@ -32,29 +32,37 @@ cfg_async_client! {
 }
 
 pub mod error;
+
 pub use error::Error;
 use jsonrpsee_types::request::IdGeneratorFn;
 
 use std::fmt;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::task::{self, Poll};
 use tokio::sync::mpsc::error::TrySendError;
 
+use crate::middleware::ToJson;
 use crate::params::BatchRequestBuilder;
 use crate::traits::ToRpcParams;
-use async_trait::async_trait;
+
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{ErrorObject, Id, SubscriptionId};
+use http::Extensions;
+use jsonrpsee_types::{ErrorObject, Id, InvalidRequestId, SubscriptionId};
+use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde_json::Value as JsonValue;
+use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
 
 /// Shared state whether a subscription has lagged or not.
 #[derive(Debug, Clone)]
 pub(crate) struct SubscriptionLagged(Arc<RwLock<bool>>);
+
+/// Owned version of [`RawResponse`].
+pub type RawResponseOwned = RawResponse<'static>;
 
 impl SubscriptionLagged {
 	/// Create a new [`SubscriptionLagged`].
@@ -83,15 +91,14 @@ pub mod __reexports {
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
-#[async_trait]
 pub trait ClientT {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
-	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
 	where
 		Params: ToRpcParams + Send;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
 	where
 		R: DeserializeOwned,
 		Params: ToRpcParams + Send;
@@ -103,13 +110,15 @@ pub trait ClientT {
 	///
 	/// Returns `Ok` if all requests in the batch were answered.
 	/// Returns `Error` if the network failed or any of the responses could be parsed a valid JSON-RPC response.
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
 	where
 		R: DeserializeOwned + fmt::Debug + 'a;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
-#[async_trait]
 pub trait SubscriptionClientT: ClientT {
 	/// Initiate a subscription by performing a JSON-RPC method call where the server responds with
 	/// a `Subscription ID` that is used to fetch messages on that subscription,
@@ -123,12 +132,12 @@ pub trait SubscriptionClientT: ClientT {
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	async fn subscribe<'a, Notif, Params>(
+	fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<Notif>, Error>
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
 	where
 		Params: ToRpcParams + Send,
 		Notif: DeserializeOwned;
@@ -137,7 +146,10 @@ pub trait SubscriptionClientT: ClientT {
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	async fn subscribe_to_method<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
+	fn subscribe_to_method<Notif>(
+		&self,
+		method: &str,
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
 	where
 		Notif: DeserializeOwned;
 }
@@ -157,29 +169,27 @@ impl<T: Send> MaybeSend for T {}
 impl<T> MaybeSend for T {}
 
 /// Transport interface to send data asynchronous.
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-pub trait TransportSenderT: MaybeSend + 'static {
+pub trait TransportSenderT: 'static {
 	/// Error that may occur during sending a message.
 	type Error: std::error::Error + Send + Sync;
 
 	/// Send.
-	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
+	fn send(&mut self, msg: String) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
 	/// This is optional because it's most likely relevant for WebSocket transports only.
 	/// You should only implement this is your transport supports sending periodic pings.
 	///
 	/// Send ping frame (opcode of 0x9).
-	async fn send_ping(&mut self) -> Result<(), Self::Error> {
-		Ok(())
+	fn send_ping(&mut self) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+		async { Ok(()) }
 	}
 
 	/// This is optional because it's most likely relevant for WebSocket transports only.
 	/// You should only implement this is your transport supports being closed.
 	///
 	/// Send customized close message.
-	async fn close(&mut self) -> Result<(), Self::Error> {
-		Ok(())
+	fn close(&mut self) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+		async { Ok(()) }
 	}
 }
 
@@ -196,14 +206,12 @@ pub enum ReceivedMessage {
 }
 
 /// Transport interface to receive data asynchronous.
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait TransportReceiverT: 'static {
 	/// Error that may occur during receiving a message.
 	type Error: std::error::Error + Send + Sync;
 
 	/// Receive.
-	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error>;
+	fn receive(&mut self) -> impl Future<Output = Result<ReceivedMessage, Self::Error>> + MaybeSend;
 }
 
 /// Convert the given values to a [`crate::params::ArrayParams`] as expected by a
@@ -269,7 +277,7 @@ pub struct Subscription<Notif> {
 	is_closed: bool,
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
+	/// Channel from which we receive notifications from the server, as encoded JSON.
 	rx: SubscriptionReceiver,
 	/// Callback kind.
 	kind: Option<SubscriptionKind>,
@@ -320,11 +328,7 @@ impl<Notif> Subscription<Notif> {
 			return None;
 		}
 
-		if lagged {
-			Some(SubscriptionCloseReason::Lagged)
-		} else {
-			Some(SubscriptionCloseReason::ConnectionClosed)
-		}
+		if lagged { Some(SubscriptionCloseReason::Lagged) } else { Some(SubscriptionCloseReason::ConnectionClosed) }
 	}
 }
 
@@ -336,7 +340,7 @@ struct BatchMessage {
 	/// Request IDs.
 	ids: Vec<Id<'static>>,
 	/// One-shot channel over which we send back the result of this request.
-	send_back: oneshot::Sender<Result<Vec<BatchEntry<'static, JsonValue>>, Error>>,
+	send_back: oneshot::Sender<Result<Vec<RawResponseOwned>, InvalidRequestId>>,
 }
 
 /// Request message.
@@ -347,7 +351,7 @@ struct RequestMessage {
 	/// Request ID.
 	id: Id<'static>,
 	/// One-shot channel over which we send back the result of this request.
-	send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
+	send_back: Option<oneshot::Sender<Result<RawResponseOwned, InvalidRequestId>>>,
 }
 
 /// Subscription message.
@@ -425,7 +429,7 @@ where
 	type Item = Result<Notif, serde_json::Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let res = match futures_util::ready!(self.rx.poll_next_unpin(cx)) {
-			Some(v) => Some(serde_json::from_value::<Notif>(v).map_err(Into::into)),
+			Some(v) => Some(serde_json::from_str::<Notif>(v.get())),
 			None => {
 				self.is_closed = true;
 				None
@@ -599,17 +603,17 @@ enum TrySubscriptionSendError {
 	#[error("The subscription is closed")]
 	Closed,
 	#[error("A subscription message was dropped")]
-	TooSlow(JsonValue),
+	TooSlow(Box<RawValue>),
 }
 
 #[derive(Debug)]
 pub(crate) struct SubscriptionSender {
-	inner: mpsc::Sender<JsonValue>,
+	inner: mpsc::Sender<Box<RawValue>>,
 	lagged: SubscriptionLagged,
 }
 
 impl SubscriptionSender {
-	fn send(&self, msg: JsonValue) -> Result<(), TrySubscriptionSendError> {
+	fn send(&self, msg: Box<RawValue>) -> Result<(), TrySubscriptionSendError> {
 		match self.inner.try_send(msg) {
 			Ok(_) => Ok(()),
 			Err(TrySendError::Closed(_)) => Err(TrySubscriptionSendError::Closed),
@@ -623,12 +627,12 @@ impl SubscriptionSender {
 
 #[derive(Debug)]
 pub(crate) struct SubscriptionReceiver {
-	inner: mpsc::Receiver<JsonValue>,
+	inner: mpsc::Receiver<Box<RawValue>>,
 	lagged: SubscriptionLagged,
 }
 
 impl Stream for SubscriptionReceiver {
-	type Item = JsonValue;
+	type Item = Box<RawValue>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		self.inner.poll_recv(cx)
@@ -641,4 +645,214 @@ fn subscription_channel(max_buf_size: usize) -> (SubscriptionSender, Subscriptio
 	let lagged_rx = lagged_tx.clone();
 
 	(SubscriptionSender { inner: tx, lagged: lagged_tx }, SubscriptionReceiver { inner: rx, lagged: lagged_rx })
+}
+
+/// Represents the kind of response that can be received from the server.
+#[derive(Debug)]
+pub enum MethodResponseKind {
+	/// Method call response.
+	MethodCall(RawResponseOwned),
+	/// Subscription response.
+	Subscription(SubscriptionResponse),
+	/// Notification response (no payload).
+	Notification,
+	/// Batch response.
+	Batch(Vec<RawResponseOwned>),
+}
+
+/// Represents an active subscription returned by the server.
+#[derive(Debug)]
+pub struct SubscriptionResponse {
+	/// The ID of the subscription.
+	sub_id: SubscriptionId<'static>,
+	// The receiver is used to receive notifications from the server and shouldn't be exposed to the user
+	// from the middleware.
+	stream: SubscriptionReceiver,
+	/// The raw response from the server (mostly used for middleware).
+	rp: RawResponseOwned,
+}
+
+impl SubscriptionResponse {
+	/// Get the subscription ID.
+	pub fn subscription_id(&self) -> &SubscriptionId<'static> {
+		&self.sub_id
+	}
+
+	/// Get the raw response.
+	pub fn response(&self) -> &RawResponseOwned {
+		&self.rp
+	}
+}
+
+/// Represents a response from the server which can be a method call, notification or batch.
+#[derive(Debug)]
+pub struct MethodResponse {
+	extensions: Extensions,
+	inner: MethodResponseKind,
+}
+
+impl MethodResponse {
+	/// Create a new method response.
+	pub fn method_call(rp: RawResponseOwned, extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::MethodCall(rp), extensions }
+	}
+
+	/// Create a new subscription response.
+	pub fn subscription(sub: SubscriptionResponse, extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::Subscription(sub), extensions }
+	}
+
+	/// Create a new notification response.
+	pub fn notification(extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::Notification, extensions }
+	}
+
+	/// Create a new batch response.
+	pub fn batch(json: Vec<RawResponseOwned>, extensions: Extensions) -> Self {
+		Self { inner: MethodResponseKind::Batch(json), extensions }
+	}
+
+	/// Get the method call if this response is a method call.
+	pub fn into_method_call(self) -> Option<RawResponseOwned> {
+		match self.inner {
+			MethodResponseKind::MethodCall(call) => Some(call),
+			_ => None,
+		}
+	}
+
+	/// Get the batch if this response is a batch.
+	pub fn into_batch(self) -> Option<Vec<RawResponseOwned>> {
+		match self.inner {
+			MethodResponseKind::Batch(batch) => Some(batch),
+			_ => None,
+		}
+	}
+
+	/// Get the subscription if this response is a subscription.
+	fn into_subscription(self) -> Option<(SubscriptionId<'static>, SubscriptionReceiver)> {
+		match self.inner {
+			MethodResponseKind::Subscription(s) => Some((s.sub_id, s.stream)),
+			_ => None,
+		}
+	}
+
+	/// Returns whether this response is a method call.
+	pub fn is_method_call(&self) -> bool {
+		matches!(self.inner, MethodResponseKind::MethodCall(_))
+	}
+
+	/// Returns whether this response is a notification.
+	pub fn is_notification(&self) -> bool {
+		matches!(self.inner, MethodResponseKind::Notification)
+	}
+
+	/// Returns whether this response is a batch.
+	pub fn is_batch(&self) -> bool {
+		matches!(self.inner, MethodResponseKind::Batch(_))
+	}
+
+	/// Returns whether this response is a subscription.
+	pub fn is_subscription(&self) -> bool {
+		matches!(self.inner, MethodResponseKind::Subscription { .. })
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Returns a mutable reference to the associated extensions.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
+	}
+}
+
+impl std::ops::Deref for MethodResponse {
+	type Target = MethodResponseKind;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl ToJson for MethodResponse {
+	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
+		match &self.inner {
+			MethodResponseKind::MethodCall(call) => call.to_json(),
+			MethodResponseKind::Notification => Ok(Box::<RawValue>::default()),
+			MethodResponseKind::Batch(json) => serde_json::value::to_raw_value(json),
+			MethodResponseKind::Subscription(s) => serde_json::value::to_raw_value(&s.rp),
+		}
+	}
+}
+
+/// A raw JSON-RPC response object which can be either a JSON-RPC success or error response.
+///
+/// This is a wrapper around the `jsonrpsee_types::Response` type for ease of use
+/// for middleware client implementations.
+#[derive(Debug)]
+pub struct RawResponse<'a>(jsonrpsee_types::Response<'a, Box<RawValue>>);
+
+impl Serialize for RawResponse<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.0.serialize(serializer)
+	}
+}
+
+impl<'a> From<jsonrpsee_types::Response<'a, Box<RawValue>>> for RawResponse<'a> {
+	fn from(r: jsonrpsee_types::Response<'a, Box<RawValue>>) -> Self {
+		Self(r)
+	}
+}
+
+impl<'a> RawResponse<'a> {
+	/// Whether this response is successful JSON-RPC response.
+	pub fn is_success(&self) -> bool {
+		match self.0.payload {
+			jsonrpsee_types::ResponsePayload::Success(_) => true,
+			jsonrpsee_types::ResponsePayload::Error(_) => false,
+		}
+	}
+
+	/// Extract the error object from the response if it is an error.
+	pub fn as_error(&self) -> Option<&ErrorObject<'_>> {
+		match self.0.payload {
+			jsonrpsee_types::ResponsePayload::Error(ref err) => Some(err),
+			_ => None,
+		}
+	}
+
+	// Extract the result field the response if it is a success.
+	///
+	/// Omits JSON-RPC specific fields like `jsonrpc` and `id`.
+	pub fn as_success(&self) -> Option<&RawValue> {
+		match self.0.payload {
+			jsonrpsee_types::ResponsePayload::Success(ref res) => Some(res),
+			_ => None,
+		}
+	}
+
+	/// Get the request ID.
+	pub fn id(&self) -> &Id<'a> {
+		&self.0.id
+	}
+
+	/// Consume the response and extract the inner value.
+	pub fn into_inner(self) -> jsonrpsee_types::Response<'a, Box<RawValue>> {
+		self.0
+	}
+
+	/// Convert the response into an owned version.
+	pub fn into_owned(self) -> RawResponseOwned {
+		RawResponse(self.0.into_owned())
+	}
+}
+
+impl ToJson for RawResponse<'_> {
+	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
+		serde_json::value::to_raw_value(&self.0)
+	}
 }

@@ -9,7 +9,7 @@ use helpers::fixed_client::{
 	ws_handshake,
 };
 use helpers::{KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
-use jsonrpsee::types::{Id, RequestSer};
+use jsonrpsee::types::{Id, Request};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -101,7 +101,7 @@ impl RequestType {
 	}
 }
 
-fn v2_serialize(req: RequestSer<'_>) -> String {
+fn v2_serialize(req: Request<'_>) -> String {
 	serde_json::to_string(&req).unwrap()
 }
 
@@ -115,7 +115,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 		b.iter(|| {
 			let params = serde_json::value::RawValue::from_string("[1, 2]".to_string()).unwrap();
 
-			let request = RequestSer::borrowed(&Id::Number(0), &"say_hello", Some(&params));
+			let request = Request::borrowed("say_hello", Some(&params), Id::Number(0));
 			v2_serialize(request);
 		})
 	});
@@ -128,7 +128,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 			builder.insert(1u64).unwrap();
 			builder.insert(2u32).unwrap();
 			let params = builder.to_rpc_params().expect("Valid params");
-			let request = RequestSer::borrowed(&Id::Number(0), &"say_hello", params.as_deref());
+			let request = Request::borrowed("say_hello", params.as_deref(), Id::Number(0));
 			v2_serialize(request);
 		})
 	});
@@ -138,7 +138,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 		b.iter(|| {
 			let params = serde_json::value::RawValue::from_string(r#"{"key": 1}"#.to_string()).unwrap();
 
-			let request = RequestSer::borrowed(&Id::Number(0), &"say_hello", Some(&params));
+			let request = Request::borrowed("say_hello", Some(&params), Id::Number(0));
 			v2_serialize(request);
 		})
 	});
@@ -150,7 +150,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 			let mut builder = ObjectParams::new();
 			builder.insert("key", 1u32).unwrap();
 			let params = builder.to_rpc_params().expect("Valid params");
-			let request = RequestSer::borrowed(&Id::Number(0), &"say_hello", params.as_deref());
+			let request = Request::borrowed("say_hello", params.as_deref(), Id::Number(0));
 			v2_serialize(request);
 		})
 	});

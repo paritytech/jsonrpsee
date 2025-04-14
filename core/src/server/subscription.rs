@@ -28,17 +28,17 @@
 
 use super::helpers::MethodSink;
 use super::{MethodResponse, MethodsError, ResponsePayload};
+use crate::server::LOG_TARGET;
 use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, SendTimeoutError, TrySendError};
 use crate::server::rpc_module::ConnectionId;
-use crate::server::LOG_TARGET;
 use crate::{error::StringError, traits::IdProvider};
 use jsonrpsee_types::SubscriptionPayload;
-use jsonrpsee_types::{response::SubscriptionError, ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse};
+use jsonrpsee_types::{ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse, response::SubscriptionError};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 
 /// Type-alias for subscribers.
 pub type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, mpsc::Receiver<()>)>>>;
@@ -259,7 +259,7 @@ impl PendingSubscriptionSink {
 	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
 		let err = MethodResponse::subscription_error(self.id, err.into());
-		_ = self.inner.send(err.to_result()).await;
+		_ = self.inner.send(err.as_json().get().to_owned()).await;
 		_ = self.subscribe.send(err);
 	}
 
@@ -282,7 +282,7 @@ impl PendingSubscriptionSink {
 		//
 		// The same message is sent twice here because one is sent directly to the transport layer and
 		// the other one is sent internally to accept the subscription.
-		self.inner.send(response.to_result()).await.map_err(|_| PendingSubscriptionAcceptError)?;
+		self.inner.send(response.as_json().get().to_owned()).await.map_err(|_| PendingSubscriptionAcceptError)?;
 		self.subscribe.send(response).map_err(|_| PendingSubscriptionAcceptError)?;
 
 		if success {
@@ -297,7 +297,9 @@ impl PendingSubscriptionSink {
 				_permit: Arc::new(self.permit),
 			})
 		} else {
-			panic!("The subscription response was too big; adjust the `max_response_size` or change Subscription ID generation");
+			panic!(
+				"The subscription response was too big; adjust the `max_response_size` or change Subscription ID generation"
+			);
 		}
 	}
 
@@ -372,7 +374,7 @@ impl SubscriptionSink {
 		}
 
 		let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &self.uniq_sub.sub_id, self.method);
-		self.inner.send(json).await.map_err(Into::into)
+		self.inner.send(json).await
 	}
 
 	/// Similar to `SubscriptionSink::send` but only waits for a limited time.
@@ -383,7 +385,7 @@ impl SubscriptionSink {
 		}
 
 		let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &self.uniq_sub.sub_id, self.method);
-		self.inner.send_timeout(json, timeout).await.map_err(Into::into)
+		self.inner.send_timeout(json, timeout).await
 	}
 
 	/// Attempts to immediately send out the message as JSON string to the subscribers but fails if the
@@ -399,7 +401,7 @@ impl SubscriptionSink {
 		}
 
 		let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &self.uniq_sub.sub_id, self.method);
-		self.inner.try_send(json).map_err(Into::into)
+		self.inner.try_send(json)
 	}
 
 	/// Returns whether the subscription is closed.

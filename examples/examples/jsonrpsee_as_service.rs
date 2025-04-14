@@ -31,6 +31,7 @@
 //! The typical use-case for this is when one wants to have
 //! access to HTTP related things.
 
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -39,9 +40,9 @@ use futures::FutureExt;
 use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
 use jsonrpsee::core::async_trait;
+use jsonrpsee::core::middleware::{Batch, BatchEntry, BatchEntryErr, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::server::middleware::rpc::{ResponseFuture, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::server::{
 	ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder, serve_with_graceful_shutdown, stop_channel,
 };
@@ -62,6 +63,10 @@ struct Metrics {
 	success_http_calls: Arc<AtomicUsize>,
 }
 
+fn auth_reject_error() -> ErrorObjectOwned {
+	ErrorObject::owned(-32999, "HTTP Authorization header is missing", None::<()>)
+}
+
 #[derive(Clone)]
 struct AuthorizationMiddleware<S> {
 	headers: HeaderMap,
@@ -70,26 +75,96 @@ struct AuthorizationMiddleware<S> {
 	transport_label: &'static str,
 }
 
-impl<'a, S> RpcServiceT<'a> for AuthorizationMiddleware<S>
-where
-	S: Send + Clone + Sync + RpcServiceT<'a>,
-{
-	type Future = ResponseFuture<S::Future>;
-
-	fn call(&self, req: Request<'a>) -> Self::Future {
+impl<S> AuthorizationMiddleware<S> {
+	/// Authorize the request by checking the `Authorization` header.
+	///
+	///
+	/// In this example for simplicity, the authorization value is not checked
+	// and used because it's just a toy example.
+	fn auth_method_call(&self, req: &Request<'_>) -> bool {
 		if req.method_name() == "trusted_call" {
-			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else {
-				let rp = MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "Authorization failed", None));
-				return ResponseFuture::ready(rp);
-			};
-
-			// In this example for simplicity, the authorization value is not checked
-			// and used because it's just a toy example.
-
-			ResponseFuture::future(self.inner.call(req))
-		} else {
-			ResponseFuture::future(self.inner.call(req))
+			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else { return false };
 		}
+
+		true
+	}
+
+	/// Authorize the notification by checking the `Authorization` header.
+	///
+	/// Because notifications are not expected to return a response, we
+	/// return a `MethodResponse` by injecting an error into the extensions
+	/// which could be read by other middleware or the server.
+	fn auth_notif(&self, notif: &Notification<'_>) -> bool {
+		if notif.method_name() == "trusted_call" {
+			let Some(Ok(_)) = self.headers.get(AUTHORIZATION).map(|auth| auth.to_str()) else { return false };
+		}
+
+		true
+	}
+}
+
+impl<S> RpcServiceT for AuthorizationMiddleware<S>
+where
+	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Clone + Sync + 'static,
+	S::Response: Send,
+{
+	type Error = S::Error;
+	type Response = S::Response;
+
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		let this = self.clone();
+		let auth_ok = this.auth_method_call(&req);
+
+		async move {
+			// If the authorization header is missing, it's recommended to
+			// to return the response as MethodResponse::error instead of
+			// returning an error from the service.
+			//
+			// This way the error is returned as a JSON-RPC error
+			if !auth_ok {
+				return Ok(MethodResponse::error(req.id, auth_reject_error()));
+			}
+			this.inner.call(req).await
+		}
+	}
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		// Check the authorization header for each entry in the batch.
+		let entries: Vec<_> = batch
+			.into_iter()
+			.filter_map(|entry| match entry {
+				Ok(BatchEntry::Call(req)) => {
+					if self.auth_method_call(&req) {
+						Some(Ok(BatchEntry::Call(req)))
+					} else {
+						// If the authorization header is missing, we return
+						// a JSON-RPC error instead of an error from the service.
+						Some(Err(BatchEntryErr::new(req.id, auth_reject_error())))
+					}
+				}
+				Ok(BatchEntry::Notification(notif)) => {
+					if self.auth_notif(&notif) {
+						Some(Ok(BatchEntry::Notification(notif)))
+					} else {
+						// Just filter out the notification if the auth fails
+						// because notifications are not expected to return a response.
+						None
+					}
+				}
+				// Errors which could happen such as invalid JSON-RPC call
+				// or invalid JSON are just passed through.
+				Err(err) => Some(Err(err)),
+			})
+			.collect();
+
+		self.inner.batch(Batch::from(entries)).boxed()
+	}
+
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.inner.notification(n)
 	}
 }
 
@@ -234,10 +309,7 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 					async move {
 						tracing::info!("Opened WebSocket connection");
 						metrics.opened_ws_connections.fetch_add(1, Ordering::Relaxed);
-						// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-						// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-						// as workaround.
-						svc.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
+						svc.call(req).await
 					}
 					.boxed()
 				} else {
@@ -252,10 +324,7 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 						}
 
 						tracing::info!("Closed HTTP connection");
-						// https://github.com/rust-lang/rust/issues/102211 the error type can't be inferred
-						// to be `Box<dyn std::error::Error + Send + Sync>` so we need to convert it to a concrete type
-						// as workaround.
-						rp.map_err(|e| anyhow::anyhow!("{:?}", e))
+						rp
 					}
 					.boxed()
 				}

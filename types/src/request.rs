@@ -53,6 +53,7 @@ pub struct Request<'a> {
 	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	#[serde(borrow)]
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub params: Option<Cow<'a, RawValue>>,
 	/// The request's extensions.
 	#[serde(skip)]
@@ -60,9 +61,26 @@ pub struct Request<'a> {
 }
 
 impl<'a> Request<'a> {
-	/// Create a new [`Request`].
-	pub fn new(method: Cow<'a, str>, params: Option<&'a RawValue>, id: Id<'a>) -> Self {
-		Self { jsonrpc: TwoPointZero, id, method, params: params.map(Cow::Borrowed), extensions: Extensions::new() }
+	/// Create new borrowed [`Request`].
+	pub fn borrowed(method: &'a str, params: Option<&'a RawValue>, id: Id<'a>) -> Self {
+		Self {
+			jsonrpc: TwoPointZero,
+			id,
+			method: Cow::Borrowed(method),
+			params: params.map(Cow::Borrowed),
+			extensions: Extensions::new(),
+		}
+	}
+
+	/// Create new owned [`Request`].
+	pub fn owned(method: String, params: Option<Box<RawValue>>, id: Id<'a>) -> Self {
+		Self {
+			jsonrpc: TwoPointZero,
+			id,
+			method: Cow::Owned(method),
+			params: params.map(Cow::Owned),
+			extensions: Extensions::new(),
+		}
 	}
 
 	/// Get the ID of the request.
@@ -92,7 +110,7 @@ impl<'a> Request<'a> {
 }
 
 /// JSON-RPC Invalid request as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct InvalidRequest<'a> {
 	/// Request ID
 	#[serde(borrow)]
@@ -110,69 +128,35 @@ pub struct Notification<'a, T> {
 	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	pub params: T,
+	/// Extensions of the notification.
+	#[serde(skip)]
+	pub extensions: Extensions,
 }
 
 impl<'a, T> Notification<'a, T> {
 	/// Create a new [`Notification`].
 	pub fn new(method: Cow<'a, str>, params: T) -> Self {
-		Self { jsonrpc: TwoPointZero, method, params }
-	}
-}
-
-/// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Debug, Clone)]
-pub struct RequestSer<'a> {
-	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
-	/// Request ID
-	pub id: Id<'a>,
-	/// Name of the method to be invoked.
-	// NOTE: as this type only implements serialize `#[serde(borrow)]` is not needed.
-	pub method: Cow<'a, str>,
-	/// Parameter values of the request.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub params: Option<Cow<'a, RawValue>>,
-}
-
-impl<'a> RequestSer<'a> {
-	/// Create a borrowed serializable JSON-RPC method call.
-	pub fn borrowed(id: &'a Id<'a>, method: &'a impl AsRef<str>, params: Option<&'a RawValue>) -> Self {
-		Self {
-			jsonrpc: TwoPointZero,
-			id: id.clone(),
-			method: method.as_ref().into(),
-			params: params.map(Cow::Borrowed),
-		}
+		Self { jsonrpc: TwoPointZero, method, params, extensions: Extensions::new() }
 	}
 
-	/// Create a owned serializable JSON-RPC method call.
-	pub fn owned(id: Id<'a>, method: impl Into<String>, params: Option<Box<RawValue>>) -> Self {
-		Self { jsonrpc: TwoPointZero, id, method: method.into().into(), params: params.map(Cow::Owned) }
-	}
-}
-
-/// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object).
-#[derive(Serialize, Debug, Clone)]
-pub struct NotificationSer<'a> {
-	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
-	/// Name of the method to be invoked.
-	// NOTE: as this type only implements serialize `#[serde(borrow)]` is not needed.
-	pub method: Cow<'a, str>,
-	/// Parameter values of the request.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub params: Option<Cow<'a, RawValue>>,
-}
-
-impl<'a> NotificationSer<'a> {
-	/// Create a borrowed serializable JSON-RPC notification.
-	pub fn borrowed(method: &'a impl AsRef<str>, params: Option<&'a RawValue>) -> Self {
-		Self { jsonrpc: TwoPointZero, method: method.as_ref().into(), params: params.map(Cow::Borrowed) }
+	/// Get the method name of the request.
+	pub fn method_name(&self) -> &str {
+		&self.method
 	}
 
-	/// Create an owned serializable JSON-RPC notification.
-	pub fn owned(method: impl Into<String>, params: Option<Box<RawValue>>) -> Self {
-		Self { jsonrpc: TwoPointZero, method: method.into().into(), params: params.map(Cow::Owned) }
+	/// Returns a reference to the associated extensions.
+	pub fn extensions(&self) -> &Extensions {
+		&self.extensions
+	}
+
+	/// Get the params of the request.
+	pub fn params(&self) -> &T {
+		&self.params
+	}
+
+	/// Returns a reference to the associated extensions.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 
@@ -207,7 +191,7 @@ impl Debug for IdGeneratorFn {
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, TwoPointZero};
+	use super::{Id, InvalidRequest, Notification, Request, TwoPointZero};
 	use serde_json::value::RawValue;
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
@@ -305,32 +289,10 @@ mod test {
 		];
 
 		for (ser, id, params, method) in test_vector.iter().cloned() {
-			let request = serde_json::to_string(&RequestSer {
-				jsonrpc: TwoPointZero,
-				method: method.into(),
-				id: id.unwrap_or(Id::Null),
-				params: params.map(Cow::Owned),
-			})
-			.unwrap();
+			let request =
+				serde_json::to_string(&Request::borrowed(method, params.as_deref(), id.unwrap_or(Id::Null))).unwrap();
 
 			assert_eq!(&request, ser);
 		}
-	}
-
-	#[test]
-	fn serialize_notif() {
-		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","params":["hello"]}"#;
-		let params = Some(RawValue::from_string(r#"["hello"]"#.into()).unwrap());
-		let req = NotificationSer::owned("say_hello", params);
-		let ser = serde_json::to_string(&req).unwrap();
-		assert_eq!(exp, ser);
-	}
-
-	#[test]
-	fn serialize_notif_escaped_method_name() {
-		let exp = r#"{"jsonrpc":"2.0","method":"\"method\""}"#;
-		let req = NotificationSer::owned("\"method\"", None);
-		let ser = serde_json::to_string(&req).unwrap();
-		assert_eq!(exp, ser);
 	}
 }
