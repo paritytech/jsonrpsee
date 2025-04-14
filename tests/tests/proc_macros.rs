@@ -47,7 +47,6 @@ mod rpc_impl {
 	use jsonrpsee::core::{SubscriptionResult, async_trait};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
-	use serde_json::value::RawValue;
 
 	pub struct CustomSubscriptionRet;
 
@@ -178,7 +177,7 @@ mod rpc_impl {
 
 		async fn sub_not_result(&self, pending: PendingSubscriptionSink) {
 			let sink = pending.accept().await.unwrap();
-			let msg = RawValue::from_string("\"lo\"".into()).unwrap();
+			let msg = serde_json::value::to_raw_value("lo").unwrap();
 			sink.send(msg).await.unwrap();
 		}
 
@@ -189,7 +188,7 @@ mod rpc_impl {
 		fn sync_sub(&self, pending: PendingSubscriptionSink) {
 			tokio::spawn(async move {
 				let sink = pending.accept().await.unwrap();
-				let msg = RawValue::from_string("\"hello\"".into()).unwrap();
+				let msg = serde_json::value::to_raw_value("hello").unwrap();
 				sink.send(msg).await.unwrap();
 			});
 		}

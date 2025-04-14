@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
-use jsonrpsee::core::{JsonRawValue, RpcResult, SubscriptionResult, async_trait};
+use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait, to_json_raw_value};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::ws_client::*;
@@ -96,11 +96,11 @@ impl RpcServer for RpcServerImpl {
 	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		let response_a = JsonRawValue::from_string("\"Response_A\"".into()).unwrap();
-		let response_b = JsonRawValue::from_string("\"Response_B\"".into()).unwrap();
+		let msg1 = to_json_raw_value(&"Response_A").unwrap();
+		let msg2 = to_json_raw_value(&"Response_B").unwrap();
 
-		sink.send(response_a).await?;
-		sink.send(response_b).await?;
+		sink.send(msg1).await?;
+		sink.send(msg2).await?;
 
 		Ok(())
 	}

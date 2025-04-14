@@ -325,7 +325,7 @@ impl Methods {
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
 	///     use jsonrpsee::types::{response::Success, Response};
-	///     use jsonrpsee::core::JsonRawValue;
+	///     use jsonrpsee::core::to_json_raw_value;
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
@@ -333,7 +333,7 @@ impl Methods {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
-	///         let msg = JsonRawValue::from_string("\"one answer\"".into()).unwrap();  
+	///         let msg = to_json_raw_value(&"one answer").unwrap();
 	///         sink.send(msg).await?;
 	///
 	///         Ok(())
@@ -423,12 +423,12 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::core::{EmptyServerParams, RpcResult, JsonRawValue};
+	///     use jsonrpsee::core::{EmptyServerParams, RpcResult, to_json_raw_value};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _, _| async move {
 	///         let sink = pending.accept().await?;
-	///         let msg = JsonRawValue::from_string("\"one answer\"".into()).unwrap();  
+	///         let msg = to_json_raw_value(&"one answer").unwrap();
 	///         sink.send(msg).await?;
 	///         Ok(())
 	///     }).unwrap();

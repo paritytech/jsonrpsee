@@ -233,7 +233,7 @@ pub(crate) mod visitor;
 /// mod rpc_impl {
 ///     use jsonrpsee::{proc_macros::rpc, Extensions};
 ///     use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage, IntoSubscriptionCloseResponse, SubscriptionCloseResponse};
-///     use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult, JsonRawValue};
+///     use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult, to_json_raw_value};
 ///
 ///     enum CloseResponse {
 ///         None,
@@ -248,8 +248,7 @@ pub(crate) mod visitor;
 ///                // Send a close response as an ordinary subscription notification
 ///                // when the subscription is terminated.
 ///                CloseResponse::Failed => {
-///                     const FAILED: &str = "\"Failed\"";
-///                     let err = JsonRawValue::from_string(FAILED.to_string()).unwrap();
+///                     let err = to_json_raw_value(&"Failed").unwrap();
 ///                     SubscriptionCloseResponse::Notif(err.into())
 ///                }
 ///            }
@@ -336,7 +335,7 @@ pub(crate) mod visitor;
 ///         // as subscription responses.
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
-///             let msg = JsonRawValue::from_string("\"Response_A\"".into()).unwrap();
+///             let msg = to_json_raw_value(&"Response_A").unwrap();
 ///             sink.send(msg).await?;
 ///             Ok(())
 ///         }
@@ -345,8 +344,8 @@ pub(crate) mod visitor;
 ///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
-///             let msg1 = JsonRawValue::from_string("\"Response_A\"".into()).unwrap();
-///             let msg2 = JsonRawValue::from_string("\"Response_B\"".into()).unwrap();
+///             let msg1 = to_json_raw_value(&"Response_A").unwrap();
+///             let msg2 = to_json_raw_value(&"Response_B").unwrap();
 ///
 ///             sink.send(msg1).await?;
 ///             sink.send(msg2).await?;
@@ -362,7 +361,7 @@ pub(crate) mod visitor;
 ///                 return CloseResponse::None;
 ///             };
 ///
-///             let msg = JsonRawValue::from_string("\"Response_A\"".into()).unwrap();
+///             let msg = to_json_raw_value(&"Response_A").unwrap();
 ///
 ///             if sink.send(msg).await.is_ok() {
 ///                 CloseResponse::Failed

@@ -113,7 +113,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 	// Construct the serialized array request using the `RawValue` directly.
 	crit.bench_function("jsonrpsee_types_array_params_baseline", |b| {
 		b.iter(|| {
-			let params = serde_json::value::RawValue::from_string("[1, 2]".to_string()).unwrap();
+			let params = serde_json::value::to_raw_value("[1, 2]").unwrap();
 
 			let request = Request::borrowed("say_hello", Some(&params), Id::Number(0));
 			v2_serialize(request);
@@ -136,8 +136,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 	// Construct the serialized object request using the `RawValue` directly.
 	crit.bench_function("jsonrpsee_types_object_params_baseline", |b| {
 		b.iter(|| {
-			let params = serde_json::value::RawValue::from_string(r#"{"key": 1}"#.to_string()).unwrap();
-
+			let params = serde_json::value::to_raw_value(r#"{"key": 1}"#).unwrap();
 			let request = Request::borrowed("say_hello", Some(&params), Id::Number(0));
 			v2_serialize(request);
 		})

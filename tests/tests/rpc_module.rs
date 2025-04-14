@@ -274,7 +274,7 @@ async fn close_test_subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let sink = pending.accept().await?;
-			let msg = RawValue::from_string("\"lo\"".into())?;
+			let msg = serde_json::value::to_raw_value("lo")?;
 
 			// make sure to only send one item
 			sink.send(msg.clone()).await?;
