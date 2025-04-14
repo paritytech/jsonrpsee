@@ -33,6 +33,9 @@ mod utils;
 
 pub use rpc_service::{Error as RpcServiceError, RpcService};
 
+use std::borrow::Cow as StdCow;
+use std::time::Duration;
+
 use crate::JsonRawValue;
 use crate::client::async_client::helpers::process_subscription_close_response;
 use crate::client::async_client::utils::MaybePendingFutures;
@@ -45,10 +48,6 @@ use crate::middleware::layer::RpcLoggerLayer;
 use crate::middleware::{Batch, IsBatch, IsSubscription, Request, RpcServiceBuilder, RpcServiceT};
 use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::traits::ToRpcParams;
-use std::borrow::Cow as StdCow;
-
-use async_trait::async_trait;
-use core::time::Duration;
 use futures_util::Stream;
 use futures_util::future::{self, Either};
 use futures_util::stream::StreamExt;
@@ -494,84 +493,91 @@ impl<L> Drop for Client<L> {
 	}
 }
 
-#[async_trait]
 impl<L> ClientT for Client<L>
 where
 	L: RpcServiceT<Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
 {
-	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
 	where
 		Params: ToRpcParams + Send,
 	{
-		// NOTE: we use this to guard against max number of concurrent requests.
-		let _req_id = self.id_manager.next_request_id();
-		let params = params.to_rpc_params()?.map(StdCow::Owned);
-		let fut = self.service.notification(jsonrpsee_types::Notification::new(method.into(), params));
-		self.run_future_until_timeout(fut).await?;
-		Ok(())
-	}
-
-	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
-	where
-		R: DeserializeOwned,
-		Params: ToRpcParams + Send,
-	{
-		let id = self.id_manager.next_request_id();
-		let params = params.to_rpc_params()?;
-		let fut = self.service.call(Request::borrowed(method, params.as_deref(), id.clone()));
-		let rp = self.run_future_until_timeout(fut).await?.into_method_call().expect("Method call response");
-		let success = ResponseSuccess::try_from(rp.into_inner())?;
-
-		serde_json::from_str(success.result.get()).map_err(Into::into)
-	}
-
-	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<BatchResponse<'a, R>, Error>
-	where
-		R: DeserializeOwned,
-	{
-		let batch = batch.build()?;
-		let id = self.id_manager.next_request_id();
-		let id_range = generate_batch_id_range(id, batch.len() as u64)?;
-
-		let mut b = Batch::with_capacity(batch.len());
-
-		for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-			b.push(Request {
-				jsonrpc: TwoPointZero,
-				id: self.id_manager.as_id_kind().into_id(id),
-				method: method.into(),
-				params: params.map(StdCow::Owned),
-				extensions: Extensions::new(),
-			});
+		async {
+			// NOTE: we use this to guard against max number of concurrent requests.
+			let _req_id = self.id_manager.next_request_id();
+			let params = params.to_rpc_params()?.map(StdCow::Owned);
+			let fut = self.service.notification(jsonrpsee_types::Notification::new(method.into(), params));
+			self.run_future_until_timeout(fut).await?;
+			Ok(())
 		}
+	}
 
-		b.extensions_mut().insert(IsBatch { id_range });
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
+	where
+		R: DeserializeOwned,
+		Params: ToRpcParams + Send,
+	{
+		async {
+			let id = self.id_manager.next_request_id();
+			let params = params.to_rpc_params()?;
+			let fut = self.service.call(Request::borrowed(method, params.as_deref(), id.clone()));
+			let rp = self.run_future_until_timeout(fut).await?.into_method_call().expect("Method call response");
+			let success = ResponseSuccess::try_from(rp.into_inner())?;
 
-		let fut = self.service.batch(b);
-		let json_values = self.run_future_until_timeout(fut).await?.into_batch().expect("Batch response");
+			serde_json::from_str(success.result.get()).map_err(Into::into)
+		}
+	}
 
-		let mut responses = Vec::with_capacity(json_values.len());
-		let mut successful_calls = 0;
-		let mut failed_calls = 0;
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
+	where
+		R: DeserializeOwned + 'a,
+	{
+		async {
+			let batch = batch.build()?;
+			let id = self.id_manager.next_request_id();
+			let id_range = generate_batch_id_range(id, batch.len() as u64)?;
 
-		for json_val in json_values {
-			match ResponseSuccess::try_from(json_val.into_inner()) {
-				Ok(val) => {
-					let result: R = serde_json::from_str(val.result.get()).map_err(Error::ParseError)?;
-					responses.push(Ok(result));
-					successful_calls += 1;
-				}
-				Err(err) => {
-					responses.push(Err(err));
-					failed_calls += 1;
+			let mut b = Batch::with_capacity(batch.len());
+
+			for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+				b.push(Request {
+					jsonrpc: TwoPointZero,
+					id: self.id_manager.as_id_kind().into_id(id),
+					method: method.into(),
+					params: params.map(StdCow::Owned),
+					extensions: Extensions::new(),
+				});
+			}
+
+			b.extensions_mut().insert(IsBatch { id_range });
+
+			let fut = self.service.batch(b);
+			let json_values = self.run_future_until_timeout(fut).await?.into_batch().expect("Batch response");
+
+			let mut responses = Vec::with_capacity(json_values.len());
+			let mut successful_calls = 0;
+			let mut failed_calls = 0;
+
+			for json_val in json_values {
+				match ResponseSuccess::try_from(json_val.into_inner()) {
+					Ok(val) => {
+						let result: R = serde_json::from_str(val.result.get()).map_err(Error::ParseError)?;
+						responses.push(Ok(result));
+						successful_calls += 1;
+					}
+					Err(err) => {
+						responses.push(Err(err));
+						failed_calls += 1;
+					}
 				}
 			}
+			Ok(BatchResponse { successful_calls, failed_calls, responses })
 		}
-		Ok(BatchResponse { successful_calls, failed_calls, responses })
 	}
 }
 
-#[async_trait]
 impl<L> SubscriptionClientT for Client<L>
 where
 	L: RpcServiceT<Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
@@ -580,70 +586,74 @@ where
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	async fn subscribe<'a, Notif, Params>(
+	fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<Notif>, Error>
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
 	where
 		Params: ToRpcParams + Send,
 		Notif: DeserializeOwned,
 	{
-		if subscribe_method == unsubscribe_method {
-			return Err(RegisterMethodError::SubscriptionNameConflict(unsubscribe_method.to_owned()).into());
+		async move {
+			if subscribe_method == unsubscribe_method {
+				return Err(RegisterMethodError::SubscriptionNameConflict(unsubscribe_method.to_owned()).into());
+			}
+
+			let req_id_sub = self.id_manager.next_request_id();
+			let req_id_unsub = self.id_manager.next_request_id();
+			let params = params.to_rpc_params()?;
+
+			let mut ext = Extensions::new();
+			ext.insert(IsSubscription::new(req_id_sub.clone(), req_id_unsub, unsubscribe_method.to_owned()));
+
+			let req = Request {
+				jsonrpc: TwoPointZero,
+				id: req_id_sub,
+				method: subscribe_method.into(),
+				params: params.map(StdCow::Owned),
+				extensions: ext,
+			};
+
+			let fut = self.service.call(req);
+			let (sub_id, notifs_rx) =
+				self.run_future_until_timeout(fut).await?.into_subscription().expect("Subscription response");
+
+			Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 		}
-
-		let req_id_sub = self.id_manager.next_request_id();
-		let req_id_unsub = self.id_manager.next_request_id();
-		let params = params.to_rpc_params()?;
-
-		let mut ext = Extensions::new();
-		ext.insert(IsSubscription::new(req_id_sub.clone(), req_id_unsub, unsubscribe_method.to_owned()));
-
-		let req = Request {
-			jsonrpc: TwoPointZero,
-			id: req_id_sub,
-			method: subscribe_method.into(),
-			params: params.map(StdCow::Owned),
-			extensions: ext,
-		};
-
-		let fut = self.service.call(req);
-		let (sub_id, notifs_rx) =
-			self.run_future_until_timeout(fut).await?.into_subscription().expect("Subscription response");
-
-		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
 
 	/// Subscribe to a specific method.
-	async fn subscribe_to_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
+	fn subscribe_to_method<N>(&self, method: &str) -> impl Future<Output = Result<Subscription<N>, Error>> + Send
 	where
 		N: DeserializeOwned,
 	{
-		let (send_back_tx, send_back_rx) = oneshot::channel();
-		if self
-			.to_back
-			.clone()
-			.send(FrontToBack::RegisterNotification(RegisterNotificationMessage {
-				send_back: send_back_tx,
-				method: method.to_owned(),
-			}))
-			.await
-			.is_err()
-		{
-			return Err(self.on_disconnect().await);
+		async {
+			let (send_back_tx, send_back_rx) = oneshot::channel();
+			if self
+				.to_back
+				.clone()
+				.send(FrontToBack::RegisterNotification(RegisterNotificationMessage {
+					send_back: send_back_tx,
+					method: method.to_owned(),
+				}))
+				.await
+				.is_err()
+			{
+				return Err(self.on_disconnect().await);
+			}
+
+			let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+
+			let (rx, method) = match res {
+				Ok(Ok(val)) => val,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => return Err(self.on_disconnect().await),
+			};
+
+			Ok(Subscription::new(self.to_back.clone(), rx, SubscriptionKind::Method(method)))
 		}
-
-		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-
-		let (rx, method) = match res {
-			Ok(Ok(val)) => val,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.on_disconnect().await),
-		};
-
-		Ok(Subscription::new(self.to_back.clone(), rx, SubscriptionKind::Method(method)))
 	}
 }
 
