@@ -51,12 +51,9 @@ impl RpcDescription {
 			self.methods.iter().map(|method| self.render_method(method)).collect::<Result<Vec<_>, _>>()?;
 		let sub_impls = self.subscriptions.iter().map(|sub| self.render_sub(sub)).collect::<Result<Vec<_>, _>>()?;
 
-		let async_trait = self.jrps_client_item(quote! { core::__reexports::async_trait });
-
 		// Doc-comment to be associated with the client.
 		let doc_comment = format!("Client implementation for the `{}` RPC API.", &self.trait_def.ident);
 		let trait_impl = quote! {
-			#[#async_trait]
 			#[doc = #doc_comment]
 			pub trait #trait_name #impl_generics: #super_trait where #(#where_clause,)* {
 				#(#method_impls)*
@@ -143,12 +140,12 @@ impl RpcDescription {
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
 			let returns = self.return_result_type(returns.clone());
-			let returns = quote! { #returns };
+			let returns = quote! { impl Future<Output = #returns> + Send };
 
 			(called_method, returns)
 		} else {
 			let called_method = quote::format_ident!("notification");
-			let returns = quote! { Result<(), #jrps_error> };
+			let returns = quote! { impl Future<Output = Result<(), #jrps_error>> + Send };
 
 			(called_method, returns)
 		};
@@ -165,9 +162,9 @@ impl RpcDescription {
 			#deprecated
 			#[allow(non_snake_case)]
 			#[allow(clippy::used_underscore_binding)]
-			async fn #rust_method_name(#rust_method_params) -> #returns {
+			fn #rust_method_name(#rust_method_params) -> #returns {
 				let params = { #parameter_builder };
-				self.#called_method(#rpc_method_name, params).await
+				self.#called_method(#rpc_method_name, params)
 			}
 		};
 		Ok(method)
@@ -189,7 +186,7 @@ impl RpcDescription {
 		// into the `Subscription` object.
 		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
 		let item = &sub.item;
-		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
+		let returns = quote! { impl Future<Output = Result<#sub_type<#item>, #jrps_error>> + Send };
 
 		// Encoded parameters for the request.
 		let parameter_builder = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
@@ -200,9 +197,9 @@ impl RpcDescription {
 			#docs
 			#[allow(non_snake_case)]
 			#[allow(clippy::used_underscore_binding)]
-			async fn #rust_method_name(#rust_method_params) -> #returns {
+			fn #rust_method_name(#rust_method_params) -> #returns {
 				let params = #parameter_builder;
-				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name).await
+				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name)
 			}
 		};
 		Ok(method)

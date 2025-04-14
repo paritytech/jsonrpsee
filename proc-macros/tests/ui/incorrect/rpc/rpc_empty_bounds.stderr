@@ -1,3 +1,20 @@
+error[E0277]: the trait bound `<Conf as Config>::Hash: DeserializeOwned` is not satisfied
+ --> tests/ui/incorrect/rpc/rpc_empty_bounds.rs:9:1
+  |
+9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `for<'de> Deserialize<'de>` is not implemented for `<Conf as Config>::Hash`
+  |
+  = note: required for `<Conf as Config>::Hash` to implement `DeserializeOwned`
+note: required by a bound in `request`
+ --> $WORKSPACE/core/src/client/mod.rs
+  |
+  |     fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
+  |        ------- required by a bound in this associated function
+  |     where
+  |         R: DeserializeOwned,
+  |            ^^^^^^^^^^^^^^^^ required by this bound in `ClientT::request`
+  = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
+
 error[E0277]: the trait bound `<Conf as Config>::Hash: Serialize` is not satisfied
  --> tests/ui/incorrect/rpc/rpc_empty_bounds.rs:9:1
   |
@@ -16,21 +33,4 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: Clone` is not satisfied
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `<Conf as Config>::Hash`
   |
   = note: required for `Result<<Conf as Config>::Hash, ErrorObject<'_>>` to implement `IntoResponse`
-  = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: the trait bound `<Conf as Config>::Hash: DeserializeOwned` is not satisfied
- --> tests/ui/incorrect/rpc/rpc_empty_bounds.rs:9:1
-  |
-9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `for<'de> Deserialize<'de>` is not implemented for `<Conf as Config>::Hash`
-  |
-  = note: required for `<Conf as Config>::Hash` to implement `DeserializeOwned`
-note: required by a bound in `request`
- --> $WORKSPACE/core/src/client/mod.rs
-  |
-  |     async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
-  |              ------- required by a bound in this associated function
-  |     where
-  |         R: DeserializeOwned,
-  |            ^^^^^^^^^^^^^^^^ required by this bound in `ClientT::request`
   = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)

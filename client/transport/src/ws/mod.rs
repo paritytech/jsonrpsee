@@ -32,9 +32,9 @@ use std::time::Duration;
 
 use base64::Engine;
 use futures_util::io::{BufReader, BufWriter};
+use jsonrpsee_core::Cow;
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
-use jsonrpsee_core::client::{MaybeSend, ReceivedMessage, TransportReceiverT, TransportSenderT};
-use jsonrpsee_core::{Cow, async_trait};
+use jsonrpsee_core::client::{ReceivedMessage, TransportReceiverT, TransportSenderT};
 use soketto::connection::CloseReason;
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
@@ -236,64 +236,68 @@ pub enum WsError {
 	Closed(CloseReason),
 }
 
-#[async_trait]
 impl<T> TransportSenderT for Sender<T>
 where
-	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Unpin + MaybeSend + 'static,
+	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Send + Unpin + 'static,
 {
 	type Error = WsError;
 
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	async fn send(&mut self, body: String) -> Result<(), Self::Error> {
-		if body.len() > self.max_request_size as usize {
-			return Err(WsError::MessageTooLarge);
-		}
+	fn send(&mut self, body: String) -> impl Future<Output = Result<(), Self::Error>> + Send {
+		async {
+			if body.len() > self.max_request_size as usize {
+				return Err(WsError::MessageTooLarge);
+			}
 
-		self.inner.send_text(body).await?;
-		self.inner.flush().await?;
-		Ok(())
+			self.inner.send_text(body).await?;
+			self.inner.flush().await?;
+			Ok(())
+		}
 	}
 
 	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	async fn send_ping(&mut self) -> Result<(), Self::Error> {
-		tracing::debug!(target: LOG_TARGET, "Send ping");
-		// Submit empty slice as "optional" parameter.
-		let slice: &[u8] = &[];
-		// Byte slice fails if the provided slice is larger than 125 bytes.
-		let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
+	fn send_ping(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send {
+		async {
+			tracing::debug!(target: LOG_TARGET, "Send ping");
+			// Submit empty slice as "optional" parameter.
+			let slice: &[u8] = &[];
+			// Byte slice fails if the provided slice is larger than 125 bytes.
+			let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
 
-		self.inner.send_ping(byte_slice).await?;
-		self.inner.flush().await?;
-		Ok(())
+			self.inner.send_ping(byte_slice).await?;
+			self.inner.flush().await?;
+			Ok(())
+		}
 	}
 
 	/// Send a close message and close the connection.
-	async fn close(&mut self) -> Result<(), WsError> {
-		self.inner.close().await.map_err(Into::into)
+	fn close(&mut self) -> impl Future<Output = Result<(), WsError>> + Send {
+		async { self.inner.close().await.map_err(Into::into) }
 	}
 }
 
-#[async_trait]
 impl<T> TransportReceiverT for Receiver<T>
 where
-	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Unpin + MaybeSend + 'static,
+	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Unpin + Send + 'static,
 {
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
-	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
-		let mut message = Vec::new();
+	fn receive(&mut self) -> impl Future<Output = Result<ReceivedMessage, Self::Error>> + Send {
+		async {
+			let mut message = Vec::new();
 
-		match self.inner.receive(&mut message).await? {
-			Incoming::Data(Data::Text(_)) => {
-				let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
-				Ok(ReceivedMessage::Text(s))
+			match self.inner.receive(&mut message).await? {
+				Incoming::Data(Data::Text(_)) => {
+					let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
+					Ok(ReceivedMessage::Text(s))
+				}
+				Incoming::Data(Data::Binary(_)) => Ok(ReceivedMessage::Bytes(message)),
+				Incoming::Pong(_) => Ok(ReceivedMessage::Pong),
+				Incoming::Closed(c) => Err(WsError::Closed(c)),
 			}
-			Incoming::Data(Data::Binary(_)) => Ok(ReceivedMessage::Bytes(message)),
-			Incoming::Pong(_) => Ok(ReceivedMessage::Pong),
-			Incoming::Closed(c) => Err(WsError::Closed(c)),
 		}
 	}
 }
