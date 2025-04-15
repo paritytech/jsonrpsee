@@ -844,7 +844,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								let _ = method_sink.send(json).await;
 							}
 							SubscriptionCloseResponse::NotifErr(err) => {
-								let json = sub_err_to_json(err, &sub_id, method);
+								let json = sub_err_to_json(&err, sub_id, method);
 								let _ = method_sink.send(json).await;
 							}
 							SubscriptionCloseResponse::None => (),

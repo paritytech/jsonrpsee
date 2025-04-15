@@ -499,23 +499,18 @@ pub struct SubscriptionState<'a> {
 pub(crate) fn sub_message_to_json(msg: SubscriptionMessage, sub_id: &SubscriptionId, method: &str) -> Box<RawValue> {
 	match msg.0 {
 		SubscriptionMessageInner::Complete(msg) => msg,
-		SubscriptionMessageInner::NeedsData(result) => {
-			let sub_id = serde_json::to_string(&sub_id).expect("valid JSON; qed");
-			let json_str = format!(
-				"{{\"jsonrpc\":\"2.0\",\"method\":\"{method}\",\"params\":{{\"subscription\":{sub_id},\"result\":{result}}}}}"
-			);
-			RawValue::from_string(json_str).expect("Valid JSON String; qed")
-		}
+		SubscriptionMessageInner::NeedsData(result) => serde_json::value::to_raw_value(&SubscriptionResponse::new(
+			method.into(),
+			SubscriptionPayload { subscription: sub_id.clone(), result },
+		))
+		.expect("Serialize infallible; qed"),
 	}
 }
 
-pub(crate) fn sub_err_to_json(error: SubscriptionError, sub_id: &SubscriptionId, method: &str) -> Box<RawValue> {
-	let sub = serde_json::to_string(sub_id).expect("SubscriptionID serialize infallible; qed");
-	let err = serde_json::to_string(&error).expect("SubscriptionError serialize infallible; qed");
-
-	let json_str = format!(
-		"{{\"jsonrpc\":\"2.0\",\"method\":\"{method}\",\"params\":{{\"subscription\":{sub},\"error\":{err}}}}}"
-	);
-
-	RawValue::from_string(json_str).expect("Valid JSON String; qed")
+pub(crate) fn sub_err_to_json(error: &SubscriptionError, sub_id: SubscriptionId, method: &str) -> Box<RawValue> {
+	serde_json::value::to_raw_value(&SubscriptionResponse::new(
+		method.into(),
+		SubscriptionPayload { subscription: sub_id, result: error },
+	))
+	.expect("Serialize infallible; qed")
 }

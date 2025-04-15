@@ -27,7 +27,7 @@
 use serde::Serialize;
 use serde_json::value::RawValue;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum InnerSubscriptionErr {
 	String(String),
 	Json(Box<RawValue>),
@@ -46,7 +46,7 @@ pub(crate) enum InnerSubscriptionErr {
 /// SubscriptionError::from will serialize the error as a string, which is not
 /// recommended and should only by used in the value of a `String` type.
 /// It's mainly provided for convenience and to allow for easy conversion any type that implements StdError.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SubscriptionError(pub(crate) InnerSubscriptionErr);
 
 impl Serialize for SubscriptionError {
