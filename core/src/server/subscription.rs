@@ -33,6 +33,7 @@ use crate::server::error::{DisconnectError, PendingSubscriptionAcceptError, Send
 use crate::server::rpc_module::ConnectionId;
 use crate::{error::SubscriptionError, traits::IdProvider};
 use jsonrpsee_types::SubscriptionPayload;
+use jsonrpsee_types::response::SubscriptionPayloadError;
 use jsonrpsee_types::{ErrorObjectOwned, Id, SubscriptionId, SubscriptionResponse};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -507,10 +508,10 @@ pub(crate) fn sub_message_to_json(msg: SubscriptionMessage, sub_id: &Subscriptio
 	}
 }
 
-pub(crate) fn sub_err_to_json(error: &SubscriptionError, sub_id: SubscriptionId, method: &str) -> Box<RawValue> {
-	serde_json::value::to_raw_value(&SubscriptionResponse::new(
+pub(crate) fn sub_err_to_json(error: SubscriptionError, sub_id: SubscriptionId, method: &str) -> Box<RawValue> {
+	serde_json::value::to_raw_value(&jsonrpsee_types::response::SubscriptionError::new(
 		method.into(),
-		SubscriptionPayload { subscription: sub_id, result: error },
+		SubscriptionPayloadError { subscription: sub_id, error },
 	))
 	.expect("Serialize infallible; qed")
 }
