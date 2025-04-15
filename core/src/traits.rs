@@ -50,7 +50,7 @@ use serde_json::value::RawValue;
 /// impl ToRpcParams for ManualParam {
 ///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 ///         // Manually define a valid JSONRPC parameter.
-///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(Some)
+///         serde_json::value::to_raw_value(&[1,2,3]).map(Some)
 ///     }
 /// }
 /// ```
@@ -85,8 +85,8 @@ pub trait ToRpcParams {
 macro_rules! to_rpc_params_impl {
 	() => {
 		fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-			let json = serde_json::to_string(&self)?;
-			RawValue::from_string(json).map(Some)
+			let json = serde_json::value::to_raw_value(&self)?;
+			Ok(Some(json))
 		}
 	};
 }

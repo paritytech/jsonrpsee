@@ -46,8 +46,7 @@ use hyper_util::rt::TokioExecutor;
 use jsonrpsee::core::client::SubscriptionCloseReason;
 use jsonrpsee::core::client::{ClientT, Error, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder};
-use jsonrpsee::core::server::SubscriptionMessage;
-use jsonrpsee::core::{JsonValue, StringError};
+use jsonrpsee::core::{JsonValue, SubscriptionError};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::server::middleware::http::HostFilterLayer;
 use jsonrpsee::server::{ConnectionGuard, ServerBuilder, ServerConfig, ServerHandle};
@@ -532,7 +531,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			"unsubscribe_hello",
 			|_, pending, mut tx, _| async move {
 				let sink = pending.accept().await?;
-				let msg = SubscriptionMessage::from_json(&1)?;
+				let msg = serde_json::value::to_raw_value(&1)?;
 				sink.send(msg).await?;
 				sink.closed().await;
 				let send_back = Arc::make_mut(&mut tx);
@@ -1343,7 +1342,7 @@ async fn response_payload_async_api_works() {
 
 					if let Some((sink, close)) = ctx.lock().await.take() {
 						for idx in 0..3 {
-							let msg = SubscriptionMessage::from_json(&idx).unwrap();
+							let msg = serde_json::value::to_raw_value(&idx).unwrap();
 							_ = sink.send(msg).await;
 						}
 						drop(sink);
@@ -1356,7 +1355,7 @@ async fn response_payload_async_api_works() {
 			.unwrap();
 
 		module
-			.register_subscription::<Result<(), StringError>, _, _>(
+			.register_subscription::<Result<(), SubscriptionError>, _, _>(
 				"sub",
 				"s",
 				"unsub",

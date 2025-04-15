@@ -43,7 +43,6 @@ use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
-
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
@@ -52,7 +51,6 @@ use jsonrpsee_core::server::helpers::prepare_error;
 use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
-
 use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
 };
@@ -1022,7 +1020,7 @@ where
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					let (tx, rx) = mpsc::channel::<String>(this.server_cfg.message_buffer_capacity as usize);
+					let (tx, rx) = mpsc::channel(this.server_cfg.message_buffer_capacity as usize);
 					let sink = MethodSink::new(tx);
 
 					// On each method call the `pending_calls` is cloned

@@ -1,9 +1,9 @@
 //! Test module for the proc-macro API to make sure that it compiles with the core features.
 
-use jsonrpsee::core::{SubscriptionResult, async_trait};
+use jsonrpsee::PendingSubscriptionSink;
+use jsonrpsee::core::{SubscriptionResult, async_trait, to_json_raw_value};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,7 +52,8 @@ impl ApiServer for () {
 
 	async fn sub(&self, pending: PendingSubscriptionSink, _: PubSubKind, _: PubSubParams) -> SubscriptionResult {
 		let sink = pending.accept().await?;
-		sink.send(SubscriptionMessage::from("msg")).await?;
+		let msg = to_json_raw_value("msg")?;
+		sink.send(msg).await?;
 		Ok(())
 	}
 

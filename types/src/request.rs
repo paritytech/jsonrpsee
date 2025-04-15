@@ -236,7 +236,7 @@ mod test {
 	fn serialize_call() {
 		let method = "subtract";
 		let id = Id::Number(1); // It's enough to check one variant, since the type itself also has tests.
-		let params = Some(RawValue::from_string("[42,23]".into()).unwrap());
+		let params = Some(serde_json::value::to_raw_value(&[42, 23]).unwrap());
 
 		let test_vector: &[(&'static str, Option<_>, Option<_>, &'static str)] = &[
 			// With all fields set.

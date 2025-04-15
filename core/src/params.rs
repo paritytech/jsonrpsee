@@ -33,6 +33,7 @@ use serde_json::value::RawValue;
 /// Helper module for building parameters.
 mod params_builder {
 	use serde::Serialize;
+	use serde_json::value::RawValue;
 
 	/// Initial number of bytes for a parameter length.
 	const PARAM_BYTES_CAPACITY: usize = 128;
@@ -106,8 +107,8 @@ mod params_builder {
 			Ok(())
 		}
 
-		/// Finish the building process and return a JSON compatible string.
-		pub(crate) fn build(mut self) -> Option<String> {
+		/// Finish the building process and return a JSON object.
+		pub(crate) fn build(mut self) -> Option<Box<RawValue>> {
 			if self.bytes.is_empty() {
 				return None;
 			}
@@ -120,7 +121,8 @@ mod params_builder {
 			}
 
 			// Safety: This is safe because JSON does not emit invalid UTF-8.
-			Some(unsafe { String::from_utf8_unchecked(self.bytes) })
+			let json_str = unsafe { String::from_utf8_unchecked(self.bytes) };
+			Some(RawValue::from_string(json_str).expect("Valid JSON String; qed"))
 		}
 	}
 }
@@ -164,7 +166,7 @@ impl Default for ObjectParams {
 
 impl ToRpcParams for ObjectParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		if let Some(json) = self.0.build() { RawValue::from_string(json).map(Some) } else { Ok(None) }
+		Ok(self.0.build())
 	}
 }
 
@@ -206,7 +208,7 @@ impl Default for ArrayParams {
 
 impl ToRpcParams for ArrayParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		if let Some(json) = self.0.build() { RawValue::from_string(json).map(Some) } else { Ok(None) }
+		Ok(self.0.build())
 	}
 }
 

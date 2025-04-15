@@ -43,9 +43,7 @@ use jsonrpsee::ws_client::*;
 use serde_json::json;
 
 mod rpc_impl {
-	use jsonrpsee::core::server::{
-		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubscriptionCloseResponse, SubscriptionMessage,
-	};
+	use jsonrpsee::core::server::{IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubscriptionCloseResponse};
 	use jsonrpsee::core::{SubscriptionResult, async_trait};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
@@ -160,24 +158,27 @@ mod rpc_impl {
 
 		async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 			let sink = pending.accept().await?;
-			sink.send("Response_A".into()).await?;
-			sink.send("Response_B".into()).await?;
+			let msg1 = serde_json::value::to_raw_value(&"Response_A").unwrap();
+			let msg2 = serde_json::value::to_raw_value(&"Response_B").unwrap();
+			sink.send(msg1).await?;
+			sink.send(msg2).await?;
 
 			Ok(())
 		}
 
 		async fn sub_with_params(&self, pending: PendingSubscriptionSink, val: u32) -> SubscriptionResult {
 			let sink = pending.accept().await?;
-			let msg = SubscriptionMessage::from_json(&val)?;
-			sink.send(msg.clone()).await?;
-			sink.send(msg).await?;
+			let json = serde_json::value::to_raw_value(&val).unwrap();
+			sink.send(json.clone()).await?;
+			sink.send(json).await?;
 
 			Ok(())
 		}
 
 		async fn sub_not_result(&self, pending: PendingSubscriptionSink) {
 			let sink = pending.accept().await.unwrap();
-			sink.send("lo".into()).await.unwrap();
+			let msg = serde_json::value::to_raw_value("lo").unwrap();
+			sink.send(msg).await.unwrap();
 		}
 
 		async fn sub_custom_ret(&self, _pending: PendingSubscriptionSink, _x: usize) -> CustomSubscriptionRet {
@@ -187,7 +188,8 @@ mod rpc_impl {
 		fn sync_sub(&self, pending: PendingSubscriptionSink) {
 			tokio::spawn(async move {
 				let sink = pending.accept().await.unwrap();
-				sink.send("hello".into()).await.unwrap();
+				let msg = serde_json::value::to_raw_value("hello").unwrap();
+				sink.send(msg).await.unwrap();
 			});
 		}
 

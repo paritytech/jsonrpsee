@@ -34,9 +34,8 @@ use crate::error::RegisterMethodError;
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::server::subscription::{
-	BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink, SubNotifResultOrError, Subscribers,
-	Subscription, SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit, SubscriptionState,
-	sub_message_to_json,
+	BoundedSubscriptions, IntoSubscriptionCloseResponse, PendingSubscriptionSink, Subscribers, Subscription,
+	SubscriptionCloseResponse, SubscriptionKey, SubscriptionPermit, SubscriptionState, sub_message_to_json,
 };
 use crate::server::{LOG_TARGET, MethodResponse, ResponsePayload};
 use crate::traits::ToRpcParams;
@@ -51,7 +50,7 @@ use serde::de::DeserializeOwned;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, oneshot};
 
-use super::IntoResponse;
+use super::{IntoResponse, sub_err_to_json};
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -95,7 +94,7 @@ pub type MaxResponseSize = usize;
 /// A tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-pub type RawRpcResponse = (Box<RawValue>, mpsc::Receiver<String>);
+pub type RawRpcResponse = (Box<RawValue>, mpsc::Receiver<Box<RawValue>>);
 
 /// The error that can occur when [`Methods::call`] or [`Methods::subscribe`] is invoked.
 #[derive(thiserror::Error, Debug)]
@@ -326,6 +325,7 @@ impl Methods {
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
 	///     use jsonrpsee::types::{response::Success, Response};
+	///     use jsonrpsee::core::to_json_raw_value;
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
@@ -333,7 +333,8 @@ impl Methods {
 	///         let sink = pending.accept().await?;
 	///
 	///         // see comment above.
-	///         sink.send("one answer".into()).await?;
+	///         let msg = to_json_raw_value(&"one answer").unwrap();
+	///         sink.send(msg).await?;
 	///
 	///         Ok(())
 	///     }).unwrap();
@@ -343,7 +344,7 @@ impl Methods {
 	///     let sub_resp = stream.recv().await.unwrap();
 	///     assert_eq!(
 	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
-	///         sub_resp
+	///         sub_resp.get()
 	///     );
 	/// }
 	/// ```
@@ -351,7 +352,7 @@ impl Methods {
 		&self,
 		request: &str,
 		buf_size: usize,
-	) -> Result<(Box<RawValue>, mpsc::Receiver<String>), serde_json::Error> {
+	) -> Result<(Box<RawValue>, mpsc::Receiver<Box<RawValue>>), serde_json::Error> {
 		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
 		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx) = self.inner_call(req, buf_size, mock_subscription_permit()).await;
@@ -422,12 +423,13 @@ impl Methods {
 	/// #[tokio::main]
 	/// async fn main() {
 	///     use jsonrpsee::{RpcModule, SubscriptionMessage};
-	///     use jsonrpsee::core::{EmptyServerParams, RpcResult};
+	///     use jsonrpsee::core::{EmptyServerParams, RpcResult, to_json_raw_value};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _, _| async move {
 	///         let sink = pending.accept().await?;
-	///         sink.send("one answer".into()).await?;
+	///         let msg = to_json_raw_value(&"one answer").unwrap();
+	///         sink.send(msg).await?;
 	///         Ok(())
 	///     }).unwrap();
 	///
@@ -767,7 +769,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     //
 	///     // If you need some other behavior implement or custom format of the error field
 	///     // you need to manually handle that.
-	///     let msg = SubscriptionMessage::from_json(&sum)?;
+	///     let msg = serde_json::value::to_raw_value(&sum).unwrap();
 	///
 	///     // This fails only if the connection is closed
 	///     sink.send(msg).await?;
@@ -838,11 +840,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 						match response {
 							SubscriptionCloseResponse::Notif(msg) => {
-								let json = sub_message_to_json(msg, SubNotifResultOrError::Result, &sub_id, method);
+								let json = sub_message_to_json(msg, &sub_id, method);
 								let _ = method_sink.send(json).await;
 							}
-							SubscriptionCloseResponse::NotifErr(msg) => {
-								let json = sub_message_to_json(msg, SubNotifResultOrError::Error, &sub_id, method);
+							SubscriptionCloseResponse::NotifErr(err) => {
+								let json = sub_err_to_json(err, sub_id, method);
 								let _ = method_sink.send(json).await;
 							}
 							SubscriptionCloseResponse::None => (),
@@ -910,7 +912,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         let sink = pending.accept().await.unwrap();
 	///         let sum = val + (*ctx);
 	///
-	///         let msg = SubscriptionMessage::from_json(&sum).unwrap();
+	///         let msg = serde_json::value::to_raw_value(&sum).unwrap();
 	///
 	///         // This fails only if the connection is closed
 	///         sink.send(msg).await.unwrap();

@@ -148,7 +148,7 @@ pub(crate) mod visitor;
 /// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
 ///   method `spam`, the resulting method name will be `foo_spam`.
 /// - `namespace_separator`: customize the separator used between namespace and method name. Defaults to `_`.
-///		For example, `namespace = "foo", namespace_separator = "."` results in method names like `foo.bar` instead of `foo_bar`.
+///   For example, `namespace = "foo", namespace_separator = "."` results in method names like `foo.bar` instead of `foo_bar`.
 /// - `server_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the server
 ///   implementation.
 /// - `client_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the client
@@ -233,7 +233,7 @@ pub(crate) mod visitor;
 /// mod rpc_impl {
 ///     use jsonrpsee::{proc_macros::rpc, Extensions};
 ///     use jsonrpsee::server::{PendingSubscriptionSink, SubscriptionMessage, IntoSubscriptionCloseResponse, SubscriptionCloseResponse};
-///     use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
+///     use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult, to_json_raw_value};
 ///
 ///     enum CloseResponse {
 ///         None,
@@ -247,7 +247,10 @@ pub(crate) mod visitor;
 ///                CloseResponse::None => SubscriptionCloseResponse::None,
 ///                // Send a close response as an ordinary subscription notification
 ///                // when the subscription is terminated.
-///                CloseResponse::Failed => SubscriptionCloseResponse::Notif("failed".into()),
+///                CloseResponse::Failed => {
+///                     let err = to_json_raw_value(&"Failed").unwrap();
+///                     SubscriptionCloseResponse::Notif(err.into())
+///                }
 ///            }
 ///         }
 ///     }
@@ -332,7 +335,8 @@ pub(crate) mod visitor;
 ///         // as subscription responses.
 ///         async fn sub_override_notif_method(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let mut sink = pending.accept().await?;
-///             sink.send("Response_A".into()).await?;
+///             let msg = to_json_raw_value(&"Response_A").unwrap();
+///             sink.send(msg).await?;
 ///             Ok(())
 ///         }
 ///
@@ -340,8 +344,8 @@ pub(crate) mod visitor;
 ///         async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 ///             let sink = pending.accept().await?;
 ///
-///             let msg1 = SubscriptionMessage::from("Response_A");
-///             let msg2 = SubscriptionMessage::from("Response_B");
+///             let msg1 = to_json_raw_value(&"Response_A").unwrap();
+///             let msg2 = to_json_raw_value(&"Response_B").unwrap();
 ///
 ///             sink.send(msg1).await?;
 ///             sink.send(msg2).await?;
@@ -357,12 +361,13 @@ pub(crate) mod visitor;
 ///                 return CloseResponse::None;
 ///             };
 ///
-///             if sink.send("Response_A".into()).await.is_ok() {
+///             let msg = to_json_raw_value(&"Response_A").unwrap();
+///
+///             if sink.send(msg).await.is_ok() {
 ///                 CloseResponse::Failed
 ///             } else {
 ///                 CloseResponse::None
 ///             }
-///
 ///         }
 ///     }
 /// }

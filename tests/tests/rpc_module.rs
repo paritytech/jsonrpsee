@@ -33,11 +33,12 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use helpers::{init_logger, pipe_from_stream_and_drop};
-use jsonrpsee::core::EmptyServerParams;
+use jsonrpsee::core::{EmptyServerParams, SubscriptionError};
 use jsonrpsee::core::{RpcResult, server::*};
 use jsonrpsee::types::error::{ErrorCode, ErrorObject, INVALID_PARAMS_MSG, PARSE_ERROR_CODE};
 use jsonrpsee::types::{ErrorObjectOwned, Response, ResponsePayload};
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use tokio::sync::mpsc;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -245,7 +246,7 @@ async fn subscribing_without_server() {
 
 			while let Some(letter) = stream_data.pop() {
 				tracing::debug!("This is your friendly subscription sending data.");
-				let msg = SubscriptionMessage::from_json(&letter).unwrap();
+				let msg = serde_json::value::to_raw_value(&letter).unwrap();
 				sink.send(msg).await.unwrap();
 				tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 			}
@@ -273,7 +274,7 @@ async fn close_test_subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let sink = pending.accept().await?;
-			let msg = SubscriptionMessage::from_json(&"lo")?;
+			let msg = serde_json::value::to_raw_value("lo")?;
 
 			// make sure to only send one item
 			sink.send(msg.clone()).await?;
@@ -324,7 +325,7 @@ async fn subscribing_without_server_bad_params() {
 			};
 
 			let sink = pending.accept().await?;
-			let msg = SubscriptionMessage::from_json(&p)?;
+			let msg = serde_json::value::to_raw_value(&p)?;
 			sink.send(msg).await?;
 
 			Ok(())
@@ -348,7 +349,7 @@ async fn subscribing_without_server_indicates_close() {
 			let sink = pending.accept().await?;
 
 			for m in 0..5 {
-				let msg = SubscriptionMessage::from_json(&m)?;
+				let msg = serde_json::value::to_raw_value(&m)?;
 				sink.send(msg).await?;
 			}
 
@@ -452,7 +453,7 @@ async fn bounded_subscription_works() {
 			let mut buf = VecDeque::new();
 
 			while let Some(n) = stream.next().await {
-				let msg = SubscriptionMessage::from_json(&n).expect("usize infallible; qed");
+				let msg = serde_json::value::to_raw_value(&n).expect("usize serialize infallible; qed");
 
 				match sink.try_send(msg) {
 					Err(TrySendError::Closed(_)) => panic!("This is a bug"),
@@ -499,8 +500,8 @@ async fn bounded_subscription_works() {
 }
 
 #[tokio::test]
-async fn serialize_sub_error_adds_extra_string_quotes() {
-	#[derive(Serialize)]
+async fn serialize_sub_error_json() {
+	#[derive(Serialize, Deserialize)]
 	struct MyError {
 		number: u32,
 		address: String,
@@ -513,28 +514,57 @@ async fn serialize_sub_error_adds_extra_string_quotes() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
 			let _ = pending.accept().await?;
 			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-			let err = serde_json::to_string(&MyError { number: 11, address: "State street 1337".into() }).unwrap();
-			Err(err.into())
+			let json =
+				serde_json::value::to_raw_value(&MyError { number: 11, address: "State street 1337".into() }).unwrap();
+			Err(SubscriptionError::from_json(json))
 		})
 		.unwrap();
 
-	let (rp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, 1).await.unwrap();
-	let resp = serde_json::from_str::<Response<u64>>(rp.get()).unwrap();
-	let sub_resp = stream.recv().await.unwrap();
-
-	let resp = match resp.payload {
-		ResponsePayload::Success(val) => val,
-		_ => panic!("Expected valid response"),
-	};
+	let (sub_id, notif) =
+		run_subscription(r#"{"jsonrpc":"2.0","method":"my_sub","params":[true],"id":0}"#, &module).await;
 
 	assert_eq!(
 		format!(
-			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":"{{"number":11,"address":"State street 1337"}}"}}}}"#,
-			resp,
+			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":{{"number":11,"address":"State street 1337"}}}}}}"#,
+			sub_id,
 		),
-		sub_resp
+		notif.get()
 	);
+
+	assert!(serde_json::from_str::<jsonrpsee::types::response::SubscriptionError<MyError>>(notif.get()).is_ok());
+}
+
+#[tokio::test]
+async fn serialize_sub_error_str() {
+	#[derive(Serialize, Deserialize)]
+	struct MyError {
+		number: u32,
+		address: String,
+	}
+
+	init_logger();
+
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
+			let _ = pending.accept().await?;
+			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+			let s = serde_json::to_string(&MyError { number: 11, address: "State street 1337".into() }).unwrap();
+			Err(s.into())
+		})
+		.unwrap();
+
+	let (sub_id, notif) = run_subscription(r#"{"jsonrpc":"2.0","method":"my_sub","id":0}"#, &module).await;
+
+	assert_eq!(
+		format!(
+			r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"error":"{{\"number\":11,\"address\":\"State street 1337\"}}"}}}}"#,
+			sub_id,
+		),
+		notif.get()
+	);
+
+	assert!(serde_json::from_str::<jsonrpsee::types::response::SubscriptionError<MyError>>(notif.get()).is_err());
 }
 
 #[tokio::test]
@@ -556,25 +586,20 @@ async fn subscription_close_response_works() {
 			};
 
 			let _sink = pending.accept().await.unwrap();
+			let msg = serde_json::value::to_raw_value(&x).unwrap();
 
-			SubscriptionCloseResponse::Notif(SubscriptionMessage::from_json(&x).unwrap())
+			SubscriptionCloseResponse::Notif(msg.into())
 		})
 		.unwrap();
 
 	// ensure subscription with raw_json_request works.
 	{
-		let (rp, mut stream) =
-			module.raw_json_request(r#"{"jsonrpc":"2.0","method":"my_sub","params":[1],"id":0}"#, 1).await.unwrap();
-		let resp = serde_json::from_str::<Response<u64>>(rp.get()).unwrap();
-
-		let sub_id = match resp.payload {
-			ResponsePayload::Success(val) => val,
-			_ => panic!("Expected valid response"),
-		};
+		let (sub_id, notif) =
+			run_subscription(r#"{"jsonrpc":"2.0","method":"my_sub","params":[1],"id":0}"#, &module).await;
 
 		assert_eq!(
 			format!(r#"{{"jsonrpc":"2.0","method":"my_sub","params":{{"subscription":{},"result":1}}}}"#, sub_id),
-			stream.recv().await.unwrap()
+			notif.get()
 		);
 	}
 
@@ -650,4 +675,17 @@ async fn conn_id_in_rpc_module_without_server() {
 	assert!(
 		matches!(module.call::<_, usize>("get_conn_id", EmptyServerParams::new()).await, Ok(conn_id) if conn_id == 0)
 	);
+}
+
+async fn run_subscription(req: &str, rpc: &RpcModule<()>) -> (u64, Box<RawValue>) {
+	let (rp, mut stream) = rpc.raw_json_request(req, 1).await.unwrap();
+	let resp = serde_json::from_str::<Response<u64>>(rp.get()).unwrap();
+	let sub_resp = stream.recv().await.unwrap();
+
+	let sub_id = match resp.payload {
+		ResponsePayload::Success(val) => val,
+		_ => panic!("Expected valid response"),
+	};
+
+	(*sub_id, sub_resp)
 }

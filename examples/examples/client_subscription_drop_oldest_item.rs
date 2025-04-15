@@ -31,7 +31,7 @@ use futures::{Stream, StreamExt};
 use jsonrpsee::core::DeserializeOwned;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, Server, SubscriptionMessage};
+use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
@@ -107,8 +107,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let sub = pending.accept().await.unwrap();
 
 			for i in 0..usize::MAX {
-				let msg = SubscriptionMessage::from_json(&i).unwrap();
-				sub.send(msg).await.unwrap();
+				let json = serde_json::value::to_raw_value(&i).unwrap();
+				sub.send(json).await.unwrap();
 				tokio::time::sleep(Duration::from_millis(10)).await;
 			}
 

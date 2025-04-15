@@ -16,9 +16,9 @@ use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::{BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_types::Id;
 use jsonrpsee_types::error::{ErrorCode, reject_too_big_request};
+use serde_json::value::RawValue;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
-
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, interval_at};
 use tokio_stream::wrappers::ReceiverStream;
@@ -34,8 +34,8 @@ enum Incoming {
 	Pong,
 }
 
-pub(crate) async fn send_message(sender: &mut Sender, response: String) -> Result<(), SokettoError> {
-	sender.send_text_owned(response).await?;
+pub(crate) async fn send_message(sender: &mut Sender, response: Box<RawValue>) -> Result<(), SokettoError> {
+	sender.send_text_owned(String::from(Box::<str>::from(response))).await?;
 	sender.flush().await
 }
 
@@ -56,7 +56,7 @@ pub(crate) struct BackgroundTaskParams<S> {
 	pub(crate) ws_receiver: Receiver,
 	pub(crate) rpc_service: S,
 	pub(crate) sink: MethodSink,
-	pub(crate) rx: mpsc::Receiver<String>,
+	pub(crate) rx: mpsc::Receiver<Box<RawValue>>,
 	pub(crate) pending_calls_completed: mpsc::Receiver<()>,
 	pub(crate) on_session_close: Option<SessionClose>,
 	pub(crate) extensions: http::Extensions,
@@ -167,7 +167,7 @@ where
 				let (json, mut on_close, _) = rp.into_parts();
 
 				// The connection is closed, just quit.
-				if sink.send(String::from(Box::<str>::from(json))).await.is_err() {
+				if sink.send(json).await.is_err() {
 					return;
 				}
 
@@ -195,7 +195,7 @@ where
 
 /// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
 async fn send_task(
-	rx: mpsc::Receiver<String>,
+	rx: mpsc::Receiver<Box<RawValue>>,
 	mut ws_sender: Sender,
 	ping_config: Option<PingConfig>,
 	stop: oneshot::Receiver<()>,
@@ -429,7 +429,7 @@ where
 
 	match server.receive_request(&req) {
 		Ok(response) => {
-			let (tx, rx) = mpsc::channel::<String>(server_cfg.message_buffer_capacity as usize);
+			let (tx, rx) = mpsc::channel(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
 			// On each method call the `pending_calls` is cloned

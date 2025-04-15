@@ -24,13 +24,53 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-/// A type that returns the error as a `String` from `SubscriptionCallback`.
-#[derive(Debug)]
-pub struct StringError(pub(crate) String);
+use serde::Serialize;
+use serde_json::value::RawValue;
 
-impl<T: ToString> From<T> for StringError {
+#[derive(Debug, Clone)]
+pub(crate) enum InnerSubscriptionErr {
+	String(String),
+	Json(Box<RawValue>),
+}
+
+/// Error returned when a subscription fails where the error is returned
+/// as special error notification with the following format:
+///
+/// ```json
+/// {"jsonrpc":"2.0", "method":"subscription_error", "params": {"subscription": "sub_id", "error": <error message from this type>}}
+/// ```
+///
+/// It's recommended to use [`SubscriptionError::from_json`] to create a new instance of this error
+/// if the underlying error is a JSON value. That will ensure that the error is serialized correctly.
+///
+/// SubscriptionError::from will serialize the error as a string, which is not
+/// recommended and should only by used in the value of a `String` type.
+/// It's mainly provided for convenience and to allow for easy conversion any type that implements StdError.
+#[derive(Debug, Clone)]
+pub struct SubscriptionError(pub(crate) InnerSubscriptionErr);
+
+impl Serialize for SubscriptionError {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		match &self.0 {
+			InnerSubscriptionErr::String(s) => serializer.serialize_str(s),
+			InnerSubscriptionErr::Json(json) => json.serialize(serializer),
+		}
+	}
+}
+
+impl<T: ToString> From<T> for SubscriptionError {
 	fn from(val: T) -> Self {
-		StringError(val.to_string())
+		Self(InnerSubscriptionErr::String(val.to_string()))
+	}
+}
+
+impl SubscriptionError {
+	/// Create a new `SubscriptionError` from a JSON value.
+	pub fn from_json(json: Box<RawValue>) -> Self {
+		Self(InnerSubscriptionErr::Json(json))
 	}
 }
 

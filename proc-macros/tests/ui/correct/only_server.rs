@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, RpcResult, SubscriptionResult};
+use jsonrpsee::core::{RpcResult, SubscriptionResult, async_trait, to_json_raw_value};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::server::{PendingSubscriptionSink, ServerBuilder};
 
@@ -31,8 +31,10 @@ impl RpcServer for RpcServerImpl {
 	async fn sub(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
 		let sink = pending.accept().await?;
 
-		sink.send("Response_A".into()).await?;
-		sink.send("Response_B".into()).await?;
+		let msg1 = to_json_raw_value(&"Response_A").unwrap();
+		let msg2 = to_json_raw_value(&"Response_B").unwrap();
+		sink.send(msg1).await?;
+		sink.send(msg2).await?;
 
 		Ok(())
 	}
