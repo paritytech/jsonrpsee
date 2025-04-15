@@ -33,10 +33,19 @@ pub(crate) enum InnerSubscriptionErr {
 	Json(Box<RawValue>),
 }
 
-/// Error returned when a subscription fails.
+/// Error returned when a subscription fails where the error is returned
+/// as special error notification with the following format:
 ///
-/// It's recommended to use `SubscriptionErr::from_json` to create a new instance of this error
-/// because using the `String` representation may not very ergonomic for clients to parse.
+/// ```json
+/// {"jsonrpc":"2.0", "method":"subscription_error", "params": {"subscription": "sub_id", "error": <error message from this type>}}
+/// ```
+///
+/// It's recommended to use [`SubscriptionError::from_json`] to create a new instance of this error
+/// if the underlying error is a JSON value. That will ensure that the error is serialized correctly.
+///
+/// SubscriptionError::from will serialize the error as a string, which is not
+/// recommended and should only by used in the value of a `String` type.
+/// It's mainly provided for convenience and to allow for easy conversion any type that implements StdError.
 #[derive(Debug)]
 pub struct SubscriptionError(pub(crate) InnerSubscriptionErr);
 
@@ -59,14 +68,9 @@ impl<T: ToString> From<T> for SubscriptionError {
 }
 
 impl SubscriptionError {
-	/// Create a new `SubscriptionErr` from a JSON value.
+	/// Create a new `SubscriptionError` from a JSON value.
 	pub fn from_json(json: Box<RawValue>) -> Self {
 		Self(InnerSubscriptionErr::Json(json))
-	}
-
-	/// Create a new `SubscriptionErr` from a String.
-	pub fn from_string(s: String) -> Self {
-		Self::from(s)
 	}
 }
 
