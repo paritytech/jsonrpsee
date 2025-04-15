@@ -7,6 +7,9 @@ edition.workspace = true
 license.workspace = true
 publish = false
 
+[lints.clippy]
+manual_async_fn = { level = "allow", priority = -1 }
+
 [dev-dependencies]
 anyhow = { workspace = true }
 fast-socks5 = { workspace = true }

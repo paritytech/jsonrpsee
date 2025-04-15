@@ -148,7 +148,7 @@ pub(crate) mod visitor;
 /// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
 ///   method `spam`, the resulting method name will be `foo_spam`.
 /// - `namespace_separator`: customize the separator used between namespace and method name. Defaults to `_`.
-///		For example, `namespace = "foo", namespace_separator = "."` results in method names like `foo.bar` instead of `foo_bar`.
+///   For example, `namespace = "foo", namespace_separator = "."` results in method names like `foo.bar` instead of `foo_bar`.
 /// - `server_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the server
 ///   implementation.
 /// - `client_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the client
