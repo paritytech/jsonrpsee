@@ -87,7 +87,7 @@ pub(crate) struct RequestManager {
 	/// requests.
 	subscriptions: HashMap<SubscriptionId<'static>, RequestId>,
 	/// Pending batch requests.
-	batches: FxHashMap<Vec<Id<'static>>, BatchState>,
+	batches: Vec<(Vec<Id<'static>>, BatchState)>,
 	/// Registered Methods for incoming notifications.
 	notification_handlers: HashMap<String, SubscriptionSink>,
 }
@@ -123,12 +123,12 @@ impl RequestManager {
 		batch: Vec<Id<'static>>,
 		send_back: PendingBatchOneshot,
 	) -> Result<(), PendingBatchOneshot> {
-		if let Entry::Vacant(v) = self.batches.entry(batch) {
-			v.insert(BatchState { send_back });
-			Ok(())
-		} else {
-			Err(send_back)
+		if self.batches.iter().any(|(existing_batch, _)| existing_batch == &batch) {
+			return Err(send_back);
 		}
+
+		self.batches.push((batch, BatchState { send_back }));
+		Ok(())
 	}
 
 	/// Tries to insert a new pending subscription and reserves a slot for a "potential" unsubscription request.
@@ -230,7 +230,8 @@ impl RequestManager {
 		}
 
 		if let Some(key) = matched_key {
-			if let Some((_key, state)) = self.batches.remove_entry(&key) {
+			if let Some(pos) = self.batches.iter().position(|(existing_batch, _)| existing_batch == &key) {
+				let (_, state) = self.batches.remove(pos);
 				return Some(state);
 			}
 		}
