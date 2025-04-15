@@ -191,7 +191,7 @@ impl MethodResponse {
 			Ok(_) => {
 				// Safety - serde_json does not emit invalid UTF-8.
 				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
-				let json = RawValue::from_string(result).expect("JSON serialization infallible; qed");
+				let json = RawValue::from_string(result).expect("Valid JSON String; qed");
 
 				Self { json, success_or_error, kind, on_close: rp.on_exit, extensions: Extensions::new() }
 			}
@@ -370,7 +370,7 @@ impl BatchResponseBuilder {
 		} else {
 			self.result.pop();
 			self.result.push(']');
-			let json = RawValue::from_string(self.result).expect("JSON serialization infallible; qed");
+			let json = RawValue::from_string(self.result).expect("BatchResponse builds a valid JSON String; qed");
 			BatchResponse { json, extensions: self.extensions }
 		}
 	}

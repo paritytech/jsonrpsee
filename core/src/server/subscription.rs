@@ -504,18 +504,18 @@ pub(crate) fn sub_message_to_json(msg: SubscriptionMessage, sub_id: &Subscriptio
 			let json_str = format!(
 				"{{\"jsonrpc\":\"2.0\",\"method\":\"{method}\",\"params\":{{\"subscription\":{sub_id},\"result\":{result}}}}}"
 			);
-			RawValue::from_string(json_str).expect("valid JSON; qed")
+			RawValue::from_string(json_str).expect("Valid JSON String; qed")
 		}
 	}
 }
 
 pub(crate) fn sub_err_to_json(error: SubscriptionError, sub_id: &SubscriptionId, method: &str) -> Box<RawValue> {
-	let sub = serde_json::to_string(sub_id).expect("valid JSON; qed");
-	let err = serde_json::to_string(&error).expect("valid JSON; qed");
+	let sub = serde_json::to_string(sub_id).expect("SubscriptionID serialize infallible; qed");
+	let err = serde_json::to_string(&error).expect("SubscriptionError serialize infallible; qed");
 
 	let json_str = format!(
 		"{{\"jsonrpc\":\"2.0\",\"method\":\"{method}\",\"params\":{{\"subscription\":{sub},\"error\":{err}}}}}"
 	);
 
-	RawValue::from_string(json_str).expect("valid JSON; qed")
+	RawValue::from_string(json_str).expect("Valid JSON String; qed")
 }

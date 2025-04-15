@@ -122,7 +122,7 @@ mod params_builder {
 
 			// Safety: This is safe because JSON does not emit invalid UTF-8.
 			let json_str = unsafe { String::from_utf8_unchecked(self.bytes) };
-			Some(RawValue::from_string(json_str).expect("Valid JSON; qed"))
+			Some(RawValue::from_string(json_str).expect("Valid JSON String; qed"))
 		}
 	}
 }
