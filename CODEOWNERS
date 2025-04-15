@@ -5,7 +5,7 @@
 # required for merging a PR (depends on repository settings).
 #
 # For details about syntax, see:
-# https://help.github.com/en/articles/about-code-owners
+# https://docs.github.com/en/articles/about-code-owners
 # But here are some important notes:
 #
 # - Glob syntax is git-like, e.g. `/core` means the core directory in the root, unlike `core`
