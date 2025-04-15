@@ -140,12 +140,12 @@ impl RpcDescription {
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
 			let returns = self.return_result_type(returns.clone());
-			let returns = quote! { impl Future<Output = #returns> + Send };
+			let returns = quote! { impl core::future::Future<Output = #returns> + Send };
 
 			(called_method, returns)
 		} else {
 			let called_method = quote::format_ident!("notification");
-			let returns = quote! { impl Future<Output = Result<(), #jrps_error>> + Send };
+			let returns = quote! { impl core::future::Future<Output = Result<(), #jrps_error>> + Send };
 
 			(called_method, returns)
 		};
@@ -186,7 +186,7 @@ impl RpcDescription {
 		// into the `Subscription` object.
 		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
 		let item = &sub.item;
-		let returns = quote! { impl Future<Output = Result<#sub_type<#item>, #jrps_error>> + Send };
+		let returns = quote! { impl core::future::Future<Output = Result<#sub_type<#item>, #jrps_error>> + Send };
 
 		// Encoded parameters for the request.
 		let parameter_builder = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
