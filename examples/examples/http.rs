@@ -25,16 +25,11 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
-use std::time::Duration;
 
-use hyper::body::Bytes;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::RpcServiceBuilder;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
-use tower_http::LatencyUnit;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
@@ -46,22 +41,7 @@ async fn main() -> anyhow::Result<()> {
 	let server_addr = run_server().await?;
 	let url = format!("http://{}", server_addr);
 
-	let middleware = tower::ServiceBuilder::new()
-	.layer(
-		TraceLayer::new_for_http()
-			.on_request(
-				|request: &hyper::Request<_>, _span: &tracing::Span| tracing::info!(request = ?request, "on_request"),
-			)
-			.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
-				tracing::info!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")
-			})
-			.make_span_with(DefaultMakeSpan::new().include_headers(true))
-			.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
-	);
-
-	let rpc = RpcServiceBuilder::new().rpc_logger(1024);
-
-	let client = HttpClient::builder().set_http_middleware(middleware).set_rpc_middleware(rpc).build(url)?;
+	let client = HttpClient::builder().build(url)?;
 	let params = rpc_params![1_u64, 2, 3];
 	let response: Result<String, _> = client.request("say_hello", params).await;
 	tracing::info!("r: {:?}", response);

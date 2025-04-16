@@ -38,7 +38,7 @@ use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
 	generate_batch_id_range,
 };
-use jsonrpsee_core::middleware::layer::RpcLoggerLayer;
+use jsonrpsee_core::middleware::layer::{RpcLogger, RpcLoggerLayer};
 use jsonrpsee_core::middleware::{Batch, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::traits::ToRpcParams;
@@ -326,7 +326,7 @@ impl HttpClientBuilder {
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug, Clone)]
-pub struct HttpClient<S> {
+pub struct HttpClient<S = RpcLogger<RpcService<HttpBackend>>> {
 	/// HTTP service.
 	service: S,
 	/// Request ID manager.
