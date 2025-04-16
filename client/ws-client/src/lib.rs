@@ -43,14 +43,16 @@ pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_core::client::async_client::PingConfig;
 pub use jsonrpsee_core::client::async_client::RpcService;
 pub use jsonrpsee_core::middleware::RpcServiceBuilder;
+use jsonrpsee_core::middleware::layer::RpcLoggerLayer;
 pub use jsonrpsee_types as types;
 
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::client::{ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT};
 use std::time::Duration;
-use tower::layer::util::Identity;
 use url::Url;
+
+type Logger = tower::layer::util::Stack<RpcLoggerLayer, tower::layer::util::Identity>;
 
 #[cfg(feature = "tls")]
 pub use jsonrpsee_client_transport::ws::CustomCertStore;
@@ -84,7 +86,7 @@ use jsonrpsee_client_transport::ws::CertificateStore;
 ///
 /// ```
 #[derive(Clone, Debug)]
-pub struct WsClientBuilder<RpcMiddleware = Identity> {
+pub struct WsClientBuilder<RpcMiddleware = Logger> {
 	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	max_request_size: u32,
@@ -101,7 +103,7 @@ pub struct WsClientBuilder<RpcMiddleware = Identity> {
 	service_builder: RpcServiceBuilder<RpcMiddleware>,
 }
 
-impl Default for WsClientBuilder<Identity> {
+impl Default for WsClientBuilder {
 	fn default() -> Self {
 		Self {
 			#[cfg(feature = "tls")]
@@ -117,14 +119,14 @@ impl Default for WsClientBuilder<Identity> {
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			tcp_no_delay: true,
-			service_builder: RpcServiceBuilder::default(),
+			service_builder: RpcServiceBuilder::default().rpc_logger(1024),
 		}
 	}
 }
 
-impl WsClientBuilder<Identity> {
+impl WsClientBuilder {
 	/// Create a new WebSocket client builder.
-	pub fn new() -> WsClientBuilder<Identity> {
+	pub fn new() -> WsClientBuilder {
 		WsClientBuilder::default()
 	}
 }
