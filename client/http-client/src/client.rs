@@ -251,7 +251,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 impl<B, S, S2, HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: Layer<RpcService<S>, Service = S2>,
-	for<'a> <RpcMiddleware as Layer<RpcService<S>>>::Service: RpcServiceT,
+	<RpcMiddleware as Layer<RpcService<S>>>::Service: RpcServiceT,
 	HttpMiddleware: Layer<transport::HttpBackend, Service = S>,
 	S: Service<HttpRequest, Response = HttpResponse<B>, Error = TransportError> + Clone,
 	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
