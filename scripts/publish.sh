@@ -12,7 +12,7 @@ function read_toml () {
 	NAME=""
 	VERSION=""
 	NAME=$(grep "^name" ./Cargo.toml | sed -e 's/.*"\(.*\)"/\1/')
-	VERSION=$(grep "^version" $DIR/Cargo.toml | sed -e 's/.*"\(.*\)"/\1/')
+	VERSION=$(grep "^version" ./Cargo.toml | sed -e 's/.*"\(.*\)"/\1/')
 }
 function remote_version () {
 	REMOTE_VERSION=""
