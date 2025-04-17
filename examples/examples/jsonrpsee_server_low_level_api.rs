@@ -74,12 +74,20 @@ struct CallLimit<S> {
 
 impl<S> RpcServiceT for CallLimit<S>
 where
-	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + Clone + 'static,
+	S: RpcServiceT<
+			MethodResponse = MethodResponse,
+			BatchResponse = MethodResponse,
+			NotificationResponse = MethodResponse,
+		> + Send
+		+ Sync
+		+ Clone
+		+ 'static,
 {
-	type Error = S::Error;
-	type Response = S::Response;
+	type MethodResponse = S::MethodResponse;
+	type NotificationResponse = S::NotificationResponse;
+	type BatchResponse = S::BatchResponse;
 
-	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		let count = self.count.clone();
 		let state = self.state.clone();
 		let service = self.service.clone();
@@ -89,7 +97,7 @@ where
 
 			if *lock >= 10 {
 				let _ = state.try_send(());
-				Ok(MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
+				MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None))
 			} else {
 				let rp = service.call(req).await;
 				*lock += 1;
@@ -98,7 +106,7 @@ where
 		}
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		let count = self.count.clone();
 		let state = self.state.clone();
 		let service = self.service.clone();
@@ -109,7 +117,7 @@ where
 
 			if *lock >= 10 + batch_len {
 				let _ = state.try_send(());
-				Ok(MethodResponse::error(Id::Null, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
+				MethodResponse::error(Id::Null, ErrorObject::borrowed(-32000, "RPC rate limit", None))
 			} else {
 				let rp = service.batch(batch).await;
 				*lock += batch_len;
@@ -118,18 +126,13 @@ where
 		}
 	}
 
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		let count = self.count.clone();
 		let service = self.service.clone();
 
 		// A notification is not expected to return a response so the result here doesn't matter
 		// rather than other middlewares may not be invoked.
-		async move {
-			if *count.lock().await >= 10 { Ok(MethodResponse::notification()) } else { service.notification(n).await }
-		}
+		async move { if *count.lock().await >= 10 { MethodResponse::notification() } else { service.notification(n).await } }
 	}
 }
 

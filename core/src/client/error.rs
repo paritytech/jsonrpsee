@@ -26,7 +26,7 @@
 
 //! Error type for client(s).
 
-use crate::{params::EmptyBatchRequest, BoxError, RegisterMethodError};
+use crate::{BoxError, RegisterMethodError, params::EmptyBatchRequest};
 use jsonrpsee_types::{ErrorObjectOwned, InvalidRequestId};
 use std::sync::Arc;
 
@@ -66,4 +66,8 @@ pub enum Error {
 	/// The error returned when registering a method or subscription failed.
 	#[error(transparent)]
 	RegisterMethod(#[from] RegisterMethodError),
+	#[error("Fetch from backend")]
+	/// Internal error state when the underlying channel is closed
+	/// and the error reason needs to be fetched from the backend.
+	FetchFromBackend,
 }

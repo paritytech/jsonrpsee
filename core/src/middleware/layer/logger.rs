@@ -62,14 +62,13 @@ pub struct RpcLogger<S> {
 impl<S> RpcServiceT for RpcLogger<S>
 where
 	S: RpcServiceT + Send + Sync + Clone + 'static,
-	S::Error: std::fmt::Debug + Send,
-	S::Response: ToJson,
 {
-	type Error = S::Error;
-	type Response = S::Response;
+	type MethodResponse = S::MethodResponse;
+	type NotificationResponse = S::NotificationResponse;
+	type BatchResponse = S::BatchResponse;
 
 	#[tracing::instrument(name = "method_call", skip_all, fields(method = request.method_name()), level = "trace")]
-	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		let json = serde_json::value::to_raw_value(&request);
 		let json_str = unwrap_json_str_or_invalid(&json);
 		tracing::trace!(target: "jsonrpsee", "request = {}", truncate_at_char_boundary(json_str, self.max as usize));
@@ -80,18 +79,16 @@ where
 		async move {
 			let rp = service.call(request).await;
 
-			if let Ok(ref rp) = rp {
-				let json = rp.to_json();
-				let json_str = unwrap_json_str_or_invalid(&json);
-				tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(json_str, max as usize));
-			}
+			let json = rp.to_json();
+			let json_str = unwrap_json_str_or_invalid(&json);
+			tracing::trace!(target: "jsonrpsee", "response = {}", truncate_at_char_boundary(json_str, max as usize));
 			rp
 		}
 		.in_current_span()
 	}
 
 	#[tracing::instrument(name = "batch", skip_all, fields(method = "batch"), level = "trace")]
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		let json = serde_json::value::to_raw_value(&batch);
 		let json_str = unwrap_json_str_or_invalid(&json);
 		tracing::trace!(target: "jsonrpsee", "batch request = {}", truncate_at_char_boundary(json_str, self.max as usize));
@@ -101,21 +98,17 @@ where
 		async move {
 			let rp = service.batch(batch).await;
 
-			if let Ok(ref rp) = rp {
-				let json = rp.to_json();
-				let json_str = unwrap_json_str_or_invalid(&json);
-				tracing::trace!(target: "jsonrpsee", "batch response = {}", truncate_at_char_boundary(json_str, max as usize));
-			}
+			let json = rp.to_json();
+			let json_str = unwrap_json_str_or_invalid(&json);
+			tracing::trace!(target: "jsonrpsee", "batch response = {}", truncate_at_char_boundary(json_str, max as usize));
+
 			rp
 		}
 		.in_current_span()
 	}
 
 	#[tracing::instrument(name = "notification", skip_all, fields(method = &*n.method), level = "trace")]
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		let json = serde_json::value::to_raw_value(&n);
 		let json_str = unwrap_json_str_or_invalid(&json);
 		tracing::trace!(target: "jsonrpsee", "notification request = {}", truncate_at_char_boundary(json_str, self.max as usize));

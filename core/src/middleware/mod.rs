@@ -296,14 +296,15 @@ impl<'a> BatchEntry<'a> {
 /// the underlying service requires that and otherwise one will get a compiler error that tries to
 /// explain that.
 pub trait RpcServiceT {
-	/// The error type.
-	type Error: std::fmt::Debug;
-
-	/// The response type
-	type Response: ToJson;
+	/// Response type for `RpcServiceT::call`.
+	type MethodResponse: ToJson;
+	/// Response type for `RpcServiceT::notification`.
+	type NotificationResponse: ToJson;
+	/// Response type for `RpcServiceT::batch`.
+	type BatchResponse: ToJson;
 
 	/// Processes a single JSON-RPC call, which may be a subscription or regular call.
-	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a;
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a;
 
 	/// Processes multiple JSON-RPC calls at once, similar to `RpcServiceT::call`.
 	///
@@ -314,13 +315,10 @@ pub trait RpcServiceT {
 	/// As a result, if you have custom logic for individual calls or notifications,
 	/// you must duplicate that implementation in this method or no middleware will be applied
 	/// for calls inside the batch.
-	fn batch<'a>(&self, requests: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a;
+	fn batch<'a>(&self, requests: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a;
 
 	/// Similar to `RpcServiceT::call` but processes a JSON-RPC notification.
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a;
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a;
 }
 
 /// Interface for types that can be serialized into JSON.
@@ -391,23 +389,23 @@ impl<L> RpcServiceBuilder<L> {
 /// Response which may be ready or a future.
 #[derive(Debug)]
 #[pin_project]
-pub struct ResponseFuture<F, R, E>(#[pin] futures_util::future::Either<F, std::future::Ready<Result<R, E>>>);
+pub struct ResponseFuture<F, R>(#[pin] futures_util::future::Either<F, std::future::Ready<R>>);
 
-impl<F, R, E> ResponseFuture<F, R, E> {
+impl<F, R> ResponseFuture<F, R> {
 	/// Returns a future that resolves to a response.
-	pub fn future(f: F) -> ResponseFuture<F, R, E> {
+	pub fn future(f: F) -> ResponseFuture<F, R> {
 		ResponseFuture(Either::Left(f))
 	}
 
 	/// Return a response which is already computed.
-	pub fn ready(response: R) -> ResponseFuture<F, R, E> {
-		ResponseFuture(Either::Right(std::future::ready(Ok(response))))
+	pub fn ready(response: R) -> ResponseFuture<F, R> {
+		ResponseFuture(Either::Right(std::future::ready(response)))
 	}
 }
 
-impl<F, R, E> Future for ResponseFuture<F, R, E>
+impl<F, R> Future for ResponseFuture<F, R>
 where
-	F: Future<Output = Result<R, E>>,
+	F: Future<Output = R>,
 {
 	type Output = F::Output;
 

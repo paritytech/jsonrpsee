@@ -31,7 +31,6 @@
 //! The typical use-case for this is when one wants to have
 //! access to HTTP related things.
 
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -43,6 +42,7 @@ use jsonrpsee::core::async_trait;
 use jsonrpsee::core::middleware::{Batch, BatchEntry, BatchEntryErr, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::middleware::http::{HostFilterLayer, ProxyGetRequestLayer};
 use jsonrpsee::server::{
 	ServerConfig, ServerHandle, StopHandle, TowerServiceBuilder, serve_with_graceful_shutdown, stop_channel,
 };
@@ -51,9 +51,53 @@ use jsonrpsee::ws_client::{HeaderValue, WsClientBuilder};
 use jsonrpsee::{MethodResponse, Methods};
 use tokio::net::TcpListener;
 use tower::Service;
-use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::util::SubscriberInitExt;
+
+#[derive(Clone)]
+struct IdentityLayer;
+
+impl<S> tower::Layer<S> for IdentityLayer
+where
+	S: RpcServiceT + Send + Sync + Clone + 'static,
+{
+	type Service = Identity<S>;
+
+	fn layer(&self, inner: S) -> Self::Service {
+		Identity(inner)
+	}
+}
+
+#[derive(Clone)]
+struct Identity<S>(S);
+
+impl<S> RpcServiceT for Identity<S>
+where
+	S: RpcServiceT<
+			MethodResponse = MethodResponse,
+			NotificationResponse = MethodResponse,
+			BatchResponse = MethodResponse,
+		> + Send
+		+ Sync
+		+ Clone
+		+ 'static,
+{
+	type MethodResponse = S::MethodResponse;
+	type BatchResponse = S::BatchResponse;
+	type NotificationResponse = S::NotificationResponse;
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
+		self.0.batch(batch)
+	}
+
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
+		self.0.call(request)
+	}
+
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
+		self.0.notification(n)
+	}
+}
 
 #[derive(Default, Clone, Debug)]
 struct Metrics {
@@ -105,13 +149,20 @@ impl<S> AuthorizationMiddleware<S> {
 
 impl<S> RpcServiceT for AuthorizationMiddleware<S>
 where
-	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Clone + Sync + 'static,
-	S::Response: Send,
+	S: RpcServiceT<
+			MethodResponse = MethodResponse,
+			NotificationResponse = MethodResponse,
+			BatchResponse = MethodResponse,
+		> + Send
+		+ Sync
+		+ Clone
+		+ 'static,
 {
-	type Error = S::Error;
-	type Response = S::Response;
+	type MethodResponse = S::MethodResponse;
+	type BatchResponse = S::BatchResponse;
+	type NotificationResponse = S::NotificationResponse;
 
-	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		let this = self.clone();
 		let auth_ok = this.auth_method_call(&req);
 
@@ -122,13 +173,13 @@ where
 			//
 			// This way the error is returned as a JSON-RPC error
 			if !auth_ok {
-				return Ok(MethodResponse::error(req.id, auth_reject_error()));
+				return MethodResponse::error(req.id, auth_reject_error());
 			}
 			this.inner.call(req).await
 		}
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		// Check the authorization header for each entry in the batch.
 		let entries: Vec<_> = batch
 			.into_iter()
@@ -157,13 +208,10 @@ where
 			})
 			.collect();
 
-		self.inner.batch(Batch::from(entries)).boxed()
+		self.inner.batch(Batch::from(entries))
 	}
 
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		self.inner.notification(n)
 	}
 }
@@ -252,7 +300,12 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 		metrics,
 		svc_builder: jsonrpsee::server::Server::builder()
 			.set_config(ServerConfig::builder().max_connections(33).build())
-			.set_http_middleware(tower::ServiceBuilder::new().layer(CorsLayer::permissive()))
+			.set_http_middleware(
+				tower::ServiceBuilder::new()
+					.layer(CorsLayer::permissive())
+					.layer(ProxyGetRequestLayer::new(vec![("trusted_call", "foo")]).unwrap())
+					.layer(HostFilterLayer::new(["example.com"]).unwrap()),
+			)
 			.to_service_builder(),
 	};
 
@@ -280,18 +333,19 @@ async fn run_server(metrics: Metrics) -> anyhow::Result<ServerHandle> {
 				let transport_label = if is_websocket { "ws" } else { "http" };
 				let PerConnection { methods, stop_handle, metrics, svc_builder } = per_conn2.clone();
 
-				let http_middleware = tower::ServiceBuilder::new().layer(CompressionLayer::new());
 				// NOTE, the rpc middleware must be initialized here to be able to created once per connection
 				// with data from the connection such as the headers in this example
 				let headers = req.headers().clone();
-				let rpc_middleware = RpcServiceBuilder::new().rpc_logger(1024).layer_fn(move |service| {
-					AuthorizationMiddleware { inner: service, headers: headers.clone(), transport_label }
-				});
+				let rpc_middleware = RpcServiceBuilder::new()
+					.rpc_logger(1024)
+					.layer_fn(move |service| AuthorizationMiddleware {
+						inner: service,
+						headers: headers.clone(),
+						transport_label,
+					})
+					.option_layer(Some(IdentityLayer));
 
-				let mut svc = svc_builder
-					.set_http_middleware(http_middleware)
-					.set_rpc_middleware(rpc_middleware)
-					.build(methods, stop_handle);
+				let mut svc = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
 
 				if is_websocket {
 					// Utilize the session close future to know when the actual WebSocket

@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
@@ -678,7 +677,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///    type Error = S::Error;
 	///    type Response = S::Response;
 	///
-	///    fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	///    fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         let count = self.count.clone();
 	///         let service = self.service.clone();
@@ -691,11 +690,11 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///         }
 	///    }
 	///
-	///    fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	///    fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 	///          self.service.batch(batch)
 	///    }
 	///
-	///    fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	///    fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 	///          self.service.notification(notif)
 	///    }
 	///
@@ -970,8 +969,13 @@ pub struct TowerServiceNoHttp<L> {
 impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService>,
-	<RpcMiddleware as Layer<RpcService>>::Service:
-		RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + 'static,
+	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<
+			MethodResponse = MethodResponse,
+			BatchResponse = MethodResponse,
+			NotificationResponse = MethodResponse,
+		> + Send
+		+ Sync
+		+ 'static,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	Body::Error: Into<BoxError>,
 {
@@ -1237,24 +1241,18 @@ pub(crate) async fn handle_rpc_call<S>(
 	extensions: Extensions,
 ) -> MethodResponse
 where
-	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
+	S: RpcServiceT<
+			MethodResponse = MethodResponse,
+			BatchResponse = MethodResponse,
+			NotificationResponse = MethodResponse,
+		> + Send,
 {
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = deserialize_with_ext::call::from_slice(body, &extensions) {
-			match rpc_service.call(req).await {
-				Ok(rp) => rp,
-				Err(err) => match err {},
-			}
+			rpc_service.call(req).await
 		} else if let Ok(notif) = deserialize_with_ext::notif::from_slice::<Notif>(body, &extensions) {
-			match rpc_service.notification(notif).await {
-				Ok(rp) => rp,
-				Err(e) => {
-					// We don't care about if middleware/service encountered if it's an notification.
-					tracing::debug!(target: LOG_TARGET, "Notification error: {:?}", e);
-					return MethodResponse::notification();
-				}
-			}
+			rpc_service.notification(notif).await
 		} else {
 			let (id, code) = prepare_error(body);
 			MethodResponse::error(id, ErrorObject::from(code))
@@ -1296,10 +1294,7 @@ where
 				}
 			}
 
-			match rpc_service.batch(Batch::from(batch)).await {
-				Ok(rp) => rp,
-				Err(e) => match e {},
-			}
+			rpc_service.batch(Batch::from(batch)).await
 		} else {
 			MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError))
 		}

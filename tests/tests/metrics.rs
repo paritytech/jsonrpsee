@@ -61,12 +61,13 @@ pub struct CounterMiddleware<S> {
 
 impl<S> RpcServiceT for CounterMiddleware<S>
 where
-	S: RpcServiceT<Response = MethodResponse> + Send + Sync + Clone + 'static,
+	S: RpcServiceT<MethodResponse = MethodResponse> + Send + Sync + Clone + 'static,
 {
-	type Error = S::Error;
-	type Response = S::Response;
+	type MethodResponse = S::MethodResponse;
+	type NotificationResponse = S::NotificationResponse;
+	type BatchResponse = S::BatchResponse;
 
-	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		let counter = self.counter.clone();
 		let service = self.service.clone();
 
@@ -86,7 +87,7 @@ where
 			{
 				let mut n = counter.lock().unwrap();
 				n.requests.1 += 1;
-				if rp.as_ref().is_ok_and(|r| r.is_success()) {
+				if rp.is_success() {
 					n.calls.get_mut(&name).unwrap().1.push(id.into_owned());
 				}
 			}
@@ -95,14 +96,11 @@ where
 		}
 	}
 
-	fn batch<'a>(&self, _: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, _: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		async { panic!("Not used for tests") }
 	}
 
-	fn notification<'a>(
-		&self,
-		_: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, _: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		async { panic!("Not used for tests") }
 	}
 }

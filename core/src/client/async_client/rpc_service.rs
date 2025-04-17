@@ -1,25 +1,13 @@
 use crate::{
 	client::{
-		BatchMessage, Error as ClientError, FrontToBack, MethodResponse, RequestMessage, SubscriptionMessage,
-		SubscriptionResponse,
+		BatchMessage, Error, FrontToBack, MiddlewareBatchResponse, MiddlewareMethodResponse, MiddlewareNotifResponse,
+		RequestMessage, SubscriptionMessage, SubscriptionResponse,
 	},
 	middleware::{Batch, IsBatch, IsSubscription, Notification, Request, RpcServiceT},
 };
 
 use jsonrpsee_types::{Response, ResponsePayload};
 use tokio::sync::{mpsc, oneshot};
-
-/// RpcService error.
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-	/// Client error.
-	#[error(transparent)]
-	Client(#[from] ClientError),
-	#[error("Fetch from backend")]
-	/// Internal error state when the underlying channel is closed
-	/// and the error reason needs to be fetched from the backend.
-	FetchFromBackend,
-}
 
 impl From<mpsc::error::SendError<FrontToBack>> for Error {
 	fn from(_: mpsc::error::SendError<FrontToBack>) -> Self {
@@ -47,14 +35,15 @@ impl RpcService {
 }
 
 impl RpcServiceT for RpcService {
-	type Response = MethodResponse;
-	type Error = Error;
+	type MethodResponse = Result<MiddlewareMethodResponse, Error>;
+	type BatchResponse = Result<MiddlewareBatchResponse, Error>;
+	type NotificationResponse = Result<MiddlewareNotifResponse, Error>;
 
-	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		let tx = self.0.clone();
 
 		async move {
-			let raw = serde_json::to_string(&request).map_err(client_err)?;
+			let raw = serde_json::to_string(&request)?;
 
 			match request.extensions.get::<IsSubscription>() {
 				Some(sub) => {
@@ -72,15 +61,11 @@ impl RpcServiceT for RpcService {
 
 					let (subscribe_rx, sub_id) = send_back_rx.await??;
 
-					let s = serde_json::value::to_raw_value(&sub_id).map_err(client_err)?;
+					let rp = serde_json::value::to_raw_value(&sub_id)?;
 
-					Ok(MethodResponse::subscription(
-						SubscriptionResponse {
-							rp: Response::new(ResponsePayload::success(s), request.id.clone().into_owned()).into(),
-							sub_id,
-							stream: subscribe_rx,
-						},
-						request.extensions,
+					Ok(MiddlewareMethodResponse::subscription_response(
+						Response::new(ResponsePayload::success(rp), request.id.clone().into_owned()).into(),
+						SubscriptionResponse { sub_id, stream: subscribe_rx },
 					))
 				}
 				None => {
@@ -92,21 +77,23 @@ impl RpcServiceT for RpcService {
 						id: request.id.clone().into_owned(),
 					}))
 					.await?;
-					let rp = send_back_rx.await?.map_err(client_err)?;
+					let mut rp = send_back_rx.await??;
 
-					Ok(MethodResponse::method_call(rp, request.extensions))
+					rp.0.extensions = request.extensions.clone();
+
+					Ok(MiddlewareMethodResponse::response(rp))
 				}
 			}
 		}
 	}
 
-	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		let tx = self.0.clone();
 
 		async move {
 			let (send_back_tx, send_back_rx) = oneshot::channel();
 
-			let raw = serde_json::to_string(&batch).map_err(client_err)?;
+			let raw = serde_json::to_string(&batch)?;
 			let id_range = batch
 				.extensions()
 				.get::<IsBatch>()
@@ -114,26 +101,19 @@ impl RpcServiceT for RpcService {
 				.expect("Batch ID range must be set in extensions");
 
 			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx })).await?;
-			let json = send_back_rx.await?.map_err(client_err)?;
+			let json = send_back_rx.await??;
 
-			Ok(MethodResponse::batch(json, batch.into_extensions()))
+			Ok(json)
 		}
 	}
 
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		let tx = self.0.clone();
 
 		async move {
-			let raw = serde_json::to_string(&n).map_err(client_err)?;
+			let raw = serde_json::to_string(&n)?;
 			tx.send(FrontToBack::Notification(raw)).await?;
-			Ok(MethodResponse::notification(n.extensions))
+			Ok(MiddlewareNotifResponse::from(n.extensions))
 		}
 	}
-}
-
-fn client_err(err: impl Into<ClientError>) -> Error {
-	Error::Client(err.into())
 }

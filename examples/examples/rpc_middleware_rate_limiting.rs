@@ -109,13 +109,20 @@ impl<S> RateLimit<S> {
 
 impl<S> RpcServiceT for RateLimit<S>
 where
-	S: Send + RpcServiceT<Response = MethodResponse> + 'static,
-	S::Error: Send,
+	S: RpcServiceT<
+			MethodResponse = MethodResponse,
+			BatchResponse = MethodResponse,
+			NotificationResponse = MethodResponse,
+		> + Send
+		+ Sync
+		+ Clone
+		+ 'static,
 {
-	type Error = S::Error;
-	type Response = S::Response;
+	type MethodResponse = S::MethodResponse;
+	type NotificationResponse = S::NotificationResponse;
+	type BatchResponse = S::BatchResponse;
 
-	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		if self.rate_limit_deny() {
 			ResponseFuture::ready(MethodResponse::error(req.id, ErrorObject::borrowed(-32000, "RPC rate limit", None)))
 		} else {
@@ -123,7 +130,7 @@ where
 		}
 	}
 
-	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		// If the rate limit is reached then we modify each entry
 		// in the batch to be a request with an error.
 		//
@@ -145,10 +152,7 @@ where
 		self.service.batch(batch)
 	}
 
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		if self.rate_limit_deny() {
 			// Notifications are not expected to return a response so just ignore
 			// if the rate limit is reached.

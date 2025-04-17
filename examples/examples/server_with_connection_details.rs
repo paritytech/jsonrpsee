@@ -49,26 +49,27 @@ pub trait Rpc {
 
 struct LoggingMiddleware<S>(S);
 
-impl<S: RpcServiceT> RpcServiceT for LoggingMiddleware<S> {
-	type Error = S::Error;
-	type Response = S::Response;
+impl<S> RpcServiceT for LoggingMiddleware<S>
+where
+	S: RpcServiceT,
+{
+	type MethodResponse = S::MethodResponse;
+	type NotificationResponse = S::NotificationResponse;
+	type BatchResponse = S::BatchResponse;
 
-	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		tracing::info!("Received request: {:?}", request);
 		assert!(request.extensions().get::<ConnectionId>().is_some());
 
 		self.0.call(request)
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		tracing::info!("Received batch: {:?}", batch);
 		self.0.batch(batch)
 	}
 
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		tracing::info!("Received notif: {:?}", n);
 		self.0.notification(n)
 	}

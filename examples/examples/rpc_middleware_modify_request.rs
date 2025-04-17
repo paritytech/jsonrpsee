@@ -66,17 +66,18 @@ pub struct ModifyRequestIf<S>(S);
 
 impl<S> RpcServiceT for ModifyRequestIf<S>
 where
-	S: Send + Sync + RpcServiceT,
+	S: RpcServiceT + Send + Sync + Clone + 'static,
 {
-	type Error = S::Error;
-	type Response = S::Response;
+	type MethodResponse = S::MethodResponse;
+	type NotificationResponse = S::NotificationResponse;
+	type BatchResponse = S::BatchResponse;
 
-	fn call<'a>(&self, mut req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, mut req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		modify_method_call(&mut req);
 		self.0.call(req)
 	}
 
-	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		for call in batch.iter_mut() {
 			match call {
 				Ok(BatchEntry::Call(call)) => {
@@ -96,7 +97,7 @@ where
 	fn notification<'a>(
 		&self,
 		mut n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		modify_notif(&mut n);
 		self.0.notification(n)
 	}
