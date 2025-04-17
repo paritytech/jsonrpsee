@@ -53,6 +53,46 @@ use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::types::Request;
 use jsonrpsee::ws_client::WsClientBuilder;
 
+#[derive(Clone)]
+struct IdentityLayer;
+
+impl<S> tower::Layer<S> for IdentityLayer
+where
+	S: RpcServiceT + Send + Sync + Clone + 'static,
+{
+	type Service = Identity<S>;
+
+	fn layer(&self, inner: S) -> Self::Service {
+		Identity(inner)
+	}
+}
+
+#[derive(Clone)]
+struct Identity<S>(S);
+
+impl<S> RpcServiceT for Identity<S>
+where
+	S: RpcServiceT + Send + Sync + Clone + 'static,
+{
+	type Response = S::Response;
+	type Error = S::Error;
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.0.batch(batch)
+	}
+
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.0.call(request)
+	}
+
+	fn notification<'a>(
+		&self,
+		n: Notification<'a>,
+	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+		self.0.notification(n)
+	}
+}
+
 // It's possible to access the connection ID
 // by using the low-level API.
 #[derive(Clone)]
@@ -209,7 +249,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		// This state is created per connection.
 		.layer_fn(|service| CallsPerConn { service, count: Default::default(), role: "server" })
 		// This state is shared by all connections.
-		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone(), role: "server" });
+		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone(), role: "server" })
+		// Optional layer that does not do anything, useful if have an optional layer.
+		.option_layer(Some(IdentityLayer));
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _, _| "lo")?;

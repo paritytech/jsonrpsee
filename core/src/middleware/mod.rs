@@ -2,7 +2,12 @@
 
 pub mod layer;
 
-use futures_util::future::{Either, Future};
+use std::borrow::Cow;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use futures_util::future::Either;
 use jsonrpsee_types::{ErrorObject, Id};
 use pin_project::pin_project;
 use serde::Serialize;
@@ -10,10 +15,6 @@ use serde::ser::SerializeSeq;
 use serde_json::value::RawValue;
 use tower::layer::LayerFn;
 use tower::layer::util::{Identity, Stack};
-
-use std::borrow::Cow;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
 /// Re-export types from `jsonrpsee_types` crate for convenience.
 pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, RawValue>>>;
@@ -350,9 +351,10 @@ impl<L> RpcServiceBuilder<L> {
 	/// Optionally add a new layer `T` to the [`RpcServiceBuilder`].
 	///
 	/// See the documentation for [`tower::ServiceBuilder::option_layer`] for more details.
-	pub fn option_layer<T>(self, layer: Option<T>) -> RpcServiceBuilder<Stack<Either<T, Identity>, L>> {
-		let layer = if let Some(layer) = layer { Either::Left(layer) } else { Either::Right(Identity::new()) };
-		self.layer(layer)
+	pub fn option_layer<T>(self, layer: Option<T>) -> RpcServiceBuilder<Stack<layer::Either<T, Identity>, L>> {
+		let layer =
+			if let Some(layer) = layer { layer::Either::Left(layer) } else { layer::Either::Right(Identity::new()) };
+		RpcServiceBuilder(self.0.layer(layer))
 	}
 
 	/// Add a new layer `T` to the [`RpcServiceBuilder`].
