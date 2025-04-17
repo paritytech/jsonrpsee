@@ -66,7 +66,7 @@ use tokio::sync::{mpsc, oneshot};
 use tower::layer::util::Identity;
 
 use self::utils::{InactivityCheck, IntervalStream};
-use super::{FrontToBack, IdKind, MethodResponse, RequestIdManager, generate_batch_id_range, subscription_channel};
+use super::{FrontToBack, IdKind, MethodResponse, RequestIdManager, subscription_channel};
 
 pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Box<JsonRawValue>>>;
 
@@ -536,22 +536,23 @@ where
 	{
 		async {
 			let batch = batch.build()?;
-			let id = self.id_manager.next_request_id();
-			let id_range = generate_batch_id_range(id, batch.len() as u64)?;
+			let mut ids = Vec::new();
 
 			let mut b = Batch::with_capacity(batch.len());
 
-			for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
+			for (method, params) in batch.into_iter() {
+				let id = self.id_manager.next_request_id();
 				b.push(Request {
 					jsonrpc: TwoPointZero,
-					id: self.id_manager.as_id_kind().into_id(id),
+					id: id.clone(),
 					method: method.into(),
 					params: params.map(StdCow::Owned),
 					extensions: Extensions::new(),
 				});
+				ids.push(id);
 			}
 
-			b.extensions_mut().insert(IsBatch { id_range });
+			b.extensions_mut().insert(IsBatch { ids });
 
 			let fut = self.service.batch(b);
 			let json_values = self.run_future_until_timeout(fut).await?.into_batch().expect("Batch response");
@@ -709,27 +710,21 @@ fn handle_backend_messages<R: TransportReceiverT>(
 			}
 			Some(b'[') => {
 				// Batch response.
-				if let Ok(raw_responses) = serde_json::from_slice::<Vec<&JsonRawValue>>(raw) {
+				if let Ok(raw_responses) = serde_json::from_slice::<Vec<Box<JsonRawValue>>>(raw) {
 					let mut batch = Vec::with_capacity(raw_responses.len());
 
-					let mut range = None;
+					let mut ids = Vec::new();
 					let mut got_notif = false;
 
 					for r in raw_responses {
-						if let Ok(response) = serde_json::from_str::<Response<_>>(r.get()) {
-							let id = response.id.try_parse_inner_as_number()?;
+						let json_string = r.get().to_string();
+
+						if let Ok(response) = serde_json::from_str::<Response<_>>(&json_string) {
+							let id = response.id.clone().into_owned();
+							// let result = ResponseSuccess::try_from(response).map(|s| s.result);
 							batch.push(response.into_owned().into());
-
-							let r = range.get_or_insert(id..id);
-
-							if id < r.start {
-								r.start = id;
-							}
-
-							if id > r.end {
-								r.end = id;
-							}
-						} else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(r.get()) {
+							ids.push(id);
+						} else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&json_string) {
 							got_notif = true;
 							if let Some(sub_id) = process_subscription_response(&mut manager.lock(), response) {
 								messages.push(FrontToBack::SubscriptionClosed(sub_id));
@@ -737,7 +732,7 @@ fn handle_backend_messages<R: TransportReceiverT>(
 						} else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
 							got_notif = true;
 							process_subscription_close_response(&mut manager.lock(), response);
-						} else if let Ok(notif) = serde_json::from_str::<Notification>(r.get()) {
+						} else if let Ok(notif) = serde_json::from_str::<Notification>(&json_string) {
 							got_notif = true;
 							process_notification(&mut manager.lock(), notif);
 						} else {
@@ -745,10 +740,8 @@ fn handle_backend_messages<R: TransportReceiverT>(
 						};
 					}
 
-					if let Some(mut range) = range {
-						// the range is exclusive so need to add one.
-						range.end += 1;
-						process_batch_response(&mut manager.lock(), batch, range)?;
+					if ids.len().gt(&0) {
+						process_batch_response(&mut manager.lock(), batch, ids)?;
 					} else if !got_notif {
 						return Err(EmptyBatchRequest.into());
 					}

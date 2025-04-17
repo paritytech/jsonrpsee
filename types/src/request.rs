@@ -27,7 +27,10 @@
 //! Types to handle JSON-RPC requests according to the [spec](https://www.jsonrpc.org/specification#request-object).
 //! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
 
-use std::borrow::Cow;
+use std::{
+	borrow::Cow,
+	fmt::{Debug, Formatter, Result},
+};
 
 use crate::{
 	Params,
@@ -154,6 +157,35 @@ impl<'a, T> Notification<'a, T> {
 	/// Returns a reference to the associated extensions.
 	pub fn extensions_mut(&mut self) -> &mut Extensions {
 		&mut self.extensions
+	}
+}
+
+/// Custom id generator function
+pub struct IdGeneratorFn(fn() -> Id<'static>);
+
+impl IdGeneratorFn {
+	/// Creates a new `IdGeneratorFn` from a function pointer.
+	pub fn new(generator: fn() -> Id<'static>) -> Self {
+		IdGeneratorFn(generator)
+	}
+
+	/// Calls the id generator function
+	pub fn call(&self) -> Id<'static> {
+		(self.0)()
+	}
+}
+
+impl Copy for IdGeneratorFn {}
+
+impl Clone for IdGeneratorFn {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+
+impl Debug for IdGeneratorFn {
+	fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+		f.write_str("<CustomIdGenerator>")
 	}
 }
 

@@ -201,8 +201,8 @@ impl IsSubscription {
 /// An extension type for the [`RpcServiceT::batch`] for the expected id range of the batch entries.
 #[derive(Debug, Clone)]
 pub struct IsBatch {
-	/// The range of ids for the batch entries.
-	pub id_range: std::ops::Range<u64>,
+	/// The ids for the batch entries.
+	pub ids: Vec<Id<'static>>,
 }
 
 /// A batch entry specific for the [`RpcServiceT::batch`] method to support both

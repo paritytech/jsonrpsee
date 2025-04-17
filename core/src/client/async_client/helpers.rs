@@ -44,7 +44,6 @@ use jsonrpsee_types::{
 	TwoPointZero,
 };
 use std::borrow::Cow;
-use std::ops::Range;
 
 /// Attempts to process a batch response.
 ///
@@ -52,34 +51,29 @@ use std::ops::Range;
 pub(crate) fn process_batch_response(
 	manager: &mut RequestManager,
 	rps: Vec<RawResponseOwned>,
-	range: Range<u64>,
+	ids: Vec<Id<'static>>,
 ) -> Result<(), InvalidRequestId> {
 	let mut responses = Vec::with_capacity(rps.len());
 
-	let start_idx = range.start;
-
-	let batch_state = match manager.complete_pending_batch(range.clone()) {
+	let batch_state = match manager.complete_pending_batch(ids.clone()) {
 		Some(state) => state,
 		None => {
 			tracing::debug!(target: LOG_TARGET, "Received unknown batch response");
-			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", range)));
+			return Err(InvalidRequestId::NotPendingRequest(format!("{:?}", ids)));
 		}
 	};
 
-	for _ in range {
+	for _ in &ids {
 		let err_obj = ErrorObject::borrowed(0, "", None);
 		responses.push(Response::new(jsonrpsee_types::ResponsePayload::error(err_obj), Id::Null).into());
 	}
 
 	for rp in rps {
-		let id = rp.id().try_parse_inner_as_number()?;
-		let maybe_elem =
-			id.checked_sub(start_idx).and_then(|p| p.try_into().ok()).and_then(|p: usize| responses.get_mut(p));
-
-		if let Some(elem) = maybe_elem {
-			*elem = rp;
+		let response_id = rp.id();
+		if let Some(pos) = ids.iter().position(|id| id == response_id) {
+			responses[pos] = rp.into()
 		} else {
-			return Err(InvalidRequestId::NotPendingRequest(rp.id().to_string()));
+			return Err(InvalidRequestId::NotPendingRequest(response_id.to_string()));
 		}
 	}
 

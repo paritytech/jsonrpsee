@@ -107,13 +107,13 @@ impl RpcServiceT for RpcService {
 			let (send_back_tx, send_back_rx) = oneshot::channel();
 
 			let raw = serde_json::to_string(&batch).map_err(client_err)?;
-			let id_range = batch
+			let ids = batch
 				.extensions()
 				.get::<IsBatch>()
-				.map(|b| b.id_range.clone())
+				.map(|b| b.ids.clone())
 				.expect("Batch ID range must be set in extensions");
 
-			tx.send(FrontToBack::Batch(BatchMessage { raw, ids: id_range, send_back: send_back_tx })).await?;
+			tx.send(FrontToBack::Batch(BatchMessage { raw, ids, send_back: send_back_tx })).await?;
 			let json = send_back_rx.await?.map_err(client_err)?;
 
 			Ok(MethodResponse::batch(json, batch.into_extensions()))
