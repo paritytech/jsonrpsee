@@ -250,7 +250,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.layer_fn(|service| CallsPerConn { service, count: Default::default(), role: "server" })
 		// This state is shared by all connections.
 		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone(), role: "server" })
-		// Optional layer that does not do anything, useful if have an optional layer.
+		// Optional layer that does nothing, just an example to be useful if one has an optional layer.
 		.option_layer(Some(IdentityLayer));
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
