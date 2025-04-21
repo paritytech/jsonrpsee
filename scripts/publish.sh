@@ -6,7 +6,6 @@
 set -eu
 
 ORDER=(types proc-macros core client/http-client client/transport client/ws-client client/wasm-client server jsonrpsee)
-DIR=$(pwd)
 
 function read_toml () {
 	NAME=""
