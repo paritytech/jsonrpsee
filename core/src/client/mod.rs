@@ -34,10 +34,10 @@ cfg_async_client! {
 pub mod error;
 
 pub use error::Error;
+use jsonrpsee_types::request::IdGeneratorFn;
 
 use std::fmt;
 use std::future::Future;
-use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -338,7 +338,7 @@ struct BatchMessage {
 	/// Serialized batch request.
 	raw: String,
 	/// Request IDs.
-	ids: Range<u64>,
+	ids: Vec<Id<'static>>,
 	/// One-shot channel over which we send back the result of this request.
 	send_back: oneshot::Sender<Result<Vec<RawResponseOwned>, InvalidRequestId>>,
 }
@@ -473,7 +473,17 @@ impl RequestIdManager {
 
 	/// Attempts to get the next request ID.
 	pub fn next_request_id(&self) -> Id<'static> {
-		self.id_kind.into_id(self.current_id.next())
+		match self.id_kind {
+			IdKind::Number => {
+				let id = self.current_id.next();
+				Id::Number(id)
+			}
+			IdKind::String => {
+				let id = self.current_id.next();
+				Id::Str(format!("{id}").into())
+			}
+			IdKind::Custom(generator) => generator.call(),
+		}
 	}
 
 	/// Get a handle to the `IdKind`.
@@ -489,16 +499,8 @@ pub enum IdKind {
 	String,
 	/// Number.
 	Number,
-}
-
-impl IdKind {
-	/// Generate an `Id` from number.
-	pub fn into_id(self, id: u64) -> Id<'static> {
-		match self {
-			IdKind::Number => Id::Number(id),
-			IdKind::String => Id::Str(format!("{id}").into()),
-		}
-	}
+	/// Custom generator.
+	Custom(IdGeneratorFn),
 }
 
 #[derive(Debug)]
@@ -515,16 +517,6 @@ impl CurrentId {
 			.try_into()
 			.expect("usize -> u64 infallible, there are no CPUs > 64 bits; qed")
 	}
-}
-
-/// Generate a range of IDs to be used in a batch request.
-pub fn generate_batch_id_range(id: Id, len: u64) -> Result<Range<u64>, Error> {
-	let id_start = id.try_parse_inner_as_number()?;
-	let id_end = id_start
-		.checked_add(len)
-		.ok_or_else(|| Error::Custom("BatchID range wrapped; restart the client or try again later".to_string()))?;
-
-	Ok(id_start..id_end)
 }
 
 /// Represent a single entry in a batch response.

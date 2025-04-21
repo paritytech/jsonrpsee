@@ -36,7 +36,6 @@ use hyper::body::Bytes;
 use hyper::http::{Extensions, HeaderMap};
 use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
-	generate_batch_id_range,
 };
 use jsonrpsee_core::middleware::layer::{RpcLogger, RpcLoggerLayer};
 use jsonrpsee_core::middleware::{Batch, RpcServiceBuilder, RpcServiceT};
@@ -415,20 +414,19 @@ where
 				None => None,
 			};
 			let batch = batch.build()?;
-			let id = self.id_manager.next_request_id();
-			let id_range = generate_batch_id_range(id, batch.len() as u64)?;
+			let mut ids = Vec::new();
 
 			let mut batch_request = Batch::with_capacity(batch.len());
-			for ((method, params), id) in batch.into_iter().zip(id_range.clone()) {
-				let id = self.id_manager.as_id_kind().into_id(id);
-				let req = Request {
+			for (method, params) in batch.into_iter() {
+				let id = self.id_manager.next_request_id();
+				batch_request.push(Request {
 					jsonrpc: TwoPointZero,
 					method: method.into(),
 					params: params.map(StdCow::Owned),
-					id,
+					id: id.clone(),
 					extensions: Extensions::new(),
-				};
-				batch_request.push(req);
+				});
+				ids.push(id);
 			}
 
 			let rp = run_future_until_timeout(self.service.batch(batch_request), self.request_timeout).await?;
@@ -444,7 +442,7 @@ where
 			}
 
 			for rp in json_rps.into_iter() {
-				let id = rp.id().try_parse_inner_as_number()?;
+				let id = rp.id().clone();
 
 				let res = match ResponseSuccess::try_from(rp.into_inner()) {
 					Ok(r) => {
@@ -458,13 +456,8 @@ where
 					}
 				};
 
-				let maybe_elem = id
-					.checked_sub(id_range.start)
-					.and_then(|p| p.try_into().ok())
-					.and_then(|p: usize| batch_response.get_mut(p));
-
-				if let Some(elem) = maybe_elem {
-					*elem = res;
+				if let Some(pos) = ids.iter().position(|stored_id| stored_id == &id) {
+					batch_response[pos] = res;
 				} else {
 					return Err(InvalidRequestId::NotPendingRequest(id.to_string()).into());
 				}
