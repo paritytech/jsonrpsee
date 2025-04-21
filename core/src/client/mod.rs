@@ -37,7 +37,7 @@ pub use error::Error;
 
 use std::fmt;
 use std::future::Future;
-use std::ops::Range;
+use std::ops::{Deref, Range};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -760,6 +760,14 @@ impl Serialize for MiddlewareMethodResponse {
 		S: serde::Serializer,
 	{
 		self.rp.serialize(serializer)
+	}
+}
+
+impl Deref for MiddlewareMethodResponse {
+	type Target = RawResponseOwned;
+
+	fn deref(&self) -> &Self::Target {
+		&self.rp
 	}
 }
 

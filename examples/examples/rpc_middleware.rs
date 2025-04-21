@@ -237,8 +237,12 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let global_cnt = Arc::new(AtomicUsize::new(0));
 
 	let rpc_middleware = RpcServiceBuilder::new()
-		.rpc_logger(1024)
-		// Optional layer that does not do anything, useful if have an optional layer.
+		.layer_fn(|service| Logger { service, role: "server" })
+		// This state is created per connection.
+		.layer_fn(|service| CallsPerConn { service, count: Default::default(), role: "server" })
+		// This state is shared by all connections.
+		.layer_fn(move |service| GlobalCalls { service, count: global_cnt.clone(), role: "server" })
+		// Optional layer that does nothing, just an example to be useful if one has an optional layer.
 		.option_layer(Some(IdentityLayer));
 	let server = Server::builder().set_rpc_middleware(rpc_middleware).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
