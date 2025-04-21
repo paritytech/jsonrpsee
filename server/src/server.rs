@@ -99,7 +99,7 @@ impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 impl<HttpMiddleware, RpcMiddleware, Body> Server<HttpMiddleware, RpcMiddleware>
 where
 	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
-	for<'a> <RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT,
+	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
 		Send + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
@@ -933,7 +933,7 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 
 impl<RequestBody, ResponseBody, RpcMiddleware, HttpMiddleware> Service<HttpRequest<RequestBody>> for TowerService<RpcMiddleware, HttpMiddleware>
 where
-	RpcMiddleware: for<'a> tower::Layer<RpcService> + Clone,
+	RpcMiddleware: tower::Layer<RpcService> + Clone,
 	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT + Send + Sync + 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
@@ -969,7 +969,7 @@ pub struct TowerServiceNoHttp<L> {
 
 impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcMiddleware>
 where
-	RpcMiddleware: for<'a> tower::Layer<RpcService>,
+	RpcMiddleware: tower::Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service:
 		RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + 'static,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
@@ -1238,7 +1238,6 @@ pub(crate) async fn handle_rpc_call<S>(
 ) -> MethodResponse
 where
 	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
-	<S as RpcServiceT>::Error: std::fmt::Debug,
 {
 	// Single request or notification
 	if is_single {

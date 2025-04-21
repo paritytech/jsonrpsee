@@ -44,7 +44,7 @@ use crate::client::{
 	SubscriptionKind, TransportReceiverT, TransportSenderT,
 };
 use crate::error::RegisterMethodError;
-use crate::middleware::layer::RpcLoggerLayer;
+use crate::middleware::layer::{RpcLogger, RpcLoggerLayer};
 use crate::middleware::{Batch, IsBatch, IsSubscription, Request, RpcServiceBuilder, RpcServiceT};
 use crate::params::{BatchRequestBuilder, EmptyBatchRequest};
 use crate::traits::ToRpcParams;
@@ -429,7 +429,7 @@ impl<L> ClientBuilder<L> {
 
 /// Generic asynchronous client.
 #[derive(Debug)]
-pub struct Client<L = Identity> {
+pub struct Client<L = RpcLogger<RpcService>> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
 	error: ErrorFromBack,
