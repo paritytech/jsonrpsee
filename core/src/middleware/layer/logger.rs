@@ -62,6 +62,8 @@ pub struct RpcLogger<S> {
 impl<S> RpcServiceT for RpcLogger<S>
 where
 	S: RpcServiceT + Send + Sync + Clone + 'static,
+	S::MethodResponse: ToJson,
+	S::BatchResponse: ToJson,
 {
 	type MethodResponse = S::MethodResponse;
 	type NotificationResponse = S::NotificationResponse;

@@ -297,11 +297,11 @@ impl<'a> BatchEntry<'a> {
 /// explain that.
 pub trait RpcServiceT {
 	/// Response type for `RpcServiceT::call`.
-	type MethodResponse: ToJson;
+	type MethodResponse;
 	/// Response type for `RpcServiceT::notification`.
-	type NotificationResponse: ToJson;
+	type NotificationResponse;
 	/// Response type for `RpcServiceT::batch`.
-	type BatchResponse: ToJson;
+	type BatchResponse;
 
 	/// Processes a single JSON-RPC call, which may be a subscription or regular call.
 	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a;

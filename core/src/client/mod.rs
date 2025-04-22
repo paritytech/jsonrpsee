@@ -820,15 +820,6 @@ impl MiddlewareNotifResponse {
 	}
 }
 
-impl Serialize for MiddlewareNotifResponse {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		Ok("null".serialize(serializer)?)
-	}
-}
-
 impl<T: Serialize> ToJson for Result<T, Error> {
 	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
 		match self {
