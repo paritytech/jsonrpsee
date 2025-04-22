@@ -463,7 +463,7 @@ impl<L> Client<L> {
 
 		match futures_util::future::select(fut, futures_timer::Delay::new(self.request_timeout)).await {
 			Either::Left((Ok(r), _)) => Ok(r),
-			Either::Left((Err(Error::FetchFromBackend), _)) => Err(self.on_disconnect().await),
+			Either::Left((Err(Error::ServiceDisconnect), _)) => Err(self.on_disconnect().await),
 			Either::Left((Err(e), _)) => Err(e),
 			Either::Right(_) => Err(Error::RequestTimeout),
 		}

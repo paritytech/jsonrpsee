@@ -11,13 +11,13 @@ use tokio::sync::{mpsc, oneshot};
 
 impl From<mpsc::error::SendError<FrontToBack>> for Error {
 	fn from(_: mpsc::error::SendError<FrontToBack>) -> Self {
-		Error::FetchFromBackend
+		Error::ServiceDisconnect
 	}
 }
 
 impl From<oneshot::error::RecvError> for Error {
 	fn from(_: oneshot::error::RecvError) -> Self {
-		Error::FetchFromBackend
+		Error::ServiceDisconnect
 	}
 }
 

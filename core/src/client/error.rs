@@ -66,8 +66,15 @@ pub enum Error {
 	/// The error returned when registering a method or subscription failed.
 	#[error(transparent)]
 	RegisterMethod(#[from] RegisterMethodError),
-	#[error("Fetch from backend")]
-	/// Internal error state when the underlying channel is closed
-	/// and the error reason needs to be fetched from the backend.
-	FetchFromBackend,
+	/// An internal state when the underlying RpcService
+	/// got disconnected and the error must be fetched
+	/// from the backend.
+	//
+	// NOTE: This is a workaround where an error occurred in
+	// underlying RpcService implementation in the async client
+	// but we don't want to expose different error types for
+	// ergonomics when writing middleware.
+	#[error("RPC service disconnected")]
+	#[doc(hidden)]
+	ServiceDisconnect,
 }
