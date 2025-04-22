@@ -400,7 +400,7 @@ async fn graceful_shutdown<S>(
 /// ) -> HttpResponse
 /// where
 ///     L: tower::Layer<RpcService> + 'static,
-///     <L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send + Sync + 'static,
+///     <L as tower::Layer<RpcService>>::Service: RpcServiceT<MethodResponse = MethodResponse, BatchResponse = MethodResponse, NotificationResponse = MethodResponse> + Send + Sync + 'static,
 /// {
 ///   match ws::connect(req, server_cfg, methods, conn, rpc_middleware).await {
 ///     Ok((rp, conn_fut)) => {

@@ -154,8 +154,9 @@ pub async fn server() -> SocketAddr {
 	where
 		S: RpcServiceT,
 	{
-		type Error = S::Error;
-		type Response = S::Response;
+		type MethodResponse = S::MethodResponse;
+		type BatchResponse = S::BatchResponse;
+		type NotificationResponse = S::NotificationResponse;
 
 		fn call<'a>(
 			&self,
@@ -165,14 +166,14 @@ pub async fn server() -> SocketAddr {
 			self.inner.call(request)
 		}
 
-		fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
+		fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 			self.inner.batch(batch)
 		}
 
 		fn notification<'a>(
 			&self,
 			notif: Notification<'a>,
-		) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
+		) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 			self.inner.notification(notif)
 		}
 	}

@@ -674,8 +674,9 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// impl<S> RpcServiceT for MyMiddleware<S>
 	/// where S: RpcServiceT + Send + Sync + Clone + 'static,
 	/// {
-	///    type Error = S::Error;
-	///    type Response = S::Response;
+	///    type MethodResponse = S::MethodResponse;
+	///    type BatchResponse = S::BatchResponse;
+	///    type NotificationResponse = S::NotificationResponse;
 	///
 	///    fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
@@ -690,11 +691,11 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///         }
 	///    }
 	///
-	///    fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
+	///    fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 	///          self.service.batch(batch)
 	///    }
 	///
-	///    fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
+	///    fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 	///          self.service.notification(notif)
 	///    }
 	///
