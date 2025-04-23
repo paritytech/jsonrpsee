@@ -79,7 +79,7 @@ impl RpcServiceT for RpcService {
 					.await?;
 					let mut rp = send_back_rx.await??;
 
-					rp.0.extensions = request.extensions.clone();
+					rp.0.extensions = request.extensions;
 
 					Ok(MiddlewareMethodResponse::response(rp))
 				}
