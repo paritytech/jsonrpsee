@@ -26,7 +26,8 @@
 
 //! RPC Logger layer.
 
-use crate::middleware::{Batch, Notification, RpcServiceT, ToJson};
+use crate::middleware::{Batch, Notification, RpcServiceT};
+use crate::traits::ToJson;
 
 use futures_util::Future;
 use jsonrpsee_types::Request;

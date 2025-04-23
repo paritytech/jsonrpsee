@@ -321,12 +321,6 @@ pub trait RpcServiceT {
 	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a;
 }
 
-/// Interface for types that can be serialized into JSON.
-pub trait ToJson {
-	/// Convert the type into a JSON value.
-	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error>;
-}
-
 /// Similar to [`tower::ServiceBuilder`] but doesn't
 /// support any tower middleware implementations.
 #[derive(Debug, Clone)]

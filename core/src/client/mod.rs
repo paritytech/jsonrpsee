@@ -42,11 +42,9 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::task::{self, Poll};
-use tokio::sync::mpsc::error::TrySendError;
 
-use crate::middleware::ToJson;
 use crate::params::BatchRequestBuilder;
-use crate::traits::ToRpcParams;
+use crate::traits::{ToJson, ToRpcParams};
 
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
@@ -55,6 +53,7 @@ use jsonrpsee_types::{ErrorObject, Id, InvalidRequestId, SubscriptionId};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::value::RawValue;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{mpsc, oneshot};
 
 /// Shared state whether a subscription has lagged or not.
