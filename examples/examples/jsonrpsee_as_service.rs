@@ -73,14 +73,7 @@ struct Identity<S>(S);
 
 impl<S> RpcServiceT for Identity<S>
 where
-	S: RpcServiceT<
-			MethodResponse = MethodResponse,
-			NotificationResponse = MethodResponse,
-			BatchResponse = MethodResponse,
-		> + Send
-		+ Sync
-		+ Clone
-		+ 'static,
+	S: RpcServiceT + Send + Sync + Clone + 'static,
 {
 	type MethodResponse = S::MethodResponse;
 	type BatchResponse = S::BatchResponse;
@@ -149,14 +142,9 @@ impl<S> AuthorizationMiddleware<S> {
 
 impl<S> RpcServiceT for AuthorizationMiddleware<S>
 where
-	S: RpcServiceT<
-			MethodResponse = MethodResponse,
-			NotificationResponse = MethodResponse,
-			BatchResponse = MethodResponse,
-		> + Send
-		+ Sync
-		+ Clone
-		+ 'static,
+	// We need to specify the concrete types here because otherwise we return an error or specific response
+	// in the middleware implementation.
+	S: RpcServiceT<MethodResponse = MethodResponse, BatchResponse = MethodResponse> + Send + Sync + Clone + 'static,
 {
 	type MethodResponse = S::MethodResponse;
 	type BatchResponse = S::BatchResponse;
@@ -211,7 +199,7 @@ where
 		self.inner.batch(Batch::from(entries))
 	}
 
-	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		self.inner.notification(n)
 	}
 }
