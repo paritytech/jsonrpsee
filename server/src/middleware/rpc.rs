@@ -32,7 +32,6 @@ pub use jsonrpsee_core::server::MethodResponse;
 use std::sync::Arc;
 
 use crate::ConnectionId;
-use futures_util::future::FutureExt;
 use jsonrpsee_core::server::{
 	BatchResponseBuilder, BoundedSubscriptions, MethodCallback, MethodSink, Methods, SubscriptionState,
 };
@@ -91,18 +90,19 @@ impl RpcServiceT for RpcService {
 			None => {
 				let rp =
 					MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)).with_extensions(extensions);
-				async move { rp }.boxed()
+				ResponseFuture::ready(rp)
 			}
 			Some((_name, method)) => match method {
 				MethodCallback::Async(callback) => {
 					let params = params.into_owned();
 					let id = id.into_owned();
+					let fut = (callback)(id, params, conn_id, max_response_body_size, extensions);
 
-					(callback)(id, params, conn_id, max_response_body_size, extensions)
+					ResponseFuture::future(fut)
 				}
 				MethodCallback::Sync(callback) => {
 					let rp = (callback)(id, params, max_response_body_size, extensions);
-					async move { rp }.boxed()
+					ResponseFuture::ready(rp)
 				}
 				MethodCallback::Subscription(callback) => {
 					let RpcServiceCfg::CallsAndSubscriptions {
@@ -115,19 +115,20 @@ impl RpcServiceT for RpcService {
 						tracing::warn!("Subscriptions not supported");
 						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
 							.with_extensions(extensions);
-						return async move { rp }.boxed();
+						return ResponseFuture::ready(rp);
 					};
 
 					if let Some(p) = bounded_subscriptions.acquire() {
 						let conn_state =
 							SubscriptionState { conn_id, id_provider: &*id_provider.clone(), subscription_permit: p };
 
-						callback(id.clone(), params, sink, conn_state, extensions)
+						let fut = (callback)(id.clone(), params, sink, conn_state, extensions);
+						ResponseFuture::future(fut)
 					} else {
 						let max = bounded_subscriptions.max();
 						let rp =
 							MethodResponse::error(id, reject_too_many_subscriptions(max)).with_extensions(extensions);
-						async move { rp }.boxed()
+						ResponseFuture::ready(rp)
 					}
 				}
 				MethodCallback::Unsubscription(callback) => {
@@ -137,11 +138,11 @@ impl RpcServiceT for RpcService {
 						tracing::warn!("Subscriptions not supported");
 						let rp = MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
 							.with_extensions(extensions);
-						return async move { rp }.boxed();
+						return ResponseFuture::ready(rp);
 					};
 
 					let rp = callback(id, params, conn_id, max_response_body_size, extensions);
-					async move { rp }.boxed()
+					ResponseFuture::ready(rp)
 				}
 			},
 		}
