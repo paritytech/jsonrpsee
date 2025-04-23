@@ -114,7 +114,7 @@ There are also a couple of other changes see the detailed changelog below.
 - fix `http request body` log ([#1540](https://github.com/paritytech/jsonrpsee/pull/1540))
 
 ### [Changed]
-- unify usage of JSON via Box<RawValue> ([#1545](https://github.com/paritytech/jsonrpsee/pull/1545))
+- unify usage of JSON via `Box<RawValue>` ([#1545](https://github.com/paritytech/jsonrpsee/pull/1545))
 - server: `ServerConfigBuilder/ServerConfig` replaces `ServerBuilder` duplicate setter methods ([#1487](https://github.com/paritytech/jsonrpsee/pull/1487))
 - server: make `ProxyGetRequestLayer` http middleware support multiple path-method pairs ([#1492](https://github.com/paritytech/jsonrpsee/pull/1492))
 - server: propagate extensions in http response ([#1514](https://github.com/paritytech/jsonrpsee/pull/1514))
