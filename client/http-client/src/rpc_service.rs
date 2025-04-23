@@ -3,7 +3,7 @@ use std::sync::Arc;
 use hyper::body::Bytes;
 use jsonrpsee_core::{
 	BoxError, JsonRawValue,
-	client::{Error, MethodResponse},
+	client::{Error, MiddlewareBatchResponse, MiddlewareMethodResponse, MiddlewareNotifResponse},
 	middleware::{Batch, Notification, Request, RpcServiceT},
 };
 use jsonrpsee_types::Response;
@@ -34,21 +34,24 @@ where
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 {
-	type Error = Error;
-	type Response = MethodResponse;
+	type BatchResponse = Result<MiddlewareBatchResponse, Error>;
+	type MethodResponse = Result<MiddlewareMethodResponse, Error>;
+	type NotificationResponse = Result<MiddlewareNotifResponse, Error>;
 
-	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		let service = self.service.clone();
 
 		async move {
 			let raw = serde_json::to_string(&request)?;
 			let bytes = service.send_and_read_body(raw).await.map_err(|e| Error::Transport(e.into()))?;
-			let json_rp: Response<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
-			Ok(MethodResponse::method_call(json_rp.into_owned().into(), request.extensions))
+			let mut rp: Response<Box<JsonRawValue>> = serde_json::from_slice(&bytes)?;
+			rp.extensions = request.extensions;
+
+			Ok(MiddlewareMethodResponse::response(rp.into_owned().into()))
 		}
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		let service = self.service.clone();
 
 		async move {
@@ -59,20 +62,20 @@ where
 				.map(|r| r.into_owned().into())
 				.collect();
 
-			Ok(MethodResponse::batch(rp, batch.into_extensions()))
+			Ok(rp)
 		}
 	}
 
 	fn notification<'a>(
 		&self,
 		notif: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		let service = self.service.clone();
 
 		async move {
 			let raw = serde_json::to_string(&notif)?;
 			service.send(raw).await.map_err(|e| Error::Transport(e.into()))?;
-			Ok(MethodResponse::notification(notif.extensions))
+			Ok(notif.extensions.into())
 		}
 	}
 }

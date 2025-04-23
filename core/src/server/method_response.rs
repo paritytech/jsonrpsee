@@ -31,6 +31,8 @@ const LOG_TARGET: &str = "jsonrpsee-core";
 use std::io;
 use std::task::Poll;
 
+use crate::traits::ToJson;
+
 use futures_util::{Future, FutureExt};
 use http::Extensions;
 use jsonrpsee_types::error::{
@@ -39,8 +41,6 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{ErrorObjectOwned, Id, Response, ResponsePayload as InnerResponsePayload};
 use serde::Serialize;
 use serde_json::value::{RawValue, to_raw_value};
-
-use crate::middleware::ToJson;
 
 #[derive(Debug, Clone)]
 enum ResponseKind {

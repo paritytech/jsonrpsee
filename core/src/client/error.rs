@@ -26,7 +26,7 @@
 
 //! Error type for client(s).
 
-use crate::{params::EmptyBatchRequest, BoxError, RegisterMethodError};
+use crate::{BoxError, RegisterMethodError, params::EmptyBatchRequest};
 use jsonrpsee_types::{ErrorObjectOwned, InvalidRequestId};
 use std::sync::Arc;
 
@@ -66,4 +66,15 @@ pub enum Error {
 	/// The error returned when registering a method or subscription failed.
 	#[error(transparent)]
 	RegisterMethod(#[from] RegisterMethodError),
+	/// An internal state when the underlying RpcService
+	/// got disconnected and the error must be fetched
+	/// from the backend.
+	//
+	// NOTE: This is a workaround where an error occurred in
+	// underlying RpcService implementation in the async client
+	// but we don't want to expose different error types for
+	// ergonomics when writing middleware.
+	#[error("RPC service disconnected")]
+	#[doc(hidden)]
+	ServiceDisconnect,
 }

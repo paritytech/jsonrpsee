@@ -35,8 +35,8 @@ use crate::{HttpRequest, HttpResponse};
 use hyper::body::Bytes;
 use hyper::http::{Extensions, HeaderMap};
 use jsonrpsee_core::client::{
-	BatchResponse, ClientT, Error, IdKind, MethodResponse, RequestIdManager, Subscription, SubscriptionClientT,
-	generate_batch_id_range,
+	BatchResponse, ClientT, Error, IdKind, MiddlewareBatchResponse, MiddlewareMethodResponse, MiddlewareNotifResponse,
+	RequestIdManager, Subscription, SubscriptionClientT, generate_batch_id_range,
 };
 use jsonrpsee_core::middleware::layer::{RpcLogger, RpcLoggerLayer};
 use jsonrpsee_core::middleware::{Batch, RpcServiceBuilder, RpcServiceT};
@@ -351,7 +351,12 @@ impl HttpClient<HttpBackend> {
 
 impl<S> ClientT for HttpClient<S>
 where
-	S: RpcServiceT<Error = Error, Response = MethodResponse> + Send + Sync,
+	S: RpcServiceT<
+			MethodResponse = Result<MiddlewareMethodResponse, Error>,
+			BatchResponse = Result<MiddlewareBatchResponse, Error>,
+			NotificationResponse = Result<MiddlewareNotifResponse, Error>,
+		> + Send
+		+ Sync,
 {
 	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
 	where
@@ -363,13 +368,9 @@ where
 				None => None,
 			};
 			let params = params.to_rpc_params()?.map(StdCow::Owned);
+			let fut = self.service.notification(Notification::new(method.into(), params));
 
-			run_future_until_timeout(
-				self.service.notification(Notification::new(method.into(), params)),
-				self.request_timeout,
-			)
-			.await
-			.map_err(|e| Error::Transport(e.into()))?;
+			run_future_until_timeout(fut, self.request_timeout).await.map_err(|e| Error::Transport(e.into()))?;
 			Ok(())
 		}
 	}
@@ -392,8 +393,7 @@ where
 				self.request_timeout,
 			)
 			.await?
-			.into_method_call()
-			.expect("Method call must return a method call reponse; qed");
+			.into_response();
 
 			let rp = ResponseSuccess::try_from(method_response.into_inner())?;
 
@@ -405,7 +405,7 @@ where
 	fn batch_request<'a, R>(
 		&self,
 		batch: BatchRequestBuilder<'a>,
-	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
+	) -> impl Future<Output = Result<jsonrpsee_core::client::BatchResponse<'a, R>, Error>> + Send
 	where
 		R: DeserializeOwned + fmt::Debug + 'a,
 	{
@@ -431,19 +431,18 @@ where
 				batch_request.push(req);
 			}
 
-			let rp = run_future_until_timeout(self.service.batch(batch_request), self.request_timeout).await?;
-			let json_rps = rp.into_batch().expect("Batch must return a batch reponse; qed");
+			let rps = run_future_until_timeout(self.service.batch(batch_request), self.request_timeout).await?;
 
 			let mut batch_response = Vec::new();
 			let mut success = 0;
 			let mut failed = 0;
 
 			// Fill the batch response with placeholder values.
-			for _ in 0..json_rps.len() {
+			for _ in 0..rps.len() {
 				batch_response.push(Err(ErrorObject::borrowed(0, "", None)));
 			}
 
-			for rp in json_rps.into_iter() {
+			for rp in rps.into_iter() {
 				let id = rp.id().try_parse_inner_as_number()?;
 
 				let res = match ResponseSuccess::try_from(rp.into_inner()) {
@@ -477,7 +476,12 @@ where
 
 impl<S> SubscriptionClientT for HttpClient<S>
 where
-	S: RpcServiceT<Error = Error, Response = MethodResponse> + Send + Sync,
+	S: RpcServiceT<
+			MethodResponse = Result<MiddlewareMethodResponse, Error>,
+			BatchResponse = Result<MiddlewareBatchResponse, Error>,
+			NotificationResponse = Result<MiddlewareNotifResponse, Error>,
+		> + Send
+		+ Sync,
 {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].
@@ -503,9 +507,9 @@ where
 	}
 }
 
-async fn run_future_until_timeout<F>(fut: F, timeout: Duration) -> Result<MethodResponse, Error>
+async fn run_future_until_timeout<F, T>(fut: F, timeout: Duration) -> Result<T, Error>
 where
-	F: std::future::Future<Output = Result<MethodResponse, Error>>,
+	F: std::future::Future<Output = Result<T, Error>>,
 {
 	match tokio::time::timeout(timeout, fut).await {
 		Ok(Ok(r)) => Ok(r),

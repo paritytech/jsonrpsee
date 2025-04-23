@@ -34,10 +34,9 @@
 //! to actually inspect the response instead of using the serialized JSON-RPC response.
 
 use std::net::SocketAddr;
-use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
-use jsonrpsee::core::client::{ClientT, MethodResponse, MethodResponseKind};
+use jsonrpsee::core::client::{ClientT, MiddlewareMethodResponse, error::Error};
 use jsonrpsee::core::middleware::{Batch, Notification, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
@@ -80,12 +79,13 @@ impl<S> Metrics<S> {
 // the serialized JSON-RPC response.
 impl<S> RpcServiceT for Metrics<S>
 where
-	S: RpcServiceT<Response = MethodResponse> + Send + Sync + Clone + 'static,
+	S: RpcServiceT<MethodResponse = Result<MiddlewareMethodResponse, Error>> + Send + Sync + Clone + 'static,
 {
-	type Error = S::Error;
-	type Response = S::Response;
+	type MethodResponse = Result<MiddlewareMethodResponse, Error>;
+	type NotificationResponse = S::NotificationResponse;
+	type BatchResponse = S::BatchResponse;
 
-	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		let m = self.metrics.clone();
 		let service = self.service.clone();
 
@@ -93,15 +93,14 @@ where
 			let rp = service.call(req).await;
 
 			// Access to inner response via the deref implementation.
-			match rp.as_ref().map(|r| r.deref()) {
-				Ok(MethodResponseKind::MethodCall(r)) => {
-					if r.is_success() {
+			match &rp {
+				Ok(rp) => {
+					if rp.is_success() {
 						m.lock().unwrap().method_calls_success += 1;
 					} else {
 						m.lock().unwrap().method_calls_failure += 1;
 					}
 				}
-				Ok(e) => unreachable!("Unexpected response type {e:?}"),
 				Err(e) => {
 					m.lock().unwrap().method_calls_failure += 1;
 					tracing::error!("Error: {:?}", e);
@@ -112,15 +111,12 @@ where
 		}
 	}
 
-	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		self.metrics.lock().unwrap().batch_calls += 1;
 		self.service.batch(batch)
 	}
 
-	fn notification<'a>(
-		&self,
-		n: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		self.metrics.lock().unwrap().notifications += 1;
 		self.service.notification(n)
 	}

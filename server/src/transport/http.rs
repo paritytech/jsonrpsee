@@ -1,5 +1,3 @@
-use std::convert::Infallible;
-
 use crate::{
 	BatchRequestConfig, ConnectionState, HttpRequest, HttpResponse, LOG_TARGET,
 	middleware::rpc::{RpcService, RpcServiceCfg},
@@ -46,7 +44,11 @@ where
 	B::Data: Send,
 	B::Error: Into<BoxError>,
 	L: tower::Layer<RpcService>,
-	<L as tower::Layer<RpcService>>::Service: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
+	<L as tower::Layer<RpcService>>::Service: RpcServiceT<
+			MethodResponse = MethodResponse,
+			BatchResponse = MethodResponse,
+			NotificationResponse = MethodResponse,
+		> + Send,
 {
 	let ServerConfig { max_response_body_size, batch_requests_config, max_request_body_size, .. } = server_cfg;
 
@@ -77,7 +79,11 @@ where
 	B: http_body::Body<Data = Bytes> + Send + 'static,
 	B::Data: Send,
 	B::Error: Into<BoxError>,
-	S: RpcServiceT<Response = MethodResponse, Error = Infallible> + Send,
+	S: RpcServiceT<
+			MethodResponse = MethodResponse,
+			BatchResponse = MethodResponse,
+			NotificationResponse = MethodResponse,
+		> + Send,
 {
 	// Only the `POST` method is allowed.
 	match *request.method() {

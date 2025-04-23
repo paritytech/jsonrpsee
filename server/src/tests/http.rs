@@ -61,10 +61,11 @@ impl<S> RpcServiceT for InjectExt<S>
 where
 	S: Send + Sync + RpcServiceT + Clone + 'static,
 {
-	type Error = S::Error;
-	type Response = S::Response;
+	type BatchResponse = S::BatchResponse;
+	type MethodResponse = S::MethodResponse;
+	type NotificationResponse = S::NotificationResponse;
 
-	fn call<'a>(&self, mut req: Request<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn call<'a>(&self, mut req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 		if req.method_name().contains("err") {
 			req.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
 		} else {
@@ -74,7 +75,7 @@ where
 		self.service.call(req)
 	}
 
-	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn batch<'a>(&self, mut batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		if let Some(Ok(last)) = batch.iter_mut().last() {
 			if last.method_name().contains("err") {
 				last.extensions_mut().insert(StatusCode::IM_A_TEAPOT);
@@ -86,10 +87,7 @@ where
 		self.service.batch(batch)
 	}
 
-	fn notification<'a>(
-		&self,
-		_: Notification<'a>,
-	) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'a {
+	fn notification<'a>(&self, _: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 		async { panic!("Not used for tests") }
 	}
 }

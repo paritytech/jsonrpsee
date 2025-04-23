@@ -37,16 +37,14 @@ pub use error::Error;
 
 use std::fmt;
 use std::future::Future;
-use std::ops::Range;
+use std::ops::{Deref, Range};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::task::{self, Poll};
-use tokio::sync::mpsc::error::TrySendError;
 
-use crate::middleware::ToJson;
 use crate::params::BatchRequestBuilder;
-use crate::traits::ToRpcParams;
+use crate::traits::{ToJson, ToRpcParams};
 
 use core::marker::PhantomData;
 use futures_util::stream::{Stream, StreamExt};
@@ -55,6 +53,7 @@ use jsonrpsee_types::{ErrorObject, Id, InvalidRequestId, SubscriptionId};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::value::RawValue;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{mpsc, oneshot};
 
 /// Shared state whether a subscription has lagged or not.
@@ -655,19 +654,6 @@ fn subscription_channel(max_buf_size: usize) -> (SubscriptionSender, Subscriptio
 	(SubscriptionSender { inner: tx, lagged: lagged_tx }, SubscriptionReceiver { inner: rx, lagged: lagged_rx })
 }
 
-/// Represents the kind of response that can be received from the server.
-#[derive(Debug)]
-pub enum MethodResponseKind {
-	/// Method call response.
-	MethodCall(RawResponseOwned),
-	/// Subscription response.
-	Subscription(SubscriptionResponse),
-	/// Notification response (no payload).
-	Notification,
-	/// Batch response.
-	Batch(Vec<RawResponseOwned>),
-}
-
 /// Represents an active subscription returned by the server.
 #[derive(Debug)]
 pub struct SubscriptionResponse {
@@ -676,121 +662,12 @@ pub struct SubscriptionResponse {
 	// The receiver is used to receive notifications from the server and shouldn't be exposed to the user
 	// from the middleware.
 	stream: SubscriptionReceiver,
-	/// The raw response from the server (mostly used for middleware).
-	rp: RawResponseOwned,
 }
 
 impl SubscriptionResponse {
 	/// Get the subscription ID.
 	pub fn subscription_id(&self) -> &SubscriptionId<'static> {
 		&self.sub_id
-	}
-
-	/// Get the raw response.
-	pub fn response(&self) -> &RawResponseOwned {
-		&self.rp
-	}
-}
-
-/// Represents a response from the server which can be a method call, notification or batch.
-#[derive(Debug)]
-pub struct MethodResponse {
-	extensions: Extensions,
-	inner: MethodResponseKind,
-}
-
-impl MethodResponse {
-	/// Create a new method response.
-	pub fn method_call(rp: RawResponseOwned, extensions: Extensions) -> Self {
-		Self { inner: MethodResponseKind::MethodCall(rp), extensions }
-	}
-
-	/// Create a new subscription response.
-	pub fn subscription(sub: SubscriptionResponse, extensions: Extensions) -> Self {
-		Self { inner: MethodResponseKind::Subscription(sub), extensions }
-	}
-
-	/// Create a new notification response.
-	pub fn notification(extensions: Extensions) -> Self {
-		Self { inner: MethodResponseKind::Notification, extensions }
-	}
-
-	/// Create a new batch response.
-	pub fn batch(json: Vec<RawResponseOwned>, extensions: Extensions) -> Self {
-		Self { inner: MethodResponseKind::Batch(json), extensions }
-	}
-
-	/// Get the method call if this response is a method call.
-	pub fn into_method_call(self) -> Option<RawResponseOwned> {
-		match self.inner {
-			MethodResponseKind::MethodCall(call) => Some(call),
-			_ => None,
-		}
-	}
-
-	/// Get the batch if this response is a batch.
-	pub fn into_batch(self) -> Option<Vec<RawResponseOwned>> {
-		match self.inner {
-			MethodResponseKind::Batch(batch) => Some(batch),
-			_ => None,
-		}
-	}
-
-	/// Get the subscription if this response is a subscription.
-	fn into_subscription(self) -> Option<(SubscriptionId<'static>, SubscriptionReceiver)> {
-		match self.inner {
-			MethodResponseKind::Subscription(s) => Some((s.sub_id, s.stream)),
-			_ => None,
-		}
-	}
-
-	/// Returns whether this response is a method call.
-	pub fn is_method_call(&self) -> bool {
-		matches!(self.inner, MethodResponseKind::MethodCall(_))
-	}
-
-	/// Returns whether this response is a notification.
-	pub fn is_notification(&self) -> bool {
-		matches!(self.inner, MethodResponseKind::Notification)
-	}
-
-	/// Returns whether this response is a batch.
-	pub fn is_batch(&self) -> bool {
-		matches!(self.inner, MethodResponseKind::Batch(_))
-	}
-
-	/// Returns whether this response is a subscription.
-	pub fn is_subscription(&self) -> bool {
-		matches!(self.inner, MethodResponseKind::Subscription { .. })
-	}
-
-	/// Returns a reference to the associated extensions.
-	pub fn extensions(&self) -> &Extensions {
-		&self.extensions
-	}
-
-	/// Returns a mutable reference to the associated extensions.
-	pub fn extensions_mut(&mut self) -> &mut Extensions {
-		&mut self.extensions
-	}
-}
-
-impl std::ops::Deref for MethodResponse {
-	type Target = MethodResponseKind;
-
-	fn deref(&self) -> &Self::Target {
-		&self.inner
-	}
-}
-
-impl ToJson for MethodResponse {
-	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
-		match &self.inner {
-			MethodResponseKind::MethodCall(call) => call.to_json(),
-			MethodResponseKind::Notification => Ok(RawValue::NULL.to_owned()),
-			MethodResponseKind::Batch(json) => serde_json::value::to_raw_value(json),
-			MethodResponseKind::Subscription(s) => serde_json::value::to_raw_value(&s.rp),
-		}
 	}
 }
 
@@ -862,5 +739,91 @@ impl<'a> RawResponse<'a> {
 impl ToJson for RawResponse<'_> {
 	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
 		serde_json::value::to_raw_value(&self.0)
+	}
+}
+
+/// Middleware batch response.
+pub type MiddlewareBatchResponse = Vec<RawResponseOwned>;
+
+/// Middleware method response which can be either a method call or a subscription response.
+/// and treated differently.
+#[derive(Debug)]
+pub struct MiddlewareMethodResponse {
+	rp: RawResponseOwned,
+	subscription: Option<SubscriptionResponse>,
+}
+
+impl Serialize for MiddlewareMethodResponse {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.rp.serialize(serializer)
+	}
+}
+
+impl Deref for MiddlewareMethodResponse {
+	type Target = RawResponseOwned;
+
+	fn deref(&self) -> &Self::Target {
+		&self.rp
+	}
+}
+
+impl MiddlewareMethodResponse {
+	/// Create a new [`MiddlewareMethodResponse`] which is plain response.
+	pub fn response(rp: RawResponseOwned) -> Self {
+		Self { rp, subscription: None }
+	}
+
+	/// Create a new [`MiddlewareMethodResponse`] which is a subscription response.
+	pub fn subscription_response(rp: RawResponseOwned, subscription: SubscriptionResponse) -> Self {
+		Self { rp, subscription: Some(subscription) }
+	}
+
+	/// Convert the response into parts.
+	pub fn into_parts(self) -> (RawResponseOwned, Option<SubscriptionResponse>) {
+		(self.rp, self.subscription)
+	}
+
+	/// Extract the response.
+	pub fn into_response(self) -> RawResponseOwned {
+		self.rp
+	}
+
+	/// Extract the subscription response if it is a subscription.
+	pub fn into_subscription(self) -> Option<SubscriptionResponse> {
+		self.subscription
+	}
+}
+
+/// Middleware notification response.
+#[derive(Debug, Clone)]
+pub struct MiddlewareNotifResponse(Extensions);
+
+impl From<Extensions> for MiddlewareNotifResponse {
+	fn from(extensions: Extensions) -> Self {
+		Self(extensions)
+	}
+}
+
+impl MiddlewareNotifResponse {
+	/// Get the extensions.
+	pub fn extensions(&self) -> &Extensions {
+		&self.0
+	}
+
+	/// Get the extensions mutable.
+	pub fn extensions_mut(&mut self) -> &mut Extensions {
+		&mut self.0
+	}
+}
+
+impl<T: Serialize> ToJson for Result<T, Error> {
+	fn to_json(&self) -> Result<Box<RawValue>, serde_json::Error> {
+		match self {
+			Ok(v) => serde_json::value::to_raw_value(v),
+			Err(e) => serde_json::value::to_raw_value(&e.to_string()),
+		}
 	}
 }

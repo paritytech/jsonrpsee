@@ -31,7 +31,7 @@ mod manager;
 mod rpc_service;
 mod utils;
 
-pub use rpc_service::{Error as RpcServiceError, RpcService};
+pub use rpc_service::RpcService;
 
 use std::borrow::Cow as StdCow;
 use std::time::Duration;
@@ -66,7 +66,10 @@ use tokio::sync::{mpsc, oneshot};
 use tower::layer::util::Identity;
 
 use self::utils::{InactivityCheck, IntervalStream};
-use super::{FrontToBack, IdKind, MethodResponse, RequestIdManager, generate_batch_id_range, subscription_channel};
+use super::{
+	FrontToBack, IdKind, MiddlewareBatchResponse, MiddlewareMethodResponse, MiddlewareNotifResponse, RequestIdManager,
+	generate_batch_id_range, subscription_channel,
+};
 
 pub(crate) type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Box<JsonRawValue>>>;
 
@@ -455,16 +458,13 @@ impl<L> Client<L> {
 		!self.to_back.is_closed()
 	}
 
-	async fn run_future_until_timeout(
-		&self,
-		fut: impl Future<Output = Result<MethodResponse, RpcServiceError>>,
-	) -> Result<MethodResponse, Error> {
+	async fn run_future_until_timeout<T>(&self, fut: impl Future<Output = Result<T, Error>>) -> Result<T, Error> {
 		tokio::pin!(fut);
 
 		match futures_util::future::select(fut, futures_timer::Delay::new(self.request_timeout)).await {
 			Either::Left((Ok(r), _)) => Ok(r),
-			Either::Left((Err(RpcServiceError::Client(e)), _)) => Err(e),
-			Either::Left((Err(RpcServiceError::FetchFromBackend), _)) => Err(self.on_disconnect().await),
+			Either::Left((Err(Error::ServiceDisconnect), _)) => Err(self.on_disconnect().await),
+			Either::Left((Err(e), _)) => Err(e),
 			Either::Right(_) => Err(Error::RequestTimeout),
 		}
 	}
@@ -495,7 +495,12 @@ impl<L> Drop for Client<L> {
 
 impl<L> ClientT for Client<L>
 where
-	L: RpcServiceT<Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
+	L: RpcServiceT<
+			MethodResponse = Result<MiddlewareMethodResponse, Error>,
+			BatchResponse = Result<MiddlewareBatchResponse, Error>,
+			NotificationResponse = Result<MiddlewareNotifResponse, Error>,
+		> + Send
+		+ Sync,
 {
 	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
 	where
@@ -520,8 +525,8 @@ where
 			let id = self.id_manager.next_request_id();
 			let params = params.to_rpc_params()?;
 			let fut = self.service.call(Request::borrowed(method, params.as_deref(), id.clone()));
-			let rp = self.run_future_until_timeout(fut).await?.into_method_call().expect("Method call response");
-			let success = ResponseSuccess::try_from(rp.into_inner())?;
+			let rp = self.run_future_until_timeout(fut).await?;
+			let success = ResponseSuccess::try_from(rp.into_response().into_inner())?;
 
 			serde_json::from_str(success.result.get()).map_err(Into::into)
 		}
@@ -554,7 +559,7 @@ where
 			b.extensions_mut().insert(IsBatch { id_range });
 
 			let fut = self.service.batch(b);
-			let json_values = self.run_future_until_timeout(fut).await?.into_batch().expect("Batch response");
+			let json_values = self.run_future_until_timeout(fut).await?;
 
 			let mut responses = Vec::with_capacity(json_values.len());
 			let mut successful_calls = 0;
@@ -580,7 +585,12 @@ where
 
 impl<L> SubscriptionClientT for Client<L>
 where
-	L: RpcServiceT<Error = RpcServiceError, Response = MethodResponse> + Send + Sync,
+	L: RpcServiceT<
+			MethodResponse = Result<MiddlewareMethodResponse, Error>,
+			BatchResponse = Result<MiddlewareBatchResponse, Error>,
+			NotificationResponse = Result<MiddlewareNotifResponse, Error>,
+		> + Send
+		+ Sync,
 {
 	/// Send a subscription request to the server.
 	///
@@ -617,10 +627,12 @@ where
 			};
 
 			let fut = self.service.call(req);
-			let (sub_id, notifs_rx) =
-				self.run_future_until_timeout(fut).await?.into_subscription().expect("Subscription response");
-
-			Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
+			let sub = self
+				.run_future_until_timeout(fut)
+				.await?
+				.into_subscription()
+				.expect("Extensions set to subscription, must return subscription; qed");
+			Ok(Subscription::new(self.to_back.clone(), sub.stream, SubscriptionKind::Subscription(sub.sub_id)))
 		}
 	}
 
