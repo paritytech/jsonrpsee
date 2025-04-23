@@ -43,8 +43,7 @@ requires BoxFuture or ResponseFuture which improves ergonomics.
 
 The downside of this change is that one has to duplicate the logic in the `batch` and `call` method to achieve the same
 functionality as before. Thus, `call` or `notification` is not being invoked in the `batch` method and one has to implement 
-does separately.
-
+them separately.
 For example now it's possible to write middleware that counts the number of method calls as follows (both client and server):
 
 ```rust
