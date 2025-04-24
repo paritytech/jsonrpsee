@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.25.1] - 2025-04-24
 
-A small follow-up release that adds a `Clone impl` for the middleware RpcLogger which was missing
+A small follow-up patch release that adds a `Clone impl` for the middleware RpcLogger which was missing
 and broke the Clone impl for the HttpClient.
 
 ## [v0.25.0] - 2025-04-24
