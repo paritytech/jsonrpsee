@@ -38,8 +38,7 @@ pub trait RpcServiceT {
 ```
 
 The reason for this change is to make it work for the client-side as well as make it easier to
-with return `impl Future` instead require an associated type for the `Future` which in many cases
-requires BoxFuture or ResponseFuture which improves ergonomics.
+implement performantly by relying on `impl Future` instead of requiring an associated type for the `Future` (which in many cases requires boxing).
 
 The downside of this change is that one has to duplicate the logic in the `batch` and `call` method to achieve the same
 functionality as before. Thus, `call` or `notification` is not being invoked in the `batch` method and one has to implement 
