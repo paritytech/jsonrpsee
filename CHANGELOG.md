@@ -4,6 +4,150 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.25.0] - 2025-04-24
+
+A new breaking release which has been in the making for a while and the biggest change is that the
+`RpcServiceT trait` has been changed to support both the client and server side:
+
+```rust
+pub trait RpcServiceT {
+	/// Response type for `RpcServiceT::call`.
+	type MethodResponse;
+	/// Response type for `RpcServiceT::notification`.
+	type NotificationResponse;
+	/// Response type for `RpcServiceT::batch`.
+	type BatchResponse;
+
+	/// Processes a single JSON-RPC call, which may be a subscription or regular call.
+	fn call<'a>(&self, request: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a;
+
+	/// Processes multiple JSON-RPC calls at once, similar to `RpcServiceT::call`.
+	///
+	/// This method wraps `RpcServiceT::call` and `RpcServiceT::notification`,
+	/// but the root RPC service does not inherently recognize custom implementations
+	/// of these methods.
+	///
+	/// As a result, if you have custom logic for individual calls or notifications,
+	/// you must duplicate that implementation in this method or no middleware will be applied
+	/// for calls inside the batch.
+	fn batch<'a>(&self, requests: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a;
+
+	/// Similar to `RpcServiceT::call` but processes a JSON-RPC notification.
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a;
+}
+```
+
+The reason for this change is to make it work for the client-side as well as make it easier to
+implement performantly by relying on `impl Future` instead of requiring an associated type for the `Future` (which in many cases requires boxing).
+
+The downside of this change is that one has to duplicate the logic in the `batch` and `call` method to achieve the same
+functionality as before. Thus, `call` or `notification` is not being invoked in the `batch` method and one has to implement 
+them separately.
+For example now it's possible to write middleware that counts the number of method calls as follows (both client and server):
+
+```rust
+#[derive(Clone)]
+pub struct Counter<S> {
+	service: S,
+	count: Arc<AtomicUsize>,
+	role: &'static str,
+}
+
+impl<S> RpcServiceT for Counter<S>
+where
+	S: RpcServiceT + Send + Sync + Clone + 'static,
+{
+	type MethodResponse = S::MethodResponse;
+	type NotificationResponse = S::NotificationResponse;
+	type BatchResponse = S::BatchResponse;
+
+	fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
+		let count = self.count.clone();
+		let service = self.service.clone();
+		let role = self.role;
+
+		async move {
+			let rp = service.call(req).await;
+			count.fetch_add(1, Ordering::SeqCst);
+			println!("{role} processed calls={} on the connection", count.load(Ordering::SeqCst));
+			rp
+		}
+	}
+
+	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
+		let len = batch.len();
+		self.count.fetch_add(len, Ordering::SeqCst);
+		println!("{} processed calls={} on the connection", self.role, self.count.load(Ordering::SeqCst));
+		self.service.batch(batch)
+	}
+
+	fn notification<'a>(&self, n: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
+		self.service.notification(n)
+	}
+}
+```
+
+In addition because this middleware is quite powerful it's possible to
+modify requests and specifically the request ID which should be avoided
+because it may break the response verification especially for the client-side.
+See https://github.com/paritytech/jsonrpsee/issues/1565 for further information.
+
+There are also a couple of other changes see the detailed changelog below.
+
+### [Added]
+- middleware: RpcServiceT distinct return types for notif, batch, call ([#1564](https://github.com/paritytech/jsonrpsee/pull/1564))
+- middleware: add support for client-side ([#1521](https://github.com/paritytech/jsonrpsee/pull/1521))
+- feat: add namespace_separator option for RPC methods ([#1544](https://github.com/paritytech/jsonrpsee/pull/1544))
+- feat: impl Into<ErrorObject> for Infallible ([#1542](https://github.com/paritytech/jsonrpsee/pull/1542))
+- client: add `request timeout` getter ([#1533](https://github.com/paritytech/jsonrpsee/pull/1533))
+- server: add example how to close a connection from a rpc handler (method call or subscription) ([#1488](https://github.com/paritytech/jsonrpsee/pull/1488))
+- server: add missing `ServerConfigBuilder::build` ([#1484](https://github.com/paritytech/jsonrpsee/pull/1484))
+
+### [Fixed]
+- chore(macros): fix typo in proc-macro example ([#1482](https://github.com/paritytech/jsonrpsee/pull/1482))
+- chore(macros): fix typo in internal type name ([#1507](https://github.com/paritytech/jsonrpsee/pull/1507))
+- http middleware: preserve the URI query in ProxyGetRequest::call ([#1512](https://github.com/paritytech/jsonrpsee/pull/1512))
+- http middlware: send original error in ProxyGetRequest ([#1516](https://github.com/paritytech/jsonrpsee/pull/1516))
+- docs: update comment for TOO_BIG_BATCH_RESPONSE_CODE error ([#1531](https://github.com/paritytech/jsonrpsee/pull/1531))
+- fix `http request body` log ([#1540](https://github.com/paritytech/jsonrpsee/pull/1540))
+
+### [Changed]
+- unify usage of JSON via `Box<RawValue>` ([#1545](https://github.com/paritytech/jsonrpsee/pull/1545))
+- server: `ServerConfigBuilder/ServerConfig` replaces `ServerBuilder` duplicate setter methods ([#1487](https://github.com/paritytech/jsonrpsee/pull/1487))
+- server: make `ProxyGetRequestLayer` http middleware support multiple path-method pairs ([#1492](https://github.com/paritytech/jsonrpsee/pull/1492))
+- server: propagate extensions in http response ([#1514](https://github.com/paritytech/jsonrpsee/pull/1514))
+- server: add assert set_message_buffer_capacity ([#1530](https://github.com/paritytech/jsonrpsee/pull/1530))
+- client: add #[derive(Clone)] for HttpClientBuilder ([#1498](https://github.com/paritytech/jsonrpsee/pull/1498))
+- client: add Error::Closed for ws close ([#1497](https://github.com/paritytech/jsonrpsee/pull/1497))
+- client: use native async fn in traits instead async_trait crate ([#1551](https://github.com/paritytech/jsonrpsee/pull/1551))
+- refactor: move to rust edition 2024 (MSRV 1.85) ([#1528](https://github.com/paritytech/jsonrpsee/pull/1528))
+- chore(deps): update tower requirement from 0.4.13 to 0.5.1 ([#1455](https://github.com/paritytech/jsonrpsee/pull/1455))
+- chore(deps): update tower-http requirement from 0.5.2 to 0.6.1 ([#1463](https://github.com/paritytech/jsonrpsee/pull/1463))
+- chore(deps): update pprof requirement from 0.13 to 0.14 ([#1493](https://github.com/paritytech/jsonrpsee/pull/1493))
+- chore(deps): update rustls-platform-verifier requirement from 0.3 to 0.4 ([#1489](https://github.com/paritytech/jsonrpsee/pull/1489))
+- chore(deps): update thiserror requirement from 1 to 2 ([#1491](https://github.com/paritytech/jsonrpsee/pull/1491))
+- chore(deps): bump soketto to 0.8.1 ([#1501](https://github.com/paritytech/jsonrpsee/pull/1501))
+- chore(deps): update rustls-platform-verifier requirement from 0.4 to 0.5 ([#1506](https://github.com/paritytech/jsonrpsee/pull/1506))
+- chore(deps): update fast-socks5 requirement from 0.9.1 to 0.10.0 ([#1505](https://github.com/paritytech/jsonrpsee/pull/1505))
+- chore(deps): tokio ^1.42 ([#1511](https://github.com/paritytech/jsonrpsee/pull/1511))
+- chore: use cargo workspace dependencies ([#1502](https://github.com/paritytech/jsonrpsee/pull/1502))
+- chore(deps): update rand requirement from 0.8 to 0.9 ([#1523](https://github.com/paritytech/jsonrpsee/pull/1523))
+
+## [v0.24.9] - 2024-03-17
+
+This is a non-breaking release that updates the dependency `rust-platform-verifier` to v0.5 to fix that
+that `rust-platform-verifier` v0.3 didn't enable the `std feature` in `rustls` which caused a compilation error.
+See https://github.com/paritytech/jsonrpsee/issues/1536 for further information.
+
+Thanks to the external contributor [@prestwich](https://github.com/prestwich) who spotted and fixed this issue.
+
+## [v0.24.8] - 2024-01-24
+
+This is a non-breaking release that decreases the MSRV to 1.74.0.
+
+### [Changed]
+- reduce MSRV to 1.74.0 ([#1519](https://github.com/paritytech/jsonrpsee/pull/1519))
+
 ## [v0.24.7] - 2024-10-16
 
 This is a patch release that mainly fixes the tower::Service implementation to be generic over the HttpBody to work with all middleware layers.
