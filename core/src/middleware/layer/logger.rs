@@ -54,7 +54,7 @@ impl<S> tower::Layer<S> for RpcLoggerLayer {
 }
 
 /// A middleware that logs each RPC call and response.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RpcLogger<S> {
 	max: u32,
 	service: S,
