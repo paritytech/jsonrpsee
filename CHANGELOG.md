@@ -4,6 +4,11 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.25.1] - 2025-04-24
+
+A small follow-up release that adds a `Clone impl` for the middleware RpcLogger which was missing
+and broke the Clone impl for the HttpClient.
+
 ## [v0.25.0] - 2025-04-24
 
 A new breaking release which has been in the making for a while and the biggest change is that the
