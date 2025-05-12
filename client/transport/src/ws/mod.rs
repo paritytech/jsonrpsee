@@ -497,6 +497,7 @@ impl WsTransportClientBuilder {
 			Ok(ServerResponse::Accepted { .. }) => {
 				tracing::debug!(target: LOG_TARGET, "Connection established to target: {:?}", target);
 				let mut builder = client.into_builder();
+				builder.set_max_frame_size(usize::MAX);
 				builder.set_max_message_size(self.max_response_size as usize);
 				let (sender, receiver) = builder.finish();
 				Ok((Sender { inner: sender, max_request_size: self.max_request_size }, Receiver { inner: receiver }))
