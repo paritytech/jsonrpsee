@@ -37,6 +37,7 @@
 
 mod client;
 mod rpc_service;
+pub use rpc_service::RpcService;
 
 /// HTTP transport.
 pub mod transport;
