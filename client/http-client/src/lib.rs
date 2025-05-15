@@ -37,7 +37,6 @@
 
 mod client;
 mod rpc_service;
-pub use rpc_service::RpcService;
 
 /// HTTP transport.
 pub mod transport;
@@ -49,6 +48,8 @@ pub use client::{HttpClient, HttpClientBuilder};
 pub use hyper::http::{HeaderMap, HeaderValue};
 pub use jsonrpsee_types as types;
 
+/// This is the default implementation of the [`jsonrpsee_core::middleware::RpcServiceT`] trait used in the [`HttpClient`].
+pub use rpc_service::RpcService;
 /// Default HTTP body for the client.
 pub type HttpBody = jsonrpsee_core::http_helpers::Body;
 /// HTTP request with default body.
