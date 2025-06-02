@@ -85,7 +85,7 @@ wasm-bindgen-futures = "0.4.19"
 # Dev dependencies
 anyhow = "1"
 console-subscriber = "0.4"
-criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
+criterion = { version = "0.6", features = ["async_tokio", "html_reports"] }
 fast-socks5 = "0.10"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 pprof = { version = "0.15", features = ["flamegraph", "criterion"] }
