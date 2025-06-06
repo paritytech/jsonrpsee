@@ -264,6 +264,8 @@ impl<L> HttpTransportClientBuilder<L> {
 				);
 			}
 		}
+		let _ = url.set_password(None);
+		let _ = url.set_username("");
 
 		Ok(HttpTransportClient {
 			target: url.as_str().to_owned(),
