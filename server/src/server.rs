@@ -198,6 +198,10 @@ pub struct ServerConfig {
 	pub(crate) id_provider: Arc<dyn IdProvider>,
 	/// `TCP_NODELAY` settings.
 	pub(crate) tcp_no_delay: bool,
+	/// `KEEP_ALIVE` duration.
+	pub(crate) keep_alive: Option<std::time::Duration>,
+	/// `KEEP_ALIVE_TIMEOUT` duration.
+	pub(crate) keep_alive_timeout: Duration,
 }
 
 /// The builder to configure and create a JSON-RPC server configuration.
@@ -227,6 +231,10 @@ pub struct ServerConfigBuilder {
 	id_provider: Arc<dyn IdProvider>,
 	/// `TCP_NODELAY` settings.
 	tcp_no_delay: bool,
+	/// `KEEP_ALIVE` duration.
+	keep_alive: Option<std::time::Duration>,
+	/// `KEEP_ALIVE_TIMEOUT` duration.
+	keep_alive_timeout: std::time::Duration,
 }
 
 /// Builder for [`TowerService`].
@@ -365,6 +373,9 @@ impl Default for ServerConfigBuilder {
 			ping_config: None,
 			id_provider: Arc::new(RandomIntegerIdProvider),
 			tcp_no_delay: true,
+			keep_alive: None,
+			//same as `hyper` default
+			keep_alive_timeout: Duration::from_secs(20),
 		}
 	}
 }
@@ -520,6 +531,18 @@ impl ServerConfigBuilder {
 		self
 	}
 
+	/// Configure `KEEP_ALIVE` hyper to the supplied value `keep_alive`.
+	pub fn set_keep_alive(mut self, keep_alive: Option<std::time::Duration>) -> Self {
+		self.keep_alive = keep_alive;
+		self
+	}
+
+	/// Configure `KEEP_ALIVE_TIMEOUT` hyper to the supplied value `keep_alive_timeout`.
+	pub fn set_keep_alive_timeout(mut self, keep_alive_timeout: Duration) -> Self {
+		self.keep_alive_timeout = keep_alive_timeout;
+		self
+	}
+
 	/// Build the [`ServerConfig`].
 	pub fn build(self) -> ServerConfig {
 		ServerConfig {
@@ -535,6 +558,8 @@ impl ServerConfigBuilder {
 			ping_config: self.ping_config,
 			id_provider: self.id_provider,
 			tcp_no_delay: self.tcp_no_delay,
+			keep_alive: self.keep_alive,
+			keep_alive_timeout: self.keep_alive_timeout,
 		}
 	}
 }
@@ -1170,6 +1195,10 @@ where
 		return;
 	}
 
+	let keep_alive = server_cfg.keep_alive;
+	let is_keep_alive = keep_alive.is_some();
+	let keep_alive_timeout = server_cfg.keep_alive_timeout;
+
 	let tower_service = TowerServiceNoHttp {
 		inner: ServiceData {
 			server_cfg,
@@ -1184,11 +1213,14 @@ where
 
 	let service = http_middleware.service(tower_service);
 
-	tokio::spawn(async {
+	tokio::spawn(async move {
 		// this requires Clone.
 		let service = crate::utils::TowerToHyperService::new(service);
 		let io = TokioIo::new(socket);
-		let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+
+		builder.http1().keep_alive(is_keep_alive);
+		builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
 
 		let conn = builder.serve_connection_with_upgrades(io, service);
 		let stopped = stop_handle.shutdown();
