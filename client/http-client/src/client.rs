@@ -213,6 +213,24 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 		self
 	}
 
+	/// Set the keep-alive duration.
+	pub fn set_keep_alive(mut self, duration: Option<Duration>) -> Self {
+		self.keep_alive_duration = duration;
+		self
+	}
+
+	/// Set the keep-alive interval.
+	pub fn set_keep_alive_interval(mut self, interval: Option<Duration>) -> Self {
+		self.keep_alive_interval = interval;
+		self
+	}
+
+	/// Set the number of keep-alive retires.
+	pub fn set_keep_alive_retires(mut self, retires: Option<u32>) -> Self {
+		self.keep_alive_retires = retires;
+		self
+	}
+
 	/// Set the RPC middleware.
 	pub fn set_rpc_middleware<T>(self, rpc_builder: RpcServiceBuilder<T>) -> HttpClientBuilder<HttpMiddleware, T> {
 		HttpClientBuilder {
