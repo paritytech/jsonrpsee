@@ -532,6 +532,7 @@ impl ServerConfigBuilder {
 	}
 
 	/// Configure `KEEP_ALIVE` hyper to the supplied value `keep_alive`.
+	#[cfg(feature = "http2")]
 	pub fn set_keep_alive(mut self, keep_alive: Option<std::time::Duration>) -> Self {
 		self.keep_alive = keep_alive;
 		self
@@ -1218,9 +1219,8 @@ where
 		let io = TokioIo::new(socket);
 		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-		if builder.is_http2_available() {
-			builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
-		}
+		//default is true for http1, if set to false then websocket connections will not be upgraded.
+		builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
 
 		let conn = builder.serve_connection_with_upgrades(io, service);
 		let stopped = stop_handle.shutdown();
