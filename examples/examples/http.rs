@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
 	let server_addr = run_server().await?;
 	let url = format!("http://{}", server_addr);
 
-	let client = HttpClient::builder().set_tcp_no_delay().build(url)?;
+	let client = HttpClient::builder().build(url)?;
 	let params = rpc_params![1_u64, 2, 3];
 	let response: Result<String, _> = client.request("say_hello", params).await;
 	tracing::info!("r: {:?}", response);
