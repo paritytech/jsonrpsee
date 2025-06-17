@@ -124,8 +124,8 @@ impl HttpTransportClientBuilder<Identity> {
 			service_builder: tower::ServiceBuilder::new(),
 			tcp_no_delay: true,
 			keep_alive_duration: None,
-            keep_alive_interval: None,
-            keep_alive_retires: None,
+			keep_alive_interval: None,
+			keep_alive_retires: None,
 		}
 	}
 }
@@ -172,6 +172,18 @@ impl<L> HttpTransportClientBuilder<L> {
 		self
 	}
 
+	/// Configure the keep-alive interval for the connection.
+	pub fn set_keep_alive_interval(mut self, interval: Option<std::time::Duration>) -> Self {
+		self.keep_alive_interval = interval;
+		self
+	}
+
+	/// Configure the number of keep-alive retries for the connection.
+	pub fn set_keep_alive_retries(mut self, retries: Option<u32>) -> Self {
+		self.keep_alive_retires = retries;
+		self
+	}
+
 	/// Configure a tower service.
 	pub fn set_service<T>(self, service: tower::ServiceBuilder<T>) -> HttpTransportClientBuilder<T> {
 		HttpTransportClientBuilder {
@@ -183,8 +195,8 @@ impl<L> HttpTransportClientBuilder<L> {
 			service_builder: service,
 			tcp_no_delay: self.tcp_no_delay,
 			keep_alive_duration: self.keep_alive_duration,
-            keep_alive_retires: self.keep_alive_retires,
-            keep_alive_interval: self.keep_alive_interval,
+			keep_alive_retires: self.keep_alive_retires,
+			keep_alive_interval: self.keep_alive_interval,
 		}
 	}
 
@@ -237,8 +249,8 @@ impl<L> HttpTransportClientBuilder<L> {
 				http_conn.set_nodelay(tcp_no_delay);
 				http_conn.enforce_http(false);
 				http_conn.set_keepalive(keep_alive_duration);
-                http_conn.set_keepalive_interval(keep_alive_interval);
-                http_conn.set_keepalive_retries(keep_alive_retires);
+				http_conn.set_keepalive_interval(keep_alive_interval);
+				http_conn.set_keepalive_retries(keep_alive_retires);
 
 				let https_conn = match certificate_store {
 					CertificateStore::Native => {
