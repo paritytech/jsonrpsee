@@ -1196,7 +1196,6 @@ where
 	}
 
 	let keep_alive = server_cfg.keep_alive;
-	let is_keep_alive = keep_alive.is_some();
 	let keep_alive_timeout = server_cfg.keep_alive_timeout;
 
 	let tower_service = TowerServiceNoHttp {
@@ -1219,8 +1218,9 @@ where
 		let io = TokioIo::new(socket);
 		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-		builder.http1().keep_alive(is_keep_alive);
-		builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
+		if builder.is_http2_available() {
+			builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
+		}
 
 		let conn = builder.serve_connection_with_upgrades(io, service);
 		let stopped = stop_handle.shutdown();
