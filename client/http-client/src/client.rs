@@ -90,6 +90,9 @@ pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Logger> 
 	rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 	tcp_no_delay: bool,
 	max_concurrent_requests: Option<usize>,
+	keep_alive_duration: Option<Duration>,
+	keep_alive_interval: Option<Duration>,
+	keep_alive_retires: Option<u32>,
 }
 
 impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddleware> {
@@ -224,6 +227,9 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 			request_timeout: self.request_timeout,
 			tcp_no_delay: self.tcp_no_delay,
 			max_concurrent_requests: self.max_concurrent_requests,
+			keep_alive_duration: self.keep_alive_duration,
+			keep_alive_interval: self.keep_alive_interval,
+			keep_alive_retires: self.keep_alive_retires,
 		}
 	}
 
@@ -244,6 +250,9 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 			request_timeout: self.request_timeout,
 			tcp_no_delay: self.tcp_no_delay,
 			max_concurrent_requests: self.max_concurrent_requests,
+			keep_alive_duration: self.keep_alive_duration,
+			keep_alive_retires: self.keep_alive_retires,
+			keep_alive_interval: self.keep_alive_interval,
 		}
 	}
 }
@@ -271,6 +280,9 @@ where
 			service_builder,
 			tcp_no_delay,
 			rpc_middleware,
+			keep_alive_duration,
+			keep_alive_interval,
+			keep_alive_retires,
 			..
 		} = self;
 
@@ -280,6 +292,9 @@ where
 			headers,
 			tcp_no_delay,
 			service_builder,
+			keep_alive_duration,
+			keep_alive_interval,
+			keep_alive_retires,
 			#[cfg(feature = "tls")]
 			certificate_store,
 		}
@@ -313,6 +328,9 @@ impl Default for HttpClientBuilder {
 			rpc_middleware: RpcServiceBuilder::default().rpc_logger(1024),
 			tcp_no_delay: true,
 			max_concurrent_requests: None,
+			keep_alive_duration: None,
+			keep_alive_interval: None,
+			keep_alive_retires: None,
 		}
 	}
 }
