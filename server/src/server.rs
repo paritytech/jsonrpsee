@@ -532,7 +532,6 @@ impl ServerConfigBuilder {
 	}
 
 	/// Configure `KEEP_ALIVE` hyper to the supplied value `keep_alive`.
-	#[cfg(feature = "http2")]
 	pub fn set_keep_alive(mut self, keep_alive: Option<std::time::Duration>) -> Self {
 		self.keep_alive = keep_alive;
 		self
