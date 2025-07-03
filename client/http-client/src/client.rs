@@ -92,7 +92,7 @@ pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Logger> 
 	max_concurrent_requests: Option<usize>,
 	keep_alive_duration: Option<Duration>,
 	keep_alive_interval: Option<Duration>,
-	keep_alive_retires: Option<u32>,
+	keep_alive_retries: Option<u32>,
 }
 
 impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddleware> {
@@ -225,9 +225,9 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 		self
 	}
 
-	/// Set the number of keep-alive retires.
-	pub fn set_keep_alive_retires(mut self, retires: Option<u32>) -> Self {
-		self.keep_alive_retires = retires;
+	/// Set the number of keep-alive retries.
+	pub fn set_keep_alive_retries(mut self, retries: Option<u32>) -> Self {
+		self.keep_alive_retries = retries;
 		self
 	}
 
@@ -247,7 +247,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 			max_concurrent_requests: self.max_concurrent_requests,
 			keep_alive_duration: self.keep_alive_duration,
 			keep_alive_interval: self.keep_alive_interval,
-			keep_alive_retires: self.keep_alive_retires,
+			keep_alive_retries: self.keep_alive_retries,
 		}
 	}
 
@@ -269,7 +269,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 			tcp_no_delay: self.tcp_no_delay,
 			max_concurrent_requests: self.max_concurrent_requests,
 			keep_alive_duration: self.keep_alive_duration,
-			keep_alive_retires: self.keep_alive_retires,
+			keep_alive_retries: self.keep_alive_retries,
 			keep_alive_interval: self.keep_alive_interval,
 		}
 	}
@@ -300,7 +300,7 @@ where
 			rpc_middleware,
 			keep_alive_duration,
 			keep_alive_interval,
-			keep_alive_retires,
+			keep_alive_retries,
 			..
 		} = self;
 
@@ -312,7 +312,7 @@ where
 			service_builder,
 			keep_alive_duration,
 			keep_alive_interval,
-			keep_alive_retires,
+			keep_alive_retries,
 			#[cfg(feature = "tls")]
 			certificate_store,
 		}
@@ -348,7 +348,7 @@ impl Default for HttpClientBuilder {
 			max_concurrent_requests: None,
 			keep_alive_duration: None,
 			keep_alive_interval: None,
-			keep_alive_retires: None,
+			keep_alive_retries: None,
 		}
 	}
 }
