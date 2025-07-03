@@ -91,6 +91,7 @@ pub struct WsClientBuilder<RpcMiddleware = Logger> {
 	certificate_store: CertificateStore,
 	max_request_size: u32,
 	max_response_size: u32,
+	max_frame_size: Option<u32>,
 	request_timeout: Duration,
 	connection_timeout: Duration,
 	ping_config: Option<PingConfig>,
@@ -110,6 +111,7 @@ impl Default for WsClientBuilder {
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
+			max_frame_size: None,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
 			ping_config: None,
@@ -212,6 +214,12 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 		self
 	}
 
+	/// See documentation [`WsTransportClientBuilder::max_frame_size`] (default is none).
+	pub fn max_frame_size(mut self, size: u32) -> Self {
+		self.max_frame_size = Some(size);
+		self
+	}
+
 	/// See documentation [`ClientBuilder::request_timeout`] (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
@@ -279,6 +287,7 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			certificate_store: self.certificate_store,
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
+			max_frame_size: self.max_frame_size,
 			request_timeout: self.request_timeout,
 			connection_timeout: self.connection_timeout,
 			ping_config: self.ping_config,
@@ -346,6 +355,7 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			headers: self.headers.clone(),
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
+			max_frame_size: self.max_frame_size,
 			max_redirections: self.max_redirections,
 			tcp_no_delay: self.tcp_no_delay,
 		};
@@ -375,6 +385,7 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			headers: self.headers.clone(),
 			max_request_size: self.max_request_size,
 			max_response_size: self.max_response_size,
+			max_frame_size: self.max_frame_size,
 			max_redirections: self.max_redirections,
 			tcp_no_delay: self.tcp_no_delay,
 		};

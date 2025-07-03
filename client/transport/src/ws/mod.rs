@@ -95,6 +95,8 @@ pub struct WsTransportClientBuilder {
 	pub max_request_size: u32,
 	/// Max response payload size
 	pub max_response_size: u32,
+	/// Max frame size
+	pub max_frame_size: Option<u32>,
 	/// Max number of redirections.
 	pub max_redirections: usize,
 	/// TCP no delay.
@@ -108,6 +110,7 @@ impl Default for WsTransportClientBuilder {
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
+			max_frame_size: None,
 			connection_timeout: Duration::from_secs(10),
 			headers: http::HeaderMap::new(),
 			max_redirections: 5,
@@ -137,6 +140,12 @@ impl WsTransportClientBuilder {
 	/// Set the maximum size of a response in bytes. Default is 10 MiB.
 	pub fn max_response_size(mut self, size: u32) -> Self {
 		self.max_response_size = size;
+		self
+	}
+
+	/// Set the maximum size of a frame in bytes (default is none).
+	pub fn max_frame_size(mut self, size: u32) -> Self {
+		self.max_frame_size = Some(size);
 		self
 	}
 
@@ -497,8 +506,11 @@ impl WsTransportClientBuilder {
 			Ok(ServerResponse::Accepted { .. }) => {
 				tracing::debug!(target: LOG_TARGET, "Connection established to target: {:?}", target);
 				let mut builder = client.into_builder();
-				builder.set_max_frame_size(usize::MAX);
 				builder.set_max_message_size(self.max_response_size as usize);
+				// Use the max frame size if any, otherwise let the underlying code use appropriate defaults.
+				if let Some(max_frame_size) = self.max_frame_size {
+					builder.set_max_frame_size(max_frame_size as usize);
+				}
 				let (sender, receiver) = builder.finish();
 				Ok((Sender { inner: sender, max_request_size: self.max_request_size }, Receiver { inner: receiver }))
 			}
