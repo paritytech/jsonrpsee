@@ -98,6 +98,12 @@ pub struct HttpTransportClientBuilder<L> {
 	pub(crate) service_builder: tower::ServiceBuilder<L>,
 	/// TCP_NODELAY
 	pub(crate) tcp_no_delay: bool,
+	/// KEEP_ALIVE duration
+	pub(crate) keep_alive_duration: Option<std::time::Duration>,
+	/// KEEP_ALIVE interval
+	pub(crate) keep_alive_interval: Option<std::time::Duration>,
+	/// KEEP_ALIVE retries
+	pub(crate) keep_alive_retries: Option<u32>,
 }
 
 impl Default for HttpTransportClientBuilder<Identity> {
@@ -117,6 +123,9 @@ impl HttpTransportClientBuilder<Identity> {
 			headers: HeaderMap::new(),
 			service_builder: tower::ServiceBuilder::new(),
 			tcp_no_delay: true,
+			keep_alive_duration: None,
+			keep_alive_interval: None,
+			keep_alive_retries: None,
 		}
 	}
 }
@@ -157,6 +166,24 @@ impl<L> HttpTransportClientBuilder<L> {
 		self
 	}
 
+	/// Configure the keep-alive duration for the connection.
+	pub fn set_keep_alive(mut self, duration: Option<std::time::Duration>) -> Self {
+		self.keep_alive_duration = duration;
+		self
+	}
+
+	/// Configure the keep-alive interval for the connection.
+	pub fn set_keep_alive_interval(mut self, interval: Option<std::time::Duration>) -> Self {
+		self.keep_alive_interval = interval;
+		self
+	}
+
+	/// Configure the number of keep-alive retries for the connection.
+	pub fn set_keep_alive_retries(mut self, retries: Option<u32>) -> Self {
+		self.keep_alive_retries = retries;
+		self
+	}
+
 	/// Configure a tower service.
 	pub fn set_service<T>(self, service: tower::ServiceBuilder<T>) -> HttpTransportClientBuilder<T> {
 		HttpTransportClientBuilder {
@@ -167,6 +194,9 @@ impl<L> HttpTransportClientBuilder<L> {
 			max_response_size: self.max_response_size,
 			service_builder: service,
 			tcp_no_delay: self.tcp_no_delay,
+			keep_alive_duration: self.keep_alive_duration,
+			keep_alive_retries: self.keep_alive_retries,
+			keep_alive_interval: self.keep_alive_interval,
 		}
 	}
 
@@ -187,6 +217,9 @@ impl<L> HttpTransportClientBuilder<L> {
 			headers,
 			service_builder,
 			tcp_no_delay,
+			keep_alive_duration,
+			keep_alive_interval,
+			keep_alive_retries,
 		} = self;
 		let mut url = Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
 
@@ -199,6 +232,9 @@ impl<L> HttpTransportClientBuilder<L> {
 			"http" => {
 				let mut connector = HttpConnector::new();
 				connector.set_nodelay(tcp_no_delay);
+				connector.set_keepalive(keep_alive_duration);
+				connector.set_keepalive_interval(keep_alive_interval);
+				connector.set_keepalive_retries(keep_alive_retries);
 				HttpBackend::Http(Client::builder(TokioExecutor::new()).build(connector))
 			}
 			#[cfg(feature = "tls")]
@@ -212,6 +248,9 @@ impl<L> HttpTransportClientBuilder<L> {
 				let mut http_conn = HttpConnector::new();
 				http_conn.set_nodelay(tcp_no_delay);
 				http_conn.enforce_http(false);
+				http_conn.set_keepalive(keep_alive_duration);
+				http_conn.set_keepalive_interval(keep_alive_interval);
+				http_conn.set_keepalive_retries(keep_alive_retries);
 
 				let https_conn = match certificate_store {
 					CertificateStore::Native => {
