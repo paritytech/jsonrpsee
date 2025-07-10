@@ -89,7 +89,7 @@ criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 fast-socks5 = "0.10"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 pprof = { version = "0.15", features = ["flamegraph", "criterion"] }
-socket2 = "0.5.1"
+socket2 = "0.6.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = "1.0.97"
 
