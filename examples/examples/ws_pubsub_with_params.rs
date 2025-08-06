@@ -49,12 +49,12 @@ async fn main() -> anyhow::Result<()> {
 	let client = WsClientBuilder::default().build(&url).await?;
 
 	// Subscription with a single parameter
-	let mut sub_params_one: Subscription<Option<char>> =
+	let mut sub_params_one: Subscription<_, Option<char>> =
 		client.subscribe("sub_one_param", rpc_params![3], "unsub_one_param").await?;
 	tracing::info!("subscription with one param: {:?}", sub_params_one.next().await);
 
 	// Subscription with multiple parameters
-	let mut sub_params_two: Subscription<String> =
+	let mut sub_params_two: Subscription<_, String> =
 		client.subscribe("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
 	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
 
