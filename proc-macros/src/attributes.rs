@@ -136,7 +136,7 @@ impl AttributeMeta {
 	/// Attempt to get a list of `Argument`s from a list of names in order.
 	///
 	/// Errors if there is an argument with a name that's not on the list, or if there is a duplicate definition.
-	pub fn retain<const N: usize>(self, allowed: [&str; N]) -> syn::Result<[Result<Argument, MissingArgument>; N]> {
+	pub fn retain<const N: usize>(self, allowed: [&str; N]) -> syn::Result<[Result<Argument, MissingArgument<'_>>; N]> {
 		assert!(
 			N != 0,
 			"Calling `AttributeMeta::retain` with an empty `allowed` list, this is a bug, please report it"

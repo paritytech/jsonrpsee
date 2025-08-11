@@ -14,12 +14,14 @@ use crate::{
 	transport::{Error as TransportError, HttpTransportClient},
 };
 
+/// An [`RpcServiceT`] compliant implementation for the HTTP client.
 #[derive(Clone, Debug)]
 pub struct RpcService<HttpMiddleware> {
 	service: Arc<HttpTransportClient<HttpMiddleware>>,
 }
 
 impl<HttpMiddleware> RpcService<HttpMiddleware> {
+	/// Convert an [`HttpTransportClient`] into an [`RpcService`].
 	pub fn new(service: HttpTransportClient<HttpMiddleware>) -> Self {
 		Self { service: Arc::new(service) }
 	}
