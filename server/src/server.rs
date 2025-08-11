@@ -651,7 +651,7 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// where it is possible to compose layers to the middleware.
 	///
 	/// To add middleware [`RpcServiceBuilder`] exposes a few different layer APIs that
-	///  are wrapped on top of the [`tower::ServiceBuilder`].
+	/// are wrapped on top of the [`tower::ServiceBuilder`].
 	///
 	/// When the server is started these layers are wrapped in the [`RpcService`] and
 	/// that's why the service APIs is not exposed.
