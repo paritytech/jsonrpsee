@@ -20,7 +20,7 @@ resolver = "3"
 
 [workspace.package]
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
-version = "0.25.1"
+version = "0.26.0"
 edition = "2024"
 rust-version = "1.85.0"
 license = "MIT"
@@ -32,14 +32,14 @@ readme = "README.md"
 
 [workspace.dependencies]
 # Internal jsonrpsee crates
-jsonrpsee-client-transport = { path = "client/transport", version = "0.25.1" }
-jsonrpsee-core = { path = "core", version = "0.25.1" }
-jsonrpsee-http-client = { path = "client/http-client", version = "0.25.1" }
-jsonrpsee-proc-macros = { path = "proc-macros", version = "0.25.1" }
-jsonrpsee-server = { path = "server", version = "0.25.1" }
-jsonrpsee-types = { path = "types", version = "0.25.1" }
-jsonrpsee-wasm-client = { path = "client/wasm-client", version = "0.25.1" }
-jsonrpsee-ws-client = { path = "client/ws-client", version = "0.25.1" }
+jsonrpsee-client-transport = { path = "client/transport", version = "0.26.0" }
+jsonrpsee-core = { path = "core", version = "0.26.0" }
+jsonrpsee-http-client = { path = "client/http-client", version = "0.26.0" }
+jsonrpsee-proc-macros = { path = "proc-macros", version = "0.26.0" }
+jsonrpsee-server = { path = "server", version = "0.26.0" }
+jsonrpsee-types = { path = "types", version = "0.26.0" }
+jsonrpsee-wasm-client = { path = "client/wasm-client", version = "0.26.0" }
+jsonrpsee-ws-client = { path = "client/ws-client", version = "0.26.0" }
 
 # Deps used by the jsonrpsee crates.
 async-trait = "0.1"

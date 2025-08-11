@@ -4,6 +4,26 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.26.0] - 2025-08-11
+
+This is just a small release; the only breaking change is the addition of `max_frame_size` to `WsTransportClientBuilder`, which necessitates a minor version bump.
+
+The other changes are as follows:
+
+### [Changed]
+
+- Fix new Rust 1.89 lifetime warnings and impl ToRpcParams on serde_json::Map ([#1594](https://github.com/paritytech/jsonrpsee/pull/1594))
+- feat(keepalive): expose tcp keep-alive options ([#1583](https://github.com/paritytech/jsonrpsee/pull/1583))
+- chore: expose `TowerServiceNoHttp` type ([#1588](https://github.com/paritytech/jsonrpsee/pull/1588))
+- chore(deps): update socket2 requirement from 0.5.1 to 0.6.0 ([#1587](https://github.com/paritytech/jsonrpsee/pull/1587))
+- Allow max websocket frame size to be set ([#1585](https://github.com/paritytech/jsonrpsee/pull/1585))
+- chore(deps): update pprof requirement from 0.14 to 0.15 ([#1577](https://github.com/paritytech/jsonrpsee/pull/1577))
+- Expose `jsonrpsee_http_client::RpcService` ([#1574](https://github.com/paritytech/jsonrpsee/pull/1574))
+
+### [Fixed]
+
+- fix: Remove username and password from URL after building Authorization header ([#1581](https://github.com/paritytech/jsonrpsee/pull/1581))
+
 ## [v0.25.1] - 2025-04-24
 
 A small follow-up patch release that adds a `Clone impl` for the middleware RpcLogger which was missing
