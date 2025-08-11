@@ -10,7 +10,7 @@ This is just a small release; the only breaking change is the addition of `max_f
 
 The other changes are as follows:
 
-## Changed
+### [Changed]
 
 - Fix new Rust 1.89 lifetime warnings and impl ToRpcParams on serde_json::Map ([#1594](https://github.com/paritytech/jsonrpsee/pull/1594))
 - feat(keepalive): expose tcp keep-alive options ([#1583](https://github.com/paritytech/jsonrpsee/pull/1583))
@@ -20,7 +20,7 @@ The other changes are as follows:
 - chore(deps): update pprof requirement from 0.14 to 0.15 ([#1577](https://github.com/paritytech/jsonrpsee/pull/1577))
 - Expose `jsonrpsee_http_client::RpcService` ([#1574](https://github.com/paritytech/jsonrpsee/pull/1574))
 
-## Fixed
+### [Fixed]
 
 - fix: Remove username and password from URL after building Authorization header ([#1581](https://github.com/paritytech/jsonrpsee/pull/1581))
 
