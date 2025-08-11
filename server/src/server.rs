@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::error::Error as StdError;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
@@ -97,15 +96,14 @@ impl<RpcMiddleware, HttpMiddleware> Server<RpcMiddleware, HttpMiddleware> {
 
 impl<HttpMiddleware, RpcMiddleware, Body> Server<HttpMiddleware, RpcMiddleware>
 where
-	RpcMiddleware: tower::Layer<RpcService> + Clone + Send + 'static,
+	RpcMiddleware: Layer<RpcService> + Clone + Send + 'static,
 	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
-		Send + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
+		Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError> + Clone + Send,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future: Send,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	<Body as http_body::Body>::Error: Into<BoxError>,
-	<Body as http_body::Body>::Data: Send,
 {
 	/// Start responding to connections requests.
 	///
@@ -647,15 +645,15 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// which means that you can't use built-in middleware from tower.
 	///
 	/// Another consequence of `&self` is that you must wrap any of the middleware state in
-	/// a type which is Send and provides interior mutability such `Arc<Mutex>`.
+	/// a type which is Send and provides interior mutability such as `Arc<Mutex>`.
 	///
 	/// The builder itself exposes a similar API as the [`tower::ServiceBuilder`]
 	/// where it is possible to compose layers to the middleware.
 	///
-	/// To add a middleware [`crate::middleware::rpc::RpcServiceBuilder`] exposes a few different layer APIs that
-	/// is wrapped on top of the [`tower::ServiceBuilder`].
+	/// To add middleware [`RpcServiceBuilder`] exposes a few different layer APIs that
+	/// are wrapped on top of the [`tower::ServiceBuilder`].
 	///
-	/// When the server is started these layers are wrapped in the [`crate::middleware::rpc::RpcService`] and
+	/// When the server is started these layers are wrapped in the [`RpcService`] and
 	/// that's why the service APIs is not exposed.
 	/// ```
 	///
@@ -672,11 +670,12 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// }
 	///
 	/// impl<S> RpcServiceT for MyMiddleware<S>
-	/// where S: RpcServiceT + Send + Sync + Clone + 'static,
+	/// where
+	/// 	S: RpcServiceT + Clone + Send + Sync + 'static,
 	/// {
 	///    type MethodResponse = S::MethodResponse;
-	///    type BatchResponse = S::BatchResponse;
 	///    type NotificationResponse = S::NotificationResponse;
+	///    type BatchResponse = S::BatchResponse;
 	///
 	///    fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
@@ -698,7 +697,6 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///    fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 	///          self.service.notification(notif)
 	///    }
-	///
 	/// }
 	///
 	/// // Create a state per connection
@@ -933,15 +931,15 @@ impl<RpcMiddleware, HttpMiddleware> TowerService<RpcMiddleware, HttpMiddleware> 
 
 impl<RequestBody, ResponseBody, RpcMiddleware, HttpMiddleware> Service<HttpRequest<RequestBody>> for TowerService<RpcMiddleware, HttpMiddleware>
 where
-	RpcMiddleware: tower::Layer<RpcService> + Clone,
-	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT + Send + Sync + 'static,
+	RpcMiddleware: Layer<RpcService> + Clone,
+	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT + 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
-		Send + Service<HttpRequest<RequestBody>, Response = HttpResponse<ResponseBody>, Error = Box<(dyn StdError + Send + Sync + 'static)>>,
+		Service<HttpRequest<RequestBody>, Response = HttpResponse<ResponseBody>, Error = BoxError> + Send,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest<RequestBody>>>::Future:
 		Send + 'static,
 	RequestBody: http_body::Body<Data = Bytes> + Send + 'static,
-	RequestBody::Error: Into<BoxError>,
+	<RequestBody as http_body::Body>::Error: Into<BoxError>,
 {
 	type Response = HttpResponse<ResponseBody>;
 	type Error = BoxError;
@@ -969,7 +967,7 @@ pub struct TowerServiceNoHttp<L> {
 
 impl<Body, RpcMiddleware> Service<HttpRequest<Body>> for TowerServiceNoHttp<RpcMiddleware>
 where
-	RpcMiddleware: tower::Layer<RpcService>,
+	RpcMiddleware: Layer<RpcService>,
 	<RpcMiddleware as Layer<RpcService>>::Service: RpcServiceT<
 			MethodResponse = MethodResponse,
 			BatchResponse = MethodResponse,
@@ -978,7 +976,7 @@ where
 		+ Sync
 		+ 'static,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
-	Body::Error: Into<BoxError>,
+	<Body as http_body::Body>::Error: Into<BoxError>,
 {
 	type Response = HttpResponse;
 
@@ -988,7 +986,7 @@ where
 
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+	fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
 		Poll::Ready(Ok(()))
 	}
 
@@ -1063,7 +1061,7 @@ where
 								}
 							};
 
-							let io = hyper_util::rt::TokioIo::new(upgraded);
+							let io = TokioIo::new(upgraded);
 
 							let stream = BufReader::new(BufWriter::new(io.compat()));
 							let mut ws_builder = server.into_builder(stream);
@@ -1142,15 +1140,13 @@ struct ProcessConnection<'a, HttpMiddleware, RpcMiddleware> {
 #[instrument(name = "connection", skip_all, fields(remote_addr = %params.remote_addr, conn_id = %params.conn_id), level = "INFO")]
 fn process_connection<'a, RpcMiddleware, HttpMiddleware, Body>(params: ProcessConnection<HttpMiddleware, RpcMiddleware>)
 where
-	RpcMiddleware: 'static,
 	HttpMiddleware: Layer<TowerServiceNoHttp<RpcMiddleware>> + Send + 'static,
 	<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service:
-		Send + 'static + Clone + Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError>,
+		Service<HttpRequest, Response = HttpResponse<Body>, Error = BoxError> + Clone + Send + 'static,
 	<<HttpMiddleware as Layer<TowerServiceNoHttp<RpcMiddleware>>>::Service as Service<HttpRequest>>::Future:
 		Send + 'static,
 	Body: http_body::Body<Data = Bytes> + Send + 'static,
 	<Body as http_body::Body>::Error: Into<BoxError>,
-	<Body as http_body::Body>::Data: Send,
 {
 	let ProcessConnection {
 		http_middleware,
