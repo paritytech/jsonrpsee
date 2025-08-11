@@ -91,6 +91,10 @@ macro_rules! to_rpc_params_impl {
 	};
 }
 
+impl ToRpcParams for serde_json::Map<String, serde_json::Value> {
+	to_rpc_params_impl!();
+}
+
 impl<P: Serialize> ToRpcParams for &[P] {
 	to_rpc_params_impl!();
 }

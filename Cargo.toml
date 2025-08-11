@@ -68,7 +68,7 @@ rustls = { version = "0.23", default-features = false }
 rustls-pki-types = "1"
 rustls-platform-verifier = "0.5"
 serde = { version = "1", default-features = false, features = ["derive"] }
-serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value"] }
+serde_json = { version = "1.0.142", default-features = false, features = ["alloc", "raw_value"] }
 soketto = "0.8.1"
 syn = { version = "2", default-features = false }
 thiserror = "2"

@@ -696,13 +696,13 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///
 	/// impl<S> RpcServiceT for MyMiddleware<S>
 	/// where
-	/// 	S: RpcServiceT + Clone + Send + Sync + 'static,
+	///     S: RpcServiceT + Clone + Send + Sync + 'static,
 	/// {
-	///    type MethodResponse = S::MethodResponse;
-	///    type NotificationResponse = S::NotificationResponse;
-	///    type BatchResponse = S::BatchResponse;
+	///     type MethodResponse = S::MethodResponse;
+	///     type NotificationResponse = S::NotificationResponse;
+	///     type BatchResponse = S::BatchResponse;
 	///
-	///    fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
+	///     fn call<'a>(&self, req: Request<'a>) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
 	///         tracing::info!("MyMiddleware processed call {}", req.method);
 	///         let count = self.count.clone();
 	///         let service = self.service.clone();
@@ -713,15 +713,15 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	///             count.fetch_add(1, Ordering::Relaxed);
 	///             rp
 	///         }
-	///    }
+	///     }
 	///
-	///    fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
+	///     fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 	///          self.service.batch(batch)
-	///    }
+	///     }
 	///
-	///    fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
+	///     fn notification<'a>(&self, notif: Notification<'a>) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
 	///          self.service.notification(notif)
-	///    }
+	///     }
 	/// }
 	///
 	/// // Create a state per connection
