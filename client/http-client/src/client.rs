@@ -483,6 +483,8 @@ where
 		> + Send
 		+ Sync,
 {
+	type SubscriptionClient = Self;
+
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return
 	/// [`Error::HttpNotImplemented`].
 	fn subscribe<'a, N, Params>(
@@ -490,7 +492,7 @@ where
 		_subscribe_method: &'a str,
 		_params: Params,
 		_unsubscribe_method: &'a str,
-	) -> impl Future<Output = Result<Subscription<N>, Error>>
+	) -> impl Future<Output = Result<Subscription<Self::SubscriptionClient, N>, Error>>
 	where
 		Params: ToRpcParams + Send,
 		N: DeserializeOwned,
@@ -499,7 +501,10 @@ where
 	}
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
-	fn subscribe_to_method<N>(&self, _method: &str) -> impl Future<Output = Result<Subscription<N>, Error>>
+	fn subscribe_to_method<N>(
+		&self,
+		_method: &str,
+	) -> impl Future<Output = Result<Subscription<Self::SubscriptionClient, N>, Error>>
 	where
 		N: DeserializeOwned,
 	{
