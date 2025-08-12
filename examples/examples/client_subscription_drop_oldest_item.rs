@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use futures::{Stream, StreamExt};
 use jsonrpsee::core::DeserializeOwned;
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{Client, Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, Server};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -47,8 +47,9 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
+	let client: &'static Client = Box::leak(Box::new(client));
 
-	let sub: Subscription<i32> = client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
+	let sub: Subscription<_, i32> = client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 
 	// drop oldest messages from subscription:
 	let mut sub = drop_oldest_when_lagging(sub, 10);
@@ -73,8 +74,8 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-fn drop_oldest_when_lagging<T: Clone + DeserializeOwned + Send + Sync + 'static>(
-	mut sub: Subscription<T>,
+fn drop_oldest_when_lagging<S: Sync + 'static, T: Clone + DeserializeOwned + Send + Sync + 'static>(
+	mut sub: Subscription<'static, S, T>,
 	buffer_size: usize,
 ) -> impl Stream<Item = Result<T, BroadcastStreamRecvError>> {
 	let (tx, rx) = tokio::sync::broadcast::channel(buffer_size);

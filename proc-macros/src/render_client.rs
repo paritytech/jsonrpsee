@@ -186,7 +186,8 @@ impl RpcDescription {
 		// into the `Subscription` object.
 		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
 		let item = &sub.item;
-		let returns = quote! { impl core::future::Future<Output = Result<#sub_type<#item>, #jrps_error>> + Send };
+		let returns =
+			quote! { impl core::future::Future<Output = Result<#sub_type<'_, Self, #item>, #jrps_error>> + Send };
 
 		// Encoded parameters for the request.
 		let parameter_builder = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);

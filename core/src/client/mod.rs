@@ -131,12 +131,12 @@ pub trait SubscriptionClientT: ClientT {
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	fn subscribe<'a, Notif, Params>(
-		&self,
+	fn subscribe<'a, 'client, Notif, Params>(
+		&'client self,
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	) -> impl Future<Output = Result<Subscription<'client, Self, Notif>, Error>> + Send
 	where
 		Params: ToRpcParams + Send,
 		Notif: DeserializeOwned;
@@ -145,10 +145,10 @@ pub trait SubscriptionClientT: ClientT {
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	fn subscribe_to_method<Notif>(
-		&self,
+	fn subscribe_to_method<'client, Notif>(
+		&'client self,
 		method: &str,
-	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	) -> impl Future<Output = Result<Subscription<'client, Self, Notif>, Error>> + Send
 	where
 		Notif: DeserializeOwned;
 }
@@ -272,7 +272,7 @@ pub enum SubscriptionCloseReason {
 /// You can call [`Subscription::close_reason`] to determine why
 /// the subscription was closed.
 #[derive(Debug)]
-pub struct Subscription<Notif> {
+pub struct Subscription<'a, Client: ?Sized, Notif> {
 	is_closed: bool,
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
@@ -280,18 +280,19 @@ pub struct Subscription<Notif> {
 	rx: SubscriptionReceiver,
 	/// Callback kind.
 	kind: Option<SubscriptionKind>,
+	_client: &'a Client,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
 }
 
 // `Subscription` does not automatically implement this due to `PhantomData<Notif>`,
 // but type type has no need to be pinned.
-impl<Notif> std::marker::Unpin for Subscription<Notif> {}
+impl<'a, Client: ?Sized, Notif> std::marker::Unpin for Subscription<'a, Client, Notif> {}
 
-impl<Notif> Subscription<Notif> {
+impl<'a, Client: ?Sized, Notif> Subscription<'a, Client, Notif> {
 	/// Create a new subscription.
-	fn new(to_back: mpsc::Sender<FrontToBack>, rx: SubscriptionReceiver, kind: SubscriptionKind) -> Self {
-		Self { to_back, rx, kind: Some(kind), marker: PhantomData, is_closed: false }
+	fn new(client: &'a Client, to_back: mpsc::Sender<FrontToBack>, rx: SubscriptionReceiver, kind: SubscriptionKind) -> Self {
+		Self { to_back, rx, kind: Some(kind), _client: client, marker: PhantomData, is_closed: false }
 	}
 
 	/// Return the subscription type and, if applicable, ID.
@@ -404,7 +405,7 @@ enum FrontToBack {
 	SubscriptionClosed(SubscriptionId<'static>),
 }
 
-impl<Notif> Subscription<Notif>
+impl<'a, Client: ?Sized, Notif> Subscription<'a, Client, Notif>
 where
 	Notif: DeserializeOwned,
 {
@@ -421,7 +422,7 @@ where
 	}
 }
 
-impl<Notif> Stream for Subscription<Notif>
+impl<'a, Client: ?Sized, Notif> Stream for Subscription<'a, Client, Notif>
 where
 	Notif: DeserializeOwned,
 {
@@ -439,7 +440,7 @@ where
 	}
 }
 
-impl<Notif> Drop for Subscription<Notif> {
+impl<'a, Client: ?Sized, Notif> Drop for Subscription<'a, Client, Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
 		// the channel's buffer will be full.
