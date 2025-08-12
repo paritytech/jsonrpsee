@@ -159,7 +159,7 @@ async fn subscription_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
-		let mut sub: Subscription<String> = client
+		let mut sub: Subscription<_, String> = client
 			.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
 			.with_default_timeout()
 			.await
@@ -183,7 +183,7 @@ async fn notification_handler_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
-		let mut nh: Subscription<String> =
+		let mut nh: Subscription<_, String> =
 			client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
 		assert_eq!("server originated notification works".to_owned(), response);
@@ -203,7 +203,7 @@ async fn notification_no_params() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
-		let mut nh: Subscription<serde_json::Value> =
+		let mut nh: Subscription<_, serde_json::Value> =
 			client.subscribe_to_method("no_params").with_default_timeout().await.unwrap().unwrap();
 		let response = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
 		assert_eq!(response, serde_json::Value::Null);
@@ -244,7 +244,7 @@ async fn batched_notifs_works() {
 	// Ensure that subscription is returned back to the correct handle
 	// and is handled separately from ordinary notifications.
 	{
-		let mut nh: Subscription<String> =
+		let mut nh: Subscription<_, String> =
 			client.subscribe("sub", rpc_params![], "unsub").with_default_timeout().await.unwrap().unwrap();
 		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
 		assert_eq!("sub_notif", response);
@@ -252,7 +252,7 @@ async fn batched_notifs_works() {
 
 	// Ensure that method notif is returned back to the correct handle.
 	{
-		let mut nh: Subscription<String> =
+		let mut nh: Subscription<_, String> =
 			client.subscribe_to_method("sub").with_default_timeout().await.unwrap().unwrap();
 		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
 		assert_eq!("method_notif", response);
@@ -279,7 +279,7 @@ async fn notification_close_on_lagging() {
 		.await
 		.unwrap()
 		.unwrap();
-	let mut nh: Subscription<String> =
+	let mut nh: Subscription<_, String> =
 		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
 	// Don't poll the notification stream for 2 seconds, should be full now.
@@ -297,7 +297,7 @@ async fn notification_close_on_lagging() {
 	assert!(nh.next().with_default_timeout().await.unwrap().is_none());
 
 	// The same subscription should be possible to register again.
-	let mut other_nh: Subscription<String> =
+	let mut other_nh: Subscription<_, String> =
 		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
 	// check that the new subscription works.
