@@ -91,7 +91,7 @@ impl<'a> Request<'a> {
 	}
 
 	/// Get the params of the request.
-	pub fn params(&self) -> Params {
+	pub fn params(&self) -> Params<'_> {
 		Params::new(self.params.as_ref().map(|p| RawValue::get(p)))
 	}
 

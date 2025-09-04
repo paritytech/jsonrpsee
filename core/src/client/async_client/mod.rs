@@ -149,7 +149,7 @@ impl ThreadSafeRequestManager {
 		Self::default()
 	}
 
-	pub(crate) fn lock(&self) -> std::sync::MutexGuard<RequestManager> {
+	pub(crate) fn lock(&self) -> std::sync::MutexGuard<'_, RequestManager> {
 		self.0.lock().expect(NOT_POISONED)
 	}
 }

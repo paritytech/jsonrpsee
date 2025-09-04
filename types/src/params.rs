@@ -107,7 +107,7 @@ impl<'a> Params<'a> {
 	///
 	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC
 	/// request has optional parameters at the tail that may or may not be present.
-	pub fn sequence(&self) -> ParamsSequence {
+	pub fn sequence(&self) -> ParamsSequence<'_> {
 		let json = match self.0.as_ref() {
 			// It's assumed that params is `[a,b,c]`, if empty regard as no params.
 			Some(json) if json == "[]" => "",

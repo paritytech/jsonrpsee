@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v4.3.0
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -34,7 +34,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.8
+        uses: Swatinem/rust-cache@v2.8.0
 
       - name: Cargo fmt
         uses: actions-rs/cargo@v1.0.3
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v4.3.0
 
       - name: Install Rust nightly toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v4.3.0
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -92,7 +92,7 @@ jobs:
           version: 0.5
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.8
+        uses: Swatinem/rust-cache@v2.8.0
 
       - name: Cargo check all targets and features
         run: cargo hack check --workspace --each-feature --all-targets
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v4.3.0
 
       - name: Install Rust 1.85.0 toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -116,7 +116,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.8
+        uses: Swatinem/rust-cache@v2.8.0
 
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
@@ -129,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4.3.0
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -139,7 +139,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.8
+        uses: Swatinem/rust-cache@v2.8.0
 
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
@@ -152,7 +152,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4.3.0
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -162,7 +162,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.8
+        uses: Swatinem/rust-cache@v2.8.0
 
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
@@ -175,7 +175,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4.3.0
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -185,7 +185,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.8
+        uses: Swatinem/rust-cache@v2.8.0
 
       - name: Cargo test
         uses: actions-rs/cargo@v1.0.3
@@ -198,7 +198,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4.2.2
+    - uses: actions/checkout@v4.3.0
 
     - name: Install Rust stable toolchain
       uses: actions-rs/toolchain@v1.0.7

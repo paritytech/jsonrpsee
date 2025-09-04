@@ -256,7 +256,7 @@ impl RequestManager {
 		&mut self,
 		request_id: RequestId,
 		subscription_id: SubscriptionId<'static>,
-	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId)> {
+	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId<'_>)> {
 		match (self.requests.entry(request_id), self.subscriptions.entry(subscription_id)) {
 			(Entry::Occupied(request), Entry::Occupied(subscription))
 				if matches!(request.get(), Kind::Subscription(_)) =>
@@ -282,7 +282,7 @@ impl RequestManager {
 		&mut self,
 		request_id: RequestId,
 		subscription_id: SubscriptionId<'static>,
-	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId)> {
+	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId<'_>)> {
 		match (self.requests.entry(request_id), self.subscriptions.entry(subscription_id)) {
 			(Entry::Occupied(mut request), Entry::Occupied(subscription))
 				if matches!(request.get(), Kind::Subscription(_)) =>

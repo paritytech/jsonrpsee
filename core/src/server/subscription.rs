@@ -429,7 +429,7 @@ impl Subscription {
 	}
 
 	/// Get the subscription ID
-	pub fn subscription_id(&self) -> &SubscriptionId {
+	pub fn subscription_id(&self) -> &SubscriptionId<'static> {
 		&self.sub_id
 	}
 
