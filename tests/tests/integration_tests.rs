@@ -69,9 +69,9 @@ async fn ws_subscription_works() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut hello_sub: Subscription<String> =
+	let mut hello_sub: Subscription<_, String> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-	let mut foo_sub: Subscription<u64> =
+	let mut foo_sub: Subscription<_, u64> =
 		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
@@ -92,9 +92,9 @@ async fn ws_subscription_works_over_proxy_stream() {
 	let socks_stream = connect_over_socks_stream(server_addr).await;
 	let client = WsClientBuilder::default().build_with_stream(target_url, socks_stream).await.unwrap();
 
-	let mut hello_sub: Subscription<String> =
+	let mut hello_sub: Subscription<_, String> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-	let mut foo_sub: Subscription<u64> =
+	let mut foo_sub: Subscription<_, u64> =
 		client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
@@ -114,7 +114,7 @@ async fn ws_unsubscription_works() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let sub: Subscription<usize> =
+	let sub: Subscription<_, usize> =
 		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
 
 	sub.unsubscribe().with_default_timeout().await.unwrap().unwrap();
@@ -135,7 +135,7 @@ async fn ws_unsubscription_works_over_proxy_stream() {
 	let socks_stream = connect_over_socks_stream(server_addr).await;
 	let client = WsClientBuilder::default().build_with_stream(&server_url, socks_stream).await.unwrap();
 
-	let sub: Subscription<usize> =
+	let sub: Subscription<_, usize> =
 		client.subscribe("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap();
 
 	sub.unsubscribe().with_default_timeout().await.unwrap().unwrap();
@@ -152,7 +152,7 @@ async fn ws_subscription_with_input_works() {
 	let server_addr = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut add_one: Subscription<u64> =
+	let mut add_one: Subscription<_, u64> =
 		client.subscribe("subscribe_add_one", rpc_params![1], "unsubscribe_add_one").await.unwrap();
 
 	for i in 2..4 {
@@ -171,7 +171,7 @@ async fn ws_subscription_with_input_works_over_proxy_stream() {
 	let socks_stream = connect_over_socks_stream(server_addr).await;
 	let client = WsClientBuilder::default().build_with_stream(&server_url, socks_stream).await.unwrap();
 
-	let mut add_one: Subscription<u64> =
+	let mut add_one: Subscription<_, u64> =
 		client.subscribe("subscribe_add_one", rpc_params![1], "unsubscribe_add_one").await.unwrap();
 
 	for i in 2..4 {
@@ -310,9 +310,9 @@ async fn ws_subscription_several_clients() {
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
 		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-		let hello_sub: Subscription<JsonValue> =
+		let hello_sub: Subscription<_, JsonValue> =
 			client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-		let foo_sub: Subscription<JsonValue> =
+		let foo_sub: Subscription<_, JsonValue> =
 			client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
@@ -332,9 +332,9 @@ async fn ws_subscription_several_clients_with_drop() {
 			.build(&server_url)
 			.await
 			.unwrap();
-		let hello_sub: Subscription<String> =
+		let hello_sub: Subscription<_, String> =
 			client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
-		let foo_sub: Subscription<u64> =
+		let foo_sub: Subscription<_, u64> =
 			client.subscribe("subscribe_foo", rpc_params![], "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
@@ -378,7 +378,7 @@ async fn ws_subscription_close_on_lagging() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().max_buffer_capacity_per_subscription(4).build(&server_url).await.unwrap();
-	let mut hello_sub: Subscription<JsonValue> =
+	let mut hello_sub: Subscription<_, JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
 	// Don't poll the subscription stream for 2 seconds, should be full now.
@@ -399,7 +399,7 @@ async fn ws_subscription_close_on_lagging() {
 	let _hello_req: JsonValue = client.request("say_hello", rpc_params![]).await.unwrap();
 
 	// The same subscription should be possible to register again.
-	let mut other_sub: Subscription<JsonValue> =
+	let mut other_sub: Subscription<_, JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
 	assert!(other_sub.next().with_default_timeout().await.unwrap().is_some());
@@ -453,10 +453,10 @@ async fn ws_unsubscribe_releases_request_slots() {
 
 	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
 
-	let sub1: Subscription<JsonValue> =
+	let sub1: Subscription<_, JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 	drop(sub1);
-	let _: Subscription<JsonValue> =
+	let _: Subscription<_, JsonValue> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 }
 
@@ -469,7 +469,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<String> =
+	let mut sub: Subscription<_, String> =
 		client.subscribe("subscribe_noop", rpc_params![], "unsubscribe_noop").await.unwrap();
 
 	assert!(sub.next().await.is_none());
@@ -484,7 +484,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<String> =
+	let mut sub: Subscription<_, String> =
 		c1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
 	assert!(matches!(sub.next().await, Some(Ok(_))));
@@ -492,7 +492,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 	server_handle.stop().unwrap();
 	server_handle.stopped().await;
 
-	let sub2: Result<Subscription<String>, _> =
+	let sub2: Result<Subscription<_, String>, _> =
 		c1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await;
 
 	// no new request should be accepted.
@@ -512,7 +512,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 }
 
 #[tokio::test]
-async fn ws_server_should_stop_subscription_after_client_drop() {
+async fn ws_server_should_stop_subscription_after_client_and_subscriptions_dropped() {
 	use futures::{SinkExt, StreamExt, channel::mpsc};
 	use jsonrpsee::{RpcModule, server::ServerBuilder};
 
@@ -546,13 +546,14 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<usize> =
+	let mut sub: Subscription<_, usize> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await.unwrap();
 
 	let res = sub.next().await.unwrap().unwrap();
 
 	assert_eq!(res, 1);
 	drop(client);
+	drop(sub);
 	let close_err = rx.next().await.unwrap();
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
@@ -674,6 +675,7 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	}
 
 	// terminate connection.
+	drop(subs);
 	drop(client);
 
 	let rx_len = rx.take(10).fold(0, |acc, _| async move { acc + 1 }).await;
@@ -689,9 +691,9 @@ async fn ws_server_subscribe_with_stream() {
 	let server_url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub1: Subscription<usize> =
+	let mut sub1: Subscription<_, usize> =
 		client.subscribe("subscribe_5_ints", rpc_params![], "unsubscribe_5_ints").await.unwrap();
-	let mut sub2: Subscription<usize> =
+	let mut sub2: Subscription<_, usize> =
 		client.subscribe("subscribe_5_ints", rpc_params![], "unsubscribe_5_ints").await.unwrap();
 
 	let (r1, r2) = futures::future::try_join(
