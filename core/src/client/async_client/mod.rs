@@ -596,12 +596,12 @@ where
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	fn subscribe<'a, Notif, Params>(
-		&self,
+	fn subscribe<'a, 'client, Notif, Params>(
+		&'client self,
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	) -> impl Future<Output = Result<Subscription<'client, Self, Notif>, Error>> + Send
 	where
 		Params: ToRpcParams + Send,
 		Notif: DeserializeOwned,
@@ -632,12 +632,12 @@ where
 				.await?
 				.into_subscription()
 				.expect("Extensions set to subscription, must return subscription; qed");
-			Ok(Subscription::new(self.to_back.clone(), sub.stream, SubscriptionKind::Subscription(sub.sub_id)))
+			Ok(Subscription::new(self, self.to_back.clone(), sub.stream, SubscriptionKind::Subscription(sub.sub_id)))
 		}
 	}
 
 	/// Subscribe to a specific method.
-	fn subscribe_to_method<N>(&self, method: &str) -> impl Future<Output = Result<Subscription<N>, Error>> + Send
+	fn subscribe_to_method<'client, N>(&'client self, method: &str) -> impl Future<Output = Result<Subscription<'client, Self, N>, Error>> + Send
 	where
 		N: DeserializeOwned,
 	{
@@ -664,7 +664,7 @@ where
 				Err(_) => return Err(self.on_disconnect().await),
 			};
 
-			Ok(Subscription::new(self.to_back.clone(), rx, SubscriptionKind::Method(method)))
+			Ok(Subscription::new(self, self.to_back.clone(), rx, SubscriptionKind::Method(method)))
 		}
 	}
 }
