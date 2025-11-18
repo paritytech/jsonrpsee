@@ -15,7 +15,7 @@ jobs:
       image: "paritytech/ci-unified:bullseye-1.85.0-2025-01-28-v202504231537"
     steps:
       - name: Checkout Sources
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
