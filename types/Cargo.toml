@@ -18,6 +18,6 @@ workspace = true
 
 [dependencies]
 http = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["alloc"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

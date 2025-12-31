@@ -20,7 +20,7 @@ workspace = true
 async-trait = { workspace = true }
 jsonrpsee-types = { workspace = true }
 thiserror = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["alloc"] }
 serde_json = { workspace = true, features = ["std", "raw_value"] }
 tracing = { workspace = true }
 

@@ -33,7 +33,7 @@ hyper-util = { workspace = true, features = ["client", "client-legacy"]}
 futures-channel = { workspace = true }
 futures-util = { workspace = true }
 serde_json = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["alloc"] }
 trybuild = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
 tower = { workspace = true }
