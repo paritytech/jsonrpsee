@@ -57,6 +57,10 @@ pub type HttpRequest<T = HttpBody> = jsonrpsee_core::http_helpers::Request<T>;
 /// HTTP response with default body.
 pub type HttpResponse<T = HttpBody> = jsonrpsee_core::http_helpers::Response<T>;
 
+pub use jsonrpsee_core::middleware::layer::{RpcLogger, RpcLoggerLayer};
+pub use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
+pub use transport::{HttpBackend, HttpTransportClient};
+
 /// Custom TLS configuration.
 #[cfg(feature = "tls")]
 pub type CustomCertStore = rustls::ClientConfig;

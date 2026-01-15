@@ -26,7 +26,7 @@ jsonrpsee-types = { workspace = true }
 jsonrpsee-core = { workspace = true, features = ["client", "http-helpers"] }
 rustls = { workspace = true, optional = true, features = ["logging", "std", "tls12", "ring"] }
 rustls-platform-verifier = { workspace = true, optional = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["alloc"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }

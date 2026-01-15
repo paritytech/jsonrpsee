@@ -1,4 +1,4 @@
-error[E0277]: the trait bound `<Conf as Config>::Hash: DeserializeOwned` is not satisfied
+error[E0277]: the trait bound `<Conf as Config>::Hash: serde::de::DeserializeOwned` is not satisfied
  --> tests/ui/incorrect/rpc/rpc_empty_bounds.rs:9:1
   |
 9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]
@@ -15,7 +15,7 @@ note: required by a bound in `request`
   |            ^^^^^^^^^^^^^^^^ required by this bound in `ClientT::request`
   = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `<Conf as Config>::Hash: Serialize` is not satisfied
+error[E0277]: the trait bound `<Conf as Config>::Hash: serde::Serialize` is not satisfied
  --> tests/ui/incorrect/rpc/rpc_empty_bounds.rs:9:1
   |
 9 | #[rpc(server, client, namespace = "foo", client_bounds(), server_bounds())]

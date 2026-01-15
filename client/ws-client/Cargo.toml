@@ -29,7 +29,7 @@ tracing-subscriber = { workspace = true }
 jsonrpsee-test-utils = { path = "../../test-utils" }
 tokio = { workspace = true, features = ["macros"] }
 serde_json = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["alloc"] }
 rustls = { workspace = true, features = ["logging", "std", "tls12", "ring"] }
 
 [features]
