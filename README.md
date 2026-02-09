@@ -55,6 +55,7 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 - [Uptest](https://github.com/uptest-sc/uptest)
 - [zkSync Era](https://github.com/matter-labs/zksync-era)
 - [Forest](https://github.com/ChainSafe/forest)
+- [NEAR MPC](https://github.com/near/mpc)
 
 ## Benchmarks
 
