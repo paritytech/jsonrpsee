@@ -35,6 +35,12 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+// These crates are only used behind wasip2 cfg gates, suppress unused warnings on other targets.
+#[cfg(not(all(target_os = "wasi", target_env = "p2")))]
+use log as _;
+#[cfg(all(feature = "tls-rustcrypto", not(all(target_os = "wasi", target_env = "p2"))))]
+use webpki_roots as _;
+
 mod client;
 mod rpc_service;
 
@@ -62,10 +68,10 @@ pub use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 pub use transport::{HttpBackend, HttpTransportClient};
 
 /// Custom TLS configuration.
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 pub type CustomCertStore = rustls::ClientConfig;
 
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 // rustls needs the concrete `ClientConfig` type so we can't Box it here.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
