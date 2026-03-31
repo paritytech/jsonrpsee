@@ -43,8 +43,8 @@ use crate::{CertificateStore, CustomCertStore};
 /// DNS resolution uses `std::net::ToSocketAddrs` directly (not `spawn_blocking`)
 /// since wasip2 is single-threaded but wasi-libc provides working `getaddrinfo`.
 #[cfg(all(target_os = "wasi", target_env = "p2"))]
-#[derive(Clone, Debug)]
-struct WasiConnector;
+#[derive(Copy, Clone, Debug)]
+pub struct WasiConnector;
 
 #[cfg(all(target_os = "wasi", target_env = "p2"))]
 impl Service<hyper::Uri> for WasiConnector {

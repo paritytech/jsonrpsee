@@ -18,7 +18,12 @@ cargo test -p jsonrpsee-http-client --no-default-features --features tls-rustcry
 
 echo ""
 echo "=== wasip2 build with tls-rustcrypto ==="
-RUSTFLAGS="--cfg tokio_unstable" cargo +nightly build --target wasm32-wasip2 -p jsonrpsee-http-client --no-default-features --features tls-rustcrypto
+RUSTFLAGS="--cfg tokio_unstable" cargo build --target wasm32-wasip2 -p jsonrpsee-http-client --no-default-features --features tls-rustcrypto
+
+echo ""
+echo "=== clippy warnings ==="
+cargo clippy --all-targets
+# cargo clippy -p jsonrpsee-http-client --no-default-features --features tls-rustcrypto --all-targets
 
 echo ""
 echo "All checks passed."

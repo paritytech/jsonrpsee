@@ -41,6 +41,10 @@ use log as _;
 #[cfg(all(feature = "tls-rustcrypto", not(all(target_os = "wasi", target_env = "p2"))))]
 use webpki_roots as _;
 
+// Unused just for wasi-p2
+#[cfg(all(target_os = "wasi", target_env = "p2"))]                                                                                                                           
+use rustls_platform_verifier as _;   
+
 mod client;
 mod rpc_service;
 
