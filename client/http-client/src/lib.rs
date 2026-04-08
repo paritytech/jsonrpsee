@@ -36,13 +36,14 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 // These crates are only used behind wasip2 cfg gates, suppress unused warnings on other targets.
-#[cfg(not(all(target_os = "wasi", target_env = "p2")))]
+#[cfg(not(wasip2))]
 use log as _;
-#[cfg(all(feature = "tls-rustcrypto", not(all(target_os = "wasi", target_env = "p2"))))]
+#[cfg(all(feature = "tls-rustcrypto", not(wasip2)))]
 use webpki_roots as _;
 
-// Unused just for wasi-p2
-#[cfg(all(target_os = "wasi", target_env = "p2"))]                                                                                                                           
+// rustls_platform_verifier is used on native targets (ConfigVerifierExt) but not on wasip2,
+// where we use webpki_roots instead. Suppress the unused dependency warning for wasip2.
+#[cfg(wasip2)]
 use rustls_platform_verifier as _;   
 
 mod client;

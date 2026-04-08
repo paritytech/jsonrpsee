@@ -16,6 +16,9 @@ publish = true
 [lints]
 workspace = true
 
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
 [dependencies]
 base64 = { workspace = true }
 hyper = { workspace = true, features = ["client", "http1", "http2"] }
@@ -47,6 +50,8 @@ tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
 [features]
 default = ["tls"]
 tls = ["hyper-rustls", "hyper-rustls/ring", "rustls", "rustls/ring", "rustls-platform-verifier"]
+# Note: rustls-platform-verifier is used on native targets (ConfigVerifierExt) but compiled-unused
+# on wasip2 where webpki_roots provides cert verification instead.
 tls-rustcrypto = ["hyper-rustls", "rustls", "rustls-rustcrypto", "rustls-platform-verifier", "webpki-roots"]
 
 [package.metadata.docs.rs]
