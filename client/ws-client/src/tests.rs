@@ -440,9 +440,9 @@ async fn is_connected_works() {
 }
 
 async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
-	batch: BatchRequestBuilder<'_>,
+	batch: BatchRequestBuilder<'static>,
 	response: String,
-) -> Result<BatchResponse<T>, Error> {
+) -> Result<BatchResponse<'static, T>, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
 		.with_default_timeout()
 		.await

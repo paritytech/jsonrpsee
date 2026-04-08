@@ -252,9 +252,9 @@ async fn batch_request_out_of_order_response() {
 }
 
 async fn run_batch_request_with_response<T: Send + DeserializeOwned + std::fmt::Debug + Clone + 'static>(
-	batch: BatchRequestBuilder<'_>,
+	batch: BatchRequestBuilder<'static>,
 	response: String,
-) -> Result<BatchResponse<T>, ClientError> {
+) -> Result<BatchResponse<'static, T>, ClientError> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
 	let uri = format!("http://{server_addr}");
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
