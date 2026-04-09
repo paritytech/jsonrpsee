@@ -63,7 +63,6 @@ pub(crate) struct SubscriptionLagged(Arc<RwLock<bool>>);
 /// Owned version of [`RawResponse`].
 pub type RawResponseOwned = RawResponse<'static>;
 
-#[allow(dead_code)]
 impl SubscriptionLagged {
 	/// Create a new [`SubscriptionLagged`].
 	pub(crate) fn new() -> Self {
@@ -289,7 +288,6 @@ pub struct Subscription<Notif> {
 // but type type has no need to be pinned.
 impl<Notif> std::marker::Unpin for Subscription<Notif> {}
 
-#[allow(dead_code)]
 impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
 	fn new(to_back: mpsc::Sender<FrontToBack>, rx: SubscriptionReceiver, kind: SubscriptionKind) -> Self {
@@ -335,7 +333,6 @@ impl<Notif> Subscription<Notif> {
 
 /// Batch request message.
 #[derive(Debug)]
-#[allow(dead_code)]
 struct BatchMessage {
 	/// Serialized batch request.
 	raw: String,
@@ -347,7 +344,6 @@ struct BatchMessage {
 
 /// Request message.
 #[derive(Debug)]
-#[allow(dead_code)]
 struct RequestMessage {
 	/// Serialized message.
 	raw: String,
@@ -359,7 +355,6 @@ struct RequestMessage {
 
 /// Subscription message.
 #[derive(Debug)]
-#[allow(dead_code)]
 struct SubscriptionMessage {
 	/// Serialized message.
 	raw: String,
@@ -377,7 +372,6 @@ struct SubscriptionMessage {
 
 /// RegisterNotification message.
 #[derive(Debug)]
-#[allow(dead_code)]
 struct RegisterNotificationMessage {
 	/// Method name this notification handler is attached to
 	method: String,
@@ -389,7 +383,6 @@ struct RegisterNotificationMessage {
 
 /// Message that the Client can send to the background task.
 #[derive(Debug)]
-#[allow(dead_code)]
 enum FrontToBack {
 	/// Send a batch request to the server.
 	Batch(BatchMessage),
@@ -613,7 +606,6 @@ impl<'a, R> IntoIterator for BatchResponse<'a, R> {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[allow(dead_code)]
 enum TrySubscriptionSendError {
 	#[error("The subscription is closed")]
 	Closed,
@@ -622,13 +614,11 @@ enum TrySubscriptionSendError {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) struct SubscriptionSender {
 	inner: mpsc::Sender<Box<RawValue>>,
 	lagged: SubscriptionLagged,
 }
 
-#[allow(dead_code)]
 impl SubscriptionSender {
 	fn send(&self, msg: Box<RawValue>) -> Result<(), TrySubscriptionSendError> {
 		match self.inner.try_send(msg) {
@@ -656,7 +646,6 @@ impl Stream for SubscriptionReceiver {
 	}
 }
 
-#[allow(dead_code)]
 fn subscription_channel(max_buf_size: usize) -> (SubscriptionSender, SubscriptionReceiver) {
 	let (tx, rx) = mpsc::channel(max_buf_size);
 	let lagged_tx = SubscriptionLagged::new();
@@ -672,7 +661,6 @@ pub struct SubscriptionResponse {
 	sub_id: SubscriptionId<'static>,
 	// The receiver is used to receive notifications from the server and shouldn't be exposed to the user
 	// from the middleware.
-	#[allow(dead_code)]
 	stream: SubscriptionReceiver,
 }
 
