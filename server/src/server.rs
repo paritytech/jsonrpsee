@@ -42,7 +42,7 @@ use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::{Batch, BatchEntry, BatchEntryErr, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
@@ -1229,7 +1229,7 @@ where
 
 		if http2_only {
 			let mut builder = hyper::server::conn::http2::Builder::new(TokioExecutor::new());
-			builder.keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
+			builder.timer(TokioTimer::new()).keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
 			let conn = builder.serve_connection(io, service);
 			drive_connection(conn, stopped).await;
 		} else {
