@@ -548,7 +548,7 @@ impl ServerConfigBuilder {
 
 	/// ENABLE `HTTP2_ONLY` for h2c requests, requires prior-knowledge from clients
 	pub fn http2_only(mut self, enabled: bool) -> Self {
-		self.enable_http = enabled;
+		self.http2_only = enabled;
 		self
 	}
 
