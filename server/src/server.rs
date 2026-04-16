@@ -1225,17 +1225,18 @@ where
 		// this requires Clone.
 		let service = crate::utils::TowerToHyperService::new(service);
 		let io = TokioIo::new(socket);
-		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-
-		//default is true for http1, if set to false then websocket connections will not be upgraded.
-		builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
 		let stopped = stop_handle.shutdown();
 
 		if http2_only {
-			let builder = builder.http2_only();
+			let mut builder = hyper::server::conn::http2::Builder::new(TokioExecutor::new());
+			builder.keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
 			let conn = builder.serve_connection(io, service);
 			drive_connection(conn, stopped).await;
 		} else {
+			let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+
+			//default is true for http1, if set to false then websocket connections will not be upgraded.
+			builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
 			let conn = builder.serve_connection_with_upgrades(io, service);
 			drive_connection(conn, stopped).await;
 		}
