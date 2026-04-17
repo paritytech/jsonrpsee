@@ -22,7 +22,7 @@ http = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["server", "http1", "http2"] }
-hyper-util = { workspace = true, features = ["tokio", "service", "server-auto", "server-graceful"], version = "1.0.0" }
+hyper-util = { workspace = true, features = ["tokio", "service", "server-auto", "server-graceful"] }
 jsonrpsee-core = { workspace = true, features = ["server", "http-helpers"] }
 jsonrpsee-types = { workspace = true }
 pin-project = "1.1.3"
