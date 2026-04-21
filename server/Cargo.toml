@@ -16,6 +16,9 @@ publish = true
 [lints]
 workspace = true
 
+[features]
+ws-deflate = ["soketto/deflate"]
+
 [dependencies]
 futures-util = { workspace = true, features = ["io", "async-await-macro"] }
 http = { workspace = true }

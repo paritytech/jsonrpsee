@@ -53,6 +53,8 @@ use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
 };
 use jsonrpsee_types::{ErrorObject, Id};
+#[cfg(feature = "ws-deflate")]
+use soketto::extension::deflate::Deflate;
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, watch};
@@ -200,6 +202,9 @@ pub struct ServerConfig {
 	pub(crate) keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	pub(crate) keep_alive_timeout: Duration,
+	/// Enable WebSocket per-message deflate compression.
+	#[cfg(feature = "ws-deflate")]
+	pub(crate) ws_compression: bool,
 }
 
 /// The builder to configure and create a JSON-RPC server configuration.
@@ -233,6 +238,9 @@ pub struct ServerConfigBuilder {
 	keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	keep_alive_timeout: std::time::Duration,
+	/// Enable WebSocket per-message deflate compression.
+	#[cfg(feature = "ws-deflate")]
+	ws_compression: bool,
 }
 
 /// Builder for [`TowerService`].
@@ -374,6 +382,8 @@ impl Default for ServerConfigBuilder {
 			keep_alive: None,
 			//same as `hyper` default
 			keep_alive_timeout: Duration::from_secs(20),
+			#[cfg(feature = "ws-deflate")]
+			ws_compression: false,
 		}
 	}
 }
@@ -496,6 +506,27 @@ impl ServerConfigBuilder {
 		self
 	}
 
+	/// Enable per-message deflate compression for WebSocket connections.
+	///
+	/// This uses the `permessage-deflate` WebSocket extension (RFC 7692)
+	/// to compress individual messages.
+	///
+	/// Default: compression is disabled.
+	#[cfg(feature = "ws-deflate")]
+	pub fn enable_ws_compression(mut self) -> Self {
+		self.ws_compression = true;
+		self
+	}
+
+	/// Disable per-message deflate compression for WebSocket connections.
+	///
+	/// Default: compression is disabled.
+	#[cfg(feature = "ws-deflate")]
+	pub fn disable_ws_compression(mut self) -> Self {
+		self.ws_compression = false;
+		self
+	}
+
 	/// Configure custom `subscription ID` provider for the server to use
 	/// to when getting new subscription calls.
 	///
@@ -558,6 +589,8 @@ impl ServerConfigBuilder {
 			tcp_no_delay: self.tcp_no_delay,
 			keep_alive: self.keep_alive,
 			keep_alive_timeout: self.keep_alive_timeout,
+			#[cfg(feature = "ws-deflate")]
+			ws_compression: self.ws_compression,
 		}
 	}
 }
@@ -1045,6 +1078,11 @@ where
 			let this = self.inner.clone();
 
 			let mut server = soketto::handshake::http::Server::new();
+
+			#[cfg(feature = "ws-deflate")]
+			if this.server_cfg.ws_compression {
+				server.add_extension(Box::new(Deflate::new(soketto::Mode::Server)));
+			}
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {

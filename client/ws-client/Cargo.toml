@@ -35,6 +35,7 @@ rustls = { workspace = true, features = ["logging", "std", "tls12", "ring"] }
 [features]
 tls = ["jsonrpsee-client-transport/tls"]
 tls-rustls-platform-verifier = ["jsonrpsee-client-transport/tls-rustls-platform-verifier", "tls"]
+ws-deflate = ["jsonrpsee-client-transport/ws-deflate"]
 default = ["tls-rustls-platform-verifier"]
 
 [package.metadata.docs.rs]
