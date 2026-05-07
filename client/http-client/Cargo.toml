@@ -48,7 +48,7 @@ tokio = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
 
 [features]
-default = ["tls"]
+default = ["tls-rustcrypto"]
 tls = ["hyper-rustls", "hyper-rustls/ring", "rustls", "rustls/ring", "rustls-platform-verifier"]
 # Note: rustls-platform-verifier is used on native targets (ConfigVerifierExt) but compiled-unused
 # on wasip2 where webpki_roots provides cert verification instead.
