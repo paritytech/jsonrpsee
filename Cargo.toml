@@ -1,6 +1,5 @@
 [workspace]
 members = [
-	"benches",
 	"client/http-client",
 	"client/transport",
 	"client/wasm-client",
@@ -16,6 +15,10 @@ members = [
 	"tests/proc-macro-core",
 	"types",
 ]
+# benches/ pulls jsonrpc-http-server (hyper 0.14), which pins socket2 to 0.5.x and breaks
+# wasm32-wasip2 builds. Keep it out of the workspace so downstream consumers' lockfiles
+# aren't poisoned; run benchmarks from inside benches/ with its own lockfile.
+exclude = ["benches"]
 resolver = "3"
 
 [workspace.package]

@@ -31,6 +31,29 @@
 //! It is tightly-coupled to [`tokio`](https://docs.rs/tokio) because [`hyper`](https://docs.rs/hyper) is used as transport client,
 //! which is not compatible with other async runtimes such as
 //! [`async-std`](https://docs.rs/async-std/), [`smol`](https://docs.rs/smol) and similar.
+//!
+//! ## Building for `wasm32-wasip2`
+//!
+//! On `wasm32-wasip2` this crate uses `tokio::net::TcpStream`, which tokio gates behind the
+//! unstable `--cfg tokio_unstable` rustc flag. Downstream consumers must set this flag themselves
+//! when targeting `wasm32-wasip2`. The recommended way is a `.cargo/config.toml` in the consumer
+//! crate:
+//!
+//! ```toml
+//! [target.wasm32-wasip2]
+//! rustflags = ["--cfg", "tokio_unstable"]
+//! ```
+//!
+//! Without it, the build fails inside `tokio` with
+//! `compile_error!("Only features sync,macros,io-util,rt,time are supported on wasm.")`.
+//!
+//! The default `tls` feature uses [`ring`](https://docs.rs/ring) for crypto, which has a C build
+//! step that requires `clang` on the host. For wasip2 builds without a C toolchain, use the
+//! pure-Rust `tls-rustcrypto` feature instead:
+//!
+//! ```bash
+//! cargo build --target wasm32-wasip2 --no-default-features --features tls-rustcrypto
+//! ```
 
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -43,8 +66,8 @@ use webpki_roots as _;
 
 // rustls_platform_verifier is used on native targets (ConfigVerifierExt) but not on wasip2,
 // where we use webpki_roots instead. Suppress the unused dependency warning for wasip2.
-#[cfg(wasip2)]
-use rustls_platform_verifier as _;   
+#[cfg(all(wasip2, any(feature = "tls", feature = "tls-rustcrypto")))]
+use rustls_platform_verifier as _;
 
 mod client;
 mod rpc_service;
