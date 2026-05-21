@@ -574,6 +574,8 @@ async fn custom_subscription_id_works() {
 			"subscribe_hello",
 			"unsubscribe_hello",
 			|_, sink, _, _| async {
+				assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
+
 				let sink = sink.accept().await.unwrap();
 				assert!(matches!(sink.subscription_id(), SubscriptionId::Str(id) if id == "0xdeadbeef"));
 				// Keep idle until it's unsubscribed.

@@ -301,6 +301,11 @@ impl PendingSubscriptionSink {
 		}
 	}
 
+	/// Get the subscription ID.
+	pub fn subscription_id(&self) -> SubscriptionId<'static> {
+		self.uniq_sub.sub_id.clone()
+	}
+
 	/// Returns connection identifier, which was used to perform pending subscription request
 	pub fn connection_id(&self) -> ConnectionId {
 		self.uniq_sub.conn_id
