@@ -358,4 +358,49 @@ mod tests {
 		let ser = serde_json::to_string(&ErrorObject::owned(-32699, "food", Some(data))).unwrap();
 		assert_eq!(exp, ser);
 	}
+
+	#[test]
+	fn deserialize_fails_with_extra_field() {
+		let ser = r#"{"code":-32700,"message":"Parse error","extra":1}"#;
+		assert!(serde_json::from_str::<ErrorObject>(ser).is_err());
+	}
+
+	#[test]
+	fn deserialize_fails_with_missing_code() {
+		let ser = r#"{"message":"Parse error"}"#;
+		assert!(serde_json::from_str::<ErrorObject>(ser).is_err());
+	}
+
+	#[test]
+	fn deserialize_fails_with_missing_message() {
+		let ser = r#"{"code":-32700}"#;
+		assert!(serde_json::from_str::<ErrorObject>(ser).is_err());
+	}
+
+	#[test]
+	fn deserialize_with_data_object() {
+		let ser = r#"{"code":-32602,"message":"Invalid params","data":{"key":"value"}}"#;
+		let err: ErrorObject = serde_json::from_str(ser).unwrap();
+		assert_eq!(err.code(), -32602);
+		assert_eq!(err.message(), "Invalid params");
+		assert_eq!(err.data().unwrap().get(), r#"{"key":"value"}"#);
+	}
+
+	#[test]
+	fn deserialize_with_data_array() {
+		let ser = r#"{"code":-32602,"message":"Invalid params","data":[1,2,3]}"#;
+		let err: ErrorObject = serde_json::from_str(ser).unwrap();
+		assert_eq!(err.code(), -32602);
+		assert_eq!(err.message(), "Invalid params");
+		assert_eq!(err.data().unwrap().get(), "[1,2,3]");
+	}
+
+	#[test]
+	fn deserialize_with_data_null() {
+		let ser = r#"{"code":-32602,"message":"Invalid params","data":null}"#;
+		let err: ErrorObject = serde_json::from_str(ser).unwrap();
+		assert_eq!(err.code(), -32602);
+		assert_eq!(err.message(), "Invalid params");
+		assert!(err.data().is_none());
+	}
 }
