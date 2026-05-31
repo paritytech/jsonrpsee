@@ -504,4 +504,23 @@ mod tests {
 		let response = client.send(body).await.unwrap_err();
 		assert!(matches!(response, Error::RequestTooLarge));
 	}
+
+	#[test]
+	fn http_with_username_and_password() {
+		let client = HttpTransportClientBuilder::new().build("http://user:pwd@localhost:9999").unwrap();
+		assert_eq!(client.headers["authorization"], "Basic dXNlcjpwd2Q=");
+	}
+
+	#[test]
+	fn http_with_special_username_and_password() {
+		let client = HttpTransportClientBuilder::new().build("http://=:=@localhost:9999").unwrap();
+		assert_eq!(client.headers["authorization"], "Basic PTo9");
+	}
+
+	#[test]
+	fn http_with_percent_username_and_password() {
+		// username "a", password "b"
+		let client = HttpTransportClientBuilder::new().build("http://%61:%62@localhost:9999").unwrap();
+		assert_eq!(client.headers["authorization"], "Basic YTpi");
+	}
 }
