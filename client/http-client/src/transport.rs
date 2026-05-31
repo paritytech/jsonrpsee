@@ -17,6 +17,7 @@ use jsonrpsee_core::{
 	TEN_MB_SIZE_BYTES,
 	http_helpers::{self, HttpError},
 };
+use percent_encoding::percent_decode_str;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -308,7 +309,13 @@ impl<L> HttpTransportClientBuilder<L> {
 
 		if let Some(pwd) = url.password() {
 			if !cached_headers.contains_key(hyper::header::AUTHORIZATION) {
-				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{pwd}", url.username()));
+				let usr = percent_decode_str(url.username())
+					.decode_utf8()
+					.map_err(|_| Error::Url("username is not valid utf8".into()))?;
+				let pwd = percent_decode_str(pwd)
+					.decode_utf8()
+					.map_err(|_| Error::Url("password is not valid utf8".into()))?;
+				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{usr}:{pwd}"));
 				cached_headers.insert(
 					hyper::header::AUTHORIZATION,
 					HeaderValue::from_str(&format!("Basic {digest}"))
