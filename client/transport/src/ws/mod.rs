@@ -771,4 +771,27 @@ mod tests {
 
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
 	}
+
+	#[test]
+	fn ws_with_special_username_and_password() {
+		use base64::Engine;
+
+		let target = parse_target("ws://=:=@127.0.0.1").unwrap();
+		let digest = base64::engine::general_purpose::STANDARD.encode("=:=");
+		let basic_auth = HeaderValue::from_str(&format!("Basic {digest}")).unwrap();
+
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
+	}
+
+	#[test]
+	fn ws_with_percent_username_and_password() {
+		use base64::Engine;
+
+		// username "a", password "b"
+		let target = parse_target("ws://%61:%62@127.0.0.1").unwrap();
+		let digest = base64::engine::general_purpose::STANDARD.encode("a:b");
+		let basic_auth = HeaderValue::from_str(&format!("Basic {digest}")).unwrap();
+
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
+	}
 }
