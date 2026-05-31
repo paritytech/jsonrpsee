@@ -28,6 +28,7 @@ tokio-util = { workspace = true, features = ["compat"], optional = true }
 tokio = { workspace = true, features = ["net", "time", "macros"], optional = true }
 pin-project = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
+percent-encoding = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 
 # tls
@@ -59,6 +60,7 @@ ws = [
     "thiserror",
     "tracing",
     "url",
+    "percent-encoding",
 ]
 web = [
     "gloo-net",
