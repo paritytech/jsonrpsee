@@ -4,6 +4,12 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [Unreleased]
+
+### [Added]
+
+- feat(http-client): expose connect timeout option ([#XXXX](https://github.com/paritytech/jsonrpsee/pull/XXXX))
+
 ## [v0.26.0] - 2025-08-11
 
 This is just a small release; the only breaking change is the addition of `max_frame_size` to `WsTransportClientBuilder`, which necessitates a minor version bump.
