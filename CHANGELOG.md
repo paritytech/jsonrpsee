@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog].
 
 ### [Added]
 
-- feat(http-client): expose connect timeout option ([#XXXX](https://github.com/paritytech/jsonrpsee/pull/XXXX))
+- feat(http-client): expose connect timeout option ([#1643](https://github.com/paritytech/jsonrpsee/pull/1643))
 
 ## [v0.26.0] - 2025-08-11
 
