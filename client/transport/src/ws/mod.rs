@@ -531,8 +531,8 @@ impl WsTransportClientBuilder {
 ///
 /// This replaces `url::Url::socket_addrs`, which performs *blocking* `getaddrinfo`
 /// resolution (via `std::net::ToSocketAddrs`) on the calling thread. Inside the async client
-/// that means a Tokio worker thread can be blocked for as long as the system resolver takes
-/// `tokio::net::lookup_host` runs the  lookup on Tokio's blocking thread pool instead,
+/// that means a Tokio worker thread can be blocked for as long as the system resolver takes.
+/// `tokio::net::lookup_host` runs the lookup on Tokio's blocking thread pool instead,
 /// and IP literals are turned into a `SocketAddr` directly without any DNS lookup.
 ///
 /// The whole resolution is bounded by `timeout_dur`; on expiry it returns
@@ -548,26 +548,20 @@ async fn resolve_sockaddrs(uri: &Url, timeout_dur: Duration) -> Result<Vec<Socke
 		// the enum exposes a parsed `Ipv6Addr`. This mirrors what `url::Url::socket_addrs` does
 		// internally, so IP literals and default ports behave exactly as before.
 		match uri.host() {
-			Some(url::Host::Domain(domain)) => {
-				let addrs = tokio::net::lookup_host((domain, port))
-					.await
-					.map_err(|e| {
-						tracing::debug!(target: LOG_TARGET, "DNS resolution failed for {domain}: {e:?}");
-						WsHandshakeError::ResolutionFailed(e)
-					})?
-					.collect();
-				Ok(addrs)
-			}
+			Some(url::Host::Domain(domain)) => tokio::net::lookup_host((domain, port))
+				.await
+				.map(|addrs| addrs.collect())
+				.map_err(|e| {
+					tracing::debug!(target: LOG_TARGET, "DNS resolution failed for {domain}: {e:?}");
+					WsHandshakeError::ResolutionFailed(e)
+				}),
 			Some(url::Host::Ipv4(ip)) => Ok(vec![SocketAddr::from((ip, port))]),
 			Some(url::Host::Ipv6(ip)) => Ok(vec![SocketAddr::from((ip, port))]),
 			None => Err(WsHandshakeError::Url("No host name in the URL".into())),
 		}
 	};
 
-	match tokio::time::timeout(timeout_dur, resolve).await {
-		Ok(res) => res,
-		Err(_elapsed) => Err(WsHandshakeError::Timeout(timeout_dur)),
-	}
+	tokio::time::timeout(timeout_dur, resolve).await.map_err(|_| WsHandshakeError::Timeout(timeout_dur))?
 }
 
 #[cfg(feature = "tls")]
