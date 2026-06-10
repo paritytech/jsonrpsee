@@ -548,13 +548,12 @@ async fn resolve_sockaddrs(uri: &Url, timeout_dur: Duration) -> Result<Vec<Socke
 		// the enum exposes a parsed `Ipv6Addr`. This mirrors what `url::Url::socket_addrs` does
 		// internally, so IP literals and default ports behave exactly as before.
 		match uri.host() {
-			Some(url::Host::Domain(domain)) => tokio::net::lookup_host((domain, port))
-				.await
-				.map(|addrs| addrs.collect())
-				.map_err(|e| {
+			Some(url::Host::Domain(domain)) => {
+				tokio::net::lookup_host((domain, port)).await.map(|addrs| addrs.collect()).map_err(|e| {
 					tracing::debug!(target: LOG_TARGET, "DNS resolution failed for {domain}: {e:?}");
 					WsHandshakeError::ResolutionFailed(e)
-				}),
+				})
+			}
 			Some(url::Host::Ipv4(ip)) => Ok(vec![SocketAddr::from((ip, port))]),
 			Some(url::Host::Ipv6(ip)) => Ok(vec![SocketAddr::from((ip, port))]),
 			None => Err(WsHandshakeError::Url("No host name in the URL".into())),
