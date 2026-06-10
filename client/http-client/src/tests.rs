@@ -67,12 +67,9 @@ async fn connect_timeout_fires_before_request_timeout() {
 
 	// Bound the test well under the 60s request timeout: the connect should fail in ~100ms. If it
 	// regressed and hung until the request timeout, this outer 10s bound trips and fails the test.
-	let res = tokio::time::timeout(
-		Duration::from_secs(10),
-		client.request::<String, _>("say_hello", rpc_params![]),
-	)
-	.await
-	.expect("connect should fail well before the request timeout");
+	let res = tokio::time::timeout(Duration::from_secs(10), client.request::<String, _>("say_hello", rpc_params![]))
+		.await
+		.expect("connect should fail well before the request timeout");
 
 	match res {
 		Ok(_) => panic!("expected a connect error, got a successful response"),
