@@ -42,7 +42,7 @@ use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::{Batch, BatchEntry, BatchEntryErr, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
@@ -1215,7 +1215,7 @@ where
 		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
 		//default is true for http1, if set to false then websocket connections will not be upgraded.
-		builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
+		builder.http2().timer(TokioTimer::new()).keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
 
 		let conn = builder.serve_connection_with_upgrades(io, service);
 		let stopped = stop_handle.shutdown();
