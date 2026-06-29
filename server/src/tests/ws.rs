@@ -735,6 +735,10 @@ async fn ws_server_backpressure_works() {
 				let bp = serde_json::value::to_raw_value(&2).unwrap();
 
 				let mut msg = n.clone();
+				// Only notify the client once that backpressure was hit. The signal channel has a
+				// capacity of one and the client reads it a single time, so re-sending on every
+				// timeout would eventually block this task forever and stall the subscription.
+				let mut backpressure_signaled = false;
 
 				loop {
 					tokio::select! {
@@ -752,8 +756,11 @@ async fn ws_server_backpressure_works() {
 								Err(SendTimeoutError::Closed(_)) => break Ok(()),
 								// msg == 2
 								Err(SendTimeoutError::Timeout(_)) => {
-									let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);
-									let _ = b_tx.send(()).await;
+									if !backpressure_signaled {
+										let b_tx = std::sync::Arc::make_mut(&mut backpressure_tx);
+										let _ = b_tx.send(()).await;
+										backpressure_signaled = true;
+									}
 									msg = bp.clone();
 								}
 							};
