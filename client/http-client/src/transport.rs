@@ -6,10 +6,14 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+#[cfg(all(feature = "tls", feature = "tls-rustcrypto"))]
+compile_error!("Features `tls` and `tls-rustcrypto` are mutually exclusive");
+
 use base64::Engine;
 use hyper::body::Bytes;
 use hyper::http::{HeaderMap, HeaderValue};
 use hyper_util::client::legacy::Client;
+#[cfg(not(wasip2))]
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use jsonrpsee_core::BoxError;
@@ -27,8 +31,69 @@ use url::Url;
 
 use crate::{HttpBody, HttpRequest, HttpResponse};
 
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 use crate::{CertificateStore, CustomCertStore};
+
+/// TCP connector for wasip2 that bypasses hyper-util's `HttpConnector`.
+///
+/// `HttpConnector` creates sockets via socket2 and calls `set_nonblocking()`,
+/// which fails on wasip2. This connector uses `tokio::net::TcpStream::connect()`
+/// instead, which goes through mio's wasip2-compatible path.
+///
+/// DNS resolution uses `std::net::ToSocketAddrs` directly (not `spawn_blocking`)
+/// since wasip2 is single-threaded but wasi-libc provides working `getaddrinfo`.
+#[cfg(wasip2)]
+#[derive(Copy, Clone, Debug)]
+pub struct WasiConnector;
+
+#[cfg(wasip2)]
+impl Service<hyper::Uri> for WasiConnector {
+	type Response = hyper_util::rt::TokioIo<tokio::net::TcpStream>;
+	type Error = Box<dyn std::error::Error + Send + Sync>;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+	fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn call(&mut self, uri: hyper::Uri) -> Self::Future {
+		Box::pin(async move {
+			let host = uri.host().ok_or("missing host")?;
+			let port = uri.port_u16().unwrap_or(match uri.scheme_str() {
+				Some("https") => 443,
+				_ => 80,
+			});
+
+			// Resolve DNS synchronously via std::net (wasi-libc getaddrinfo)
+			let addr = std::net::ToSocketAddrs::to_socket_addrs(&(host, port))?
+				.next()
+				.ok_or("DNS resolved no addresses")?;
+
+			// Connect via tokio (goes through mio's wasip2-compatible path)
+			let stream = tokio::net::TcpStream::connect(addr).await?;
+			Ok(hyper_util::rt::TokioIo::new(stream))
+		})
+	}
+}
+
+/// Log a warning when TCP socket options are set on wasip2, where they are unsupported.
+#[cfg(wasip2)]
+fn warn_unsupported_tcp_options(
+	tcp_no_delay: bool,
+	keep_alive_duration: Option<std::time::Duration>,
+	keep_alive_interval: Option<std::time::Duration>,
+	keep_alive_retries: Option<u32>,
+) {
+	if !tcp_no_delay || keep_alive_duration.is_some() || keep_alive_interval.is_some() || keep_alive_retries.is_some() {
+		log::warn!("TCP socket options (tcp_no_delay, keep_alive_*) are not supported on wasip2 and will be ignored");
+	}
+}
+
+/// Connector type selected by target: [`WasiConnector`] on wasip2, [`HttpConnector`] elsewhere.
+#[cfg(wasip2)]
+type Connector = WasiConnector;
+#[cfg(not(wasip2))]
+type Connector = HttpConnector;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
@@ -36,17 +101,17 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 #[derive(Debug)]
 pub enum HttpBackend<B = HttpBody> {
 	/// Hyper client with https connector.
-	#[cfg(feature = "tls")]
-	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>, B>),
+	#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
+	Https(Client<hyper_rustls::HttpsConnector<Connector>, B>),
 	/// Hyper client with http connector.
-	Http(Client<HttpConnector, B>),
+	Http(Client<Connector, B>),
 }
 
 impl<B> Clone for HttpBackend<B> {
 	fn clone(&self) -> Self {
 		match self {
 			Self::Http(inner) => Self::Http(inner.clone()),
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			Self::Https(inner) => Self::Https(inner.clone()),
 		}
 	}
@@ -65,7 +130,7 @@ where
 	fn poll_ready(&mut self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		match self {
 			Self::Http(inner) => inner.poll_ready(ctx),
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			Self::Https(inner) => inner.poll_ready(ctx),
 		}
 		.map_err(|e| Error::Http(HttpError::Stream(e.into())))
@@ -74,7 +139,7 @@ where
 	fn call(&mut self, req: HttpRequest<B>) -> Self::Future {
 		let resp = match self {
 			Self::Http(inner) => inner.call(req),
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			Self::Https(inner) => inner.call(req),
 		};
 
@@ -86,7 +151,7 @@ where
 #[derive(Debug)]
 pub struct HttpTransportClientBuilder<L> {
 	/// Certificate store.
-	#[cfg(feature = "tls")]
+	#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 	pub(crate) certificate_store: CertificateStore,
 	/// Configurable max request body size
 	pub(crate) max_request_size: u32,
@@ -116,7 +181,7 @@ impl HttpTransportClientBuilder<Identity> {
 	/// Create a new [`HttpTransportClientBuilder`].
 	pub fn new() -> Self {
 		Self {
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			certificate_store: CertificateStore::Native,
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
@@ -132,7 +197,7 @@ impl HttpTransportClientBuilder<Identity> {
 
 impl<L> HttpTransportClientBuilder<L> {
 	/// See docs [`crate::HttpClientBuilder::with_custom_cert_store`] for more information.
-	#[cfg(feature = "tls")]
+	#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
 		self.certificate_store = CertificateStore::Custom(cfg);
 		self
@@ -187,7 +252,7 @@ impl<L> HttpTransportClientBuilder<L> {
 	/// Configure a tower service.
 	pub fn set_service<T>(self, service: tower::ServiceBuilder<T>) -> HttpTransportClientBuilder<T> {
 		HttpTransportClientBuilder {
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			certificate_store: self.certificate_store,
 			headers: self.headers,
 			max_request_size: self.max_request_size,
@@ -210,7 +275,7 @@ impl<L> HttpTransportClientBuilder<L> {
 		B::Error: Into<BoxError>,
 	{
 		let Self {
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			certificate_store,
 			max_request_size,
 			max_response_size,
@@ -230,52 +295,24 @@ impl<L> HttpTransportClientBuilder<L> {
 
 		let client = match url.scheme() {
 			"http" => {
-				let mut connector = HttpConnector::new();
-				connector.set_nodelay(tcp_no_delay);
-				connector.set_keepalive(keep_alive_duration);
-				connector.set_keepalive_interval(keep_alive_interval);
-				connector.set_keepalive_retries(keep_alive_retries);
+				let connector = build_connector(tcp_no_delay, keep_alive_duration, keep_alive_interval, keep_alive_retries);
 				HttpBackend::Http(Client::builder(TokioExecutor::new()).build(connector))
 			}
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			"https" => {
-				// Make sure that the TLS provider is set. If not, set a default one.
-				// Otherwise, creating `tls` configuration may panic if there are multiple
-				// providers available due to `rustls` features (e.g. both `ring` and `aws-lc-rs`).
-				// Function returns an error if the provider is already installed, and we're fine with it.
-				let _ = rustls::crypto::ring::default_provider().install_default();
-
-				let mut http_conn = HttpConnector::new();
-				http_conn.set_nodelay(tcp_no_delay);
-				http_conn.enforce_http(false);
-				http_conn.set_keepalive(keep_alive_duration);
-				http_conn.set_keepalive_interval(keep_alive_interval);
-				http_conn.set_keepalive_retries(keep_alive_retries);
-
-				let https_conn = match certificate_store {
-					CertificateStore::Native => {
-						use rustls_platform_verifier::ConfigVerifierExt;
-
-						hyper_rustls::HttpsConnectorBuilder::new()
-							.with_tls_config(rustls::ClientConfig::with_platform_verifier())
-							.https_or_http()
-							.enable_all_versions()
-							.wrap_connector(http_conn)
-					}
-
-					CertificateStore::Custom(tls_config) => hyper_rustls::HttpsConnectorBuilder::new()
-						.with_tls_config(tls_config)
-						.https_or_http()
-						.enable_all_versions()
-						.wrap_connector(http_conn),
-				};
-
+				let https_conn = build_tls_connector(
+					tcp_no_delay,
+					keep_alive_duration,
+					keep_alive_interval,
+					keep_alive_retries,
+					certificate_store,
+				)?;
 				HttpBackend::Https(Client::builder(TokioExecutor::new()).build(https_conn))
 			}
 			_ => {
-				#[cfg(feature = "tls")]
+				#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 				let err = "URL scheme not supported, expects 'http' or 'https'";
-				#[cfg(not(feature = "tls"))]
+				#[cfg(not(any(feature = "tls", feature = "tls-rustcrypto")))]
 				let err = "URL scheme not supported, expects 'http'";
 				return Err(Error::Url(err.into()));
 			}
@@ -313,6 +350,98 @@ impl<L> HttpTransportClientBuilder<L> {
 			max_response_size,
 			headers: cached_headers,
 		})
+	}
+}
+
+/// Build an HTTP connector configured with TCP options.
+fn build_connector(
+	tcp_no_delay: bool,
+	keep_alive_duration: Option<std::time::Duration>,
+	keep_alive_interval: Option<std::time::Duration>,
+	keep_alive_retries: Option<u32>,
+) -> Connector {
+	#[cfg(wasip2)]
+	{
+		warn_unsupported_tcp_options(tcp_no_delay, keep_alive_duration, keep_alive_interval, keep_alive_retries);
+		WasiConnector
+	}
+	#[cfg(not(wasip2))]
+	{
+		let mut connector = HttpConnector::new();
+		connector.set_nodelay(tcp_no_delay);
+		connector.set_keepalive(keep_alive_duration);
+		connector.set_keepalive_interval(keep_alive_interval);
+		connector.set_keepalive_retries(keep_alive_retries);
+		connector
+	}
+}
+
+/// Build an HTTPS connector with TLS configured.
+#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
+fn build_tls_connector(
+	tcp_no_delay: bool,
+	keep_alive_duration: Option<std::time::Duration>,
+	keep_alive_interval: Option<std::time::Duration>,
+	keep_alive_retries: Option<u32>,
+	certificate_store: CertificateStore,
+) -> Result<hyper_rustls::HttpsConnector<Connector>, Error> {
+	install_crypto_provider();
+
+	let tls_config = match certificate_store {
+		CertificateStore::Native => build_native_tls_config()?,
+		CertificateStore::Custom(tls_config) => tls_config,
+	};
+
+	let connector = build_connector(tcp_no_delay, keep_alive_duration, keep_alive_interval, keep_alive_retries);
+
+	#[cfg(not(wasip2))]
+	let connector = {
+		let mut c = connector;
+		c.enforce_http(false);
+		c
+	};
+
+	Ok(hyper_rustls::HttpsConnectorBuilder::new()
+		.with_tls_config(tls_config)
+		.https_or_http()
+		.enable_all_versions()
+		.wrap_connector(connector))
+}
+
+/// Install the appropriate rustls crypto provider.
+#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
+fn install_crypto_provider() {
+	// Make sure that the TLS provider is set. If not, set a default one.
+	// Otherwise, creating `tls` configuration may panic if there are multiple
+	// providers available due to `rustls` features (e.g. both `ring` and `aws-lc-rs`).
+	// Function returns an error if the provider is already installed, and we're fine with it.
+	#[cfg(feature = "tls")]
+	{
+		let _ = rustls::crypto::ring::default_provider().install_default();
+	}
+	#[cfg(all(feature = "tls-rustcrypto", not(feature = "tls")))]
+	{
+		let _ = rustls_rustcrypto::provider().install_default();
+	}
+}
+
+/// Build a [`rustls::ClientConfig`] for the `CertificateStore::Native` case.
+#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
+fn build_native_tls_config() -> Result<rustls::ClientConfig, Error> {
+	// On wasip2 there is no OS certificate store; use bundled Mozilla root certs instead.
+	#[cfg(wasip2)]
+	{
+		log::debug!("wasip2: CertificateStore::Native uses bundled Mozilla root certs (webpki-roots) since there is no OS cert store");
+		let mut root_store = rustls::RootCertStore::empty();
+		root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+		Ok(rustls::ClientConfig::builder()
+			.with_root_certificates(root_store)
+			.with_no_client_auth())
+	}
+	#[cfg(not(wasip2))]
+	{
+		use rustls_platform_verifier::ConfigVerifierExt;
+		Ok(rustls::ClientConfig::with_platform_verifier())
 	}
 }
 
@@ -412,14 +541,14 @@ mod tests {
 		assert!(matches!(err, Error::Url(_)));
 	}
 
-	#[cfg(feature = "tls")]
+	#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 	#[test]
 	fn https_works() {
 		let client = HttpTransportClientBuilder::new().build("https://localhost").unwrap();
 		assert_eq!(&client.target, "https://localhost/");
 	}
 
-	#[cfg(not(feature = "tls"))]
+	#[cfg(not(any(feature = "tls", feature = "tls-rustcrypto")))]
 	#[test]
 	fn https_fails_without_tls_feature() {
 		let err = HttpTransportClientBuilder::new().build("https://localhost").unwrap_err();
@@ -459,7 +588,7 @@ mod tests {
 		assert_eq!(&client.target, "http://127.0.0.1/");
 	}
 
-	#[cfg(feature = "tls")]
+	#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 	#[test]
 	fn https_custom_port_works() {
 		let client = HttpTransportClientBuilder::new().build("https://localhost:9999").unwrap();

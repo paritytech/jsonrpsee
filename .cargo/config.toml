@@ -1,0 +1,6 @@
+# Tokio gates `tokio::net` (and friends) on wasm behind `--cfg tokio_unstable`.
+# `WasiConnector` in jsonrpsee-http-client uses `tokio::net::TcpStream`, so wasip2
+# builds need the flag set. Scope it to the wasm32-wasip2 target so native builds
+# keep their cache and don't pick up unstable APIs.
+[target.wasm32-wasip2]
+rustflags = ["--cfg", "tokio_unstable"]

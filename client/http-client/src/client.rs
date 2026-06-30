@@ -49,7 +49,7 @@ use tokio::sync::Semaphore;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 use crate::{CertificateStore, CustomCertStore};
 
 type Logger = tower::layer::util::Stack<RpcLoggerLayer, tower::layer::util::Identity>;
@@ -82,7 +82,7 @@ pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Logger> 
 	max_request_size: u32,
 	max_response_size: u32,
 	request_timeout: Duration,
-	#[cfg(feature = "tls")]
+	#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
 	headers: HeaderMap,
@@ -185,7 +185,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 	/// // client builder with disabled certificate verification.
 	/// let client_builder = HttpClientBuilder::new().with_custom_cert_store(tls_cfg);
 	/// ```
-	#[cfg(feature = "tls")]
+	#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 	pub fn with_custom_cert_store(mut self, cfg: CustomCertStore) -> Self {
 		self.certificate_store = CertificateStore::Custom(cfg);
 		self
@@ -234,7 +234,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 	/// Set the RPC middleware.
 	pub fn set_rpc_middleware<T>(self, rpc_builder: RpcServiceBuilder<T>) -> HttpClientBuilder<HttpMiddleware, T> {
 		HttpClientBuilder {
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
 			headers: self.headers,
@@ -257,7 +257,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 		service_builder: tower::ServiceBuilder<T>,
 	) -> HttpClientBuilder<T, RpcMiddleware> {
 		HttpClientBuilder {
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			certificate_store: self.certificate_store,
 			id_kind: self.id_kind,
 			headers: self.headers,
@@ -291,7 +291,7 @@ where
 			max_request_size,
 			max_response_size,
 			request_timeout,
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			certificate_store,
 			id_kind,
 			headers,
@@ -313,7 +313,7 @@ where
 			keep_alive_duration,
 			keep_alive_interval,
 			keep_alive_retries,
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			certificate_store,
 		}
 		.build(target)
@@ -338,7 +338,7 @@ impl Default for HttpClientBuilder {
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
-			#[cfg(feature = "tls")]
+			#[cfg(any(feature = "tls", feature = "tls-rustcrypto"))]
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
 			headers: HeaderMap::new(),

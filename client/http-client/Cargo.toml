@@ -16,16 +16,22 @@ publish = true
 [lints]
 workspace = true
 
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
 [dependencies]
 base64 = { workspace = true }
 hyper = { workspace = true, features = ["client", "http1", "http2"] }
-hyper-rustls = { workspace = true, features = ["http1", "http2", "tls12", "logging", "ring"], optional = true }
+hyper-rustls = { workspace = true, features = ["http1", "http2", "tls12", "logging"], optional = true }
 hyper-util = { workspace = true, features = ["client", "client-legacy", "tokio", "http1", "http2"] }
 http-body = { workspace = true }
+log = { workspace = true }
 jsonrpsee-types = { workspace = true }
 jsonrpsee-core = { workspace = true, features = ["client", "http-helpers"] }
-rustls = { workspace = true, optional = true, features = ["logging", "std", "tls12", "ring"] }
+rustls = { workspace = true, optional = true, features = ["logging", "std", "tls12"] }
 rustls-platform-verifier = { workspace = true, optional = true }
+rustls-rustcrypto = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
 serde = { workspace = true, features = ["alloc"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -36,11 +42,17 @@ url = { workspace = true }
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
 jsonrpsee-test-utils = { path = "../../test-utils" }
-tokio = { workspace = true, features = ["net", "rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["macros"] }
+
+[target.'cfg(not(all(target_os = "wasi", target_env = "p2")))'.dev-dependencies]
+tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
 
 [features]
-default = ["tls"]
-tls = ["hyper-rustls", "rustls", "rustls-platform-verifier"]
+default = ["tls-rustcrypto"]
+tls = ["hyper-rustls", "hyper-rustls/ring", "rustls", "rustls/ring", "rustls-platform-verifier"]
+# Note: rustls-platform-verifier is used on native targets (ConfigVerifierExt) but compiled-unused
+# on wasip2 where webpki_roots provides cert verification instead.
+tls-rustcrypto = ["hyper-rustls", "rustls", "rustls-rustcrypto", "rustls-platform-verifier", "webpki-roots"]
 
 [package.metadata.docs.rs]
 all-features = true
