@@ -153,14 +153,14 @@ pub mod deserialize_with_ext {
 			extensions: &'a http::Extensions,
 		) -> Result<Request<'a>, serde_json::Error> {
 			let mut req: Request = serde_json::from_slice(data)?;
-			*req.extensions_mut() = extensions.clone();
+			req.extensions_mut().extend(extensions.clone());
 			Ok(req)
 		}
 
 		/// Wrapper over `serde_json::from_str` that sets the extensions.
 		pub fn from_str<'a>(data: &'a str, extensions: &'a http::Extensions) -> Result<Request<'a>, serde_json::Error> {
 			let mut req: Request = serde_json::from_str(data)?;
-			*req.extensions_mut() = extensions.clone();
+			req.extensions_mut().extend(extensions.clone());
 			Ok(req)
 		}
 	}
@@ -178,7 +178,7 @@ pub mod deserialize_with_ext {
 			T: serde::Deserialize<'a>,
 		{
 			let mut notif: Notification<T> = serde_json::from_slice(data)?;
-			*notif.extensions_mut() = extensions.clone();
+			notif.extensions_mut().extend(extensions.clone());
 			Ok(notif)
 		}
 
@@ -191,8 +191,69 @@ pub mod deserialize_with_ext {
 			T: serde::Deserialize<'a>,
 		{
 			let mut notif: Notification<T> = serde_json::from_str(data)?;
-			*notif.extensions_mut() = extensions.clone();
+			notif.extensions_mut().extend(extensions.clone());
 			Ok(notif)
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::borrow::Cow;
+
+	use jsonrpsee_types::{Notification, Request};
+	use serde_json::{Value, value::RawValue};
+
+	use super::deserialize_with_ext;
+
+	#[derive(Clone, Debug, PartialEq, Eq)]
+	struct TransportExtension(&'static str);
+
+	fn transport_extensions() -> http::Extensions {
+		let mut extensions = http::Extensions::new();
+		extensions.insert(TransportExtension("transport"));
+		extensions
+	}
+
+	fn assert_request_extensions(request: &Request<'_>) {
+		assert_eq!(request.extensions().get::<TransportExtension>(), Some(&TransportExtension("transport")));
+		assert_eq!(
+			request.request_extensions().and_then(|extensions| extensions.get("vendor")).and_then(Value::as_str),
+			Some("wire")
+		);
+	}
+
+	fn assert_notification_extensions(notification: &Notification<'_, Option<Cow<'_, RawValue>>>) {
+		assert_eq!(notification.extensions().get::<TransportExtension>(), Some(&TransportExtension("transport")));
+		assert_eq!(
+			notification.request_extensions().and_then(|extensions| extensions.get("vendor")).and_then(Value::as_str),
+			Some("wire")
+		);
+	}
+
+	#[test]
+	fn call_deserialization_preserves_wire_and_transport_extensions() {
+		let payload = r#"{"jsonrpc":"2.0","method":"say_hello","id":1,"vendor":"wire"}"#;
+		let extensions = transport_extensions();
+
+		let from_slice = deserialize_with_ext::call::from_slice(payload.as_bytes(), &extensions).unwrap();
+		assert_request_extensions(&from_slice);
+
+		let from_str = deserialize_with_ext::call::from_str(payload, &extensions).unwrap();
+		assert_request_extensions(&from_str);
+	}
+
+	#[test]
+	fn notification_deserialization_preserves_wire_and_transport_extensions() {
+		let payload = r#"{"jsonrpc":"2.0","method":"say_hello","params":[],"vendor":"wire"}"#;
+		let extensions = transport_extensions();
+
+		let from_slice: Notification<Option<Cow<'_, RawValue>>> =
+			deserialize_with_ext::notif::from_slice(payload.as_bytes(), &extensions).unwrap();
+		assert_notification_extensions(&from_slice);
+
+		let from_str: Notification<Option<Cow<'_, RawValue>>> =
+			deserialize_with_ext::notif::from_str(payload, &extensions).unwrap();
+		assert_notification_extensions(&from_str);
 	}
 }
