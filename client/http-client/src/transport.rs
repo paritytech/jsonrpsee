@@ -175,6 +175,12 @@ impl<L> HttpTransportClientBuilder<L> {
 		self
 	}
 
+	/// Configure the TCP connect timeout for the connection.
+	pub fn set_connect_timeout(mut self, timeout: Option<std::time::Duration>) -> Self {
+		self.connect_timeout = timeout;
+		self
+	}
+
 	/// Configure the keep-alive interval for the connection.
 	pub fn set_keep_alive_interval(mut self, interval: Option<std::time::Duration>) -> Self {
 		self.keep_alive_interval = interval;
