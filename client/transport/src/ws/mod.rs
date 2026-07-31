@@ -38,6 +38,8 @@ use jsonrpsee_core::client::{ReceivedMessage, TransportReceiverT, TransportSende
 use soketto::connection::CloseReason;
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
+#[cfg(feature = "ws-deflate")]
+use soketto::extension::deflate::Deflate;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use soketto::{Data, Incoming, connection};
 use thiserror::Error;
@@ -101,6 +103,9 @@ pub struct WsTransportClientBuilder {
 	pub max_redirections: usize,
 	/// TCP no delay.
 	pub tcp_no_delay: bool,
+	/// Enable per-message deflate compression.
+	#[cfg(feature = "ws-deflate")]
+	pub ws_compression: bool,
 }
 
 impl Default for WsTransportClientBuilder {
@@ -115,6 +120,8 @@ impl Default for WsTransportClientBuilder {
 			headers: http::HeaderMap::new(),
 			max_redirections: 5,
 			tcp_no_delay: true,
+			#[cfg(feature = "ws-deflate")]
+			ws_compression: false,
 		}
 	}
 }
@@ -167,6 +174,26 @@ impl WsTransportClientBuilder {
 	/// (default is 5).
 	pub fn max_redirections(mut self, redirect: usize) -> Self {
 		self.max_redirections = redirect;
+		self
+	}
+
+	/// Enable per-message deflate compression for the WebSocket connection.
+	///
+	/// This uses the `permessage-deflate` WebSocket extension (RFC 7692).
+	///
+	/// Default: compression is disabled.
+	#[cfg(feature = "ws-deflate")]
+	pub fn enable_ws_compression(mut self) -> Self {
+		self.ws_compression = true;
+		self
+	}
+
+	/// Disable per-message deflate compression for the WebSocket connection.
+	///
+	/// Default: compression is disabled.
+	#[cfg(feature = "ws-deflate")]
+	pub fn disable_ws_compression(mut self) -> Self {
+		self.ws_compression = false;
 		self
 	}
 }
@@ -482,6 +509,11 @@ impl WsTransportClientBuilder {
 			&target.host_header,
 			&target.path_and_query,
 		);
+
+		#[cfg(feature = "ws-deflate")]
+		if self.ws_compression {
+			client.add_extension(Box::new(Deflate::new(soketto::Mode::Client)));
+		}
 
 		let headers: Vec<_> = match &target.basic_auth {
 			Some(basic_auth) if !self.headers.contains_key(http::header::AUTHORIZATION) => {
