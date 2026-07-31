@@ -71,6 +71,9 @@ where
 		+ Sync
 		+ 'static,
 {
+	let cancel = tokio_util::sync::CancellationToken::new();
+	let _g = cancel.drop_guard_ref();
+
 	let BackgroundTaskParams {
 		server_cfg,
 		conn,
@@ -150,6 +153,7 @@ where
 		let rpc_service = rpc_service.clone();
 		let sink = sink.clone();
 		let extensions = extensions.clone();
+		let cancel2 = cancel.clone();
 
 		tokio::spawn(async move {
 			let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
@@ -163,7 +167,19 @@ where
 				}
 			};
 
-			let rp = handle_rpc_call(&data[idx..], is_single, batch_requests_config, &*rpc_service, extensions).await;
+			let Some(rp) = cancel2
+				.run_until_cancelled(handle_rpc_call(
+					&data[idx..],
+					is_single,
+					batch_requests_config,
+					&*rpc_service,
+					extensions,
+				))
+				.await
+			else {
+				// Cancelled
+				return;
+			};
 
 			// Subscriptions are handled by the subscription callback and
 			// "ordinary notifications" should not be sent back to the client.
