@@ -47,6 +47,7 @@ use jsonrpsee_core::middleware::layer::RpcLoggerLayer;
 pub use jsonrpsee_types as types;
 
 use jsonrpsee_client_transport::ws::{AsyncRead, AsyncWrite, WsTransportClientBuilder};
+pub use jsonrpsee_client_transport::ws::{DeflateOptions, WsOptions};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::client::{ClientBuilder, Error, IdKind, MaybeSend, TransportReceiverT, TransportSenderT};
 use std::time::Duration;
@@ -85,7 +86,7 @@ use jsonrpsee_client_transport::ws::CertificateStore;
 /// }
 ///
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct WsClientBuilder<RpcMiddleware = Logger> {
 	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
@@ -101,7 +102,31 @@ pub struct WsClientBuilder<RpcMiddleware = Logger> {
 	max_redirections: usize,
 	id_kind: IdKind,
 	tcp_no_delay: bool,
+	ws_options: Option<WsOptions>,
 	service_builder: RpcServiceBuilder<RpcMiddleware>,
+}
+
+impl<RpcMiddleware: std::fmt::Debug> std::fmt::Debug for WsClientBuilder<RpcMiddleware> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut s = f.debug_struct("WsClientBuilder");
+		#[cfg(feature = "tls")]
+		s.field("certificate_store", &self.certificate_store);
+		s.field("max_request_size", &self.max_request_size)
+			.field("max_response_size", &self.max_response_size)
+			.field("max_frame_size", &self.max_frame_size)
+			.field("request_timeout", &self.request_timeout)
+			.field("connection_timeout", &self.connection_timeout)
+			.field("ping_config", &self.ping_config)
+			.field("headers", &self.headers)
+			.field("max_concurrent_requests", &self.max_concurrent_requests)
+			.field("max_buffer_capacity_per_subscription", &self.max_buffer_capacity_per_subscription)
+			.field("max_redirections", &self.max_redirections)
+			.field("id_kind", &self.id_kind)
+			.field("tcp_no_delay", &self.tcp_no_delay)
+			.field("ws_options", &self.ws_options.as_ref().map(|_| ".."))
+			.field("service_builder", &self.service_builder)
+			.finish()
+	}
 }
 
 impl Default for WsClientBuilder {
@@ -121,6 +146,7 @@ impl Default for WsClientBuilder {
 			max_redirections: 5,
 			id_kind: IdKind::Number,
 			tcp_no_delay: true,
+			ws_options: None,
 			service_builder: RpcServiceBuilder::default().rpc_logger(1024),
 		}
 	}
@@ -280,6 +306,12 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 		self
 	}
 
+	/// See documentation [`WsTransportClientBuilder::set_ws_options`] (default is balanced compression).
+	pub fn set_ws_options(mut self, options: WsOptions) -> Self {
+		self.ws_options = Some(options);
+		self
+	}
+
 	/// Set the RPC service builder.
 	pub fn set_rpc_middleware<T>(self, service_builder: RpcServiceBuilder<T>) -> WsClientBuilder<T> {
 		WsClientBuilder {
@@ -297,6 +329,7 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			max_redirections: self.max_redirections,
 			id_kind: self.id_kind,
 			tcp_no_delay: self.tcp_no_delay,
+			ws_options: self.ws_options,
 			service_builder,
 		}
 	}
@@ -358,6 +391,7 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			max_frame_size: self.max_frame_size,
 			max_redirections: self.max_redirections,
 			tcp_no_delay: self.tcp_no_delay,
+			ws_options: self.ws_options.clone(),
 		};
 
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
@@ -388,6 +422,7 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			max_frame_size: self.max_frame_size,
 			max_redirections: self.max_redirections,
 			tcp_no_delay: self.tcp_no_delay,
+			ws_options: self.ws_options.clone(),
 		};
 
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;

@@ -17,7 +17,7 @@ publish = true
 workspace = true
 
 [dependencies]
-futures-util = { workspace = true, features = ["io", "async-await-macro"] }
+futures-util = { workspace = true, features = ["async-await-macro"] }
 http = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
@@ -29,10 +29,9 @@ pin-project = "1.1.3"
 route-recognizer = "0.3.1"
 serde = "1"
 serde_json = { version = "1", features = ["raw_value"] }
-soketto = { version = "0.8.1", features = ["http"] }
+yawc = { workspace = true }
 thiserror = "2"
 tokio = { version = "1.23.1", features = ["net", "rt-multi-thread", "macros", "time"] }
-tokio-util = { version = "0.7", features = ["compat"] }
 tokio-stream = { version = "0.1.7", features = ["sync"] }
 tower = { workspace = true, features = ["util"] }
 tracing = { workspace = true }

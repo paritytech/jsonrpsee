@@ -15,6 +15,6 @@ http-body-util = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 serde_json = { workspace = true }
-soketto = { workspace = true, features = ["http"] }
+url = { workspace = true }
+yawc = { workspace = true }
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "macros", "time"] }
-tokio-util = { workspace = true, features = ["compat"] }

@@ -7,45 +7,50 @@ use crate::server::{ConnectionState, ServerConfig, handle_rpc_call};
 use crate::{HttpBody, HttpRequest, HttpResponse, LOG_TARGET, PingConfig};
 
 use futures_util::future::{self, Either};
-use futures_util::io::{BufReader, BufWriter};
-use futures_util::{Future, StreamExt, TryStreamExt};
-use hyper::upgrade::Upgraded;
-use hyper_util::rt::TokioIo;
+use futures_util::{Future, SinkExt, StreamExt};
 use jsonrpsee_core::middleware::{RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::{BoundedSubscriptions, MethodResponse, MethodSink, Methods};
 use jsonrpsee_types::Id;
-use jsonrpsee_types::error::{ErrorCode, reject_too_big_request};
+use jsonrpsee_types::error::ErrorCode;
 use serde_json::value::RawValue;
-use soketto::connection::Error as SokettoError;
-use soketto::data::ByteSlice125;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, interval_at};
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use yawc::frame::{Frame, OpCode};
+use yawc::{HttpStream, WebSocket};
 
-pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<TokioIo<Upgraded>>>>>;
-pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<TokioIo<Upgraded>>>>>;
+pub(crate) type Sender = futures_util::stream::SplitSink<WebSocket<HttpStream>, Frame>;
+pub(crate) type Receiver = futures_util::stream::SplitStream<WebSocket<HttpStream>>;
 
-pub use soketto::handshake::http::is_upgrade_request;
+/// Checks whether the incoming request is a WebSocket upgrade request.
+pub fn is_upgrade_request<B>(req: &http::Request<B>) -> bool {
+	let dominated_upgrade = req
+		.headers()
+		.get(http::header::UPGRADE)
+		.and_then(|v| v.to_str().ok())
+		.map(|v| v.eq_ignore_ascii_case("websocket"))
+		.unwrap_or(false);
+	let has_connection_upgrade = req
+		.headers()
+		.get(http::header::CONNECTION)
+		.and_then(|v| v.to_str().ok())
+		.map(|v| v.to_lowercase().contains("upgrade"))
+		.unwrap_or(false);
+	dominated_upgrade && has_connection_upgrade
+}
 
 enum Incoming {
 	Data(Vec<u8>),
 	Pong,
 }
 
-pub(crate) async fn send_message(sender: &mut Sender, response: Box<RawValue>) -> Result<(), SokettoError> {
-	sender.send_text_owned(String::from(Box::<str>::from(response))).await?;
-	sender.flush().await
+pub(crate) async fn send_message(sender: &mut Sender, response: Box<RawValue>) -> Result<(), yawc::WebSocketError> {
+	sender.send(Frame::text(String::from(Box::<str>::from(response)))).await
 }
 
-pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), SokettoError> {
+pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), yawc::WebSocketError> {
 	tracing::debug!(target: LOG_TARGET, "Send ping");
-	// Submit empty slice as "optional" parameter.
-	let slice: &[u8] = &[];
-	// Byte slice fails if the provided slice is larger than 125 bytes.
-	let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
-	sender.send_ping(byte_slice).await?;
-	sender.flush().await
+	sender.send(Frame::ping(b"" as &[u8])).await
 }
 
 pub(crate) struct BackgroundTaskParams<S> {
@@ -83,7 +88,7 @@ where
 		mut on_session_close,
 		extensions,
 	} = params;
-	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, .. } = server_cfg;
+	let ServerConfig { ping_config, batch_requests_config, .. } = server_cfg;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
 
@@ -96,18 +101,18 @@ where
 
 	tokio::pin!(stopped);
 
-	let ws_stream = futures_util::stream::unfold(ws_receiver, |mut receiver| async {
-		let mut data = Vec::new();
-		match receiver.receive(&mut data).await {
-			Ok(soketto::Incoming::Data(_)) => Some((Ok(Incoming::Data(data)), receiver)),
-			Ok(soketto::Incoming::Pong(_)) => Some((Ok(Incoming::Pong), receiver)),
-			Ok(soketto::Incoming::Closed(_)) | Err(SokettoError::Closed) => None,
-			// The closing reason is already logged by `soketto` trace log level.
-			// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
-			Err(e) => Some((Err(e), receiver)),
-		}
-	})
-	.fuse();
+	// Convert the yawc Stream<Item = Frame> into Stream<Item = Result<Incoming, ()>>
+	let ws_stream = ws_receiver
+		.filter_map(|frame| async move {
+			match frame.opcode() {
+				OpCode::Text | OpCode::Binary => Some(Ok(Incoming::Data(frame.into_payload().to_vec()))),
+				OpCode::Pong => Some(Ok(Incoming::Pong)),
+				OpCode::Close => None,
+				OpCode::Ping => None, // auto-ponged by yawc
+				_ => None,
+			}
+		})
+		.fuse();
 
 	tokio::pin!(ws_stream);
 
@@ -119,31 +124,8 @@ where
 				stopped = stop;
 				data
 			}
-			Receive::Err(err, stop) => {
-				stopped = stop;
-
-				match err {
-					SokettoError::Closed => {
-						break Ok(Shutdown::ConnectionClosed);
-					}
-					SokettoError::MessageTooLarge { current, maximum } => {
-						tracing::debug!(
-							target: LOG_TARGET,
-							"WS recv error: message too large current={}/max={}",
-							current,
-							maximum
-						);
-						if sink.send_error(Id::Null, reject_too_big_request(max_request_body_size)).await.is_err() {
-							break Ok(Shutdown::ConnectionClosed);
-						}
-
-						continue;
-					}
-					err => {
-						tracing::debug!(target: LOG_TARGET, "WS error: {}; terminate connection: {}", err, conn.conn_id);
-						break Err(err);
-					}
-				};
+			Receive::Err(_stop) => {
+				break Ok(Shutdown::ConnectionClosed);
 			}
 		};
 
@@ -268,7 +250,7 @@ async fn send_task(
 enum Receive<S> {
 	ConnectionClosed,
 	Stopped,
-	Err(SokettoError, S),
+	Err(S),
 	Ok(Vec<u8>, S),
 }
 
@@ -281,7 +263,7 @@ async fn try_recv<T, S>(
 ) -> Receive<S>
 where
 	S: Future<Output = ()> + Unpin,
-	T: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
+	T: StreamExt<Item = Result<Incoming, ()>> + Unpin,
 {
 	let mut last_active = Instant::now();
 	let inactivity_check = match ping_config {
@@ -306,7 +288,7 @@ where
 				futs = futures_util::future::select(ws_stream.next(), inactive);
 			}
 			// Received an error, terminate the connection.
-			Either::Left((Either::Left((Some(Err(e)), _)), s)) => break Receive::Err(e, s),
+			Either::Left((Either::Left((Some(Err(_)), _)), s)) => break Receive::Err(s),
 			// Max inactivity timeout fired, check if the connection has been idle too long.
 			Either::Left((Either::Right((_instant, rcv)), s)) => {
 				if let Some(p) = ping_config {
@@ -343,27 +325,23 @@ pub(crate) enum Shutdown {
 ///
 /// This will return once the connection has been terminated or all pending calls have been executed.
 async fn graceful_shutdown<S>(
-	result: Result<Shutdown, SokettoError>,
+	result: Result<Shutdown, ()>,
 	pending_calls: mpsc::Receiver<()>,
 	ws_stream: S,
 	mut conn_tx: oneshot::Sender<()>,
 	send_task_handle: tokio::task::JoinHandle<()>,
 ) where
-	S: StreamExt<Item = Result<Incoming, SokettoError>> + Unpin,
+	S: StreamExt + Unpin,
 {
 	let pending_calls = ReceiverStream::new(pending_calls);
 
 	if let Ok(Shutdown::Stopped) = result {
 		let graceful_shutdown = pending_calls.for_each(|_| async {});
-		let disconnect = ws_stream.try_for_each(|_| async { Ok(()) });
+		let disconnect = ws_stream.for_each(|_| async {});
 
 		tokio::select! {
 			_ = graceful_shutdown => {}
-			res = disconnect => {
-				if let Err(err) = res {
-					tracing::warn!(target: LOG_TARGET, "Graceful shutdown terminated because of error: `{err}`");
-				}
-			}
+			_ = disconnect => {}
 			_ = conn_tx.closed() => {}
 		}
 	}
@@ -435,10 +413,16 @@ where
 		+ Sync
 		+ 'static,
 {
-	let mut server = soketto::handshake::http::Server::new();
+	let mut request = req.map(|_| http_body_util::Empty::<hyper::body::Bytes>::new());
 
-	match server.receive_request(&req) {
-		Ok(response) => {
+	let options = server_cfg
+		.ws_options
+		.clone()
+		.unwrap_or_else(|| yawc::Options::default().with_balanced_compression())
+		.with_max_payload_read(server_cfg.max_request_body_size as usize);
+
+	match WebSocket::upgrade_with_options(&mut request, options) {
+		Ok((response, upgrade_fut)) => {
 			let (tx, rx) = mpsc::channel(server_cfg.message_buffer_capacity as usize);
 			let sink = MethodSink::new(tx);
 
@@ -466,22 +450,17 @@ where
 			// Note: This can't possibly be fulfilled until the HTTP response
 			// is returned below, so that's why it's a separate async block
 			let fut = async move {
-				let extensions = req.extensions().clone();
+				let extensions = request.extensions().clone();
 
-				let upgraded = match hyper::upgrade::on(req).await {
-					Ok(upgraded) => upgraded,
+				let ws = match upgrade_fut.await {
+					Ok(ws) => ws,
 					Err(e) => {
 						tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
 						return;
 					}
 				};
 
-				let io = TokioIo::new(upgraded);
-
-				let stream = BufReader::new(BufWriter::new(io.compat()));
-				let mut ws_builder = server.into_builder(stream);
-				ws_builder.set_max_message_size(server_cfg.max_response_body_size as usize);
-				let (sender, receiver) = ws_builder.finish();
+				let (sender, receiver) = futures_util::StreamExt::split(ws);
 
 				let params = BackgroundTaskParams {
 					server_cfg,
@@ -499,7 +478,7 @@ where
 				background_task(params).await;
 			};
 
-			Ok((response.map(|()| HttpBody::default()), fut))
+			Ok((response.map(|_| HttpBody::default()), fut))
 		}
 		Err(e) => {
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
