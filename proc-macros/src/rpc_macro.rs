@@ -33,9 +33,12 @@ use crate::attributes::{
 };
 use crate::helpers::extract_doc_comments;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{ToTokens, quote};
+use syn::parse2;
 use syn::spanned::Spanned;
 use syn::{Attribute, Token, punctuated::Punctuated};
+
+pub(crate) const RPC_DISCOVER_METHOD: &str = "rpc.discover";
 
 /// Represents a single argument in a RPC call.
 ///
@@ -274,11 +277,13 @@ pub struct RpcDescription {
 	pub(crate) client_bounds: Option<Punctuated<syn::WherePredicate, Token![,]>>,
 	/// Optional user defined trait bounds for the server implementation.
 	pub(crate) server_bounds: Option<Punctuated<syn::WherePredicate, Token![,]>>,
+	/// Optional, specifies whenther rpc.discover method shold be generated.
+	pub(crate) discover: bool,
 }
 
 impl RpcDescription {
 	pub fn from_item(attr: Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
-		let [client, server, namespace, namespace_separator, client_bounds, server_bounds] =
+		let [client, server, namespace, namespace_separator, client_bounds, server_bounds, discover] =
 			AttributeMeta::parse(attr)?.retain([
 				"client",
 				"server",
@@ -286,6 +291,7 @@ impl RpcDescription {
 				"namespace_separator",
 				"client_bounds",
 				"server_bounds",
+				"discover",
 			])?;
 
 		let needs_server = optional(server, Argument::flag)?.is_some();
@@ -294,6 +300,7 @@ impl RpcDescription {
 		let namespace_separator = optional(namespace_separator, Argument::string)?;
 		let client_bounds = optional(client_bounds, Argument::group)?;
 		let server_bounds = optional(server_bounds, Argument::group)?;
+		let discover = optional(discover, Argument::flag)?.is_some();
 		if !needs_server && !needs_client {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
 		}
@@ -372,6 +379,27 @@ impl RpcDescription {
 			return Err(syn::Error::new_spanned(&item, "RPC cannot be empty"));
 		}
 
+		// If discover is enabled, add the discover method for `into_rpc`.
+		if discover {
+			// TODO(Velnbur): may be there is a more elegant way to add it for `into_rpc`,
+			// but for now this hack is used:
+			methods.push(RpcMethod {
+				name: RPC_DISCOVER_METHOD.to_string(),
+				blocking: false,
+				docs: "Discover the available methods".into_token_stream(),
+				deprecated: "false".to_token_stream(),
+				params: Vec::new(),
+				param_kind: ParamKind::Array,
+				returns: Some(parse2(quote! {jsonrpsee::open_rpc::OpenRpc}).expect("to be valid type")),
+				signature: parse2(
+					quote! {async fn discover(&self) -> Result<jsonrpsee::open_rpc::OpenRpc, std::convert::Infallible>;},
+				)
+				.expect("to be valid signature"),
+				aliases: Vec::new(),
+				with_extensions: false,
+			});
+		}
+
 		Ok(Self {
 			jsonrpsee_client_path,
 			jsonrpsee_server_path,
@@ -384,6 +412,7 @@ impl RpcDescription {
 			subscriptions,
 			client_bounds,
 			server_bounds,
+			discover,
 		})
 	}
 
