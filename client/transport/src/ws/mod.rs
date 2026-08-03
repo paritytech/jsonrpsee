@@ -35,6 +35,7 @@ use futures_util::io::{BufReader, BufWriter};
 use jsonrpsee_core::Cow;
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::client::{ReceivedMessage, TransportReceiverT, TransportSenderT};
+use percent_encoding::percent_decode_str;
 use soketto::connection::CloseReason;
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
@@ -633,7 +634,13 @@ impl TryFrom<url::Url> for Target {
 		}
 
 		let basic_auth = if let Some(pwd) = url.password() {
-			let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", url.username(), pwd));
+			let usr = percent_decode_str(url.username())
+				.decode_utf8()
+				.map_err(|_| WsHandshakeError::Url("username is not valid utf8".into()))?;
+			let pwd = percent_decode_str(pwd)
+				.decode_utf8()
+				.map_err(|_| WsHandshakeError::Url("password is not valid utf8".into()))?;
+			let digest = base64::engine::general_purpose::STANDARD.encode(format!("{usr}:{pwd}"));
 			let val = HeaderValue::from_str(&format!("Basic {digest}"))
 				.map_err(|_| WsHandshakeError::Url("Header value `authorization basic user:pwd` invalid".into()))?;
 
@@ -767,6 +774,29 @@ mod tests {
 
 		let target = parse_target("ws://user:pwd@127.0.0.1").unwrap();
 		let digest = base64::engine::general_purpose::STANDARD.encode("user:pwd");
+		let basic_auth = HeaderValue::from_str(&format!("Basic {digest}")).unwrap();
+
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
+	}
+
+	#[test]
+	fn ws_with_special_username_and_password() {
+		use base64::Engine;
+
+		let target = parse_target("ws://=:=@127.0.0.1").unwrap();
+		let digest = base64::engine::general_purpose::STANDARD.encode("=:=");
+		let basic_auth = HeaderValue::from_str(&format!("Basic {digest}")).unwrap();
+
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
+	}
+
+	#[test]
+	fn ws_with_percent_username_and_password() {
+		use base64::Engine;
+
+		// username "a", password "b"
+		let target = parse_target("ws://%61:%62@127.0.0.1").unwrap();
+		let digest = base64::engine::general_purpose::STANDARD.encode("a:b");
 		let basic_auth = HeaderValue::from_str(&format!("Basic {digest}")).unwrap();
 
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
