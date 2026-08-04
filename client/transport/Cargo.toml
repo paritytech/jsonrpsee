@@ -67,6 +67,12 @@ web = [
     "thiserror",
 ]
 
+[dev-dependencies]
+# `rt` provides the `#[tokio::test]` runtime and the `spawn_blocking` pool that
+# `tokio::net::lookup_host` relies on. `macros`/`time` are already enabled via the `ws`
+# feature but are listed here so the test requirements are explicit.
+tokio = { workspace = true, features = ["rt", "macros", "time"] }
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
