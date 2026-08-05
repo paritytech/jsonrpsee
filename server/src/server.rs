@@ -42,7 +42,7 @@ use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::{Batch, BatchEntry, BatchEntryErr, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
@@ -200,6 +200,8 @@ pub struct ServerConfig {
 	pub(crate) keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	pub(crate) keep_alive_timeout: Duration,
+	/// `HTTP2 ONLY` for enabling h2c
+	pub(crate) http2_only: bool,
 }
 
 /// The builder to configure and create a JSON-RPC server configuration.
@@ -233,6 +235,8 @@ pub struct ServerConfigBuilder {
 	keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	keep_alive_timeout: std::time::Duration,
+	/// `HTTP2_ONLY` for h2c connections
+	http2_only: bool,
 }
 
 /// Builder for [`TowerService`].
@@ -374,6 +378,7 @@ impl Default for ServerConfigBuilder {
 			keep_alive: None,
 			//same as `hyper` default
 			keep_alive_timeout: Duration::from_secs(20),
+			http2_only: false,
 		}
 	}
 }
@@ -541,6 +546,12 @@ impl ServerConfigBuilder {
 		self
 	}
 
+	/// ENABLE `HTTP2_ONLY` for h2c requests, requires prior-knowledge from clients
+	pub fn http2_only(mut self, enabled: bool) -> Self {
+		self.http2_only = enabled;
+		self
+	}
+
 	/// Build the [`ServerConfig`].
 	pub fn build(self) -> ServerConfig {
 		ServerConfig {
@@ -558,6 +569,7 @@ impl ServerConfigBuilder {
 			tcp_no_delay: self.tcp_no_delay,
 			keep_alive: self.keep_alive,
 			keep_alive_timeout: self.keep_alive_timeout,
+			http2_only: self.http2_only,
 		}
 	}
 }
@@ -1193,6 +1205,7 @@ where
 
 	let keep_alive = server_cfg.keep_alive;
 	let keep_alive_timeout = server_cfg.keep_alive_timeout;
+	let http2_only = server_cfg.http2_only;
 
 	let tower_service = TowerServiceNoHttp {
 		inner: ServiceData {
@@ -1212,28 +1225,20 @@ where
 		// this requires Clone.
 		let service = crate::utils::TowerToHyperService::new(service);
 		let io = TokioIo::new(socket);
-		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-
-		//default is true for http1, if set to false then websocket connections will not be upgraded.
-		builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
-
-		let conn = builder.serve_connection_with_upgrades(io, service);
 		let stopped = stop_handle.shutdown();
 
-		tokio::pin!(stopped, conn);
+		if http2_only {
+			let mut builder = hyper::server::conn::http2::Builder::new(TokioExecutor::new());
+			builder.timer(TokioTimer::new()).keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
+			let conn = builder.serve_connection(io, service);
+			drive_connection(conn, stopped).await;
+		} else {
+			let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-		let res = match future::select(conn, stopped).await {
-			Either::Left((conn, _)) => conn,
-			Either::Right((_, mut conn)) => {
-				// NOTE: the connection should continue to be polled until shutdown can finish.
-				// Thus, both lines below are needed and not a nit.
-				conn.as_mut().graceful_shutdown();
-				conn.await
-			}
-		};
-
-		if let Err(e) = res {
-			tracing::debug!(target: LOG_TARGET, "HTTP serve connection failed {:?}", e);
+			//default is true for http1, if set to false then websocket connections will not be upgraded.
+			builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
+			let conn = builder.serve_connection_with_upgrades(io, service);
+			drive_connection(conn, stopped).await;
 		}
 		drop(drop_on_completion)
 	});
@@ -1326,5 +1331,24 @@ where
 		} else {
 			MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::ParseError))
 		}
+	}
+}
+
+async fn drive_connection<C, S>(conn: C, stop: S)
+where
+	C: hyper_util::server::graceful::GracefulConnection,
+	C::Error: std::fmt::Debug,
+	S: Future<Output = ()>,
+{
+	tokio::pin!(conn, stop);
+	let res = match future::select(conn, stop).await {
+		Either::Left((res, _)) => res,
+		Either::Right((_, mut conn)) => {
+			conn.as_mut().graceful_shutdown();
+			conn.await
+		}
+	};
+	if let Err(e) = res {
+		tracing::debug!(target: LOG_TARGET, "HTTP serve connection failed {:?}", e);
 	}
 }
