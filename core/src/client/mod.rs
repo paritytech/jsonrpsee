@@ -119,6 +119,8 @@ pub trait ClientT {
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
 pub trait SubscriptionClientT: ClientT {
+	type SubscriptionClient;
+
 	/// Initiate a subscription by performing a JSON-RPC method call where the server responds with
 	/// a `Subscription ID` that is used to fetch messages on that subscription,
 	///
@@ -136,7 +138,7 @@ pub trait SubscriptionClientT: ClientT {
 		subscribe_method: &'a str,
 		params: Params,
 		unsubscribe_method: &'a str,
-	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	) -> impl Future<Output = Result<Subscription<Self::SubscriptionClient, Notif>, Error>> + Send
 	where
 		Params: ToRpcParams + Send,
 		Notif: DeserializeOwned;
@@ -148,7 +150,7 @@ pub trait SubscriptionClientT: ClientT {
 	fn subscribe_to_method<Notif>(
 		&self,
 		method: &str,
-	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	) -> impl Future<Output = Result<Subscription<Self::SubscriptionClient, Notif>, Error>> + Send
 	where
 		Notif: DeserializeOwned;
 }
@@ -272,7 +274,7 @@ pub enum SubscriptionCloseReason {
 /// You can call [`Subscription::close_reason`] to determine why
 /// the subscription was closed.
 #[derive(Debug)]
-pub struct Subscription<Notif> {
+pub struct Subscription<Client, Notif> {
 	is_closed: bool,
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
@@ -282,16 +284,18 @@ pub struct Subscription<Notif> {
 	kind: Option<SubscriptionKind>,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
+	/// Keep client alive at least until subscription is dropped
+	_client: Client,
 }
 
 // `Subscription` does not automatically implement this due to `PhantomData<Notif>`,
 // but type type has no need to be pinned.
-impl<Notif> std::marker::Unpin for Subscription<Notif> {}
+impl<Client, Notif> std::marker::Unpin for Subscription<Client, Notif> {}
 
-impl<Notif> Subscription<Notif> {
+impl<Client, Notif> Subscription<Client, Notif> {
 	/// Create a new subscription.
-	fn new(to_back: mpsc::Sender<FrontToBack>, rx: SubscriptionReceiver, kind: SubscriptionKind) -> Self {
-		Self { to_back, rx, kind: Some(kind), marker: PhantomData, is_closed: false }
+	fn new(client: Client, to_back: mpsc::Sender<FrontToBack>, rx: SubscriptionReceiver, kind: SubscriptionKind) -> Self {
+		Self { _client: client, to_back, rx, kind: Some(kind), marker: PhantomData, is_closed: false }
 	}
 
 	/// Return the subscription type and, if applicable, ID.
@@ -404,7 +408,7 @@ enum FrontToBack {
 	SubscriptionClosed(SubscriptionId<'static>),
 }
 
-impl<Notif> Subscription<Notif>
+impl<Client, Notif> Subscription<Client, Notif>
 where
 	Notif: DeserializeOwned,
 {
@@ -421,7 +425,7 @@ where
 	}
 }
 
-impl<Notif> Stream for Subscription<Notif>
+impl<Client, Notif> Stream for Subscription<Client, Notif>
 where
 	Notif: DeserializeOwned,
 {
@@ -439,7 +443,7 @@ where
 	}
 }
 
-impl<Notif> Drop for Subscription<Notif> {
+impl<Client, Notif> Drop for Subscription<Client, Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
 		// the channel's buffer will be full.

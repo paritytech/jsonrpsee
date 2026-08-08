@@ -185,8 +185,9 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method*, which is wrapped
 		// into the `Subscription` object.
 		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
+		let super_trait = self.jrps_client_item(quote! { core::client::SubscriptionClientT });
 		let item = &sub.item;
-		let returns = quote! { impl core::future::Future<Output = Result<#sub_type<#item>, #jrps_error>> + Send };
+		let returns = quote! { impl core::future::Future<Output = Result<#sub_type<<Self as #super_trait>::SubscriptionClient, #item>, #jrps_error>> + Send };
 
 		// Encoded parameters for the request.
 		let parameter_builder = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
