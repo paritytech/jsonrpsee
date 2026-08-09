@@ -31,7 +31,7 @@ use std::task::{Context, Poll};
 use crate::{HttpBody, HttpRequest};
 
 use futures_util::future::{self, Either};
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use jsonrpsee_core::BoxError;
 use pin_project::pin_project;
 use tower::ServiceExt;
@@ -100,7 +100,8 @@ where
 	let service = hyper_util::service::TowerToHyperService::new(service);
 	let io = TokioIo::new(io);
 
-	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+	let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+	builder.http2().timer(TokioTimer::new());
 	let conn = builder.serve_connection_with_upgrades(io, service);
 	conn.await
 }
@@ -124,7 +125,8 @@ where
 	let service = hyper_util::service::TowerToHyperService::new(service);
 	let io = TokioIo::new(io);
 
-	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+	let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+	builder.http2().timer(TokioTimer::new());
 	let conn = builder.serve_connection_with_upgrades(io, service);
 
 	tokio::pin!(stopped, conn);
