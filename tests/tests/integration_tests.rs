@@ -58,7 +58,7 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
-use crate::helpers::server_with_sleeping_subscription;
+use crate::helpers::{server_with_context, server_with_sleeping_subscription};
 
 type HttpBody = http_body_util::Full<hyper::body::Bytes>;
 
@@ -287,6 +287,44 @@ async fn http_method_call_works() {
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	let response: String = client.request("say_hello", rpc_params![]).await.unwrap();
 	assert_eq!(&response, "hello");
+}
+
+#[tokio::test]
+async fn http_method_call_cleanup_on_abort() {
+	init_logger();
+
+	let notif = Arc::new(tokio::sync::Notify::new());
+	let notified = notif.notified();
+	let server_addr = server_with_context((Some(notif.clone()),)).await;
+	let uri = format!("http://{}", server_addr);
+	let client = HttpClientBuilder::default().build(&uri).unwrap();
+	tokio::time::timeout(
+		Duration::from_millis(100),
+		client.request::<String, _>("blocking_hello_with_cleanup_notif", rpc_params![]),
+	)
+	.await
+	.unwrap_err();
+	drop(client);
+	notified.await
+}
+
+#[tokio::test]
+async fn ws_method_call_cleanup_on_abort() {
+	init_logger();
+
+	let notif = Arc::new(tokio::sync::Notify::new());
+	let notified = notif.notified();
+	let server_addr = server_with_context((Some(notif.clone()),)).await;
+	let uri = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&uri).await.unwrap();
+	tokio::time::timeout(
+		Duration::from_millis(100),
+		client.request::<String, _>("blocking_hello_with_cleanup_notif", rpc_params![]),
+	)
+	.await
+	.unwrap_err();
+	drop(client);
+	notified.await
 }
 
 #[tokio::test]
