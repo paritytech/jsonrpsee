@@ -48,6 +48,7 @@
 //! - **`client-ws-transport`** - Enables `ws` transport with TLS.
 //! - **`client-ws-transport-no-tls`** - Enables `ws` transport without TLS.
 //! - **`client-web-transport`** - Enables `websys` transport.
+//! - **`ws-deflate`** - Enables per-message deflate compression for WebSocket connections (RFC 7692).
 
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]

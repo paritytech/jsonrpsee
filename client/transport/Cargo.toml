@@ -60,6 +60,7 @@ ws = [
     "tracing",
     "url",
 ]
+ws-deflate = ["ws", "soketto/deflate"]
 web = [
     "gloo-net",
     "futures-channel",

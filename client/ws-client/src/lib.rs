@@ -102,6 +102,9 @@ pub struct WsClientBuilder<RpcMiddleware = Logger> {
 	id_kind: IdKind,
 	tcp_no_delay: bool,
 	service_builder: RpcServiceBuilder<RpcMiddleware>,
+	/// Enable per-message deflate compression.
+	#[cfg(feature = "ws-deflate")]
+	ws_compression: bool,
 }
 
 impl Default for WsClientBuilder {
@@ -122,6 +125,8 @@ impl Default for WsClientBuilder {
 			id_kind: IdKind::Number,
 			tcp_no_delay: true,
 			service_builder: RpcServiceBuilder::default().rpc_logger(1024),
+			#[cfg(feature = "ws-deflate")]
+			ws_compression: false,
 		}
 	}
 }
@@ -244,6 +249,26 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 		self
 	}
 
+	/// Enable per-message deflate compression for the WebSocket connection.
+	///
+	/// This uses the `permessage-deflate` WebSocket extension (RFC 7692).
+	///
+	/// Default: compression is disabled.
+	#[cfg(feature = "ws-deflate")]
+	pub fn enable_ws_compression(mut self) -> Self {
+		self.ws_compression = true;
+		self
+	}
+
+	/// Disable per-message deflate compression for the WebSocket connection.
+	///
+	/// Default: compression is disabled.
+	#[cfg(feature = "ws-deflate")]
+	pub fn disable_ws_compression(mut self) -> Self {
+		self.ws_compression = false;
+		self
+	}
+
 	/// See documentation [`WsTransportClientBuilder::set_headers`] (default is none).
 	pub fn set_headers(mut self, headers: http::HeaderMap) -> Self {
 		self.headers = headers;
@@ -298,6 +323,8 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			id_kind: self.id_kind,
 			tcp_no_delay: self.tcp_no_delay,
 			service_builder,
+			#[cfg(feature = "ws-deflate")]
+			ws_compression: self.ws_compression,
 		}
 	}
 
@@ -358,6 +385,8 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			max_frame_size: self.max_frame_size,
 			max_redirections: self.max_redirections,
 			tcp_no_delay: self.tcp_no_delay,
+			#[cfg(feature = "ws-deflate")]
+			ws_compression: self.ws_compression,
 		};
 
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;
@@ -388,6 +417,8 @@ impl<RpcMiddleware> WsClientBuilder<RpcMiddleware> {
 			max_frame_size: self.max_frame_size,
 			max_redirections: self.max_redirections,
 			tcp_no_delay: self.tcp_no_delay,
+			#[cfg(feature = "ws-deflate")]
+			ws_compression: self.ws_compression,
 		};
 
 		let uri = Url::parse(url.as_ref()).map_err(|e| Error::Transport(e.into()))?;

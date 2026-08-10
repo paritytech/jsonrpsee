@@ -1600,3 +1600,100 @@ async fn http_connection_guard_works() {
 		assert_eq!(conn_count, 1);
 	}
 }
+
+/// Checks permessage-deflate compression when both server and client enable it.
+///
+/// We use a raw TCP proxy between the client and server to capture the bytes
+/// and actually verify that the compressed bytes are flowing on the wire.
+#[tokio::test]
+async fn ws_deflate_wire_level_proxy() {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+	use tokio::net::{
+		TcpListener, TcpStream,
+		tcp::{OwnedReadHalf, OwnedWriteHalf},
+	};
+
+	// The real RPC server.
+
+	let server = ServerBuilder::with_config(ServerConfig::builder().enable_ws_compression().build())
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
+	let server_addr = server.local_addr().unwrap();
+
+	let mut module = RpcModule::new(());
+	module
+		.register_method("echo_big", |params, _, _| {
+			let s: String = params.one().unwrap();
+			s
+		})
+		.unwrap();
+	let handle = server.start(module);
+
+	// Transparent TCP proxy.
+
+	let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let proxy_addr = proxy_listener.local_addr().unwrap();
+
+	let proxy_task = tokio::spawn(async move {
+		let (client_conn, _) = proxy_listener.accept().await.unwrap();
+		let server_conn = TcpStream::connect(server_addr).await.unwrap();
+
+		let (cr, cw) = client_conn.into_split();
+		let (sr, sw) = server_conn.into_split();
+
+		let propagate_and_capture = |mut rd: OwnedReadHalf, mut wr: OwnedWriteHalf| {
+			tokio::spawn(async move {
+				let mut buf = [0u8; 4096];
+				let mut captured = Vec::new();
+				loop {
+					let n = match rd.read(&mut buf).await {
+						Ok(0) => break,
+						Ok(n) => n,
+						Err(e) => panic!("proxy client->server read error: {e}"),
+					};
+					captured.extend_from_slice(&buf[..n]);
+					wr.write_all(&buf[..n]).await.expect("proxy client->server write error");
+				}
+				captured
+			})
+		};
+
+		let t1 = propagate_and_capture(cr, sw);
+		let t2 = propagate_and_capture(sr, cw);
+
+		let (c2s, s2c) = tokio::join!(t1, t2);
+		(c2s.unwrap(), s2c.unwrap())
+	});
+
+	// The real RPC client.
+
+	let big_string = "a".repeat(200);
+
+	let url = format!("ws://{proxy_addr}");
+	let client = jsonrpsee::ws_client::WsClientBuilder::default().enable_ws_compression().build(&url).await.unwrap();
+
+	let response: String = client.request("echo_big", rpc_params![big_string.clone()]).await.unwrap();
+	assert_eq!(response, big_string);
+
+	// Drop the client to close the WebSocket connection so the proxy tasks reach EOF and finish.
+	drop(client);
+	let (c2s, s2c) = proxy_task.await.unwrap();
+
+	// Assertions.
+
+	let needle = big_string.as_bytes();
+
+	assert!(
+		!c2s.windows(needle.len()).any(|w| w == needle),
+		"client->server bytes contain plaintext payload – compression is NOT active on the client side"
+	);
+
+	assert!(
+		!s2c.windows(needle.len()).any(|w| w == needle),
+		"server->client bytes contain plaintext payload – compression is NOT active on the server side"
+	);
+
+	handle.stop().unwrap();
+	handle.stopped().await;
+}

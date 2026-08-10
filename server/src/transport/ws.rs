@@ -18,6 +18,8 @@ use jsonrpsee_types::error::{ErrorCode, reject_too_big_request};
 use serde_json::value::RawValue;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
+#[cfg(feature = "ws-deflate")]
+use soketto::extension::deflate::Deflate;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, interval_at};
 use tokio_stream::wrappers::ReceiverStream;
@@ -436,6 +438,11 @@ where
 		+ 'static,
 {
 	let mut server = soketto::handshake::http::Server::new();
+
+	#[cfg(feature = "ws-deflate")]
+	if server_cfg.ws_compression {
+		server.add_extension(Box::new(Deflate::new(soketto::Mode::Server)));
+	}
 
 	match server.receive_request(&req) {
 		Ok(response) => {
