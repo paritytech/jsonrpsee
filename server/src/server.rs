@@ -39,8 +39,8 @@ use crate::transport::{http, ws};
 use crate::utils::deserialize_with_ext;
 use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
+use futures_util::StreamExt;
 use futures_util::future::{self, Either, FutureExt};
-use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
@@ -53,10 +53,8 @@ use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
 };
 use jsonrpsee_types::{ErrorObject, Id};
-use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, watch};
-use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 use tracing::{Instrument, instrument};
@@ -170,7 +168,7 @@ where
 }
 
 /// Static server configuration which is shared per connection.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ServerConfig {
 	/// Maximum size in bytes of a request.
 	pub(crate) max_request_body_size: u32,
@@ -200,10 +198,34 @@ pub struct ServerConfig {
 	pub(crate) keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	pub(crate) keep_alive_timeout: Duration,
+	/// Custom WebSocket options (compression, etc).
+	pub(crate) ws_options: Option<yawc::Options>,
+}
+
+impl std::fmt::Debug for ServerConfig {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ServerConfig")
+			.field("max_request_body_size", &self.max_request_body_size)
+			.field("max_response_body_size", &self.max_response_body_size)
+			.field("max_connections", &self.max_connections)
+			.field("max_subscriptions_per_connection", &self.max_subscriptions_per_connection)
+			.field("batch_requests_config", &self.batch_requests_config)
+			.field("tokio_runtime", &self.tokio_runtime)
+			.field("enable_http", &self.enable_http)
+			.field("enable_ws", &self.enable_ws)
+			.field("message_buffer_capacity", &self.message_buffer_capacity)
+			.field("ping_config", &self.ping_config)
+			.field("id_provider", &self.id_provider)
+			.field("tcp_no_delay", &self.tcp_no_delay)
+			.field("keep_alive", &self.keep_alive)
+			.field("keep_alive_timeout", &self.keep_alive_timeout)
+			.field("ws_options", &self.ws_options.as_ref().map(|_| ".."))
+			.finish()
+	}
 }
 
 /// The builder to configure and create a JSON-RPC server configuration.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ServerConfigBuilder {
 	/// Maximum size in bytes of a request.
 	max_request_body_size: u32,
@@ -233,6 +255,30 @@ pub struct ServerConfigBuilder {
 	keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	keep_alive_timeout: std::time::Duration,
+	/// Custom WebSocket options (compression, etc).
+	ws_options: Option<yawc::Options>,
+}
+
+impl std::fmt::Debug for ServerConfigBuilder {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ServerConfigBuilder")
+			.field("max_request_body_size", &self.max_request_body_size)
+			.field("max_response_body_size", &self.max_response_body_size)
+			.field("max_connections", &self.max_connections)
+			.field("max_subscriptions_per_connection", &self.max_subscriptions_per_connection)
+			.field("batch_requests_config", &self.batch_requests_config)
+			.field("tokio_runtime", &self.tokio_runtime)
+			.field("enable_http", &self.enable_http)
+			.field("enable_ws", &self.enable_ws)
+			.field("message_buffer_capacity", &self.message_buffer_capacity)
+			.field("ping_config", &self.ping_config)
+			.field("id_provider", &self.id_provider)
+			.field("tcp_no_delay", &self.tcp_no_delay)
+			.field("keep_alive", &self.keep_alive)
+			.field("keep_alive_timeout", &self.keep_alive_timeout)
+			.field("ws_options", &self.ws_options.as_ref().map(|_| ".."))
+			.finish()
+	}
 }
 
 /// Builder for [`TowerService`].
@@ -374,6 +420,7 @@ impl Default for ServerConfigBuilder {
 			keep_alive: None,
 			//same as `hyper` default
 			keep_alive_timeout: Duration::from_secs(20),
+			ws_options: None,
 		}
 	}
 }
@@ -541,6 +588,29 @@ impl ServerConfigBuilder {
 		self
 	}
 
+	/// Set custom WebSocket options such as compression settings.
+	///
+	/// By default, balanced compression is enabled. The `max_payload_read` setting
+	/// from these options will be overridden by [`ServerConfigBuilder::max_request_body_size`].
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use jsonrpsee_server::{ServerConfigBuilder, WsOptions};
+	///
+	/// // Disable compression
+	/// let ws_opts = WsOptions::default().without_compression();
+	/// let builder = ServerConfigBuilder::default().set_ws_options(ws_opts);
+	///
+	/// // High compression
+	/// let ws_opts = WsOptions::default().with_high_compression();
+	/// let builder = ServerConfigBuilder::default().set_ws_options(ws_opts);
+	/// ```
+	pub fn set_ws_options(mut self, options: yawc::Options) -> Self {
+		self.ws_options = Some(options);
+		self
+	}
+
 	/// Build the [`ServerConfig`].
 	pub fn build(self) -> ServerConfig {
 		ServerConfig {
@@ -558,6 +628,7 @@ impl ServerConfigBuilder {
 			tcp_no_delay: self.tcp_no_delay,
 			keep_alive: self.keep_alive,
 			keep_alive_timeout: self.keep_alive_timeout,
+			ws_options: self.ws_options,
 		}
 	}
 }
@@ -1039,15 +1110,20 @@ where
 		req_ext.insert::<ConnectionGuard>(conn_guard.clone());
 		req_ext.insert::<ConnectionId>(conn.conn_id.into());
 
-		let is_upgrade_request = is_upgrade_request(&request);
+		let is_upgrade_request = ws::is_upgrade_request(&request);
 
 		if self.inner.server_cfg.enable_ws && is_upgrade_request {
 			let this = self.inner.clone();
 
-			let mut server = soketto::handshake::http::Server::new();
+			let options = this
+				.server_cfg
+				.ws_options
+				.clone()
+				.unwrap_or_else(|| yawc::Options::default().with_balanced_compression())
+				.with_max_payload_read(this.server_cfg.max_request_body_size as usize);
 
-			let response = match server.receive_request(&request) {
-				Ok(response) => {
+			let response = match yawc::WebSocket::upgrade_with_options(&mut request, options) {
+				Ok((response, upgrade_fut)) => {
 					let (tx, rx) = mpsc::channel(this.server_cfg.message_buffer_capacity as usize);
 					let sink = MethodSink::new(tx);
 
@@ -1078,20 +1154,15 @@ where
 						async move {
 							let extensions = request.extensions().clone();
 
-							let upgraded = match hyper::upgrade::on(request).await {
-								Ok(u) => u,
+							let ws = match upgrade_fut.await {
+								Ok(ws) => ws,
 								Err(e) => {
 									tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);
 									return;
 								}
 							};
 
-							let io = TokioIo::new(upgraded);
-
-							let stream = BufReader::new(BufWriter::new(io.compat()));
-							let mut ws_builder = server.into_builder(stream);
-							ws_builder.set_max_message_size(this.server_cfg.max_request_body_size as usize);
-							let (sender, receiver) = ws_builder.finish();
+							let (sender, receiver) = ws.split();
 
 							let params = BackgroundTaskParams {
 								server_cfg: this.server_cfg,
@@ -1111,7 +1182,7 @@ where
 						.in_current_span(),
 					);
 
-					response.map(|()| HttpBody::empty())
+					response.map(|_| HttpBody::empty())
 				}
 				Err(e) => {
 					tracing::debug!(target: LOG_TARGET, "Could not upgrade connection: {}", e);

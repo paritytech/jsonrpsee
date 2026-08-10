@@ -51,6 +51,7 @@ pub use server::{
 	ServerConfigBuilder, TowerService, TowerServiceBuilder, TowerServiceNoHttp,
 };
 pub use tracing;
+pub use yawc::{DeflateOptions, Options as WsOptions};
 
 pub use jsonrpsee_core::http_helpers::{Body as HttpBody, Request as HttpRequest, Response as HttpResponse};
 pub use transport::http;

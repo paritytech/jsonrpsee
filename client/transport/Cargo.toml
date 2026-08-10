@@ -24,7 +24,6 @@ thiserror = { workspace = true, optional = true }
 futures-util = { workspace = true, features = ["alloc"], optional = true }
 http = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-tokio-util = { workspace = true, features = ["compat"], optional = true }
 tokio = { workspace = true, features = ["net", "time", "macros"], optional = true }
 pin-project = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
@@ -37,7 +36,7 @@ rustls-platform-verifier = { workspace = true, optional = true }
 rustls = { workspace = true, default-features = false, optional = true }
 
 # ws
-soketto = { workspace = true, optional = true }
+yawc = { workspace = true, optional = true }
 
 # web-sys
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -53,8 +52,7 @@ ws = [
     "futures-util",
     "http",
     "tokio",
-    "tokio-util",
-    "soketto",
+    "yawc",
     "pin-project",
     "thiserror",
     "tracing",

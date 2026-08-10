@@ -56,14 +56,15 @@ async fn can_set_the_max_request_body_size() {
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
-	// Invalid: too long
+	// Invalid: too long — yawc terminates the connection when the payload exceeds the limit
 	let req = format!(r#"{{"jsonrpc":"2.0","method":"{}","id":1}}"#, "a".repeat(100));
-	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, oversized_request(100));
+	assert!(client.send_request_text(req).await.is_err());
 
-	// Max request body size should not override the max response body size
+	// After an oversized request, the connection is closed; verify with a new connection
+	// that normal-sized requests still work fine.
+	let mut client2 = WebSocketTestClient::new(addr).await.unwrap();
 	let req = r#"{"jsonrpc":"2.0","method":"anything","id":1}"#;
-	let response = client.send_request_text(req).await.unwrap();
+	let response = client2.send_request_text(req).await.unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
 	handle.stop().unwrap();

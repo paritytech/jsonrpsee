@@ -31,24 +31,21 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use base64::Engine;
-use futures_util::io::{BufReader, BufWriter};
+use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::{SinkExt, StreamExt};
 use jsonrpsee_core::Cow;
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::client::{ReceivedMessage, TransportReceiverT, TransportSenderT};
-use soketto::connection::CloseReason;
-use soketto::connection::Error::Utf8;
-use soketto::data::ByteSlice125;
-use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use soketto::{Data, Incoming, connection};
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use yawc::frame::{Frame, OpCode};
+use yawc::{Options, WebSocket, WebSocketError};
 
 pub use http::{HeaderMap, HeaderValue, Uri, uri::InvalidUri};
-pub use soketto::handshake::client::Header;
 pub use stream::EitherStream;
 pub use tokio::io::{AsyncRead, AsyncWrite};
 pub use url::Url;
+pub use yawc::{DeflateOptions, Options as WsOptions};
 
 const LOG_TARGET: &str = "jsonrpsee-client";
 
@@ -69,20 +66,29 @@ pub enum CertificateStore {
 }
 
 /// Sending end of WebSocket transport.
-#[derive(Debug)]
 pub struct Sender<T> {
-	inner: connection::Sender<BufReader<BufWriter<T>>>,
+	inner: SplitSink<WebSocket<T>, Frame>,
 	max_request_size: u32,
 }
 
+impl<T> std::fmt::Debug for Sender<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Sender").field("max_request_size", &self.max_request_size).finish()
+	}
+}
+
 /// Receiving end of WebSocket transport.
-#[derive(Debug)]
 pub struct Receiver<T> {
-	inner: connection::Receiver<BufReader<BufWriter<T>>>,
+	inner: SplitStream<WebSocket<T>>,
+}
+
+impl<T> std::fmt::Debug for Receiver<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Receiver").finish()
+	}
 }
 
 /// Builder for a WebSocket transport [`Sender`] and [`Receiver`] pair.
-#[derive(Debug)]
 pub struct WsTransportClientBuilder {
 	#[cfg(feature = "tls")]
 	/// What certificate store to use
@@ -101,6 +107,25 @@ pub struct WsTransportClientBuilder {
 	pub max_redirections: usize,
 	/// TCP no delay.
 	pub tcp_no_delay: bool,
+	/// Custom WebSocket options (compression, etc).
+	pub ws_options: Option<Options>,
+}
+
+impl std::fmt::Debug for WsTransportClientBuilder {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut s = f.debug_struct("WsTransportClientBuilder");
+		#[cfg(feature = "tls")]
+		s.field("certificate_store", &self.certificate_store);
+		s.field("connection_timeout", &self.connection_timeout)
+			.field("headers", &self.headers)
+			.field("max_request_size", &self.max_request_size)
+			.field("max_response_size", &self.max_response_size)
+			.field("max_frame_size", &self.max_frame_size)
+			.field("max_redirections", &self.max_redirections)
+			.field("tcp_no_delay", &self.tcp_no_delay)
+			.field("ws_options", &self.ws_options.as_ref().map(|_| ".."))
+			.finish()
+	}
 }
 
 impl Default for WsTransportClientBuilder {
@@ -115,6 +140,7 @@ impl Default for WsTransportClientBuilder {
 			headers: http::HeaderMap::new(),
 			max_redirections: 5,
 			tcp_no_delay: true,
+			ws_options: None,
 		}
 	}
 }
@@ -169,6 +195,15 @@ impl WsTransportClientBuilder {
 		self.max_redirections = redirect;
 		self
 	}
+
+	/// Set custom WebSocket options such as compression settings.
+	///
+	/// By default, balanced compression is enabled. The `max_payload_read` setting
+	/// from these options will be overridden by [`WsTransportClientBuilder::max_response_size`].
+	pub fn set_ws_options(mut self, options: Options) -> Self {
+		self.ws_options = Some(options);
+		self
+	}
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -200,7 +235,7 @@ pub enum WsHandshakeError {
 
 	/// Error in the transport layer.
 	#[error("{0}")]
-	Transport(#[source] soketto::handshake::Error),
+	Transport(#[source] WebSocketError),
 
 	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {status_code}")]
@@ -236,18 +271,18 @@ pub enum WsHandshakeError {
 pub enum WsError {
 	/// Error in the WebSocket connection.
 	#[error("{0}")]
-	Connection(#[source] soketto::connection::Error),
+	Connection(#[source] WebSocketError),
 	/// Message was too large.
 	#[error("The message was too large")]
 	MessageTooLarge,
 	/// Connection was closed.
-	#[error("Connection was closed: {0:?}")]
-	Closed(CloseReason),
+	#[error("Connection was closed")]
+	Closed,
 }
 
 impl<T> TransportSenderT for Sender<T>
 where
-	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Send + Unpin + 'static,
+	T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
 {
 	type Error = WsError;
 
@@ -259,9 +294,7 @@ where
 				return Err(WsError::MessageTooLarge);
 			}
 
-			self.inner.send_text(body).await?;
-			self.inner.flush().await?;
-			Ok(())
+			self.inner.send(Frame::text(body)).await.map_err(WsError::Connection)
 		}
 	}
 
@@ -270,42 +303,39 @@ where
 	fn send_ping(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send {
 		async {
 			tracing::debug!(target: LOG_TARGET, "Send ping");
-			// Submit empty slice as "optional" parameter.
-			let slice: &[u8] = &[];
-			// Byte slice fails if the provided slice is larger than 125 bytes.
-			let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
-
-			self.inner.send_ping(byte_slice).await?;
-			self.inner.flush().await?;
-			Ok(())
+			self.inner.send(Frame::ping(b"" as &[u8])).await.map_err(WsError::Connection)
 		}
 	}
 
 	/// Send a close message and close the connection.
 	fn close(&mut self) -> impl Future<Output = Result<(), WsError>> + Send {
-		async { self.inner.close().await.map_err(Into::into) }
+		async { self.inner.close().await.map_err(WsError::Connection) }
 	}
 }
 
 impl<T> TransportReceiverT for Receiver<T>
 where
-	T: futures_util::io::AsyncRead + futures_util::io::AsyncWrite + Unpin + Send + 'static,
+	T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
 	fn receive(&mut self) -> impl Future<Output = Result<ReceivedMessage, Self::Error>> + Send {
 		async {
-			let mut message = Vec::new();
-
-			match self.inner.receive(&mut message).await? {
-				Incoming::Data(Data::Text(_)) => {
-					let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
-					Ok(ReceivedMessage::Text(s))
-				}
-				Incoming::Data(Data::Binary(_)) => Ok(ReceivedMessage::Bytes(message)),
-				Incoming::Pong(_) => Ok(ReceivedMessage::Pong),
-				Incoming::Closed(c) => Err(WsError::Closed(c)),
+			match self.inner.next().await {
+				Some(frame) => match frame.opcode() {
+					OpCode::Text => {
+						let payload = frame.into_payload();
+						let s = String::from_utf8(payload.to_vec())
+							.map_err(|_| WsError::Connection(WebSocketError::InvalidUTF8))?;
+						Ok(ReceivedMessage::Text(s))
+					}
+					OpCode::Binary => Ok(ReceivedMessage::Bytes(frame.into_payload().to_vec())),
+					OpCode::Pong => Ok(ReceivedMessage::Pong),
+					OpCode::Close => Err(WsError::Closed),
+					_ => Ok(ReceivedMessage::Pong), // treat other frames as activity
+				},
+				None => Err(WsError::Closed),
 			}
 		}
 	}
@@ -315,10 +345,7 @@ impl WsTransportClientBuilder {
 	/// Try to establish the connection.
 	///
 	/// Uses the default connection over TCP.
-	pub async fn build(
-		self,
-		uri: Url,
-	) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
+	pub async fn build(self, uri: Url) -> Result<(Sender<EitherStream>, Receiver<EitherStream>), WsHandshakeError> {
 		self.try_connect_over_tcp(uri).await
 	}
 
@@ -327,12 +354,12 @@ impl WsTransportClientBuilder {
 		self,
 		uri: Url,
 		data_stream: T,
-	) -> Result<(Sender<Compat<T>>, Receiver<Compat<T>>), WsHandshakeError>
+	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
 	where
-		T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+		T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 	{
 		let target: Target = uri.try_into()?;
-		self.try_connect(&target, data_stream.compat()).await
+		self.try_connect(&target, data_stream).await
 	}
 
 	#[cfg(feature = "tls")]
@@ -354,7 +381,7 @@ impl WsTransportClientBuilder {
 	async fn try_connect_over_tcp(
 		&self,
 		uri: Url,
-	) -> Result<(Sender<Compat<EitherStream>>, Receiver<Compat<EitherStream>>), WsHandshakeError> {
+	) -> Result<(Sender<EitherStream>, Receiver<EitherStream>), WsHandshakeError> {
 		let mut target: Target = uri.clone().try_into()?;
 		let mut err = None;
 
@@ -399,7 +426,7 @@ impl WsTransportClientBuilder {
 					}
 				};
 
-				match self.try_connect(&target, tcp_stream.compat()).await {
+				match self.try_connect(&target, tcp_stream).await {
 					Ok(result) => return Ok(result),
 
 					Err(WsHandshakeError::Redirected { status_code, location }) => {
@@ -475,57 +502,49 @@ impl WsTransportClientBuilder {
 		data_stream: T,
 	) -> Result<(Sender<T>, Receiver<T>), WsHandshakeError>
 	where
-		T: futures_util::AsyncRead + futures_util::AsyncWrite + Unpin,
+		T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 	{
-		let mut client = WsHandshakeClient::new(
-			BufReader::new(BufWriter::new(data_stream)),
-			&target.host_header,
-			&target.path_and_query,
-		);
+		let options = self
+			.ws_options
+			.clone()
+			.unwrap_or_else(|| Options::default().with_balanced_compression())
+			.with_max_payload_read(self.max_response_size as usize);
 
-		let headers: Vec<_> = match &target.basic_auth {
-			Some(basic_auth) if !self.headers.contains_key(http::header::AUTHORIZATION) => {
-				let it1 =
-					self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() });
-				let it2 = std::iter::once(Header {
-					name: http::header::AUTHORIZATION.as_str(),
-					value: basic_auth.as_bytes(),
-				});
+		let mut builder = http::Request::builder();
+		for (key, value) in &self.headers {
+			builder = builder.header(key, value);
+		}
 
-				it1.chain(it2).collect()
+		if let Some(basic_auth) = &target.basic_auth {
+			if !self.headers.contains_key(http::header::AUTHORIZATION) {
+				builder = builder.header(http::header::AUTHORIZATION, basic_auth);
 			}
-			_ => {
-				self.headers.iter().map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() }).collect()
-			}
+		}
+
+		// Build the URL from target components
+		let scheme = match target._mode {
+			Mode::Plain => "ws",
+			Mode::Tls => "wss",
 		};
+		let ws_url: url::Url = format!("{scheme}://{}{}", target.host_header, target.path_and_query)
+			.parse()
+			.map_err(|e: url::ParseError| WsHandshakeError::Url(e.to_string().into()))?;
 
-		client.set_headers(&headers);
-
-		// Perform the initial handshake.
-		match client.handshake().await {
-			Ok(ServerResponse::Accepted { .. }) => {
+		match WebSocket::handshake_with_request(ws_url, data_stream, options, builder).await {
+			Ok(ws) => {
 				tracing::debug!(target: LOG_TARGET, "Connection established to target: {:?}", target);
-				let mut builder = client.into_builder();
-				builder.set_max_message_size(self.max_response_size as usize);
-				// Use the max frame size if any, otherwise let the underlying code use appropriate defaults.
-				if let Some(max_frame_size) = self.max_frame_size {
-					builder.set_max_frame_size(max_frame_size as usize);
-				}
-				let (sender, receiver) = builder.finish();
-				Ok((Sender { inner: sender, max_request_size: self.max_request_size }, Receiver { inner: receiver }))
+				let (sink, stream) = ws.split();
+				Ok((Sender { inner: sink, max_request_size: self.max_request_size }, Receiver { inner: stream }))
 			}
-
-			Ok(ServerResponse::Rejected { status_code }) => {
-				tracing::debug!(target: LOG_TARGET, "Connection rejected: {:?}", status_code);
-				Err(WsHandshakeError::Rejected { status_code })
-			}
-
-			Ok(ServerResponse::Redirect { status_code, location }) => {
+			Err(WebSocketError::Redirected { status_code, location }) => {
 				tracing::debug!(target: LOG_TARGET, "Redirection: status_code: {}, location: {}", status_code, location);
 				Err(WsHandshakeError::Redirected { status_code, location })
 			}
-
-			Err(e) => Err(e.into()),
+			Err(WebSocketError::InvalidStatusCode(status_code)) => {
+				tracing::debug!(target: LOG_TARGET, "Connection rejected: {:?}", status_code);
+				Err(WsHandshakeError::Rejected { status_code })
+			}
+			Err(e) => Err(WsHandshakeError::Transport(e)),
 		}
 	}
 }
@@ -581,14 +600,14 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-impl From<soketto::handshake::Error> for WsHandshakeError {
-	fn from(err: soketto::handshake::Error) -> WsHandshakeError {
+impl From<WebSocketError> for WsHandshakeError {
+	fn from(err: WebSocketError) -> WsHandshakeError {
 		WsHandshakeError::Transport(err)
 	}
 }
 
-impl From<soketto::connection::Error> for WsError {
-	fn from(err: soketto::connection::Error) -> Self {
+impl From<WebSocketError> for WsError {
+	fn from(err: WebSocketError) -> Self {
 		WsError::Connection(err)
 	}
 }
