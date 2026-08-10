@@ -585,4 +585,47 @@ mod test {
 		assert_eq!(seq.optional_next::<Vec<Vec<u32>>>().unwrap(), Some(vec![vec![5], vec![6, 7], vec![]]));
 		assert_eq!(seq.optional_next::<serde_json::Value>().unwrap(), Some(serde_json::json!({"named":7})));
 	}
+
+	#[test]
+	fn params_sequence_out_of_range() {
+		let params = Params::new(Some("[1, 2]"));
+		let mut seq = params.sequence();
+		assert_eq!(seq.next::<u64>().unwrap(), 1);
+		assert_eq!(seq.next::<u64>().unwrap(), 2);
+		assert!(seq.next::<u64>().is_err());
+		// subsequent calls stay err
+		assert!(seq.next::<u64>().is_err());
+	}
+
+	#[test]
+	fn params_parse_by_name_vs_position() {
+		#[derive(serde::Deserialize, Debug, PartialEq)]
+		struct Named {
+			a: u32,
+			b: String,
+		}
+
+		let by_name = Params::new(Some(r#"{"a":1,"b":"hello"}"#));
+		let parsed: Named = by_name.parse().unwrap();
+		assert_eq!(parsed, Named { a: 1, b: "hello".into() });
+
+		let by_pos = Params::new(Some(r#"[1, "hello"]"#));
+		let parsed: (u32, String) = by_pos.parse().unwrap();
+		assert_eq!(parsed, (1, "hello".into()));
+	}
+
+	#[test]
+	fn params_empty_none_and_array() {
+		let none = Params::new(None);
+		assert_eq!(none.len_bytes(), 0);
+		assert!(none.as_str().is_none());
+		assert!(!none.is_object());
+		let mut seq = none.sequence();
+		assert!(seq.next::<u64>().is_err());
+
+		let empty = Params::new(Some("[]"));
+		assert_eq!(empty.len_bytes(), 2);
+		let mut seq = empty.sequence();
+		assert!(seq.next::<u64>().is_err());
+	}
 }
