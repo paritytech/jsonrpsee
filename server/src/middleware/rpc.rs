@@ -32,6 +32,7 @@ pub use jsonrpsee_core::server::MethodResponse;
 use std::sync::Arc;
 
 use crate::ConnectionId;
+use futures_util::{FutureExt, StreamExt, stream::FuturesOrdered};
 use jsonrpsee_core::server::{
 	BatchResponseBuilder, BoundedSubscriptions, MethodCallback, MethodSink, Methods, SubscriptionState,
 };
@@ -150,29 +151,31 @@ impl RpcServiceT for RpcService {
 
 	fn batch<'a>(&self, batch: Batch<'a>) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
 		let mut batch_rp = BatchResponseBuilder::new_with_limit(self.max_response_body_size);
-		let service = self.clone();
-		async move {
-			let mut got_notification = false;
+		let mut got_notification = false;
+		let mut tasks = FuturesOrdered::new();
+		for batch_entry in batch.into_iter() {
+			match batch_entry {
+				Ok(BatchEntry::Call(req)) => {
+					tasks.push_back(self.call(req).map(Some).boxed());
+				}
+				Ok(BatchEntry::Notification(n)) => {
+					got_notification = true;
+					tasks.push_back(self.notification(n).map(|_| None).boxed());
+				}
+				Err(err) => {
+					let (err, id) = err.into_parts();
+					let rp = MethodResponse::error(id, err);
+					tasks.push_back(async move { Some(rp) }.boxed());
+				}
+			}
+		}
 
-			for batch_entry in batch.into_iter() {
-				match batch_entry {
-					Ok(BatchEntry::Call(req)) => {
-						let rp = service.call(req).await;
-						if let Err(err) = batch_rp.append(rp) {
-							return err;
-						}
-					}
-					Ok(BatchEntry::Notification(n)) => {
-						got_notification = true;
-						service.notification(n).await;
-					}
-					Err(err) => {
-						let (err, id) = err.into_parts();
-						let rp = MethodResponse::error(id, err);
-						if let Err(err) = batch_rp.append(rp) {
-							return err;
-						}
-					}
+		async move {
+			while let Some(r) = tasks.next().await {
+				if let Some(rp) = r
+					&& let Err(err) = batch_rp.append(rp)
+				{
+					return err;
 				}
 			}
 
