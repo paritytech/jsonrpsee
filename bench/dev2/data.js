@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787983523726,
+  "lastUpdate": 1788588413481,
   "repoUrl": "https://github.com/paritytech/jsonrpsee",
   "entries": {
     "Benchmark": [
@@ -649897,6 +649897,766 @@ window.BENCHMARK_DATA = {
             "name": "subscriptions/unsub",
             "value": 2491,
             "range": "± 151",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "DenzelPenzel",
+            "username": "DenzelPenzel",
+            "email": "15388928+DenzelPenzel@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "4260c35dbdb416693ddbac5faec89ad4efd37209",
+          "message": "ci: fix benchmarks job (#1649)\n\nCo-authored-by: Alexandru Vasile <60601340+lexnv@users.noreply.github.com>",
+          "timestamp": "2026-08-03T08:46:14Z",
+          "url": "https://github.com/paritytech/jsonrpsee/commit/4260c35dbdb416693ddbac5faec89ad4efd37209"
+        },
+        "date": 1788588401055,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "jsonrpsee_types_array_params_baseline",
+            "value": 159,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "jsonrpsee_types_array_params",
+            "value": 227,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "jsonrpsee_types_object_params_baseline",
+            "value": 190,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "jsonrpsee_types_object_params",
+            "value": 237,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_custom_headers_round_trip/0kb",
+            "value": 54471,
+            "range": "± 990",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_custom_headers_round_trip/1kb",
+            "value": 54208,
+            "range": "± 751",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_custom_headers_round_trip/5kb",
+            "value": 57141,
+            "range": "± 828",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_custom_headers_round_trip/25kb",
+            "value": 64791,
+            "range": "± 913",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_custom_headers_round_trip/100kb",
+            "value": 109985,
+            "range": "± 2629",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/2",
+            "value": 154374,
+            "range": "± 8795",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/4",
+            "value": 190336,
+            "range": "± 268561",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/8",
+            "value": 359702,
+            "range": "± 591700",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip/3",
+            "value": 1396004,
+            "range": "± 20519",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip/9",
+            "value": 3221441,
+            "range": "± 96043",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip/27",
+            "value": 12309696,
+            "range": "± 522442",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip/81",
+            "value": 37807397,
+            "range": "± 1700233",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip/243",
+            "value": 111778074,
+            "range": "± 4707861",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip/729",
+            "value": 350096885,
+            "range": "± 9251447",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/fast_call/2",
+            "value": 58466,
+            "range": "± 2243",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/fast_call/5",
+            "value": 67819,
+            "range": "± 1292",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/fast_call/10",
+            "value": 79243,
+            "range": "± 2199",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/fast_call/50",
+            "value": 162037,
+            "range": "± 2488",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/fast_call/100",
+            "value": 265725,
+            "range": "± 5481",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_custom_headers_handshake/0kb",
+            "value": 88162,
+            "range": "± 2883",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_custom_headers_handshake/1kb",
+            "value": 101060,
+            "range": "± 1444",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_custom_headers_handshake/2kb",
+            "value": 105070,
+            "range": "± 1395",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_custom_headers_handshake/4kb",
+            "value": 103970,
+            "range": "± 2070",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/2",
+            "value": 182999,
+            "range": "± 10136",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/4",
+            "value": 300006,
+            "range": "± 31725",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/8",
+            "value": 555468,
+            "range": "± 28381",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip/3",
+            "value": 1282821,
+            "range": "± 23405",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip/9",
+            "value": 2522711,
+            "range": "± 29143",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip/27",
+            "value": 7257906,
+            "range": "± 357853",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip/81",
+            "value": 23219227,
+            "range": "± 1426348",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip/243",
+            "value": 75534183,
+            "range": "± 6317965",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip/729",
+            "value": 238374097,
+            "range": "± 13428014",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/fast_call/2",
+            "value": 53229,
+            "range": "± 526",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/fast_call/5",
+            "value": 59847,
+            "range": "± 2642",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/fast_call/10",
+            "value": 75702,
+            "range": "± 5393",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/fast_call/50",
+            "value": 166838,
+            "range": "± 2095",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/fast_call/100",
+            "value": 298578,
+            "range": "± 3403",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/16",
+            "value": 667560,
+            "range": "± 1142882",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/32",
+            "value": 1272428,
+            "range": "± 2132234",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/64",
+            "value": 2555361,
+            "range": "± 4602942",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/16",
+            "value": 1005881,
+            "range": "± 43228",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/32",
+            "value": 1953376,
+            "range": "± 98056",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/64",
+            "value": 4170168,
+            "range": "± 163489",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_subs/16",
+            "value": 1850873,
+            "range": "± 55320",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_subs/32",
+            "value": 3505543,
+            "range": "± 93222",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_subs/64",
+            "value": 6869891,
+            "range": "± 232578",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/128",
+            "value": 8991241,
+            "range": "± 3126490",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/256",
+            "value": 1003122280,
+            "range": "± 510585319",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/512",
+            "value": 1025418643,
+            "range": "± 323780006",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_conn_calls/fast_call/1024",
+            "value": 1229014516,
+            "range": "± 228225286",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/128",
+            "value": 8358489,
+            "range": "± 390457",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/256",
+            "value": 18772211,
+            "range": "± 696240",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/512",
+            "value": 36579093,
+            "range": "± 661545",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_calls/fast_call/1024",
+            "value": 77265966,
+            "range": "± 1747372",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_subs/128",
+            "value": 14050319,
+            "range": "± 335915",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_subs/256",
+            "value": 29042084,
+            "range": "± 811326",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_subs/512",
+            "value": 58736485,
+            "range": "± 1059157",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_conn_subs/1024",
+            "value": 115782061,
+            "range": "± 1342702",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_custom_headers_round_trip/0kb",
+            "value": 54908,
+            "range": "± 886",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_custom_headers_round_trip/1kb",
+            "value": 56451,
+            "range": "± 844",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_custom_headers_round_trip/5kb",
+            "value": 57991,
+            "range": "± 649",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_custom_headers_round_trip/25kb",
+            "value": 65121,
+            "range": "± 922",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_custom_headers_round_trip/100kb",
+            "value": 112166,
+            "range": "± 2006",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/2",
+            "value": 155287,
+            "range": "± 6601",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/4",
+            "value": 194023,
+            "range": "± 248054",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/8",
+            "value": 338891,
+            "range": "± 596667",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip/3",
+            "value": 1538466,
+            "range": "± 19358",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip/9",
+            "value": 3161640,
+            "range": "± 50912",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip/27",
+            "value": 9513321,
+            "range": "± 305239",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip/81",
+            "value": 31920568,
+            "range": "± 1461020",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip/243",
+            "value": 108623366,
+            "range": "± 3967431",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip/729",
+            "value": 358313833,
+            "range": "± 10633204",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/fast_call/2",
+            "value": 57925,
+            "range": "± 1076",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/fast_call/5",
+            "value": 66451,
+            "range": "± 1156",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/fast_call/10",
+            "value": 79415,
+            "range": "± 1504",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/fast_call/50",
+            "value": 166412,
+            "range": "± 3994",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/fast_call/100",
+            "value": 263147,
+            "range": "± 4112",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_custom_headers_handshake/0kb",
+            "value": 88035,
+            "range": "± 3608",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_custom_headers_handshake/1kb",
+            "value": 99723,
+            "range": "± 2535",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_custom_headers_handshake/2kb",
+            "value": 99916,
+            "range": "± 1381",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_custom_headers_handshake/4kb",
+            "value": 98291,
+            "range": "± 1859",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/2",
+            "value": 177073,
+            "range": "± 13285",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/4",
+            "value": 298363,
+            "range": "± 15774",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/8",
+            "value": 535272,
+            "range": "± 34182",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip/3",
+            "value": 1272464,
+            "range": "± 16984",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip/9",
+            "value": 2506791,
+            "range": "± 23729",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip/27",
+            "value": 7386007,
+            "range": "± 365675",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip/81",
+            "value": 23813440,
+            "range": "± 1618099",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip/243",
+            "value": 80764943,
+            "range": "± 7033076",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip/729",
+            "value": 243642944,
+            "range": "± 13800553",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/fast_call/2",
+            "value": 53134,
+            "range": "± 961",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/fast_call/5",
+            "value": 59992,
+            "range": "± 6246",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/fast_call/10",
+            "value": 75549,
+            "range": "± 22119",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/fast_call/50",
+            "value": 179251,
+            "range": "± 2247",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/fast_call/100",
+            "value": 319213,
+            "range": "± 5473",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/16",
+            "value": 691991,
+            "range": "± 985067",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/32",
+            "value": 1256727,
+            "range": "± 2182999",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/64",
+            "value": 2397114,
+            "range": "± 4731521",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/16",
+            "value": 973149,
+            "range": "± 53189",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/32",
+            "value": 1954755,
+            "range": "± 74502",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/64",
+            "value": 3858057,
+            "range": "± 158258",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_subs/16",
+            "value": 1787610,
+            "range": "± 44524",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_subs/32",
+            "value": 3462240,
+            "range": "± 107643",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_subs/64",
+            "value": 7074654,
+            "range": "± 226208",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/128",
+            "value": 9088602,
+            "range": "± 3085783",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/256",
+            "value": 530273548,
+            "range": "± 359568871",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/512",
+            "value": 1027147672,
+            "range": "± 265611544",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_conn_calls/fast_call/1024",
+            "value": 1226386176,
+            "range": "± 241916688",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/128",
+            "value": 8228103,
+            "range": "± 219660",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/256",
+            "value": 17514214,
+            "range": "± 545010",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/512",
+            "value": 37216436,
+            "range": "± 1051361",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_calls/fast_call/1024",
+            "value": 80914357,
+            "range": "± 2429457",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_subs/128",
+            "value": 14613012,
+            "range": "± 331477",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_subs/256",
+            "value": 29888819,
+            "range": "± 419518",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_subs/512",
+            "value": 60740216,
+            "range": "± 1141899",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_conn_subs/1024",
+            "value": 123890115,
+            "range": "± 3447004",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe",
+            "value": 73473,
+            "range": "± 3231",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe_response",
+            "value": 4018,
+            "range": "± 239",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/unsub",
+            "value": 2386,
+            "range": "± 145",
             "unit": "ns/iter"
           }
         ]
