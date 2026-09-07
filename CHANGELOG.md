@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+### [Fixed]
+
+- fix(server): dropping a cloned `SubscriptionSink` no longer closes the remaining subscription ([#1622](https://github.com/paritytech/jsonrpsee/issues/1622))
+
 ### [Added]
 
 - feat(http-client): expose connect timeout option ([#1643](https://github.com/paritytech/jsonrpsee/pull/1643))

@@ -292,7 +292,11 @@ impl PendingSubscriptionSink {
 	}
 }
 
-/// Represents a single subscription that hasn't been processed yet.
+/// Represents a single subscription.
+///
+/// This type is cheap to clone; clones share the same subscription. The subscription is
+/// removed from the server only when the last clone is dropped, or when the client
+/// unsubscribes or disconnects.
 #[derive(Debug, Clone)]
 pub struct SubscriptionSink {
 	/// Sink.
@@ -413,7 +417,9 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		if self.is_active_subscription() {
+		// Clones share the same subscription. Only the last sink should tear it down;
+		// otherwise dropping a clone closes the remaining sink (see #1622).
+		if self.is_active_subscription() && Arc::strong_count(&self._permit) == 1 {
 			self.subscribers.lock().remove(&self.uniq_sub);
 		}
 	}
