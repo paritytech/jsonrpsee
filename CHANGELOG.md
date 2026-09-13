@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog].
 
 - feat(http-client): expose connect timeout option ([#1643](https://github.com/paritytech/jsonrpsee/pull/1643))
 
+### [Changed]
+
+- perf(server): skip re-validation of serialized responses, bumps the minimum serde_json to 1.0.151 ([#1652](https://github.com/paritytech/jsonrpsee/pull/1652))
+
 ## [v0.26.0] - 2025-08-11
 
 This is just a small release; the only breaking change is the addition of `max_frame_size` to `WsTransportClientBuilder`, which necessitates a minor version bump.
