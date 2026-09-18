@@ -35,6 +35,13 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+#[cfg(all(feature = "tls", not(any(feature = "tls-ring", feature = "tls-aws-lc-rs", feature = "tls-no-provider"))))]
+compile_error!(
+	"the `tls` feature does not pick a crypto provider on its own. Enable `tls-ring` for the \
+	 backend `tls` used to select, `tls-aws-lc-rs` for aws-lc-rs, or `tls-no-provider` to install \
+	 a rustls process-default yourself."
+);
+
 mod client;
 mod rpc_service;
 

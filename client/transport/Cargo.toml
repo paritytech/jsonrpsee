@@ -31,7 +31,7 @@ url = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 
 # tls
-tokio-rustls = { workspace = true, optional = true, features = ["logging", "tls12", "ring"] }
+tokio-rustls = { workspace = true, optional = true, features = ["logging", "tls12"] }
 rustls-pki-types = { workspace = true, optional = true }
 rustls-platform-verifier = { workspace = true, optional = true }
 rustls = { workspace = true, default-features = false, optional = true }
@@ -45,7 +45,16 @@ gloo-net = { workspace = true, features = ["json", "websocket"], optional = true
 futures-channel = { workspace = true, optional = true }
 
 [features]
+# The TLS code and everything it needs except a crypto provider. Pair it with
+# one of the features below.
 tls = ["rustls", "tokio-rustls", "rustls-pki-types"]
+tls-ring = ["tls", "tokio-rustls?/ring", "rustls?/ring"]
+tls-aws-lc-rs = ["tls", "tokio-rustls?/aws-lc-rs", "rustls?/aws-lc-rs"]
+# Link no provider and install a rustls process-default yourself, which suits
+# a binary that already picks one.
+tls-no-provider = ["tls"]
+
+# Which roots to trust, independent of the provider above.
 tls-rustls-platform-verifier = ["tls", "rustls-platform-verifier"]
 
 ws = [

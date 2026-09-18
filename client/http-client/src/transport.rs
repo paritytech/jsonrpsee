@@ -255,7 +255,11 @@ impl<L> HttpTransportClientBuilder<L> {
 				// Otherwise, creating `tls` configuration may panic if there are multiple
 				// providers available due to `rustls` features (e.g. both `ring` and `aws-lc-rs`).
 				// Function returns an error if the provider is already installed, and we're fine with it.
+				// Under `tls-no-provider` the caller installs one instead.
+				#[cfg(feature = "tls-ring")]
 				let _ = rustls::crypto::ring::default_provider().install_default();
+				#[cfg(all(feature = "tls-aws-lc-rs", not(feature = "tls-ring")))]
+				let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
 				let mut http_conn = HttpConnector::new();
 				http_conn.set_nodelay(tcp_no_delay);
