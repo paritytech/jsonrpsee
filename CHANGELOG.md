@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog].
 
 - feat(http-client): expose connect timeout option ([#1643](https://github.com/paritytech/jsonrpsee/pull/1643))
 
+### [Fixed]
+
+- fix(server): cancel pending ws calls when the connection closes ([#1656](https://github.com/paritytech/jsonrpsee/pull/1656))
+
 ## [v0.26.0] - 2025-08-11
 
 This is just a small release; the only breaking change is the addition of `max_frame_size` to `WsTransportClientBuilder`, which necessitates a minor version bump.
