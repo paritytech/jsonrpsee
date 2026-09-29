@@ -1,10 +1,14 @@
-use crate::ServerConfig;
 use crate::tests::helpers::{init_logger, server_with_handles};
+use crate::{HttpBody, HttpRequest, HttpResponse, ServerConfig};
 use hyper::StatusCode;
+use jsonrpsee_core::BoxError;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::{http_request, ok_response, to_http_uri};
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
+use std::net::SocketAddr;
 use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 #[tokio::test]
 async fn stop_works() {
@@ -89,4 +93,74 @@ async fn ws_only_works() {
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 	let response = client.send_request_text(req.to_string()).await.unwrap();
 	assert_eq!(response, ok_response("hello".to_string().into(), Id::Num(1)));
+}
+
+async fn server_with_header_read_timeout(header_read_timeout: Duration) -> SocketAddr {
+	use crate::{RpcModule, ServerBuilder};
+
+	let config = ServerConfig::builder().set_header_read_timeout(Some(header_read_timeout)).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
+
+	let addr = server.local_addr().unwrap();
+	tokio::spawn(server.start(module).stopped());
+	addr
+}
+
+#[tokio::test]
+async fn header_read_timeout_closes_connection_that_sends_nothing() {
+	let addr = server_with_header_read_timeout(Duration::from_millis(100)).await;
+	let mut stream = TcpStream::connect(addr).with_default_timeout().await.unwrap().unwrap();
+
+	let closed = stream.read_to_end(&mut Vec::new()).with_timeout(Duration::from_secs(5)).await;
+	assert!(closed.is_ok(), "connection that never sent a request was kept open");
+}
+
+#[tokio::test]
+async fn header_read_timeout_closes_connection_with_incomplete_header() {
+	let addr = server_with_header_read_timeout(Duration::from_millis(100)).await;
+	let mut stream = TcpStream::connect(addr).with_default_timeout().await.unwrap().unwrap();
+	stream.write_all(b"GET / HTTP/1.1\r\n").await.unwrap();
+
+	let closed = stream.read_to_end(&mut Vec::new()).with_timeout(Duration::from_secs(5)).await;
+	assert!(closed.is_ok(), "connection whose request header never completed was kept open");
+}
+
+#[tokio::test]
+async fn header_read_timeout_keeps_idle_websocket_open() {
+	let addr = server_with_header_read_timeout(Duration::from_millis(100)).await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	tokio::time::sleep(Duration::from_millis(300)).await;
+
+	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, ok_response("hello".to_string().into(), Id::Num(1)));
+}
+
+#[tokio::test(start_paused = true)]
+async fn serve_closes_connection_that_sends_nothing() {
+	let (_client, io) = tokio::io::duplex(1024);
+	let service = tower::service_fn(|_: HttpRequest<hyper::body::Incoming>| async {
+		Ok::<_, BoxError>(HttpResponse::new(HttpBody::empty()))
+	});
+
+	let served = crate::serve_with_graceful_shutdown(io, service, std::future::pending::<()>())
+		.with_timeout(Duration::from_secs(60))
+		.await;
+	assert!(served.is_ok(), "connection that never sent a request was kept open");
+}
+
+#[tokio::test(start_paused = true)]
+async fn serve_closes_connection_with_incomplete_header() {
+	let (mut client, io) = tokio::io::duplex(1024);
+	client.write_all(b"GET / HTTP/1.1\r\n").await.unwrap();
+	let service = tower::service_fn(|_: HttpRequest<hyper::body::Incoming>| async {
+		Ok::<_, BoxError>(HttpResponse::new(HttpBody::empty()))
+	});
+
+	let served = crate::serve_with_graceful_shutdown(io, service, std::future::pending::<()>())
+		.with_timeout(Duration::from_secs(60))
+		.await;
+	assert!(served.is_ok(), "connection whose request header never completed was kept open");
 }

@@ -36,13 +36,13 @@ use crate::future::{ConnectionGuard, ServerHandle, SessionClose, SessionClosedFu
 use crate::middleware::rpc::{RpcService, RpcServiceCfg};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::utils::deserialize_with_ext;
+use crate::utils::{DEFAULT_HEADER_READ_TIMEOUT, FirstByteTimeout, deserialize_with_ext, http_builder};
 use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{self, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::TokioIo;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::{Batch, BatchEntry, BatchEntryErr, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
@@ -200,6 +200,8 @@ pub struct ServerConfig {
 	pub(crate) keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	pub(crate) keep_alive_timeout: Duration,
+	/// Timeout for receiving the header of a request.
+	pub(crate) header_read_timeout: Option<Duration>,
 }
 
 /// The builder to configure and create a JSON-RPC server configuration.
@@ -233,6 +235,8 @@ pub struct ServerConfigBuilder {
 	keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	keep_alive_timeout: std::time::Duration,
+	/// Timeout for receiving the header of a request.
+	header_read_timeout: Option<Duration>,
 }
 
 /// Builder for [`TowerService`].
@@ -374,6 +378,7 @@ impl Default for ServerConfigBuilder {
 			keep_alive: None,
 			//same as `hyper` default
 			keep_alive_timeout: Duration::from_secs(20),
+			header_read_timeout: Some(DEFAULT_HEADER_READ_TIMEOUT),
 		}
 	}
 }
@@ -541,6 +546,16 @@ impl ServerConfigBuilder {
 		self
 	}
 
+	/// Configure how long a connection may take to send the header of a request, e.g. the
+	/// WebSocket upgrade request, before it is closed. This also applies to idle HTTP/1
+	/// keep-alive connections waiting for their next request. `None` disables the timeout.
+	///
+	/// Default is 30 seconds.
+	pub fn set_header_read_timeout(mut self, header_read_timeout: Option<Duration>) -> Self {
+		self.header_read_timeout = header_read_timeout;
+		self
+	}
+
 	/// Build the [`ServerConfig`].
 	pub fn build(self) -> ServerConfig {
 		ServerConfig {
@@ -558,6 +573,7 @@ impl ServerConfigBuilder {
 			tcp_no_delay: self.tcp_no_delay,
 			keep_alive: self.keep_alive,
 			keep_alive_timeout: self.keep_alive_timeout,
+			header_read_timeout: self.header_read_timeout,
 		}
 	}
 }
@@ -1193,6 +1209,7 @@ where
 
 	let keep_alive = server_cfg.keep_alive;
 	let keep_alive_timeout = server_cfg.keep_alive_timeout;
+	let header_read_timeout = server_cfg.header_read_timeout;
 
 	let tower_service = TowerServiceNoHttp {
 		inner: ServiceData {
@@ -1211,8 +1228,8 @@ where
 	tokio::spawn(async move {
 		// this requires Clone.
 		let service = crate::utils::TowerToHyperService::new(service);
-		let io = TokioIo::new(socket);
-		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+		let io = TokioIo::new(FirstByteTimeout::new(socket, header_read_timeout));
+		let mut builder = http_builder(header_read_timeout);
 
 		//default is true for http1, if set to false then websocket connections will not be upgraded.
 		builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
