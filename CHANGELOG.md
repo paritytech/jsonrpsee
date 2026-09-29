@@ -8,10 +8,15 @@ The format is based on [Keep a Changelog].
 
 A small patch release that exposes a connect timeout for the HTTP client, bounds the WebSocket handshake of the
 client by `connection_timeout` and makes the server close connections that don't send a request header in time.
+It also raises the MSRV to 1.87.
 
 ### [Added]
 
 - feat(http-client): expose connect timeout option ([#1643](https://github.com/paritytech/jsonrpsee/pull/1643))
+
+### [Changed]
+
+- chore: bump MSRV to 1.87, required by `yoke-derive` 0.8.3 (a transitive dependency of `url`)
 
 ### [Fixed]
 
