@@ -27,21 +27,22 @@
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::{HttpBody, HttpRequest};
 
-use futures_util::future::{self, Either};
-use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+use futures_util::future;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::BoxError;
 use pin_project::pin_project;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::sync::Notify;
 use tower::ServiceExt;
 use tower::util::Oneshot;
 
-/// Default for how long a connection may take to send the header of a request.
-pub(crate) const DEFAULT_HEADER_READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default for how long a connection may take to send its first request.
+pub(crate) const DEFAULT_FIRST_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct TowerToHyperService<S> {
@@ -89,77 +90,52 @@ where
 	}
 }
 
-/// Builds the handler for HTTP connections that closes connections which don't send the header of a request
-/// within `header_read_timeout`.
-pub(crate) fn http_builder(
-	header_read_timeout: Option<Duration>,
-) -> hyper_util::server::conn::auto::Builder<TokioExecutor> {
-	let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-	builder.http1().timer(TokioTimer::new()).header_read_timeout(header_read_timeout);
-	builder
+/// Notifies `request_received` whenever the service is called with a request.
+#[derive(Debug, Clone)]
+pub(crate) struct NotifyOnRequest<S> {
+	service: S,
+	request_received: Arc<Notify>,
 }
 
-/// Fails reading if the peer doesn't send anything within the timeout.
-///
-/// hyper's header read timeout only starts once the protocol was detected from the first bytes.
-pub(crate) struct FirstByteTimeout<I> {
-	io: I,
-	deadline: Option<Pin<Box<tokio::time::Sleep>>>,
-}
-
-impl<I> FirstByteTimeout<I> {
-	pub(crate) fn new(io: I, timeout: Option<Duration>) -> Self {
-		Self { io, deadline: timeout.map(|timeout| Box::pin(tokio::time::sleep(timeout))) }
+impl<S> NotifyOnRequest<S> {
+	pub(crate) fn new(service: S, request_received: Arc<Notify>) -> Self {
+		Self { service, request_received }
 	}
 }
 
-impl<I: AsyncRead + Unpin> AsyncRead for FirstByteTimeout<I> {
-	fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
-		let this = self.get_mut();
-		let read = Pin::new(&mut this.io).poll_read(cx, buf);
+impl<S, R> tower::Service<R> for NotifyOnRequest<S>
+where
+	S: tower::Service<R>,
+{
+	type Response = S::Response;
+	type Error = S::Error;
+	type Future = S::Future;
 
-		if read.is_ready() {
-			this.deadline = None;
-		} else if let Some(deadline) = &mut this.deadline {
-			if deadline.as_mut().poll(cx).is_ready() {
-				return Poll::Ready(Err(io::Error::new(io::ErrorKind::TimedOut, "no request header received in time")));
-			}
+	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		self.service.poll_ready(cx)
+	}
+
+	fn call(&mut self, request: R) -> Self::Future {
+		self.request_received.notify_one();
+		self.service.call(request)
+	}
+}
+
+/// Resolves with an error if no request was received within `timeout`, otherwise never.
+pub(crate) async fn no_request_within(request_received: &Notify, timeout: Option<Duration>) -> BoxError {
+	if let Some(timeout) = timeout {
+		if tokio::time::timeout(timeout, request_received.notified()).await.is_err() {
+			return io::Error::new(io::ErrorKind::TimedOut, "no request received in time").into();
 		}
-
-		read
-	}
-}
-
-impl<I: AsyncWrite + Unpin> AsyncWrite for FirstByteTimeout<I> {
-	fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
-		Pin::new(&mut self.io).poll_write(cx, buf)
 	}
 
-	fn poll_write_vectored(
-		mut self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-		bufs: &[io::IoSlice<'_>],
-	) -> Poll<io::Result<usize>> {
-		Pin::new(&mut self.io).poll_write_vectored(cx, bufs)
-	}
-
-	fn is_write_vectored(&self) -> bool {
-		self.io.is_write_vectored()
-	}
-
-	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-		Pin::new(&mut self.io).poll_flush(cx)
-	}
-
-	fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-		Pin::new(&mut self.io).poll_shutdown(cx)
-	}
+	future::pending().await
 }
 
 /// Serve a service over a TCP connection without graceful shutdown.
 /// This means that pending requests will be dropped when the server is stopped.
 ///
-/// Connections which don't send the header of a request within 30 seconds are closed.
+/// Connections which don't send a request within 30 seconds are closed.
 ///
 /// If you want to gracefully shutdown the server, use [`serve_with_graceful_shutdown`] instead.
 pub async fn serve<S, B, I>(io: I, service: S) -> Result<(), BoxError>
@@ -172,18 +148,24 @@ where
 	B::Error: Into<BoxError>,
 	I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
 {
-	let service = hyper_util::service::TowerToHyperService::new(service);
-	let io = TokioIo::new(FirstByteTimeout::new(io, Some(DEFAULT_HEADER_READ_TIMEOUT)));
+	let request_received = Arc::new(Notify::new());
+	let service =
+		hyper_util::service::TowerToHyperService::new(NotifyOnRequest::new(service, request_received.clone()));
+	let io = TokioIo::new(io);
 
-	let builder = http_builder(Some(DEFAULT_HEADER_READ_TIMEOUT));
+	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 	let conn = builder.serve_connection_with_upgrades(io, service);
-	conn.await
+
+	tokio::select! {
+		res = conn => res,
+		err = no_request_within(&request_received, Some(DEFAULT_FIRST_REQUEST_TIMEOUT)) => Err(err),
+	}
 }
 
 /// Serve a service over a TCP connection with graceful shutdown.
 /// This means that pending requests will be completed before the server is stopped.
 ///
-/// Connections which don't send the header of a request within 30 seconds are closed.
+/// Connections which don't send a request within 30 seconds are closed.
 pub async fn serve_with_graceful_shutdown<S, B, I>(
 	io: I,
 	service: S,
@@ -198,23 +180,26 @@ where
 	B::Error: Into<BoxError>,
 	I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
 {
-	let service = hyper_util::service::TowerToHyperService::new(service);
-	let io = TokioIo::new(FirstByteTimeout::new(io, Some(DEFAULT_HEADER_READ_TIMEOUT)));
+	let request_received = Arc::new(Notify::new());
+	let service =
+		hyper_util::service::TowerToHyperService::new(NotifyOnRequest::new(service, request_received.clone()));
+	let io = TokioIo::new(io);
 
-	let builder = http_builder(Some(DEFAULT_HEADER_READ_TIMEOUT));
+	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 	let conn = builder.serve_connection_with_upgrades(io, service);
 
 	tokio::pin!(stopped, conn);
 
-	match future::select(conn, stopped).await {
+	tokio::select! {
 		// Return if the connection was completed.
-		Either::Left((conn, _)) => conn,
+		res = &mut conn => res,
 		// If the server is stopped, we should gracefully shutdown
 		// the connection and poll it until it finishes.
-		Either::Right((_, mut conn)) => {
+		_ = &mut stopped => {
 			conn.as_mut().graceful_shutdown();
 			conn.await
 		}
+		err = no_request_within(&request_received, Some(DEFAULT_FIRST_REQUEST_TIMEOUT)) => Err(err),
 	}
 }
 

@@ -95,13 +95,19 @@ async fn ws_only_works() {
 	assert_eq!(response, ok_response("hello".to_string().into(), Id::Num(1)));
 }
 
-async fn server_with_header_read_timeout(header_read_timeout: Duration) -> SocketAddr {
+async fn server_with_first_request_timeout(first_request_timeout: Duration) -> SocketAddr {
 	use crate::{RpcModule, ServerBuilder};
 
-	let config = ServerConfig::builder().set_header_read_timeout(Some(header_read_timeout)).build();
+	let config = ServerConfig::builder().set_first_request_timeout(Some(first_request_timeout)).build();
 	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _, _| "hello").unwrap();
+	module
+		.register_async_method("slow_hello", move |_, _, _| async move {
+			tokio::time::sleep(first_request_timeout * 3).await;
+			"hello"
+		})
+		.unwrap();
 
 	let addr = server.local_addr().unwrap();
 	tokio::spawn(server.start(module).stopped());
@@ -109,8 +115,8 @@ async fn server_with_header_read_timeout(header_read_timeout: Duration) -> Socke
 }
 
 #[tokio::test]
-async fn header_read_timeout_closes_connection_that_sends_nothing() {
-	let addr = server_with_header_read_timeout(Duration::from_millis(100)).await;
+async fn first_request_timeout_closes_connection_that_sends_nothing() {
+	let addr = server_with_first_request_timeout(Duration::from_millis(100)).await;
 	let mut stream = TcpStream::connect(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let closed = stream.read_to_end(&mut Vec::new()).with_timeout(Duration::from_secs(5)).await;
@@ -118,8 +124,8 @@ async fn header_read_timeout_closes_connection_that_sends_nothing() {
 }
 
 #[tokio::test]
-async fn header_read_timeout_closes_connection_with_incomplete_header() {
-	let addr = server_with_header_read_timeout(Duration::from_millis(100)).await;
+async fn first_request_timeout_closes_connection_with_incomplete_header() {
+	let addr = server_with_first_request_timeout(Duration::from_millis(100)).await;
 	let mut stream = TcpStream::connect(addr).with_default_timeout().await.unwrap().unwrap();
 	stream.write_all(b"GET / HTTP/1.1\r\n").await.unwrap();
 
@@ -128,8 +134,38 @@ async fn header_read_timeout_closes_connection_with_incomplete_header() {
 }
 
 #[tokio::test]
-async fn header_read_timeout_keeps_idle_websocket_open() {
-	let addr = server_with_header_read_timeout(Duration::from_millis(100)).await;
+async fn first_request_timeout_closes_connection_with_incomplete_http2_preface() {
+	let addr = server_with_first_request_timeout(Duration::from_millis(100)).await;
+	let mut stream = TcpStream::connect(addr).with_default_timeout().await.unwrap().unwrap();
+	stream.write_all(b"P").await.unwrap();
+
+	let closed = stream.read_to_end(&mut Vec::new()).with_timeout(Duration::from_secs(5)).await;
+	assert!(closed.is_ok(), "connection whose HTTP/2 preface never completed was kept open");
+}
+
+#[tokio::test]
+async fn first_request_timeout_closes_http2_connection_without_request() {
+	let addr = server_with_first_request_timeout(Duration::from_millis(100)).await;
+	let mut stream = TcpStream::connect(addr).with_default_timeout().await.unwrap().unwrap();
+	stream.write_all(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n").await.unwrap();
+
+	let closed = stream.read_to_end(&mut Vec::new()).with_timeout(Duration::from_secs(5)).await;
+	assert!(closed.is_ok(), "HTTP/2 connection without a request was kept open");
+}
+
+#[tokio::test]
+async fn first_request_timeout_does_not_cut_slow_request() {
+	let addr = server_with_first_request_timeout(Duration::from_millis(100)).await;
+
+	let req = r#"{"jsonrpc":"2.0","method":"slow_hello","id":1}"#;
+	let response = http_request(req.into(), to_http_uri(addr)).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, ok_response("hello".to_string().into(), Id::Num(1)));
+}
+
+#[tokio::test]
+async fn first_request_timeout_keeps_idle_websocket_open() {
+	let addr = server_with_first_request_timeout(Duration::from_millis(100)).await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 	tokio::time::sleep(Duration::from_millis(300)).await;
 

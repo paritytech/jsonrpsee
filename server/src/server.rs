@@ -36,13 +36,13 @@ use crate::future::{ConnectionGuard, ServerHandle, SessionClose, SessionClosedFu
 use crate::middleware::rpc::{RpcService, RpcServiceCfg};
 use crate::transport::ws::BackgroundTaskParams;
 use crate::transport::{http, ws};
-use crate::utils::{DEFAULT_HEADER_READ_TIMEOUT, FirstByteTimeout, deserialize_with_ext, http_builder};
+use crate::utils::{DEFAULT_FIRST_REQUEST_TIMEOUT, NotifyOnRequest, deserialize_with_ext, no_request_within};
 use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
-use futures_util::future::{self, Either, FutureExt};
+use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::{Batch, BatchEntry, BatchEntryErr, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
@@ -55,7 +55,7 @@ use jsonrpsee_types::error::{
 use jsonrpsee_types::{ErrorObject, Id};
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::{OwnedSemaphorePermit, mpsc, watch};
+use tokio::sync::{Notify, OwnedSemaphorePermit, mpsc, watch};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -200,8 +200,8 @@ pub struct ServerConfig {
 	pub(crate) keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	pub(crate) keep_alive_timeout: Duration,
-	/// Timeout for receiving the header of a request.
-	pub(crate) header_read_timeout: Option<Duration>,
+	/// Timeout for receiving the first request of a connection.
+	pub(crate) first_request_timeout: Option<Duration>,
 }
 
 /// The builder to configure and create a JSON-RPC server configuration.
@@ -235,8 +235,8 @@ pub struct ServerConfigBuilder {
 	keep_alive: Option<std::time::Duration>,
 	/// `KEEP_ALIVE_TIMEOUT` duration.
 	keep_alive_timeout: std::time::Duration,
-	/// Timeout for receiving the header of a request.
-	header_read_timeout: Option<Duration>,
+	/// Timeout for receiving the first request of a connection.
+	first_request_timeout: Option<Duration>,
 }
 
 /// Builder for [`TowerService`].
@@ -378,7 +378,7 @@ impl Default for ServerConfigBuilder {
 			keep_alive: None,
 			//same as `hyper` default
 			keep_alive_timeout: Duration::from_secs(20),
-			header_read_timeout: Some(DEFAULT_HEADER_READ_TIMEOUT),
+			first_request_timeout: Some(DEFAULT_FIRST_REQUEST_TIMEOUT),
 		}
 	}
 }
@@ -546,13 +546,12 @@ impl ServerConfigBuilder {
 		self
 	}
 
-	/// Configure how long a connection may take to send the header of a request, e.g. the
-	/// WebSocket upgrade request, before it is closed. This also applies to idle HTTP/1
-	/// keep-alive connections waiting for their next request. `None` disables the timeout.
+	/// Configure how long a connection may take to send its first request, e.g. the WebSocket
+	/// upgrade request, before it is closed. `None` disables the timeout.
 	///
 	/// Default is 30 seconds.
-	pub fn set_header_read_timeout(mut self, header_read_timeout: Option<Duration>) -> Self {
-		self.header_read_timeout = header_read_timeout;
+	pub fn set_first_request_timeout(mut self, first_request_timeout: Option<Duration>) -> Self {
+		self.first_request_timeout = first_request_timeout;
 		self
 	}
 
@@ -573,7 +572,7 @@ impl ServerConfigBuilder {
 			tcp_no_delay: self.tcp_no_delay,
 			keep_alive: self.keep_alive,
 			keep_alive_timeout: self.keep_alive_timeout,
-			header_read_timeout: self.header_read_timeout,
+			first_request_timeout: self.first_request_timeout,
 		}
 	}
 }
@@ -1209,7 +1208,7 @@ where
 
 	let keep_alive = server_cfg.keep_alive;
 	let keep_alive_timeout = server_cfg.keep_alive_timeout;
-	let header_read_timeout = server_cfg.header_read_timeout;
+	let first_request_timeout = server_cfg.first_request_timeout;
 
 	let tower_service = TowerServiceNoHttp {
 		inner: ServiceData {
@@ -1226,10 +1225,11 @@ where
 	let service = http_middleware.service(tower_service);
 
 	tokio::spawn(async move {
+		let request_received = Arc::new(Notify::new());
 		// this requires Clone.
-		let service = crate::utils::TowerToHyperService::new(service);
-		let io = TokioIo::new(FirstByteTimeout::new(socket, header_read_timeout));
-		let mut builder = http_builder(header_read_timeout);
+		let service = crate::utils::TowerToHyperService::new(NotifyOnRequest::new(service, request_received.clone()));
+		let io = TokioIo::new(socket);
+		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
 		//default is true for http1, if set to false then websocket connections will not be upgraded.
 		builder.http2().keep_alive_interval(keep_alive).keep_alive_timeout(keep_alive_timeout);
@@ -1239,14 +1239,15 @@ where
 
 		tokio::pin!(stopped, conn);
 
-		let res = match future::select(conn, stopped).await {
-			Either::Left((conn, _)) => conn,
-			Either::Right((_, mut conn)) => {
+		let res = tokio::select! {
+			res = &mut conn => res,
+			_ = &mut stopped => {
 				// NOTE: the connection should continue to be polled until shutdown can finish.
 				// Thus, both lines below are needed and not a nit.
 				conn.as_mut().graceful_shutdown();
 				conn.await
 			}
+			err = no_request_within(&request_received, first_request_timeout) => Err(err),
 		};
 
 		if let Err(e) = res {

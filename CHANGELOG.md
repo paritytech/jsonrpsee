@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog].
 ## [v0.26.1] - 2026-09-29
 
 A small patch release that exposes a connect timeout for the HTTP client, bounds the WebSocket handshake of the
-client by `connection_timeout` and makes the server close connections that don't send a request header in time.
+client by `connection_timeout` and makes the server close connections that don't send a request in time.
 It also raises the MSRV to 1.87.
 
 ### [Added]
@@ -21,7 +21,7 @@ It also raises the MSRV to 1.87.
 ### [Fixed]
 
 - fix(client): bound the WebSocket handshake by `connection_timeout`
-- fix(server): close connections that don't send a request header within 30 seconds, configurable with `ServerConfigBuilder::set_header_read_timeout`
+- fix(server): close connections that don't send a request within 30 seconds, configurable with `ServerConfigBuilder::set_first_request_timeout`
 
 ## [v0.26.0] - 2025-08-11
 
