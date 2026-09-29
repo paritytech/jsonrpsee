@@ -1227,7 +1227,7 @@ where
 	tokio::spawn(async move {
 		let request_received = Arc::new(Notify::new());
 		// this requires Clone.
-		let service = crate::utils::TowerToHyperService::new(NotifyOnRequest::new(service, request_received.clone()));
+		let service = NotifyOnRequest::new(crate::utils::TowerToHyperService::new(service), request_received.clone());
 		let io = TokioIo::new(socket);
 		let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 

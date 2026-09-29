@@ -41,5 +41,5 @@ tracing = { workspace = true }
 jsonrpsee-test-utils = { path = "../test-utils" }
 socket2 = { workspace = true }
 tokio = { version = "1.23.1", features = ["test-util"] }
-tower = { workspace = true, features = ["timeout"] }
+tower = { workspace = true, features = ["limit", "timeout"] }
 tracing-subscriber = { workspace = true }

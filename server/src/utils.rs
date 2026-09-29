@@ -90,7 +90,7 @@ where
 	}
 }
 
-/// Notifies `request_received` whenever the service is called with a request.
+/// Notifies `request_received` whenever hyper passes a request to the service.
 #[derive(Debug, Clone)]
 pub(crate) struct NotifyOnRequest<S> {
 	service: S,
@@ -103,19 +103,15 @@ impl<S> NotifyOnRequest<S> {
 	}
 }
 
-impl<S, R> tower::Service<R> for NotifyOnRequest<S>
+impl<S, R> hyper::service::Service<R> for NotifyOnRequest<S>
 where
-	S: tower::Service<R>,
+	S: hyper::service::Service<R>,
 {
 	type Response = S::Response;
 	type Error = S::Error;
 	type Future = S::Future;
 
-	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		self.service.poll_ready(cx)
-	}
-
-	fn call(&mut self, request: R) -> Self::Future {
+	fn call(&self, request: R) -> Self::Future {
 		self.request_received.notify_one();
 		self.service.call(request)
 	}
@@ -150,7 +146,7 @@ where
 {
 	let request_received = Arc::new(Notify::new());
 	let service =
-		hyper_util::service::TowerToHyperService::new(NotifyOnRequest::new(service, request_received.clone()));
+		NotifyOnRequest::new(hyper_util::service::TowerToHyperService::new(service), request_received.clone());
 	let io = TokioIo::new(io);
 
 	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
@@ -182,7 +178,7 @@ where
 {
 	let request_received = Arc::new(Notify::new());
 	let service =
-		hyper_util::service::TowerToHyperService::new(NotifyOnRequest::new(service, request_received.clone()));
+		NotifyOnRequest::new(hyper_util::service::TowerToHyperService::new(service), request_received.clone());
 	let io = TokioIo::new(io);
 
 	let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());

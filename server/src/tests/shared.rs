@@ -164,6 +164,44 @@ async fn first_request_timeout_does_not_cut_slow_request() {
 }
 
 #[tokio::test]
+async fn first_request_timeout_counts_request_waiting_for_middleware() {
+	use crate::{RpcModule, ServerBuilder};
+	use std::sync::Arc;
+	use tokio::sync::Notify;
+
+	// Only one request is processed at a time, a second one waits in `poll_ready` of the middleware.
+	let middleware = tower::ServiceBuilder::new().layer(tower::limit::GlobalConcurrencyLimitLayer::new(1));
+	let config = ServerConfig::builder().set_first_request_timeout(Some(Duration::from_millis(100))).build();
+	let server = ServerBuilder::with_config(config)
+		.set_http_middleware(middleware)
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let slow_started = Arc::new(Notify::new());
+	let mut module = RpcModule::new(slow_started.clone());
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
+	module
+		.register_async_method("slow_hello", |_, slow_started, _| async move {
+			slow_started.notify_one();
+			tokio::time::sleep(Duration::from_millis(300)).await;
+			"hello"
+		})
+		.unwrap();
+	let uri = to_http_uri(server.local_addr().unwrap());
+	tokio::spawn(server.start(module).stopped());
+
+	let slow = tokio::spawn(http_request(r#"{"jsonrpc":"2.0","method":"slow_hello","id":1}"#.into(), uri.clone()));
+	slow_started.notified().await;
+
+	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#;
+	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap();
+	assert!(response.is_ok(), "request waiting for the middleware was dropped: {:?}", response.err());
+	assert!(slow.await.unwrap().is_ok());
+}
+
+#[tokio::test]
 async fn first_request_timeout_keeps_idle_websocket_open() {
 	let addr = server_with_first_request_timeout(Duration::from_millis(100)).await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
