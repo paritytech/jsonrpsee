@@ -34,7 +34,7 @@ readme = "README.md"
 # Internal jsonrpsee crates
 jsonrpsee-client-transport = { path = "client/transport", version = "0.26.1" }
 jsonrpsee-core = { path = "core", version = "0.26.1" }
-jsonrpsee-http-client = { path = "client/http-client", version = "0.26.1" }
+jsonrpsee-http-client = { path = "client/http-client", version = "0.26.1", default-features = false }
 jsonrpsee-proc-macros = { path = "proc-macros", version = "0.26.1" }
 jsonrpsee-server = { path = "server", version = "0.26.1", default-features = false }
 jsonrpsee-types = { path = "types", version = "0.26.1" }

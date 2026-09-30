@@ -36,6 +36,7 @@
 //! The following features are available.
 //!
 //! - **`http-client`** - JSON-RPC client functionality over HTTP protocol.
+//! - **`http-client-no-tls`** - JSON-RPC client functionality over HTTP protocol, without TLS.
 //! - **`wasm-client`** - JSON-RPC client functionality over web-sys.
 //! - **`ws-client`** - JSON-RPC client functionality over WebSocket protocol.
 //! - **`macros`** - JSON-RPC API generation convenience by derive macros.
