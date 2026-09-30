@@ -195,6 +195,40 @@ async fn slow_method_calls_works() {
 }
 
 #[tokio::test]
+async fn pending_method_call_is_dropped_when_connection_closes() {
+	init_logger();
+
+	let (started_tx, started_rx) = tokio::sync::oneshot::channel::<()>();
+	let (dropped_tx, dropped_rx) = tokio::sync::oneshot::channel::<()>();
+	let mut module = RpcModule::new(std::sync::Mutex::new(Some((started_tx, dropped_tx))));
+	module
+		.register_async_method("pending", |_, ctx, _| async move {
+			// `dropped_tx` is dropped together with the call.
+			let (started_tx, _dropped_tx) = ctx.lock().unwrap().take().unwrap();
+			let _ = started_tx.send(());
+			std::future::pending::<&'static str>().await
+		})
+		.unwrap();
+
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let addr = server.local_addr().unwrap();
+	let handle = server.start(module);
+
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	client.send(r#"{"jsonrpc":"2.0","method":"pending","id":1}"#).await.unwrap();
+	started_rx.with_default_timeout().await.unwrap().unwrap();
+
+	client.close().await.unwrap();
+	drop(client);
+
+	let dropped = tokio::time::timeout(Duration::from_secs(5), dropped_rx).await;
+	assert!(dropped.is_ok(), "method call kept running after the connection closed");
+
+	handle.stop().unwrap();
+	handle.stopped().await;
+}
+
+#[tokio::test]
 async fn batch_method_call_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
