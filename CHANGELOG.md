@@ -4,7 +4,7 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
-## [v0.26.1] - 2026-09-29
+## [v0.26.1] - 2026-09-30
 
 A small patch release that exposes a connect timeout for the HTTP client, bounds the WebSocket handshake of the
 client by `connection_timeout` and makes the server close connections that don't send a request in time.
