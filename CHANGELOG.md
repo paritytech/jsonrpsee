@@ -4,7 +4,11 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
-## [Unreleased]
+## [v0.26.1] - 2026-09-30
+
+A small patch release that exposes a connect timeout for the HTTP client, bounds the WebSocket handshake of the
+client by `connection_timeout` and makes the server close connections that don't send a request in time.
+It also raises the MSRV to 1.87.
 
 ### [Fixed]
 
@@ -13,6 +17,15 @@ The format is based on [Keep a Changelog].
 ### [Added]
 
 - feat(http-client): expose connect timeout option ([#1643](https://github.com/paritytech/jsonrpsee/pull/1643))
+
+### [Changed]
+
+- chore: bump MSRV to 1.87, required by `yoke-derive` 0.8.3 (a transitive dependency of `url`)
+
+### [Fixed]
+
+- fix(client): bound the WebSocket handshake by `connection_timeout`
+- fix(server): close connections that don't send a request within 30 seconds, configurable with `ServerConfigBuilder::set_first_request_timeout`
 
 ## [v0.26.0] - 2025-08-11
 

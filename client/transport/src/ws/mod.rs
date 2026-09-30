@@ -502,7 +502,11 @@ impl WsTransportClientBuilder {
 		client.set_headers(&headers);
 
 		// Perform the initial handshake.
-		match client.handshake().await {
+		let response = tokio::time::timeout(self.connection_timeout, client.handshake())
+			.await
+			.map_err(|_| WsHandshakeError::Timeout(self.connection_timeout))?;
+
+		match response {
 			Ok(ServerResponse::Accepted { .. }) => {
 				tracing::debug!(target: LOG_TARGET, "Connection established to target: {:?}", target);
 				let mut builder = client.into_builder();
