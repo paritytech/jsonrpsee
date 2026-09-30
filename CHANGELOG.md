@@ -23,6 +23,7 @@ It also raises the MSRV to 1.87.
 - fix(client): bound the WebSocket handshake by `connection_timeout`
 - fix(server): close connections that don't send a request within 30 seconds, configurable with `ServerConfigBuilder::set_first_request_timeout`
 - fix(server): cancel pending ws calls when the connection closes ([#1656](https://github.com/paritytech/jsonrpsee/pull/1656))
+- fix(server): dropping a cloned `SubscriptionSink` no longer closes the remaining subscription ([#1650](https://github.com/paritytech/jsonrpsee/pull/1650))
 
 ## [v0.26.0] - 2025-08-11
 
@@ -86,7 +87,7 @@ The reason for this change is to make it work for the client-side as well as mak
 implement performantly by relying on `impl Future` instead of requiring an associated type for the `Future` (which in many cases requires boxing).
 
 The downside of this change is that one has to duplicate the logic in the `batch` and `call` method to achieve the same
-functionality as before. Thus, `call` or `notification` is not being invoked in the `batch` method and one has to implement 
+functionality as before. Thus, `call` or `notification` is not being invoked in the `batch` method and one has to implement
 them separately.
 For example now it's possible to write middleware that counts the number of method calls as follows (both client and server):
 
@@ -289,9 +290,9 @@ This is useful if one wants to avoid bring on openssl dependencies.
 This a small patch release that fixes a couple of bugs and adds a couple of new APIs.
 
 The bug fixes are:
-- The `server::ws::on_connect` was not working properly due to a merge nit when upgrading to hyper v1.0 
+- The `server::ws::on_connect` was not working properly due to a merge nit when upgrading to hyper v1.0
   This impacts only users that are using the low-level API and not the server itself.
-- `WsTransport::build_with_stream` shouldn't not resolve the socket addresses and it's fixed now, [see #1411 for further info](https://github.com/paritytech/jsonrpsee/issues/1411). 
+- `WsTransport::build_with_stream` shouldn't not resolve the socket addresses and it's fixed now, [see #1411 for further info](https://github.com/paritytech/jsonrpsee/issues/1411).
   This impacts users that are inject their own TcpStream directly into the `WsTransport`.
 
 ### [Added]

@@ -267,6 +267,32 @@ async fn subscribing_without_server() {
 }
 
 #[tokio::test]
+async fn subscription_sink_clone_drop_keeps_subscription_alive() {
+	init_logger();
+
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _, _| async move {
+			let sink = pending.accept().await?;
+			drop(sink.clone());
+
+			assert!(!sink.is_closed(), "dropping a cloned SubscriptionSink must not close the remaining sink");
+
+			let msg = serde_json::value::to_raw_value("still-alive")?;
+			sink.send(msg).await?;
+			Ok(())
+		})
+		.unwrap();
+
+	let mut my_sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
+	let (val, _) = my_sub.next::<String>().await.unwrap().unwrap();
+	assert_eq!(val, "still-alive");
+
+	// Dropping the last sink removes the subscription, which closes the channel.
+	assert!(tokio::time::timeout(Duration::from_secs(5), my_sub.next::<String>()).await.unwrap().is_none());
+}
+
+#[tokio::test]
 async fn close_test_subscribing_without_server() {
 	init_logger();
 
