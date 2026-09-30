@@ -27,6 +27,7 @@
 use crate::WsClientBuilder;
 use crate::types::error::{ErrorCode, ErrorObject};
 
+use jsonrpsee_client_transport::ws::WsHandshakeError;
 use jsonrpsee_core::client::{
 	BatchResponse, ClientT, Error, IdKind, Subscription, SubscriptionClientT, SubscriptionCloseReason,
 };
@@ -500,4 +501,26 @@ async fn redirections() {
 	// It works
 	let response: String = client.request("anything", rpc_params![]).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, String::from(expected));
+}
+
+#[tokio::test]
+async fn connection_timeout_bounds_websocket_handshake() {
+	// Completes the TCP handshake (listen backlog), but never answers the WebSocket upgrade request.
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let uri = to_ws_uri_string(listener.local_addr().unwrap());
+
+	let client = WsClientBuilder::default()
+		.connection_timeout(std::time::Duration::from_millis(100))
+		.build(&uri)
+		.with_timeout(std::time::Duration::from_secs(5))
+		.await;
+
+	match client {
+		Ok(Err(Error::Transport(e))) => {
+			assert!(matches!(e.downcast_ref::<WsHandshakeError>(), Some(WsHandshakeError::Timeout(_))), "{e:?}")
+		}
+		Ok(Err(e)) => panic!("WsClient builder failed with: {e:?}"),
+		Ok(Ok(_)) => panic!("WsClient builder connected to a server that never answered the handshake"),
+		Err(_) => panic!("WsClient builder hung despite the connection timeout"),
+	}
 }
