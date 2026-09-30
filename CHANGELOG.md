@@ -22,6 +22,7 @@ It also raises the MSRV to 1.87.
 
 - fix(client): bound the WebSocket handshake by `connection_timeout`
 - fix(server): close connections that don't send a request within 30 seconds, configurable with `ServerConfigBuilder::set_first_request_timeout`
+- fix(server): cancel pending ws calls when the connection closes ([#1656](https://github.com/paritytech/jsonrpsee/pull/1656))
 - fix(server): dropping a cloned `SubscriptionSink` no longer closes the remaining subscription ([#1650](https://github.com/paritytech/jsonrpsee/pull/1650))
 
 ## [v0.26.0] - 2025-08-11
