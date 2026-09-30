@@ -52,7 +52,7 @@ macro_rules! cfg_client_transport {
 
 macro_rules! cfg_server {
 	($($item:item)*) => {
-		cfg_feature!("server", $($item)*);
+		cfg_feature!("jsonrpsee-server", $($item)*);
 	}
 }
 

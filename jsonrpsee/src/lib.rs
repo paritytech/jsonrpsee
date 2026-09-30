@@ -43,6 +43,7 @@
 //! - **`client`** - Enables all client features including transports.
 //! - **`server-core`** - Enables minimal server features to generate the RPC API without transports.
 //! - **`server`** - Enables all server features including transports.
+//! - **`http-server`** - Enables the server with the HTTP transport only, i.e. without WebSocket and subscriptions.
 //! - **`full`** - Enables all features.
 //! - **`async-client`** - Enables the async client without any transport.
 //! - **`client-ws-transport`** - Enables `ws` transport with TLS.
