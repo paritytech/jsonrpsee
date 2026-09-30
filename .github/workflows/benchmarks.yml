@@ -12,7 +12,7 @@ jobs:
     name: Benchmarks
     runs-on: parity-benchmark
     container:
-      image: "paritytech/ci-unified:bullseye-1.85.0-2025-01-28-v202504231537"
+      image: "paritytech/ci-unified:bullseye-1.88.0-2025-06-27-v202511141243"
     steps:
       - name: Checkout Sources
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
