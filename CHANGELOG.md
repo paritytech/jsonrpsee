@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog].
 
 ### [Fixed]
 
-- fix(server): dropping a cloned `SubscriptionSink` no longer closes the remaining subscription ([#1622](https://github.com/paritytech/jsonrpsee/issues/1622))
+- fix(server): dropping a cloned `SubscriptionSink` no longer closes the remaining subscription ([#1650](https://github.com/paritytech/jsonrpsee/pull/1650))
 
 ### [Added]
 

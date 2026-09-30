@@ -287,6 +287,9 @@ async fn subscription_sink_clone_drop_keeps_subscription_alive() {
 	let mut my_sub = module.subscribe_unbounded("my_sub", EmptyServerParams::new()).await.unwrap();
 	let (val, _) = my_sub.next::<String>().await.unwrap().unwrap();
 	assert_eq!(val, "still-alive");
+
+	// Dropping the last sink removes the subscription, which closes the channel.
+	assert!(tokio::time::timeout(Duration::from_secs(5), my_sub.next::<String>()).await.unwrap().is_none());
 }
 
 #[tokio::test]
