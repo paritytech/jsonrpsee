@@ -143,6 +143,10 @@ pub async fn server_with_subscription() -> SocketAddr {
 }
 
 pub async fn server() -> SocketAddr {
+	server_with_context((None,)).await
+}
+
+pub async fn server_with_context(context: (Option<Arc<tokio::sync::Notify>>,)) -> SocketAddr {
 	#[derive(Debug, Clone)]
 	struct ConnectionDetails<S> {
 		inner: S,
@@ -177,7 +181,7 @@ pub async fn server() -> SocketAddr {
 		}
 	}
 
-	let mut module = RpcModule::new(());
+	let mut module = RpcModule::new(context);
 	module.register_method("say_hello", |_, _, _| "hello").unwrap();
 	module.register_method("get_connection_id", |_, _, ext| *ext.get::<u32>().unwrap()).unwrap();
 	module
@@ -192,6 +196,20 @@ pub async fn server() -> SocketAddr {
 	module
 		.register_async_method("slow_hello", |_, _, _| async {
 			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+			"hello"
+		})
+		.unwrap();
+
+	module
+		.register_async_method("blocking_hello_with_cleanup_notif", |_, notif, _| async move {
+			struct CleanupGuard(Arc<tokio::sync::Notify>);
+			impl Drop for CleanupGuard {
+				fn drop(&mut self) {
+					self.0.notify_waiters();
+				}
+			}
+			let _g = notif.0.clone().map(|n| CleanupGuard(n));
+			tokio::time::sleep(std::time::Duration::MAX).await;
 			"hello"
 		})
 		.unwrap();
@@ -248,7 +266,18 @@ pub async fn server() -> SocketAddr {
 					.connection_id(connection_id)
 					.build(methods2.clone(), stop_hdl2.clone());
 
-				async move { tower_service.call(req).await }
+				let session_closed = tower_service.on_session_closed();
+				tokio::spawn(async move {
+					println!("session started, connection_id: {connection_id}");
+					session_closed.await;
+					println!("session closed, connection_id: {connection_id}");
+				});
+
+				async move {
+					// `session_closed` won't be scheduled for http without this, maybe a bug?
+					tokio::task::yield_now().await;
+					tower_service.call(req).await
+				}
 			});
 
 			// Spawn a new task to serve each respective (Hyper) connection.
