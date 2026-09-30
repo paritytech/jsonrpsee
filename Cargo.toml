@@ -34,12 +34,12 @@ readme = "README.md"
 # Internal jsonrpsee crates
 jsonrpsee-client-transport = { path = "client/transport", version = "0.26.0" }
 jsonrpsee-core = { path = "core", version = "0.26.0" }
-jsonrpsee-http-client = { path = "client/http-client", version = "0.26.0" }
+jsonrpsee-http-client = { path = "client/http-client", version = "0.26.0", default-features = false }
 jsonrpsee-proc-macros = { path = "proc-macros", version = "0.26.0" }
 jsonrpsee-server = { path = "server", version = "0.26.0" }
 jsonrpsee-types = { path = "types", version = "0.26.0" }
 jsonrpsee-wasm-client = { path = "client/wasm-client", version = "0.26.0" }
-jsonrpsee-ws-client = { path = "client/ws-client", version = "0.26.0" }
+jsonrpsee-ws-client = { path = "client/ws-client", version = "0.26.0", default-features = false }
 
 # Deps used by the jsonrpsee crates.
 async-trait = "0.1"

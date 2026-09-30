@@ -33,9 +33,13 @@ serde = { workspace = true, features = ["alloc"] }
 rustls = { workspace = true, features = ["logging", "std", "tls12", "ring"] }
 
 [features]
+default = ["tls-rustls-platform-verifier", "tls-ring"]
+
 tls = ["jsonrpsee-client-transport/tls"]
+tls-ring = ["tls", "jsonrpsee-client-transport/tls-ring"]
+tls-aws-lc-rs = ["tls", "jsonrpsee-client-transport/tls-aws-lc-rs"]
+tls-no-provider = ["tls", "jsonrpsee-client-transport/tls-no-provider"]
 tls-rustls-platform-verifier = ["jsonrpsee-client-transport/tls-rustls-platform-verifier", "tls"]
-default = ["tls-rustls-platform-verifier"]
 
 [package.metadata.docs.rs]
 all-features = true

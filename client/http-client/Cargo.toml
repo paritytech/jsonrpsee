@@ -19,12 +19,12 @@ workspace = true
 [dependencies]
 base64 = { workspace = true }
 hyper = { workspace = true, features = ["client", "http1", "http2"] }
-hyper-rustls = { workspace = true, features = ["http1", "http2", "tls12", "logging", "ring"], optional = true }
+hyper-rustls = { workspace = true, features = ["http1", "http2", "tls12", "logging"], optional = true }
 hyper-util = { workspace = true, features = ["client", "client-legacy", "tokio", "http1", "http2"] }
 http-body = { workspace = true }
 jsonrpsee-types = { workspace = true }
 jsonrpsee-core = { workspace = true, features = ["client", "http-helpers"] }
-rustls = { workspace = true, optional = true, features = ["logging", "std", "tls12", "ring"] }
+rustls = { workspace = true, optional = true, features = ["logging", "std", "tls12"] }
 rustls-platform-verifier = { workspace = true, optional = true }
 serde = { workspace = true, features = ["alloc"] }
 serde_json = { workspace = true }
@@ -39,8 +39,16 @@ jsonrpsee-test-utils = { path = "../../test-utils" }
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "macros"] }
 
 [features]
-default = ["tls"]
+default = ["tls-ring"]
+
+# The TLS code and everything it needs except a crypto provider. Pair it with
+# one of the features below.
 tls = ["hyper-rustls", "rustls", "rustls-platform-verifier"]
+tls-ring = ["tls", "hyper-rustls?/ring", "rustls?/ring"]
+tls-aws-lc-rs = ["tls", "hyper-rustls?/aws-lc-rs", "rustls?/aws-lc-rs"]
+# Link no provider and install a rustls process-default yourself, which suits
+# a binary that already picks one.
+tls-no-provider = ["tls"]
 
 [package.metadata.docs.rs]
 all-features = true

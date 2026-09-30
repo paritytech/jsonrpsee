@@ -29,6 +29,13 @@
 
 //! # jsonrpsee-client-transports
 
+#[cfg(all(feature = "tls", not(any(feature = "tls-ring", feature = "tls-aws-lc-rs", feature = "tls-no-provider"))))]
+compile_error!(
+	"the `tls` feature does not pick a crypto provider on its own. Enable `tls-ring` for the \
+	 backend `tls` used to select, `tls-aws-lc-rs` for aws-lc-rs, or `tls-no-provider` to install \
+	 a rustls process-default yourself."
+);
+
 /// Websocket transport
 #[cfg(feature = "ws")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]

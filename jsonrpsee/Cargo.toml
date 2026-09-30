@@ -31,14 +31,34 @@ tracing = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 
 [features]
+default = ["tls-ring"]
+
+# Crypto provider for whichever clients are enabled. Orthogonal to the
+# feature that turns a client on.
+tls-ring = [
+    "jsonrpsee-http-client?/tls-ring",
+    "jsonrpsee-ws-client?/tls-ring",
+    "jsonrpsee-client-transport?/tls-ring",
+]
+tls-aws-lc-rs = [
+    "jsonrpsee-http-client?/tls-aws-lc-rs",
+    "jsonrpsee-ws-client?/tls-aws-lc-rs",
+    "jsonrpsee-client-transport?/tls-aws-lc-rs",
+]
+tls-no-provider = [
+    "jsonrpsee-http-client?/tls-no-provider",
+    "jsonrpsee-ws-client?/tls-no-provider",
+    "jsonrpsee-client-transport?/tls-no-provider",
+]
+
 client-ws-transport-tls = ["jsonrpsee-client-transport/ws", "jsonrpsee-client-transport/tls-rustls-platform-verifier"]
 client-ws-transport-no-tls = ["jsonrpsee-client-transport/ws"]
 client-web-transport = ["jsonrpsee-client-transport/web"]
 async-client = ["jsonrpsee-core/async-client"]
 async-wasm-client = ["jsonrpsee-core/async-wasm-client"]
-http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-core/client"]
+http-client = ["jsonrpsee-http-client", "jsonrpsee-http-client?/tls", "jsonrpsee-types", "jsonrpsee-core/client"]
 wasm-client = ["jsonrpsee-wasm-client", "jsonrpsee-types", "jsonrpsee-core/client"]
-ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-core/client"]
+ws-client = ["jsonrpsee-ws-client", "jsonrpsee-ws-client?/tls-rustls-platform-verifier", "jsonrpsee-types", "jsonrpsee-core/client"]
 macros = ["jsonrpsee-proc-macros", "jsonrpsee-types", "tracing"]
 
 client = ["http-client", "ws-client", "wasm-client", "client-ws-transport-tls", "client-web-transport", "async-client", "async-wasm-client", "client-core"]

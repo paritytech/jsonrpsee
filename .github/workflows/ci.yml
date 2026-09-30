@@ -95,7 +95,14 @@ jobs:
         uses: Swatinem/rust-cache@v2.8.0
 
       - name: Cargo check all targets and features
-        run: cargo hack check --workspace --each-feature --all-targets
+        # `tls` carries the TLS code but picks no rustls crypto provider, so it
+        # is pinned rather than swept. The sweep runs on `tls-ring`, and the
+        # other two providers only change which backend rustls links.
+        run: |
+          cargo hack check --workspace --each-feature --all-targets --ignore-unknown-features \
+            --features tls-ring --exclude-features tls,tls-aws-lc-rs,tls-no-provider
+          cargo check -p jsonrpsee --all-targets --no-default-features --features client,tls-aws-lc-rs
+          cargo check -p jsonrpsee --all-targets --no-default-features --features client,tls-no-provider
 
       - name: Check unused dependencies
         run: cargo machete
