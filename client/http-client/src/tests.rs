@@ -24,6 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::time::Duration;
+
 use crate::HttpClientBuilder;
 use crate::types::error::{ErrorCode, ErrorObject};
 use jsonrpsee_core::ClientError;
@@ -49,6 +51,31 @@ async fn method_call_works() {
 		.unwrap()
 		.unwrap();
 	assert_eq!("hello", &result);
+}
+
+#[tokio::test]
+async fn connect_timeout_fires_before_request_timeout() {
+	// 192.0.2.1 is in TEST-NET-1 (RFC 5737): reserved and not routable, so the TCP handshake never
+	// completes. With a short connect timeout the request must fail quickly instead of waiting out the
+	// much longer request timeout — exactly what would regress if `connect_timeout` were not wired
+	// through to the connector.
+	let client = HttpClientBuilder::default()
+		.connect_timeout(Duration::from_millis(100))
+		.request_timeout(Duration::from_secs(60))
+		.build("http://192.0.2.1:9")
+		.unwrap();
+
+	// Bound the test well under the 60s request timeout: the connect should fail in ~100ms. If it
+	// regressed and hung until the request timeout, this outer 10s bound trips and fails the test.
+	let res = tokio::time::timeout(Duration::from_secs(10), client.request::<String, _>("say_hello", rpc_params![]))
+		.await
+		.expect("connect should fail well before the request timeout");
+
+	match res {
+		Ok(_) => panic!("expected a connect error, got a successful response"),
+		Err(ClientError::RequestTimeout) => panic!("request failed via the request timeout, not the connect timeout"),
+		Err(_) => {}
+	}
 }
 
 #[tokio::test]

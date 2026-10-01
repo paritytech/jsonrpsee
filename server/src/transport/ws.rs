@@ -163,7 +163,12 @@ where
 				}
 			};
 
-			let rp = handle_rpc_call(&data[idx..], is_single, batch_requests_config, &*rpc_service, extensions).await;
+			// Calls are not tied to the connection task, so stop them once the connection is closed
+			// instead of running them to completion without anyone to send the response to.
+			let rp = tokio::select! {
+				_ = sink.closed() => return,
+				rp = handle_rpc_call(&data[idx..], is_single, batch_requests_config, &*rpc_service, extensions) => rp,
+			};
 
 			// Subscriptions are handled by the subscription callback and
 			// "ordinary notifications" should not be sent back to the client.
