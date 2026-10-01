@@ -82,6 +82,7 @@ pub struct HttpClientBuilder<HttpMiddleware = Identity, RpcMiddleware = Logger> 
 	max_request_size: u32,
 	max_response_size: u32,
 	request_timeout: Duration,
+	connect_timeout: Option<Duration>,
 	#[cfg(feature = "tls")]
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
@@ -111,6 +112,17 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 	/// Set request timeout (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
+		self
+	}
+
+	/// Set a timeout for establishing the TCP connection (default is none).
+	///
+	/// This bounds only the TCP connection establishment and does not include DNS
+	/// resolution or the TLS handshake; the overall request is still bounded by
+	/// [`Self::request_timeout`]. If the host resolves to multiple addresses, the
+	/// timeout is divided evenly across them.
+	pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+		self.connect_timeout = Some(timeout);
 		self
 	}
 
@@ -248,6 +260,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 			keep_alive_duration: self.keep_alive_duration,
 			keep_alive_interval: self.keep_alive_interval,
 			keep_alive_retries: self.keep_alive_retries,
+			connect_timeout: self.connect_timeout,
 		}
 	}
 
@@ -271,6 +284,7 @@ impl<HttpMiddleware, RpcMiddleware> HttpClientBuilder<HttpMiddleware, RpcMiddlew
 			keep_alive_duration: self.keep_alive_duration,
 			keep_alive_retries: self.keep_alive_retries,
 			keep_alive_interval: self.keep_alive_interval,
+			connect_timeout: self.connect_timeout,
 		}
 	}
 }
@@ -291,6 +305,7 @@ where
 			max_request_size,
 			max_response_size,
 			request_timeout,
+			connect_timeout,
 			#[cfg(feature = "tls")]
 			certificate_store,
 			id_kind,
@@ -313,6 +328,7 @@ where
 			keep_alive_duration,
 			keep_alive_interval,
 			keep_alive_retries,
+			connect_timeout,
 			#[cfg(feature = "tls")]
 			certificate_store,
 		}
@@ -338,6 +354,7 @@ impl Default for HttpClientBuilder {
 			max_request_size: TEN_MB_SIZE_BYTES,
 			max_response_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
+			connect_timeout: None,
 			#[cfg(feature = "tls")]
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,

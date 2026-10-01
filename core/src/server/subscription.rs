@@ -257,7 +257,7 @@ impl PendingSubscriptionSink {
 				subscribers: self.subscribers,
 				uniq_sub: self.uniq_sub,
 				unsubscribe: IsUnsubscribed(tx),
-				_permit: Arc::new(self.permit),
+				_permit: Some(Arc::new(self.permit)),
 			})
 		} else {
 			panic!(
@@ -292,7 +292,10 @@ impl PendingSubscriptionSink {
 	}
 }
 
-/// Represents a single subscription that hasn't been processed yet.
+/// A handle to an active subscription.
+///
+/// Clones share the same subscription. The subscription is torn down when the last
+/// clone is dropped or the client explicitly unsubscribes.
 #[derive(Debug, Clone)]
 pub struct SubscriptionSink {
 	/// Sink.
@@ -305,8 +308,8 @@ pub struct SubscriptionSink {
 	uniq_sub: SubscriptionKey,
 	/// A future to that fires once the unsubscribe method has been called.
 	unsubscribe: IsUnsubscribed,
-	/// Subscription permit
-	_permit: Arc<SubscriptionPermit>,
+	/// Subscription permit.
+	_permit: Option<Arc<SubscriptionPermit>>,
 }
 
 impl SubscriptionSink {
@@ -414,7 +417,12 @@ impl SubscriptionSink {
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
 		if self.is_active_subscription() {
-			self.subscribers.lock().remove(&self.uniq_sub);
+			// Only the last clone should tear down the subscription (see #1622).
+			// The lock serializes concurrent drops so that exactly one `try_unwrap` succeeds.
+			let mut subs = self.subscribers.lock();
+			if self._permit.take().is_some_and(|p| Arc::try_unwrap(p).is_ok()) {
+				subs.remove(&self.uniq_sub);
+			}
 		}
 	}
 }
