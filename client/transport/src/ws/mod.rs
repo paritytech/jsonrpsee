@@ -527,26 +527,12 @@ impl WsTransportClientBuilder {
 	}
 }
 
-/// Resolve the socket addresses for `uri` using asynchronous DNS resolution.
-///
-/// This replaces `url::Url::socket_addrs`, which performs *blocking* `getaddrinfo`
-/// resolution (via `std::net::ToSocketAddrs`) on the calling thread. Inside the async client
-/// that means a Tokio worker thread can be blocked for as long as the system resolver takes.
-/// `tokio::net::lookup_host` runs the lookup on Tokio's blocking thread pool instead,
-/// and IP literals are turned into a `SocketAddr` directly without any DNS lookup.
-///
-/// The whole resolution is bounded by `timeout_dur`; on expiry it returns
-/// `WsHandshakeError::Timeout`. This budget is per-resolution and is additive with the
-/// per-address TCP connect timeout applied in `connect`.
+/// Resolve the socket addresses for `uri` with async DNS, bounded by `timeout_dur`.
 async fn resolve_sockaddrs(uri: &Url, timeout_dur: Duration) -> Result<Vec<SocketAddr>, WsHandshakeError> {
 	let resolve = async {
 		let port =
 			uri.port_or_known_default().ok_or_else(|| WsHandshakeError::Url("No port number in the URL".into()))?;
 
-		// NOTE: match on `uri.host()` (the `url::Host` enum) rather than `host_str()`. The latter
-		// returns IPv6 hosts *with* brackets (e.g. `"[::1]"`), which `getaddrinfo` rejects, whereas
-		// the enum exposes a parsed `Ipv6Addr`. This mirrors what `url::Url::socket_addrs` does
-		// internally, so IP literals and default ports behave exactly as before.
 		match uri.host() {
 			Some(url::Host::Domain(domain)) => {
 				tokio::net::lookup_host((domain, port)).await.map(|addrs| addrs.collect()).map_err(|e| {
@@ -808,13 +794,20 @@ mod tests {
 	}
 
 	// A slow or broken resolver must not stall the connection: DNS resolution is bounded by the
-	// connection timeout. `.invalid` is a reserved TLD (RFC 6761) that never resolves, and with a
-	// zero timeout the (blocking-pool) lookup cannot complete on its first poll, so the timer fires
-	// first — deterministic and without touching the network.
+	// connection timeout. `.invalid` is a reserved TLD (RFC 6761) that never resolves.
 	#[tokio::test]
 	async fn dns_resolution_is_bounded_by_timeout() {
 		let url = Url::parse("ws://host.invalid").unwrap();
 		let err = resolve_sockaddrs(&url, Duration::ZERO).await.unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Timeout(_)));
+	}
+
+	#[tokio::test]
+	async fn ip_literals_and_default_ports_resolve_without_dns() {
+		for uri in ["ws://127.0.0.1:9933", "ws://[::1]:9933", "ws://127.0.0.1"] {
+			let url = Url::parse(uri).unwrap();
+			let resolved = resolve_sockaddrs(&url, Duration::from_secs(1)).await.unwrap();
+			assert_eq!(resolved, url.socket_addrs(|| None).unwrap());
+		}
 	}
 }
