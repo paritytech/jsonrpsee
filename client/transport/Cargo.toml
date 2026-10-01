@@ -68,9 +68,7 @@ web = [
 ]
 
 [dev-dependencies]
-# `rt` provides the `#[tokio::test]` runtime and the `spawn_blocking` pool that
-# `tokio::net::lookup_host` relies on. `macros`/`time` are already enabled via the `ws`
-# feature but are listed here so the test requirements are explicit.
+# `rt` provides the `#[tokio::test]` runtime and the blocking pool `lookup_host` needs.
 tokio = { workspace = true, features = ["rt", "macros", "time"] }
 
 [package.metadata.docs.rs]
