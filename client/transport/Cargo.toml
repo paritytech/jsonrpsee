@@ -67,6 +67,10 @@ web = [
     "thiserror",
 ]
 
+[dev-dependencies]
+# `rt` provides the `#[tokio::test]` runtime and the blocking pool `lookup_host` needs.
+tokio = { workspace = true, features = ["rt", "macros", "time"] }
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

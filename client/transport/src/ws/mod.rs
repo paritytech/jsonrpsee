@@ -363,7 +363,7 @@ impl WsTransportClientBuilder {
 		let mut connector = self.tls_connector(&target)?;
 
 		// The sockaddrs might get reused if the server replies with a relative URI.
-		let mut target_sockaddrs = uri.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
+		let mut target_sockaddrs = resolve_sockaddrs(&uri, self.connection_timeout).await?;
 
 		for _ in 0..self.max_redirections {
 			tracing::debug!(target: LOG_TARGET, "Connecting to target: {:?}", target);
@@ -408,10 +408,7 @@ impl WsTransportClientBuilder {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
-								target_sockaddrs = uri.socket_addrs(|| None).map_err(|e| {
-									tracing::debug!(target: LOG_TARGET, "Redirection failed: {:?}", e);
-									e
-								})?;
+								target_sockaddrs = resolve_sockaddrs(&uri, self.connection_timeout).await?;
 
 								target = uri.try_into().map_err(|e| {
 									tracing::debug!(target: LOG_TARGET, "Redirection failed: {:?}", e);
@@ -532,6 +529,28 @@ impl WsTransportClientBuilder {
 			Err(e) => Err(e.into()),
 		}
 	}
+}
+
+/// Resolve the socket addresses for `uri` with async DNS, bounded by `timeout_dur`.
+async fn resolve_sockaddrs(uri: &Url, timeout_dur: Duration) -> Result<Vec<SocketAddr>, WsHandshakeError> {
+	let resolve = async {
+		let port =
+			uri.port_or_known_default().ok_or_else(|| WsHandshakeError::Url("No port number in the URL".into()))?;
+
+		match uri.host() {
+			Some(url::Host::Domain(domain)) => {
+				tokio::net::lookup_host((domain, port)).await.map(|addrs| addrs.collect()).map_err(|e| {
+					tracing::debug!(target: LOG_TARGET, "DNS resolution failed for {domain}: {e:?}");
+					WsHandshakeError::ResolutionFailed(e)
+				})
+			}
+			Some(url::Host::Ipv4(ip)) => Ok(vec![SocketAddr::from((ip, port))]),
+			Some(url::Host::Ipv6(ip)) => Ok(vec![SocketAddr::from((ip, port))]),
+			None => Err(WsHandshakeError::Url("No host name in the URL".into())),
+		}
+	};
+
+	tokio::time::timeout(timeout_dur, resolve).await.map_err(|_| WsHandshakeError::Timeout(timeout_dur))?
 }
 
 #[cfg(feature = "tls")]
@@ -677,9 +696,11 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 
 #[cfg(test)]
 mod tests {
+	use std::time::Duration;
+
 	use http::HeaderValue;
 
-	use super::{Mode, Target, Url, WsHandshakeError};
+	use super::{Mode, Target, Url, WsHandshakeError, resolve_sockaddrs};
 
 	fn assert_ws_target(
 		target: Target,
@@ -774,5 +795,23 @@ mod tests {
 		let basic_auth = HeaderValue::from_str(&format!("Basic {digest}")).unwrap();
 
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
+	}
+
+	// A slow or broken resolver must not stall the connection: DNS resolution is bounded by the
+	// connection timeout. `.invalid` is a reserved TLD (RFC 6761) that never resolves.
+	#[tokio::test]
+	async fn dns_resolution_is_bounded_by_timeout() {
+		let url = Url::parse("ws://host.invalid").unwrap();
+		let err = resolve_sockaddrs(&url, Duration::ZERO).await.unwrap_err();
+		assert!(matches!(err, WsHandshakeError::Timeout(_)));
+	}
+
+	#[tokio::test]
+	async fn ip_literals_and_default_ports_resolve_without_dns() {
+		for uri in ["ws://127.0.0.1:9933", "ws://[::1]:9933", "ws://127.0.0.1"] {
+			let url = Url::parse(uri).unwrap();
+			let resolved = resolve_sockaddrs(&url, Duration::from_secs(1)).await.unwrap();
+			assert_eq!(resolved, url.socket_addrs(|| None).unwrap());
+		}
 	}
 }
