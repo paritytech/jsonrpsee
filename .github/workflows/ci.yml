@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v4.3.0
+      - uses: actions/checkout@v6.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v4.3.0
+      - uses: actions/checkout@v6.0.2
 
       - name: Install Rust nightly toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v4.3.0
+      - uses: actions/checkout@v6.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v4.3.0
+      - uses: actions/checkout@v6.0.2
 
       - name: Set env
         run: cat .github/env >> $GITHUB_ENV
@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4.3.0
+        uses: actions/checkout@v6.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -155,7 +155,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4.3.0
+        uses: actions/checkout@v6.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -178,7 +178,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4.3.0
+        uses: actions/checkout@v6.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -201,7 +201,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4.3.0
+    - uses: actions/checkout@v6.0.2
 
     - name: Install Rust stable toolchain
       uses: actions-rs/toolchain@v1.0.7
