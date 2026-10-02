@@ -19,7 +19,7 @@ use tower::layer::util::{Identity, Stack};
 /// Re-export types from `jsonrpsee_types` crate for convenience.
 pub type Notification<'a> = jsonrpsee_types::Notification<'a, Option<Cow<'a, RawValue>>>;
 /// Re-export types from `jsonrpsee_types` crate for convenience.
-pub use jsonrpsee_types::{Extensions, Request};
+pub use jsonrpsee_types::{Extensions, Request, RequestExtensions};
 
 /// Error response that can used to indicate an error in JSON-RPC request batch request.
 /// This is used in the [`Batch`] type to indicate an error in the batch entry.
