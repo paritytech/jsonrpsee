@@ -47,7 +47,7 @@ async fn rpc_method_call_works() {
 async fn rpc_subcription_works() {
 	let client = WasmClientBuilder::default().build("ws://localhost:9944").await.unwrap();
 
-	let mut sub: Subscription<serde_json::Value> =
+	let mut sub: Subscription<_, serde_json::Value> =
 		client.subscribe("state_subscribeStorage", rpc_params![], "state_unsubscribeStorage").await.unwrap();
 
 	for _ in 0..3 {
