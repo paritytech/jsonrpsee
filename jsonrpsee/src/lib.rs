@@ -36,6 +36,7 @@
 //! The following features are available.
 //!
 //! - **`http-client`** - JSON-RPC client functionality over HTTP protocol.
+//! - **`http-client-no-tls`** - JSON-RPC client functionality over HTTP protocol, without TLS.
 //! - **`wasm-client`** - JSON-RPC client functionality over web-sys.
 //! - **`ws-client`** - JSON-RPC client functionality over WebSocket protocol.
 //! - **`macros`** - JSON-RPC API generation convenience by derive macros.
@@ -43,6 +44,7 @@
 //! - **`client`** - Enables all client features including transports.
 //! - **`server-core`** - Enables minimal server features to generate the RPC API without transports.
 //! - **`server`** - Enables all server features including transports.
+//! - **`http-server`** - Enables the server with the HTTP transport only, i.e. without WebSocket and subscriptions.
 //! - **`full`** - Enables all features.
 //! - **`async-client`** - Enables the async client without any transport.
 //! - **`client-ws-transport`** - Enables `ws` transport with TLS.

@@ -8,7 +8,7 @@
 
 use base64::Engine;
 use hyper::body::Bytes;
-use hyper::http::{HeaderMap, HeaderValue};
+use hyper::http::{HeaderMap, HeaderValue, Uri};
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
@@ -23,7 +23,6 @@ use std::task::{Context, Poll};
 use thiserror::Error;
 use tower::layer::util::Identity;
 use tower::{Layer, Service, ServiceExt};
-use url::Url;
 
 use crate::{HttpBody, HttpRequest, HttpResponse};
 
@@ -232,14 +231,9 @@ impl<L> HttpTransportClientBuilder<L> {
 			keep_alive_retries,
 			connect_timeout,
 		} = self;
-		let mut url = Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
+		let Target { scheme, target, credentials } = parse_target(target.as_ref())?;
 
-		if url.host_str().is_none() {
-			return Err(Error::Url("Invalid host".into()));
-		}
-		url.set_fragment(None);
-
-		let client = match url.scheme() {
+		let client = match scheme.as_str() {
 			"http" => {
 				let mut connector = HttpConnector::new();
 				connector.set_nodelay(tcp_no_delay);
@@ -306,9 +300,9 @@ impl<L> HttpTransportClientBuilder<L> {
 			}
 		}
 
-		if let Some(pwd) = url.password() {
+		if let Some((user, pwd)) = credentials {
 			if !cached_headers.contains_key(hyper::header::AUTHORIZATION) {
-				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{pwd}", url.username()));
+				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{pwd}"));
 				cached_headers.insert(
 					hyper::header::AUTHORIZATION,
 					HeaderValue::from_str(&format!("Basic {digest}"))
@@ -316,17 +310,71 @@ impl<L> HttpTransportClientBuilder<L> {
 				);
 			}
 		}
-		let _ = url.set_password(None);
-		let _ = url.set_username("");
-
 		Ok(HttpTransportClient {
-			target: url.as_str().to_owned(),
+			target,
 			client: service_builder.service(client),
 			max_request_size,
 			max_response_size,
 			headers: cached_headers,
 		})
 	}
+}
+
+/// A parsed and normalized target URL.
+struct Target {
+	/// Lowercased scheme.
+	scheme: String,
+	/// Normalized URL without credentials or fragment.
+	target: String,
+	/// Username and password from the URL's userinfo, if a password was given.
+	credentials: Option<(String, String)>,
+}
+
+/// Parse and normalize the target URL.
+///
+/// The scheme and host are lowercased, the default port of the scheme is omitted,
+/// an empty path becomes `/`, and the fragment is dropped. Credentials in the
+/// userinfo are stripped from the target and returned separately, so they can be
+/// sent as a basic authorization header instead.
+///
+/// Credentials are returned as written in the URL, i.e. still percent-encoded.
+fn parse_target(target: &str) -> Result<Target, Error> {
+	let uri: Uri = target.parse().map_err(|e| Error::Url(format!("Invalid URL: {e}")))?;
+
+	let scheme = uri.scheme_str().ok_or_else(|| Error::Url("Invalid URL: missing scheme".into()))?.to_ascii_lowercase();
+	let authority = uri.authority().ok_or_else(|| Error::Url("Invalid host".into()))?;
+	let (userinfo, host_port) = match authority.as_str().rsplit_once('@') {
+		Some((userinfo, host_port)) => (Some(userinfo), host_port),
+		None => (None, authority.as_str()),
+	};
+	let host = authority.host();
+	if host.is_empty() {
+		return Err(Error::Url("Invalid host".into()));
+	}
+	// Not `Authority::port`, which returns `None` for an unparseable port instead of an error.
+	let port = host_port[host.len()..].strip_prefix(':').filter(|port| !port.is_empty());
+	let host = host.to_ascii_lowercase();
+
+	let default_port = match scheme.as_str() {
+		"http" => Some(80),
+		"https" => Some(443),
+		_ => None,
+	};
+	let port = match port {
+		Some(port) => {
+			let port = port.parse::<u16>().map_err(|_| Error::Url("Invalid URL: invalid port".into()))?;
+			if Some(port) == default_port { String::new() } else { format!(":{port}") }
+		}
+		None => String::new(),
+	};
+
+	let credentials =
+		userinfo.and_then(|userinfo| userinfo.split_once(':')).map(|(user, pwd)| (user.to_owned(), pwd.to_owned()));
+
+	let query = uri.query().map(|query| format!("?{query}")).unwrap_or_default();
+	let target = format!("{scheme}://{host}{port}{}{query}", uri.path());
+
+	Ok(Target { scheme, target, credentials })
 }
 
 /// HTTP Transport Client.
@@ -483,6 +531,64 @@ mod tests {
 	fn http_custom_port_works() {
 		let client = HttpTransportClientBuilder::new().build("http://localhost:9999").unwrap();
 		assert_eq!(&client.target, "http://localhost:9999/");
+	}
+
+	#[test]
+	fn missing_host_rejected() {
+		let err = HttpTransportClientBuilder::new().build("http:///path").unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+
+		let err = HttpTransportClientBuilder::new().build("/path").unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+	}
+
+	#[test]
+	fn out_of_range_port_rejected() {
+		let err = HttpTransportClientBuilder::new().build("http://localhost:65536").unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+	}
+
+	#[test]
+	fn empty_port_is_omitted() {
+		let client = HttpTransportClientBuilder::new().build("http://localhost:").unwrap();
+		assert_eq!(&client.target, "http://localhost/");
+	}
+
+	#[test]
+	fn scheme_and_host_are_lowercased() {
+		let client = HttpTransportClientBuilder::new().build("HTTP://LocalHost:9999/Path").unwrap();
+		assert_eq!(&client.target, "http://localhost:9999/Path");
+	}
+
+	#[test]
+	fn ipv6_host_works() {
+		let client = HttpTransportClientBuilder::new().build("http://[::1]:9999").unwrap();
+		assert_eq!(&client.target, "http://[::1]:9999/");
+	}
+
+	#[test]
+	fn credentials_are_moved_to_authorization_header() {
+		let client = HttpTransportClientBuilder::new().build("http://user:p%40ss@localhost:9999/path").unwrap();
+		assert_eq!(&client.target, "http://localhost:9999/path");
+		// base64 of "user:p%40ss"
+		assert_eq!(client.headers[hyper::header::AUTHORIZATION], "Basic dXNlcjpwJTQwc3M=");
+	}
+
+	#[test]
+	fn explicit_authorization_header_takes_precedence() {
+		let mut headers = HeaderMap::new();
+		headers.insert(hyper::header::AUTHORIZATION, HeaderValue::from_static("Bearer token"));
+		let client =
+			HttpTransportClientBuilder::new().set_headers(headers).build("http://user:pass@localhost:9999").unwrap();
+		assert_eq!(&client.target, "http://localhost:9999/");
+		assert_eq!(client.headers[hyper::header::AUTHORIZATION], "Bearer token");
+	}
+
+	#[test]
+	fn username_without_password_is_dropped() {
+		let client = HttpTransportClientBuilder::new().build("http://user@localhost:9999").unwrap();
+		assert_eq!(&client.target, "http://localhost:9999/");
+		assert!(!client.headers.contains_key(hyper::header::AUTHORIZATION));
 	}
 
 	#[tokio::test]
