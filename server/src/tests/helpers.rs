@@ -1,3 +1,6 @@
+// Most helpers are only used by the WebSocket tests.
+#![cfg_attr(not(feature = "ws"), allow(dead_code, unused_imports))]
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -209,6 +212,7 @@ pub(crate) struct Metrics {
 	pub(crate) ws_sessions_closed: Arc<AtomicUsize>,
 }
 
+#[cfg(feature = "ws")]
 pub(crate) async fn ws_server_with_stats(metrics: Metrics) -> SocketAddr {
 	let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await.unwrap();
 	let addr = listener.local_addr().unwrap();
