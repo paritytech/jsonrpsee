@@ -24,6 +24,7 @@ hyper-util = { workspace = true, features = ["client", "client-legacy", "tokio",
 http-body = { workspace = true }
 jsonrpsee-types = { workspace = true }
 jsonrpsee-core = { workspace = true, features = ["client", "http-helpers"] }
+percent-encoding = { workspace = true }
 rustls = { workspace = true, optional = true, features = ["logging", "std", "tls12", "ring"] }
 rustls-platform-verifier = { workspace = true, optional = true }
 serde = { workspace = true, features = ["alloc"] }
