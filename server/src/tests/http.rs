@@ -744,3 +744,63 @@ async fn http_extensions_from_rpc_batch_response_overwrite() {
 	handle.stop().unwrap();
 	handle.stopped().await;
 }
+
+#[tokio::test]
+async fn notification_id_classification_http_singles_and_mixed_batches() {
+	use serde_json::json;
+	let (addr, handle, calls) = super::helpers::server_with_call_counter().await;
+	let uri = to_http_uri(addr);
+	let error: JsonValue = serde_json::from_str(&invalid_request(Id::Null)).unwrap();
+	for id in [json!(true), json!(false), json!({}), json!([])] {
+		let invalid = json!({"jsonrpc":"2.0","method":"tick","id":id});
+		for batch in [false, true] {
+			let before = calls.load(std::sync::atomic::Ordering::SeqCst);
+			let request = if batch {
+				json!([invalid, {"jsonrpc":"2.0","method":"tick","id":"okay"}, {"jsonrpc":"2.0","method":"tick","id":null}])
+			} else {
+				invalid.clone()
+			};
+			let response =
+				http_request(request.to_string().into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+			assert_eq!(response.status, StatusCode::OK);
+			let reply: JsonValue = serde_json::from_str(&response.body).unwrap();
+			let expected = if batch {
+				json!([error, {"jsonrpc":"2.0","id":"okay","result":before}, {"jsonrpc":"2.0","id":null,"result":before + 1}])
+			} else {
+				error.clone()
+			};
+			assert_eq!(reply, expected, "invalid_id_error_missing");
+			let after = before + if batch { 2 } else { 0 };
+			assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), after, "invalid ID dispatched");
+			let request = json!({"jsonrpc":"2.0","method":"tick","id":"recovery"});
+			let response =
+				http_request(request.to_string().into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+			assert_eq!(response.status, StatusCode::OK);
+			let reply: JsonValue = serde_json::from_str(&response.body).unwrap();
+			assert_eq!(reply, json!({"jsonrpc":"2.0","id":"recovery","result":after}));
+			assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), after + 1);
+		}
+	}
+	for id in [json!(0), json!("valid"), JsonValue::Null] {
+		let before = calls.load(std::sync::atomic::Ordering::SeqCst);
+		let request = json!({"jsonrpc":"2.0","method":"tick","id":id});
+		let response =
+			http_request(request.to_string().into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+		assert_eq!(response.status, StatusCode::OK);
+		let reply: JsonValue = serde_json::from_str(&response.body).unwrap();
+		assert_eq!(reply, json!({"jsonrpc":"2.0","id":id,"result":before}));
+		assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), before + 1);
+	}
+	let request = json!({"jsonrpc":"2.0","method":"tick","extra":{"id":true}});
+	let response = http_request(request.to_string().into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, "null");
+	let request = json!({"jsonrpc":"2.0","method":"tick","id":"after-notification"});
+	let response = http_request(request.to_string().into(), uri).with_default_timeout().await.unwrap().unwrap();
+	let reply: JsonValue = serde_json::from_str(&response.body).unwrap();
+	assert_eq!(reply["id"], "after-notification");
+	assert!(reply.get("result").is_some());
+	assert!(reply.get("error").is_none());
+	handle.stop().unwrap();
+	handle.stopped().with_default_timeout().await.unwrap();
+}
