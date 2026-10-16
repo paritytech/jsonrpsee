@@ -212,7 +212,7 @@ async fn invalid_single_method_call() {
 	let req = r#"{"jsonrpc":"2.0","method":1, "params": "bar"}"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, parse_error(Id::Null));
+	assert_eq!(response.body, invalid_request(Id::Null));
 }
 
 #[tokio::test]
@@ -403,7 +403,7 @@ async fn garbage_request_fails() {
 
 	let req = r#"{}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
-	assert_eq!(response.body, parse_error(Id::Null));
+	assert_eq!(response.body, invalid_request(Id::Null));
 
 	let req = r#"{sds}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
@@ -478,6 +478,23 @@ async fn invalid_json_id_missing_value() {
 	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
 	// Null.
 	assert_eq!(response.body, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn shared_server_behavior_http_and_websocket_invalid_envelopes() {
+	let (addr, _handle) = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+	for req in [r#"{"jsonrpc":"1.0","method":"say_hello"}"#, r#"{"jsonrpc":"2.0"}"#, r#"{}"#] {
+		let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+		assert_eq!(response.status, StatusCode::OK);
+		assert_eq!(response.body, invalid_request(Id::Null));
+		let response = http_request(r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#.into(), uri.clone())
+			.with_default_timeout()
+			.await
+			.unwrap()
+			.unwrap();
+		assert_eq!(response.body, ok_response(JsonValue::String("lo".to_owned()), Id::Num(1)));
+	}
 }
 
 #[tokio::test]

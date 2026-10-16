@@ -280,7 +280,7 @@ async fn garbage_request_fails() {
 
 	let req = r#"{}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));
+	assert_eq!(response, invalid_request(Id::Null));
 
 	let req = r#"{sds}"#;
 	let response = client.send_request_text(req).await.unwrap();
@@ -430,6 +430,23 @@ async fn invalid_json_id_missing_value() {
 	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
 	// Null.
 	assert_eq!(response, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn shared_server_behavior_http_and_websocket_invalid_envelopes() {
+	let addr = server().with_default_timeout().await.unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	for req in [r#"{"jsonrpc":"1.0","method":"add","params":[1,2]}"#, r#"{"jsonrpc":"2.0"}"#, r#"{}"#] {
+		let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+		assert_eq!(response, invalid_request(Id::Null));
+		let response = client
+			.send_request_text(r#"{"jsonrpc":"2.0","method":"add","params":[1,2],"id":1}"#)
+			.with_default_timeout()
+			.await
+			.unwrap()
+			.unwrap();
+		assert_eq!(response, ok_response(JsonValue::Number(3u32.into()), Id::Num(1)));
+	}
 }
 
 #[tokio::test]
