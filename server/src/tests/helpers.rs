@@ -18,6 +18,15 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 pub(crate) struct TestContext;
 
+pub(crate) async fn server_with_call_counter() -> (SocketAddr, ServerHandle, Arc<AtomicUsize>) {
+	let server = ServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let calls = Arc::new(AtomicUsize::new(0));
+	let mut module = RpcModule::new(calls.clone());
+	module.register_method("tick", |_, calls, _| calls.fetch_add(1, Ordering::SeqCst)).unwrap();
+	let addr = server.local_addr().unwrap();
+	(addr, server.start(module), calls)
+}
+
 impl TestContext {
 	pub(crate) fn ok(&self) -> Result<(), MyAppError> {
 		Ok(())
