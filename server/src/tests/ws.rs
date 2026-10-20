@@ -280,7 +280,7 @@ async fn garbage_request_fails() {
 
 	let req = r#"{}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));
+	assert_eq!(response, invalid_request(Id::Null));
 
 	let req = r#"{sds}"#;
 	let response = client.send_request_text(req).await.unwrap();
@@ -430,6 +430,23 @@ async fn invalid_json_id_missing_value() {
 	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
 	// Null.
 	assert_eq!(response, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn shared_server_behavior_http_and_websocket_invalid_envelopes() {
+	let addr = server().with_default_timeout().await.unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	for req in [r#"{"jsonrpc":"1.0","method":"add","params":[1,2]}"#, r#"{"jsonrpc":"2.0"}"#, r#"{}"#] {
+		let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+		assert_eq!(response, invalid_request(Id::Null));
+		let response = client
+			.send_request_text(r#"{"jsonrpc":"2.0","method":"add","params":[1,2],"id":1}"#)
+			.with_default_timeout()
+			.await
+			.unwrap()
+			.unwrap();
+		assert_eq!(response, ok_response(JsonValue::Number(3u32.into()), Id::Num(1)));
+	}
 }
 
 #[tokio::test]
@@ -957,4 +974,65 @@ async fn server_with_infinite_call(
 	let addr = server.local_addr().unwrap();
 
 	(server.start(module), addr)
+}
+
+#[tokio::test]
+async fn notification_id_classification_websocket_singles_and_mixed_batches() {
+	use serde_json::json;
+	let (addr, handle, calls) = super::helpers::server_with_call_counter().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let error: JsonValue = serde_json::from_str(&invalid_request(Id::Null)).unwrap();
+	for id in [json!(true), json!(false), json!({}), json!([])] {
+		let invalid = json!({"jsonrpc":"2.0","method":"tick","id":id});
+		for batch in [false, true] {
+			let before = calls.load(std::sync::atomic::Ordering::SeqCst);
+			let request = if batch {
+				json!([invalid, {"jsonrpc":"2.0","method":"tick","id":"okay"}, {"jsonrpc":"2.0","method":"tick","id":null}])
+			} else {
+				invalid.clone()
+			};
+			let raw = client.send_request_text(request.to_string()).with_default_timeout().await.unwrap().unwrap();
+			let reply: JsonValue = serde_json::from_str(&raw).unwrap();
+			let expected = if batch {
+				json!([error, {"jsonrpc":"2.0","id":"okay","result":before}, {"jsonrpc":"2.0","id":null,"result":before + 1}])
+			} else {
+				error.clone()
+			};
+			assert_eq!(reply, expected, "invalid_id_error_missing");
+			let after = before + if batch { 2 } else { 0 };
+			assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), after, "invalid ID dispatched");
+			let request = json!({"jsonrpc":"2.0","method":"tick","id":"recovery"});
+			let raw = client.send_request_text(request.to_string()).with_default_timeout().await.unwrap().unwrap();
+			let reply: JsonValue = serde_json::from_str(&raw).unwrap();
+			assert_eq!(reply, json!({"jsonrpc":"2.0","id":"recovery","result":after}));
+			assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), after + 1);
+		}
+	}
+	for id in [json!(0), json!("valid"), JsonValue::Null] {
+		let before = calls.load(std::sync::atomic::Ordering::SeqCst);
+		let request = json!({"jsonrpc":"2.0","method":"tick","id":id});
+		let raw = client.send_request_text(request.to_string()).with_default_timeout().await.unwrap().unwrap();
+		let reply: JsonValue = serde_json::from_str(&raw).unwrap();
+		assert_eq!(reply, json!({"jsonrpc":"2.0","id":id,"result":before}));
+		assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), before + 1);
+	}
+	client
+		.send(r#"{"jsonrpc":"2.0","method":"tick","extra":{"id":true}}"#)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let raw = client
+		.send_request_text(r#"{"jsonrpc":"2.0","method":"tick","id":"after-notification"}"#)
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let reply: JsonValue = serde_json::from_str(&raw).unwrap();
+	assert_eq!(reply["id"], "after-notification");
+	assert!(reply.get("result").is_some());
+	assert!(reply.get("error").is_none());
+	client.close().with_default_timeout().await.unwrap().unwrap();
+	handle.stop().unwrap();
+	handle.stopped().with_default_timeout().await.unwrap();
 }

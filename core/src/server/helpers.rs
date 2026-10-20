@@ -118,11 +118,67 @@ impl MethodSink {
 	}
 }
 
-/// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
-/// unparseable garbage.
+/// Distinguish malformed JSON from an invalid request and recover its [`Id`] when possible.
 pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
-	match serde_json::from_slice::<InvalidRequest>(data) {
-		Ok(InvalidRequest { id }) => (id, ErrorCode::InvalidRequest),
-		Err(_) => (Id::Null, ErrorCode::ParseError),
+	let Ok(value) = serde_json::from_slice::<&RawValue>(data) else {
+		return (Id::Null, ErrorCode::ParseError);
+	};
+	let id = if value.get().starts_with('{') {
+		serde_json::from_slice::<InvalidRequest>(data).map(|request| request.id).unwrap_or(Id::Null)
+	} else {
+		Id::Null
+	};
+	(id, ErrorCode::InvalidRequest)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::prepare_error;
+	use jsonrpsee_types::{ErrorCode, Id};
+
+	#[test]
+	fn error_classification_invalid_envelopes_without_id() {
+		for data in [r#"{"jsonrpc":"1.0","method":"example","params":[]}"#, r#"{"jsonrpc":"2.0"}"#, r#"{}"#] {
+			assert_eq!(prepare_error(data.as_bytes()), (Id::Null, ErrorCode::InvalidRequest), "{data}");
+		}
+	}
+
+	#[test]
+	fn error_classification_malformed_json() {
+		for data in ["", " ", "{", "[", r#"{"id":1,"method":}"#, r#"{"id":1} trailing"#] {
+			assert_eq!(prepare_error(data.as_bytes()), (Id::Null, ErrorCode::ParseError), "{data}");
+		}
+	}
+
+	#[test]
+	fn error_classification_recoverable_ids() {
+		for (data, id) in [
+			(r#"{"jsonrpc":"1.0","method":"example","id":0}"#, Id::Number(0)),
+			(r#"{"jsonrpc":"1.0","id":18446744073709551615}"#, Id::Number(u64::MAX)),
+			(" \n {\"id\":\"keep-id\"} \t ", Id::Str("keep-id".into())),
+			(r#"{"id":"escaped\u002did"}"#, Id::Str("escaped-id".into())),
+			(r#"{"id":null}"#, Id::Null),
+		] {
+			assert_eq!(prepare_error(data.as_bytes()), (id, ErrorCode::InvalidRequest), "{data}");
+		}
+	}
+
+	#[test]
+	fn error_classification_unrecoverable_ids_and_nonobjects() {
+		for data in [
+			r#"{"id":true}"#,
+			r#"{"id":{}}"#,
+			r#"{"id":[]}"#,
+			r#"{"id":-1}"#,
+			r#"["not-an-object-id"]"#,
+			"[1]",
+			"[]",
+			"true",
+			"null",
+			"42",
+			r#""text""#,
+		] {
+			assert_eq!(prepare_error(data.as_bytes()), (Id::Null, ErrorCode::InvalidRequest), "{data}");
+		}
 	}
 }
