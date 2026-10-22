@@ -27,6 +27,7 @@ jsonrpsee-server = { workspace = true, optional = true }
 jsonrpsee-proc-macros = { workspace = true, optional = true }
 jsonrpsee-core = { workspace = true, optional = true }
 jsonrpsee-types = { workspace = true, optional = true }
+open-rpc = { workspace = true, features = ["utoipa"] }
 tracing = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 
