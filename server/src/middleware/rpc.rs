@@ -54,6 +54,8 @@ pub(crate) enum RpcServiceCfg {
 	/// The server supports only calls.
 	OnlyCalls,
 	/// The server supports both method calls and subscriptions.
+	// Only constructed by the WebSocket transport.
+	#[cfg_attr(not(feature = "ws"), allow(dead_code))]
 	CallsAndSubscriptions {
 		bounded_subscriptions: BoundedSubscriptions,
 		sink: MethodSink,

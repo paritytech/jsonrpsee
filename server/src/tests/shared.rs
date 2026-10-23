@@ -4,7 +4,9 @@ use hyper::StatusCode;
 use jsonrpsee_core::BoxError;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_test_utils::helpers::{http_request, ok_response, to_http_uri};
-use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
+use jsonrpsee_test_utils::mocks::Id;
+#[cfg(feature = "ws")]
+use jsonrpsee_test_utils::mocks::{WebSocketTestClient, WebSocketTestError};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -43,6 +45,7 @@ async fn run_forever() {
 	server_handle.stopped().with_timeout(TIMEOUT).await.unwrap();
 }
 
+#[cfg(feature = "ws")]
 #[tokio::test]
 async fn http_only_works() {
 	use crate::{RpcModule, ServerBuilder};
@@ -69,6 +72,7 @@ async fn http_only_works() {
 	assert!(matches!(err, WebSocketTestError::RejectedWithStatusCode(code) if code == 403));
 }
 
+#[cfg(feature = "ws")]
 #[tokio::test]
 async fn ws_only_works() {
 	use crate::{RpcModule, ServerBuilder};
@@ -201,6 +205,7 @@ async fn first_request_timeout_counts_request_waiting_for_middleware() {
 	assert!(slow.await.unwrap().is_ok());
 }
 
+#[cfg(feature = "ws")]
 #[tokio::test]
 async fn first_request_timeout_keeps_idle_websocket_open() {
 	let addr = server_with_first_request_timeout(Duration::from_millis(100)).await;
