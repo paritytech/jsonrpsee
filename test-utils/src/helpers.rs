@@ -169,6 +169,14 @@ pub fn server_error(id: Id) -> String {
 	)
 }
 
+/// Error response with a member the JSON-RPC 2.0 spec does not define.
+pub fn error_with_unknown_field(id: Id) -> String {
+	format!(
+		r#"{{"jsonrpc":"2.0","id":{},"error":{{"code":-32000,"message":"Server error","nasty_hobbits":"fool of a took!"}}}}"#,
+		serde_json::to_string(&id).unwrap()
+	)
+}
+
 /// Hardcoded server response when a client initiates a new subscription.
 ///
 /// NOTE: works only for one subscription because the subscription ID is hardcoded.

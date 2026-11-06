@@ -160,6 +160,16 @@ async fn internal_error_works() {
 }
 
 #[tokio::test]
+async fn error_with_unknown_field_works() {
+	let err = run_request_with_response(error_with_unknown_field(Id::Num(0_u64)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
+	assert_jsonrpc_error_response(err, ErrorObject::from(ErrorCode::ServerError(-32000)).into_owned());
+}
+
+#[tokio::test]
 async fn subscription_response_to_request() {
 	let req = r#"{"jsonrpc":"2.0","method":"subscribe_hello","params":{"subscription":"3px4FrtxSYQ1zBKW154NoVnrDhrq764yQNCXEgZyM6Mu","result":"hello my friend"}}"#.to_string();
 	let err = run_request_with_response(req).with_default_timeout().await.unwrap().unwrap_err();

@@ -39,7 +39,6 @@ pub type ErrorObjectOwned = ErrorObject<'static>;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
 #[derive(Debug, Deserialize, Serialize, Clone, thiserror::Error)]
-#[serde(deny_unknown_fields)]
 #[error("{self:?}")]
 pub struct ErrorObject<'a> {
 	/// Code
@@ -320,6 +319,15 @@ mod tests {
 		let ser = r#"{"code":-32700,"message":"Parse error", "data":"vegan"}"#;
 		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
 		let exp = ErrorObject::owned(ErrorCode::ParseError.code(), "Parse error", Some(data));
+		let err: ErrorObject = serde_json::from_str(ser).unwrap();
+		assert_eq!(exp, err);
+	}
+
+	#[test]
+	fn deserialize_with_unknown_field() {
+		let ser = r#"{"nasty_hobbits":"fool of a took!","code":-32002,"message":"Resource unavailable","data":42}"#;
+		let data = serde_json::value::to_raw_value(&42).unwrap();
+		let exp = ErrorObject::owned(-32002, "Resource unavailable", Some(data));
 		let err: ErrorObject = serde_json::from_str(ser).unwrap();
 		assert_eq!(exp, err);
 	}
