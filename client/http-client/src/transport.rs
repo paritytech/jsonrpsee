@@ -308,7 +308,9 @@ impl<L> HttpTransportClientBuilder<L> {
 
 		if let Some(pwd) = url.password() {
 			if !cached_headers.contains_key(hyper::header::AUTHORIZATION) {
-				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{pwd}", url.username()));
+				let user = percent_encoding::percent_decode_str(url.username()).decode_utf8_lossy();
+				let pwd = percent_encoding::percent_decode_str(pwd).decode_utf8_lossy();
+				let digest = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{pwd}"));
 				cached_headers.insert(
 					hyper::header::AUTHORIZATION,
 					HeaderValue::from_str(&format!("Basic {digest}"))
@@ -483,6 +485,25 @@ mod tests {
 	fn http_custom_port_works() {
 		let client = HttpTransportClientBuilder::new().build("http://localhost:9999").unwrap();
 		assert_eq!(&client.target, "http://localhost:9999/");
+	}
+
+	#[test]
+	fn http_with_username_and_password() {
+		let client = HttpTransportClientBuilder::new().build("http://user:pwd@localhost").unwrap();
+		let digest = base64::engine::general_purpose::STANDARD.encode("user:pwd");
+		assert_eq!(
+			client.headers.get(hyper::header::AUTHORIZATION),
+			Some(&HeaderValue::from_str(&format!("Basic {digest}")).unwrap())
+		);
+	}
+
+	#[test]
+	fn http_with_percent_encoded_username_and_password() {
+		let client = HttpTransportClientBuilder::new().build("http://=:=@localhost").unwrap();
+		assert_eq!(
+			client.headers.get(hyper::header::AUTHORIZATION),
+			Some(&HeaderValue::from_str("Basic PTo9").unwrap())
+		);
 	}
 
 	#[tokio::test]

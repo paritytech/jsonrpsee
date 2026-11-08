@@ -656,7 +656,9 @@ impl TryFrom<url::Url> for Target {
 		}
 
 		let basic_auth = if let Some(pwd) = url.password() {
-			let digest = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", url.username(), pwd));
+			let user = percent_encoding::percent_decode_str(url.username()).decode_utf8_lossy();
+			let pwd = percent_encoding::percent_decode_str(pwd).decode_utf8_lossy();
+			let digest = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{pwd}"));
 			let val = HeaderValue::from_str(&format!("Basic {digest}"))
 				.map_err(|_| WsHandshakeError::Url("Header value `authorization basic user:pwd` invalid".into()))?;
 
@@ -793,6 +795,14 @@ mod tests {
 		let target = parse_target("ws://user:pwd@127.0.0.1").unwrap();
 		let digest = base64::engine::general_purpose::STANDARD.encode("user:pwd");
 		let basic_auth = HeaderValue::from_str(&format!("Basic {digest}")).unwrap();
+
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
+	}
+
+	#[test]
+	fn ws_with_percent_encoded_username_and_password() {
+		let target = parse_target("ws://=:=@127.0.0.1").unwrap();
+		let basic_auth = HeaderValue::from_str("Basic PTo9").unwrap();
 
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1", Mode::Plain, "/", Some(basic_auth));
 	}
