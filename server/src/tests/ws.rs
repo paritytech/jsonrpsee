@@ -650,6 +650,27 @@ async fn custom_subscription_id_works() {
 }
 
 #[tokio::test]
+async fn subscription_accept_response_is_sent_once() {
+	init_logger();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	// Subscribe using a batch request. The accept response must be delivered exactly once
+	// (inside the batch response); it must not also be sent as a standalone message (#1052).
+	let batch = format!("[{}]", call("subscribe_hello", Vec::<()>::new(), Id::Num(0)));
+	client.send(batch).await.unwrap();
+
+	let mut messages = vec![client.receive().with_default_timeout().await.unwrap().unwrap()];
+	// Drain any additional messages; a duplicated accept response would show up here.
+	while let Ok(Ok(msg)) = client.receive().with_timeout(Duration::from_millis(500)).await {
+		messages.push(msg);
+	}
+
+	let accept_responses: usize = messages.iter().map(|msg| msg.matches(r#""id":0"#).count()).sum();
+	assert_eq!(accept_responses, 1, "the subscription accept response was sent {accept_responses} times: {messages:?}");
+}
+
+#[tokio::test]
 async fn disabled_batches() {
 	// Disable batches support.
 	let config = ServerConfig::builder().set_batch_request_config(BatchRequestConfig::Disabled).build();

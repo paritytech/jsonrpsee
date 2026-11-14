@@ -170,9 +170,9 @@ where
 				rp = handle_rpc_call(&data[idx..], is_single, batch_requests_config, &*rpc_service, extensions) => rp,
 			};
 
-			// Subscriptions are handled by the subscription callback and
+			// Subscription responses are delivered here just like any other method response;
 			// "ordinary notifications" should not be sent back to the client.
-			if rp.is_method_call() || rp.is_batch() {
+			if rp.is_method_call() || rp.is_batch() || rp.is_subscription() {
 				let is_success = rp.is_success();
 				let (json, mut on_close, _) = rp.into_parts();
 
