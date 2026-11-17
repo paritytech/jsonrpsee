@@ -24,7 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crate::tests::helpers::{Metrics, deser_call, init_logger, server_with_context, ws_server_with_stats};
@@ -857,6 +858,103 @@ async fn ws_server_backpressure_works() {
 
 	assert!(seen_backpressure_item);
 	assert!(seen_item_after_backpressure);
+}
+
+#[tokio::test]
+async fn ws_server_backpressure_works_for_method_calls() {
+	init_logger();
+
+	const CALLS: usize = 100;
+	const MAX_CALLS_WITHOUT_READING: usize = CALLS / 2;
+
+	let config = ServerConfig::builder().set_message_buffer_capacity(4).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+
+	let state = Arc::new((AtomicUsize::new(0), tokio::sync::Notify::new()));
+	let mut module = RpcModule::new(state.clone());
+	module
+		.register_method("large_response", |_, state, _| {
+			let (calls, limit_reached) = &**state;
+			if calls.fetch_add(1, Ordering::SeqCst) + 1 == MAX_CALLS_WITHOUT_READING {
+				limit_reached.notify_one();
+			}
+			"a".repeat(1024 * 1024)
+		})
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+	let _server_handle = server.start(module);
+
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	for id in 0..CALLS {
+		let req = call("large_response", Vec::<()>::new(), Id::Num(id as u64));
+		client.send(req).with_default_timeout().await.unwrap().unwrap();
+	}
+
+	// The client doesn't read the responses, so the server should stop processing new calls.
+	let (calls, limit_reached) = &*state;
+	assert!(
+		limit_reached.notified().with_timeout(Duration::from_secs(2)).await.is_err(),
+		"server processed {} calls while the client didn't read any response",
+		calls.load(Ordering::SeqCst)
+	);
+
+	// Once the client reads the responses, the remaining calls are processed.
+	for _ in 0..CALLS {
+		client.receive().with_default_timeout().await.unwrap().unwrap();
+	}
+	assert_eq!(calls.load(Ordering::SeqCst), CALLS);
+}
+
+#[tokio::test]
+async fn ws_server_handles_calls_while_subscription_buffer_is_full() {
+	init_logger();
+
+	let config = ServerConfig::builder().set_message_buffer_capacity(4).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+
+	let state = Arc::new((tokio::sync::Notify::new(), tokio::sync::Notify::new()));
+	let mut module = RpcModule::new(state.clone());
+	module
+		.register_subscription("subscribe_large", "large", "unsubscribe_large", |_, pending, state, _| async move {
+			let sink = pending.accept().await?;
+			let msg = serde_json::value::to_raw_value(&"a".repeat(1024 * 1024)).unwrap();
+			let (buffer_full, unsubscribed) = &**state;
+
+			loop {
+				tokio::select! {
+					biased;
+					_ = sink.closed() => {
+						unsubscribed.notify_one();
+						break Ok(());
+					}
+					res = sink.send_timeout(msg.clone(), Duration::from_millis(100)) => match res {
+						Ok(()) => (),
+						Err(SendTimeoutError::Timeout(_)) => buffer_full.notify_one(),
+						Err(SendTimeoutError::Closed(_)) => break Ok(()),
+					},
+				}
+			}
+		})
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+	let _server_handle = server.start(module);
+
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let sub = client
+		.send_request_text(call("subscribe_large", Vec::<()>::new(), Id::Num(1)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let sub_id = serde_json::from_str::<JsonValue>(&sub).unwrap()["result"].clone();
+
+	// The client doesn't read the notifications until the buffer is full.
+	let (buffer_full, unsubscribed) = &*state;
+	buffer_full.notified().with_default_timeout().await.unwrap();
+
+	// Calls from the client must still be processed.
+	client.send(call("unsubscribe_large", vec![sub_id], Id::Num(2))).with_default_timeout().await.unwrap().unwrap();
+	unsubscribed.notified().with_default_timeout().await.unwrap();
 }
 
 #[tokio::test]

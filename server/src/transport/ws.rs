@@ -18,7 +18,7 @@ use jsonrpsee_types::error::{ErrorCode, reject_too_big_request};
 use serde_json::value::RawValue;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::time::{interval, interval_at};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
@@ -83,7 +83,8 @@ where
 		mut on_session_close,
 		extensions,
 	} = params;
-	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, .. } = server_cfg;
+	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, message_buffer_capacity, .. } =
+		server_cfg;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
 
@@ -92,6 +93,7 @@ where
 
 	let stopped = conn.stop_handle.clone().shutdown();
 	let rpc_service = Arc::new(rpc_service);
+	let call_permits = Arc::new(Semaphore::new(message_buffer_capacity as usize));
 	let mut missed_pings = 0;
 
 	tokio::pin!(stopped);
@@ -112,6 +114,11 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
+		// Only read the next message once there is room for another pending call.
+		let Some(permit) = acquire_call_permit(&call_permits, &mut stopped).await else {
+			break Ok(Shutdown::Stopped);
+		};
+
 		let data = match try_recv(&mut ws_stream, stopped, ping_config, &mut missed_pings).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
@@ -152,12 +159,16 @@ where
 		let extensions = extensions.clone();
 
 		tokio::spawn(async move {
+			// Released once the response has been handed over to the send task.
+			let _permit = permit;
+
 			let first_non_whitespace = data.iter().enumerate().take(128).find(|(_, byte)| !byte.is_ascii_whitespace());
 
 			let (idx, is_single) = match first_non_whitespace {
 				Some((start, b'{')) => (start, true),
 				Some((start, b'[')) => (start, false),
 				_ => {
+					drop(data);
 					_ = sink.send_error(Id::Null, ErrorCode::ParseError.into()).await;
 					return;
 				}
@@ -169,6 +180,8 @@ where
 				_ = sink.closed() => return,
 				rp = handle_rpc_call(&data[idx..], is_single, batch_requests_config, &*rpc_service, extensions) => rp,
 			};
+			// The request isn't needed anymore while waiting to send the response.
+			drop(data);
 
 			// Subscriptions are handled by the subscription callback and
 			// "ordinary notifications" should not be sent back to the client.
@@ -268,6 +281,20 @@ async fn send_task(
 	// Terminate connection and send close message.
 	let _ = ws_sender.close().await;
 	rx.close();
+}
+
+/// Waits until another call can be processed, fails if the server was stopped.
+async fn acquire_call_permit<S>(permits: &Arc<Semaphore>, stopped: &mut S) -> Option<OwnedSemaphorePermit>
+where
+	S: Future<Output = ()> + Unpin,
+{
+	let permit = permits.clone().acquire_owned();
+	tokio::pin!(permit);
+
+	match future::select(permit, stopped).await {
+		Either::Left((Ok(permit), _)) => Some(permit),
+		_ => None,
+	}
 }
 
 enum Receive<S> {
