@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::future::{IntervalStream, SessionClose};
 use crate::middleware::rpc::{RpcService, RpcServiceCfg};
@@ -83,8 +83,14 @@ where
 		mut on_session_close,
 		extensions,
 	} = params;
-	let ServerConfig { ping_config, batch_requests_config, max_request_body_size, message_buffer_capacity, .. } =
-		server_cfg;
+	let ServerConfig {
+		ping_config,
+		batch_requests_config,
+		max_request_body_size,
+		message_buffer_capacity,
+		ws_backpressure_timeout,
+		..
+	} = server_cfg;
 
 	let (conn_tx, conn_rx) = oneshot::channel();
 
@@ -114,11 +120,6 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
-		// Only read the next message once there is room for another pending call.
-		let Some(permit) = acquire_call_permit(&call_permits, &mut stopped).await else {
-			break Ok(Shutdown::Stopped);
-		};
-
 		let data = match try_recv(&mut ws_stream, stopped, ping_config, &mut missed_pings).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
@@ -151,6 +152,18 @@ where
 						break Err(err);
 					}
 				};
+			}
+		};
+
+		// Read one message ahead to handle control frames while calls are busy.
+		// Time out if a queued request blocks further reads.
+		let permit = match acquire_call_permit(&call_permits, &mut stopped, &sink, ws_backpressure_timeout).await {
+			Ok(permit) => permit,
+			Err(reason) => {
+				if matches!(reason, Shutdown::BackpressureTimeout) {
+					tracing::debug!(target: LOG_TARGET, "WS call capacity wait timed out; terminate connection: {}", conn.conn_id);
+				}
+				break Ok(reason);
 			}
 		};
 
@@ -283,17 +296,22 @@ async fn send_task(
 	rx.close();
 }
 
-/// Waits until another call can be processed, fails if the server was stopped.
-async fn acquire_call_permit<S>(permits: &Arc<Semaphore>, stopped: &mut S) -> Option<OwnedSemaphorePermit>
+/// Wait for a call slot, shutdown, or timeout.
+async fn acquire_call_permit<S>(
+	permits: &Arc<Semaphore>,
+	stopped: &mut S,
+	sink: &MethodSink,
+	timeout: Duration,
+) -> Result<OwnedSemaphorePermit, Shutdown>
 where
 	S: Future<Output = ()> + Unpin,
 {
-	let permit = permits.clone().acquire_owned();
-	tokio::pin!(permit);
-
-	match future::select(permit, stopped).await {
-		Either::Left((Ok(permit), _)) => Some(permit),
-		_ => None,
+	tokio::select! {
+		biased;
+		_ = stopped => Err(Shutdown::Stopped),
+		_ = sink.closed() => Err(Shutdown::ConnectionClosed),
+		permit = permits.clone().acquire_owned() => permit.map_err(|_| Shutdown::ConnectionClosed),
+		_ = tokio::time::sleep(timeout) => Err(Shutdown::BackpressureTimeout),
 	}
 }
 
@@ -369,6 +387,7 @@ where
 pub(crate) enum Shutdown {
 	Stopped,
 	ConnectionClosed,
+	BackpressureTimeout,
 }
 
 /// Enforce a graceful shutdown.
@@ -400,8 +419,13 @@ async fn graceful_shutdown<S>(
 		}
 	}
 
-	// Send a message to close down the "send task".
-	_ = conn_tx.send(());
+	if matches!(result, Ok(Shutdown::BackpressureTimeout)) {
+		// Abort blocked writes; dropping the response receiver wakes pending calls.
+		send_task_handle.abort();
+	} else {
+		// Send a message to close down the "send task".
+		_ = conn_tx.send(());
+	}
 	// Ensure that send task has been closed.
 	_ = send_task_handle.await;
 }
@@ -537,5 +561,36 @@ where
 			tracing::debug!(target: LOG_TARGET, "WS upgrade handshake failed: {}", e);
 			Err(HttpResponse::new(HttpBody::from(format!("WS upgrade handshake failed: {e}"))))
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[tokio::test(start_paused = true)]
+	async fn capacity_timeout_aborts_sender_that_cannot_observe_shutdown() {
+		let (responses_tx, responses_rx) = mpsc::channel::<Box<RawValue>>(1);
+		let (_pending_tx, pending_rx) = mpsc::channel(1);
+		let (conn_tx, conn_rx) = oneshot::channel();
+		let send_task = tokio::spawn(async move {
+			// Simulate a blocked write that cannot poll the shutdown signal.
+			let _channels = (responses_rx, conn_rx);
+			future::pending::<()>().await;
+		});
+
+		tokio::time::timeout(
+			Duration::from_secs(1),
+			graceful_shutdown(
+				Ok(Shutdown::BackpressureTimeout),
+				pending_rx,
+				futures_util::stream::pending(),
+				conn_tx,
+				send_task,
+			),
+		)
+		.await
+		.expect("capacity timeout must not wait for a blocked socket write");
+		assert!(responses_tx.is_closed(), "pending calls must be notified that their response sink closed");
 	}
 }
