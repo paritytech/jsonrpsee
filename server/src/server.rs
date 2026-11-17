@@ -190,8 +190,6 @@ pub struct ServerConfig {
 	pub(crate) enable_ws: bool,
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
 	pub(crate) message_buffer_capacity: u32,
-	/// Timeout for acquiring a WebSocket call slot.
-	pub(crate) ws_backpressure_timeout: Duration,
 	/// Ping settings.
 	pub(crate) ping_config: Option<PingConfig>,
 	/// ID provider.
@@ -227,8 +225,6 @@ pub struct ServerConfigBuilder {
 	enable_ws: bool,
 	/// Number of messages that server is allowed to `buffer` until backpressure kicks in.
 	message_buffer_capacity: u32,
-	/// Timeout for acquiring a WebSocket call slot.
-	ws_backpressure_timeout: Duration,
 	/// Ping settings.
 	ping_config: Option<PingConfig>,
 	/// ID provider.
@@ -376,7 +372,6 @@ impl Default for ServerConfigBuilder {
 			enable_http: true,
 			enable_ws: true,
 			message_buffer_capacity: 1024,
-			ws_backpressure_timeout: Duration::from_secs(60),
 			ping_config: None,
 			id_provider: Arc::new(RandomIntegerIdProvider),
 			tcp_no_delay: true,
@@ -455,12 +450,19 @@ impl ServerConfigBuilder {
 		self
 	}
 
-	/// Limit queued responses and pending WebSocket calls per connection.
-	/// A batch uses one call slot, held until its response is queued.
-	/// Subscription notifications use only the response buffer.
+	/// The server enforces backpressure which means that
+	/// `n` messages can be buffered and if the client
+	/// can't keep with up the server.
 	///
-	/// The server reads one extra request before waiting for a call slot.
-	/// See [`Self::set_ws_backpressure_timeout`] for the wait limit.
+	/// This `capacity` is applied per connection and
+	/// applies globally on the connection which implies
+	/// all JSON-RPC messages.
+	///
+	/// The same number of method calls can be pending per connection.
+	/// If this limit is reached then the server will "back-off" and only
+	/// accept new messages once the client reads pending messages.
+	///
+	/// Subscription notifications don't count as pending calls.
 	///
 	/// # Panics
 	///
@@ -469,15 +471,6 @@ impl ServerConfigBuilder {
 	pub fn set_message_buffer_capacity(mut self, c: u32) -> Self {
 		assert!(c > 0, "buffer capacity must be set to > 0");
 		self.message_buffer_capacity = c;
-		self
-	}
-
-	/// Set the WebSocket call-slot wait timeout (default: 60 seconds).
-	///
-	/// On expiry, close the connection and cancel pending calls.
-	/// Applies only while a request waits for a slot, independently of ping/pong.
-	pub fn set_ws_backpressure_timeout(mut self, timeout: Duration) -> Self {
-		self.ws_backpressure_timeout = timeout;
 		self
 	}
 
@@ -574,7 +567,6 @@ impl ServerConfigBuilder {
 			enable_http: self.enable_http,
 			enable_ws: self.enable_ws,
 			message_buffer_capacity: self.message_buffer_capacity,
-			ws_backpressure_timeout: self.ws_backpressure_timeout,
 			ping_config: self.ping_config,
 			id_provider: self.id_provider,
 			tcp_no_delay: self.tcp_no_delay,

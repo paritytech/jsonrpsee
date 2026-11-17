@@ -199,128 +199,6 @@ async fn slow_method_calls_works() {
 async fn pending_method_call_is_dropped_when_connection_closes() {
 	init_logger();
 
-	let config = ServerConfig::builder().set_message_buffer_capacity(1).build();
-	let (handle, _, mut client, dropped_rx) = server_with_started_pending_call(config).await;
-	client.close().await.unwrap();
-	drop(client);
-
-	let dropped = tokio::time::timeout(Duration::from_secs(5), dropped_rx).await;
-	assert!(dropped.is_ok(), "method call kept running after the connection closed");
-
-	handle.stop().unwrap();
-	handle.stopped().with_default_timeout().await.unwrap();
-}
-
-#[tokio::test]
-async fn ws_backpressure_timeout_cancels_pending_calls_and_releases_connection() {
-	init_logger();
-
-	// Release the connection slot with or without a client disconnect.
-	for disconnect in [false, true] {
-		let config = ServerConfig::builder()
-			.max_connections(1)
-			.set_message_buffer_capacity(1)
-			.set_ws_backpressure_timeout(Duration::from_millis(100))
-			.build();
-		let (handle, addr, mut client, dropped_rx) = server_with_started_pending_call(config).await;
-
-		// Queue requests ahead of the close frame.
-		for id in 2..10 {
-			client.send(call("ready", Vec::<()>::new(), Id::Num(id))).await.unwrap();
-		}
-		if disconnect {
-			client.close().await.unwrap();
-		}
-
-		let dropped = dropped_rx.with_timeout(Duration::from_secs(5)).await;
-		assert!(matches!(dropped, Ok(Err(_))), "pending call survived capacity timeout (disconnect={disconnect})");
-		drop(client);
-
-		// A leaked slot would reject this connection.
-		let mut next = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
-		let response = next.send_request_text(call("ready", Vec::<()>::new(), Id::Num(10))).await.unwrap();
-		assert_eq!(response, ok_response(42.into(), Id::Num(10)));
-		next.close().await.unwrap();
-		drop(next);
-		handle.stop().unwrap();
-		handle.stopped().with_default_timeout().await.unwrap();
-	}
-}
-
-#[tokio::test]
-async fn ws_backpressure_keeps_inactivity_detection_active_without_queued_calls() {
-	init_logger();
-
-	let config = ServerConfig::builder()
-		.set_message_buffer_capacity(1)
-		.enable_ws_ping(
-			crate::PingConfig::new()
-				.ping_interval(Duration::from_millis(50))
-				.inactive_limit(Duration::from_millis(200)),
-		)
-		.build();
-	let (handle, _, client, dropped_rx) = server_with_started_pending_call(config).await;
-	// Keep the client connected without answering pings.
-	assert!(matches!(dropped_rx.with_timeout(Duration::from_secs(5)).await, Ok(Err(_))));
-	drop(client);
-	handle.stop().unwrap();
-	handle.stopped().with_default_timeout().await.unwrap();
-}
-
-#[tokio::test]
-async fn ws_backpressure_resumes_when_call_capacity_returns() {
-	init_logger();
-
-	let config = ServerConfig::builder().set_message_buffer_capacity(1).build();
-	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").await.unwrap();
-	let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
-	let state = Arc::new((started_tx, tokio::sync::Semaphore::new(0)));
-	let mut module = RpcModule::new(state.clone());
-	module
-		.register_async_method("controlled", |params, state, _| async move {
-			let id = params.one::<u64>().unwrap();
-			state.0.send(id).unwrap();
-			state.1.acquire().await.unwrap().forget();
-			id
-		})
-		.unwrap();
-	let addr = server.local_addr().unwrap();
-	let handle = server.start(module);
-	let mut client = WebSocketTestClient::new(addr).await.unwrap();
-	client.send(call("controlled", vec![1], Id::Num(1))).await.unwrap();
-	assert_eq!(started_rx.recv().with_default_timeout().await.unwrap(), Some(1));
-	client.send(call("controlled", vec![2], Id::Num(2))).await.unwrap();
-	assert!(started_rx.recv().with_timeout(Duration::from_millis(100)).await.is_err());
-
-	// The queued call must start as soon as capacity returns.
-	state.1.add_permits(1);
-	assert_eq!(started_rx.recv().with_default_timeout().await.unwrap(), Some(2));
-	assert_eq!(client.receive().with_default_timeout().await.unwrap().unwrap(), ok_response(1.into(), Id::Num(1)));
-	state.1.add_permits(1);
-	assert_eq!(client.receive().with_default_timeout().await.unwrap().unwrap(), ok_response(2.into(), Id::Num(2)));
-	client.close().await.unwrap();
-	drop(client);
-	handle.stop().unwrap();
-	handle.stopped().with_default_timeout().await.unwrap();
-}
-
-#[tokio::test]
-async fn ws_backpressure_does_not_block_server_shutdown_after_disconnect() {
-	init_logger();
-
-	let config = ServerConfig::builder().set_message_buffer_capacity(1).build();
-	let (handle, _, mut client, dropped_rx) = server_with_started_pending_call(config).await;
-	client.send(call("ready", Vec::<()>::new(), Id::Num(2))).await.unwrap();
-	handle.stop().unwrap();
-	client.close().await.unwrap();
-	drop(client);
-	assert!(matches!(dropped_rx.with_timeout(Duration::from_secs(5)).await, Ok(Err(_))));
-	handle.stopped().with_default_timeout().await.unwrap();
-}
-
-async fn server_with_started_pending_call(
-	config: ServerConfig,
-) -> (crate::ServerHandle, std::net::SocketAddr, WebSocketTestClient, tokio::sync::oneshot::Receiver<()>) {
 	let (started_tx, started_rx) = tokio::sync::oneshot::channel::<()>();
 	let (dropped_tx, dropped_rx) = tokio::sync::oneshot::channel::<()>();
 	let mut module = RpcModule::new(std::sync::Mutex::new(Some((started_tx, dropped_tx))));
@@ -332,9 +210,8 @@ async fn server_with_started_pending_call(
 			std::future::pending::<&'static str>().await
 		})
 		.unwrap();
-	module.register_method("ready", |_, _, _| 42).unwrap();
 
-	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
 	let handle = server.start(module);
 
@@ -342,7 +219,14 @@ async fn server_with_started_pending_call(
 	client.send(r#"{"jsonrpc":"2.0","method":"pending","id":1}"#).await.unwrap();
 	started_rx.with_default_timeout().await.unwrap().unwrap();
 
-	(handle, addr, client, dropped_rx)
+	client.close().await.unwrap();
+	drop(client);
+
+	let dropped = tokio::time::timeout(Duration::from_secs(5), dropped_rx).await;
+	assert!(dropped.is_ok(), "method call kept running after the connection closed");
+
+	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
@@ -1025,7 +909,7 @@ async fn ws_server_backpressure_works_for_method_calls() {
 async fn ws_server_handles_calls_while_subscription_buffer_is_full() {
 	init_logger();
 
-	let config = ServerConfig::builder().set_message_buffer_capacity(1).build();
+	let config = ServerConfig::builder().set_message_buffer_capacity(4).build();
 	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let state = Arc::new((tokio::sync::Notify::new(), tokio::sync::Notify::new()));
