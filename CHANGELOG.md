@@ -4,6 +4,16 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.26.2] - 2026-11-18
+
+A small patch release with fixes for the server and the WebSocket client.
+
+### [Fixed]
+
+- fix(server): apply backpressure to WebSocket method calls ([#1675](https://github.com/paritytech/jsonrpsee/pull/1675))
+- fix(server): reject IDs in notification fallback ([#1662](https://github.com/paritytech/jsonrpsee/pull/1662))
+- fix(client): make domain name resolution async and bound it by `connection_timeout` ([#1642](https://github.com/paritytech/jsonrpsee/pull/1642))
+
 ## [v0.26.1] - 2026-09-30
 
 A small patch release that exposes a connect timeout for the HTTP client, bounds the WebSocket handshake of the
