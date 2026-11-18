@@ -31,7 +31,7 @@ use std::time::Duration;
 use crate::tests::helpers::{Metrics, deser_call, init_logger, server_with_context, ws_server_with_stats};
 use crate::types::SubscriptionId;
 use crate::{BatchRequestConfig, RegisterMethodError, ServerConfig};
-use crate::{RpcModule, ServerBuilder};
+use crate::{RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee_core::server::SendTimeoutError;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -955,6 +955,71 @@ async fn ws_server_handles_calls_while_subscription_buffer_is_full() {
 	// Calls from the client must still be processed.
 	client.send(call("unsubscribe_large", vec![sub_id], Id::Num(2))).with_default_timeout().await.unwrap().unwrap();
 	unsubscribed.notified().with_default_timeout().await.unwrap();
+}
+
+const CALL_PERMITS: u32 = 2;
+
+struct NeverFinishingCalls {
+	started: tokio::sync::Semaphore,
+	stopped: tokio::sync::Semaphore,
+}
+
+struct CountStoppedOnDrop(Arc<NeverFinishingCalls>);
+
+impl Drop for CountStoppedOnDrop {
+	fn drop(&mut self) {
+		self.0.stopped.add_permits(1);
+	}
+}
+
+async fn client_holding_all_call_permits() -> (WebSocketTestClient, Arc<NeverFinishingCalls>, ServerHandle) {
+	let config = ServerConfig::builder().set_message_buffer_capacity(CALL_PERMITS).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+
+	let calls = Arc::new(NeverFinishingCalls {
+		started: tokio::sync::Semaphore::new(0),
+		stopped: tokio::sync::Semaphore::new(0),
+	});
+	let mut module = RpcModule::new(calls.clone());
+	module
+		.register_async_method("never_finishes", |_, calls, _| async move {
+			let _count_stopped_on_drop = CountStoppedOnDrop(Arc::clone(&calls));
+			calls.started.add_permits(1);
+			futures_util::future::pending::<()>().await;
+		})
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+	let server_handle = server.start(module);
+
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	for id in 0..CALL_PERMITS {
+		let req = call("never_finishes", Vec::<()>::new(), Id::Num(id as u64));
+		client.send(req).with_default_timeout().await.unwrap().unwrap();
+	}
+	calls.started.acquire_many(CALL_PERMITS).with_default_timeout().await.unwrap().unwrap().forget();
+
+	(client, calls, server_handle)
+}
+
+#[tokio::test]
+async fn ws_server_stops_calls_on_disconnect_while_all_call_permits_are_held() {
+	init_logger();
+
+	let (client, calls, _server_handle) = client_holding_all_call_permits().await;
+
+	// No call will ever release its permit, so the server must notice the disconnect on its own.
+	drop(client);
+	calls.stopped.acquire_many(CALL_PERMITS).with_default_timeout().await.unwrap().unwrap().forget();
+}
+
+#[tokio::test]
+async fn ws_server_answers_pings_while_all_call_permits_are_held() {
+	init_logger();
+
+	let (mut client, _calls, _server_handle) = client_holding_all_call_permits().await;
+
+	// A client with a keep-alive timeout would otherwise give up on a connection that is merely busy.
+	client.ping().with_default_timeout().await.unwrap().unwrap();
 }
 
 #[tokio::test]

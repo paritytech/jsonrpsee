@@ -114,11 +114,6 @@ where
 	tokio::pin!(ws_stream);
 
 	let result = loop {
-		// Only read the next message once there is room for another pending call.
-		let Some(permit) = acquire_call_permit(&call_permits, &mut stopped).await else {
-			break Ok(Shutdown::Stopped);
-		};
-
 		let data = match try_recv(&mut ws_stream, stopped, ping_config, &mut missed_pings).await {
 			Receive::ConnectionClosed => break Ok(Shutdown::ConnectionClosed),
 			Receive::Stopped => break Ok(Shutdown::Stopped),
@@ -152,6 +147,11 @@ where
 					}
 				};
 			}
+		};
+
+		// Acquired after reading, so that a disconnect is still noticed while all permits are held.
+		let Some(permit) = acquire_call_permit(&call_permits, &mut stopped).await else {
+			break Ok(Shutdown::Stopped);
 		};
 
 		let rpc_service = rpc_service.clone();

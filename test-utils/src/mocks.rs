@@ -38,6 +38,8 @@ use futures_util::stream::{self, StreamExt};
 use futures_util::{pin_mut, select};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use serde::{Deserialize, Serialize};
+use soketto::Incoming;
+use soketto::data::ByteSlice125;
 use soketto::handshake::{self, Error as SokettoError, Server, http::is_upgrade_request, server::Response};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
@@ -135,6 +137,17 @@ impl WebSocketTestClient {
 
 	pub async fn close(&mut self) -> Result<(), Error> {
 		self.tx.close().await.map_err(Into::into)
+	}
+
+	/// Sends a ping and waits for the pong.
+	pub async fn ping(&mut self) -> Result<(), Error> {
+		self.tx.send_ping(ByteSlice125::try_from(&[][..])?).await?;
+		self.tx.flush().await?;
+		let mut data = Vec::new();
+		match self.rx.receive(&mut data).await? {
+			Incoming::Pong(_) => Ok(()),
+			incoming => Err(format!("expected a pong, got {incoming:?}").into()),
+		}
 	}
 }
 
