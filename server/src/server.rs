@@ -458,11 +458,11 @@ impl ServerConfigBuilder {
 	/// applies globally on the connection which implies
 	/// all JSON-RPC messages.
 	///
-	/// For example if a subscription produces plenty of new items
-	/// and the client can't keep up then no new messages are handled.
+	/// The same number of method calls can be pending per connection.
+	/// If this limit is reached then the server will "back-off" and only
+	/// accept new messages once the client reads pending messages.
 	///
-	/// If this limit is exceeded then the server will "back-off"
-	/// and only accept new messages once the client reads pending messages.
+	/// Subscription notifications don't count as pending calls.
 	///
 	/// # Panics
 	///

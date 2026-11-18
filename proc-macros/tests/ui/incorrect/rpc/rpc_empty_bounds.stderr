@@ -8,8 +8,9 @@ error[E0277]: the trait bound `<Conf as Config>::Hash: serde::de::DeserializeOwn
 note: required by a bound in `request`
  --> $WORKSPACE/core/src/client/mod.rs
   |
+  | pub trait ClientT {
+...
   |     fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
-  |        ------- required by a bound in this associated function
   |     where
   |         R: DeserializeOwned,
   |            ^^^^^^^^^^^^^^^^ required by this bound in `ClientT::request`
