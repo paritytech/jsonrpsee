@@ -30,9 +30,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_util::{Future, Stream, StreamExt};
+#[cfg(feature = "ws")]
+use futures_util::Stream;
+use futures_util::{Future, StreamExt};
+#[cfg(feature = "ws")]
 use pin_project::pin_project;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError, watch};
+#[cfg(feature = "ws")]
 use tokio::time::Interval;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -131,9 +135,11 @@ impl ConnectionGuard {
 /// Connection permit.
 pub type ConnectionPermit = OwnedSemaphorePermit;
 
+#[cfg(feature = "ws")]
 #[pin_project]
 pub(crate) struct IntervalStream(#[pin] Option<tokio_stream::wrappers::IntervalStream>);
 
+#[cfg(feature = "ws")]
 impl IntervalStream {
 	/// Creates a stream which never returns any elements.
 	pub(crate) fn pending() -> Self {
@@ -146,6 +152,7 @@ impl IntervalStream {
 	}
 }
 
+#[cfg(feature = "ws")]
 impl Stream for IntervalStream {
 	type Item = tokio::time::Instant;
 
@@ -164,6 +171,7 @@ impl Stream for IntervalStream {
 pub(crate) struct SessionClose(tokio::sync::broadcast::Sender<()>);
 
 impl SessionClose {
+	#[cfg(feature = "ws")]
 	pub(crate) fn close(self) {
 		let _ = self.0.send(());
 	}

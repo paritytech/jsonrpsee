@@ -34,32 +34,40 @@ use std::time::Duration;
 
 use crate::future::{ConnectionGuard, ServerHandle, SessionClose, SessionClosedFuture, StopHandle, session_close};
 use crate::middleware::rpc::{RpcService, RpcServiceCfg};
-use crate::transport::ws::BackgroundTaskParams;
-use crate::transport::{http, ws};
+use crate::transport::http;
+#[cfg(feature = "ws")]
+use crate::transport::ws::{self, BackgroundTaskParams};
 use crate::utils::{DEFAULT_FIRST_REQUEST_TIMEOUT, NotifyOnRequest, deserialize_with_ext, no_request_within};
 use crate::{Extensions, HttpBody, HttpRequest, HttpResponse, LOG_TARGET};
 
 use futures_util::future::{Either, FutureExt};
+#[cfg(feature = "ws")]
 use futures_util::io::{BufReader, BufWriter};
 use hyper::body::Bytes;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::{Batch, BatchEntry, BatchEntryErr, RpcServiceBuilder, RpcServiceT};
 use jsonrpsee_core::server::helpers::prepare_error;
-use jsonrpsee_core::server::{BoundedSubscriptions, ConnectionId, MethodResponse, MethodSink, Methods};
+#[cfg(feature = "ws")]
+use jsonrpsee_core::server::{BoundedSubscriptions, MethodSink};
+use jsonrpsee_core::server::{ConnectionId, MethodResponse, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{BoxError, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::{
 	BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG, ErrorCode, reject_too_big_batch_request,
 };
 use jsonrpsee_types::{ErrorObject, Id};
+#[cfg(feature = "ws")]
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{Notify, OwnedSemaphorePermit, mpsc, watch};
+#[cfg(feature = "ws")]
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
-use tracing::{Instrument, instrument};
+#[cfg(feature = "ws")]
+use tracing::Instrument;
+use tracing::instrument;
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u32 = 100;
@@ -171,6 +179,8 @@ where
 
 /// Static server configuration which is shared per connection.
 #[derive(Debug, Clone)]
+// The subscription and ping settings are only used by the WebSocket transport.
+#[cfg_attr(not(feature = "ws"), allow(dead_code))]
 pub struct ServerConfig {
 	/// Maximum size in bytes of a request.
 	pub(crate) max_request_body_size: u32,
@@ -268,6 +278,8 @@ pub enum BatchRequestConfig {
 /// Connection related state that is needed
 /// to execute JSON-RPC calls.
 #[derive(Debug, Clone)]
+// `stop_handle` is only used by the WebSocket transport.
+#[cfg_attr(not(feature = "ws"), allow(dead_code))]
 pub struct ConnectionState {
 	/// Stop handle.
 	pub(crate) stop_handle: StopHandle,
@@ -444,6 +456,8 @@ impl ServerConfigBuilder {
 	/// That implies that server just denies HTTP requests which isn't a WebSocket upgrade request
 	///
 	/// Default: both http and ws are enabled.
+	#[cfg(feature = "ws")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
 	pub fn ws_only(mut self) -> Self {
 		self.enable_http = false;
 		self.enable_ws = true;
@@ -781,12 +795,14 @@ impl<HttpMiddleware, RpcMiddleware> Builder<HttpMiddleware, RpcMiddleware> {
 	/// # Examples
 	///
 	/// ```no_run
+	/// # #[cfg(feature = "ws")]
 	/// use jsonrpsee_server::{Methods, ServerConfig, ServerHandle, ws, stop_channel, serve_with_graceful_shutdown};
 	/// use tower::Service;
 	/// use std::{error::Error as StdError, net::SocketAddr};
 	/// use futures_util::future::{self, Either};
 	/// use hyper_util::rt::{TokioIo, TokioExecutor};
 	///
+	/// # #[cfg(feature = "ws")]
 	/// fn run_server() -> ServerHandle {
 	///     let (stop_handle, server_handle) = stop_channel();
 	///     let svc_builder = jsonrpsee_server::Server::builder()
@@ -1036,6 +1052,7 @@ where
 		let conn_guard = &self.inner.conn_guard;
 		let stop_handle = self.inner.stop_handle.clone();
 		let conn_id = self.inner.conn_id;
+		#[cfg_attr(not(feature = "ws"), allow(unused_variables))]
 		let on_session_close = self.on_session_close.take();
 
 		tracing::trace!(target: LOG_TARGET, "{:?}", request);
@@ -1054,8 +1071,13 @@ where
 		req_ext.insert::<ConnectionGuard>(conn_guard.clone());
 		req_ext.insert::<ConnectionId>(conn.conn_id.into());
 
+		#[cfg(feature = "ws")]
 		let is_upgrade_request = is_upgrade_request(&request);
+		// Without WebSocket support, upgrade requests are handled like any other HTTP request.
+		#[cfg(not(feature = "ws"))]
+		let is_upgrade_request = false;
 
+		#[cfg(feature = "ws")]
 		if self.inner.server_cfg.enable_ws && is_upgrade_request {
 			let this = self.inner.clone();
 
@@ -1134,8 +1156,10 @@ where
 				}
 			};
 
-			async { Ok(response) }.boxed()
-		} else if self.inner.server_cfg.enable_http && !is_upgrade_request {
+			return async { Ok(response) }.boxed();
+		}
+
+		if self.inner.server_cfg.enable_http && !is_upgrade_request {
 			let this = &self.inner;
 			let max_response_size = this.server_cfg.max_response_body_size;
 			let max_request_size = this.server_cfg.max_request_body_size;
