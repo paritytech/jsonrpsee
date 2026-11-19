@@ -153,6 +153,162 @@ pub trait SubscriptionClientT: ClientT {
 		Notif: DeserializeOwned;
 }
 
+impl<C: ClientT + ?Sized> ClientT for &C {
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
+	where
+		Params: ToRpcParams + Send,
+	{
+		(**self).notification(method, params)
+	}
+
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
+	where
+		R: DeserializeOwned,
+		Params: ToRpcParams + Send,
+	{
+		(**self).request(method, params)
+	}
+
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
+	where
+		R: DeserializeOwned + fmt::Debug + 'a,
+	{
+		(**self).batch_request(batch)
+	}
+}
+
+impl<C: SubscriptionClientT + ?Sized> SubscriptionClientT for &C {
+	fn subscribe<'a, Notif, Params>(
+		&self,
+		subscribe_method: &'a str,
+		params: Params,
+		unsubscribe_method: &'a str,
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	where
+		Params: ToRpcParams + Send,
+		Notif: DeserializeOwned,
+	{
+		(**self).subscribe(subscribe_method, params, unsubscribe_method)
+	}
+
+	fn subscribe_to_method<Notif>(
+		&self,
+		method: &str,
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	where
+		Notif: DeserializeOwned,
+	{
+		(**self).subscribe_to_method(method)
+	}
+}
+
+impl<C: ClientT + ?Sized> ClientT for Arc<C> {
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
+	where
+		Params: ToRpcParams + Send,
+	{
+		(**self).notification(method, params)
+	}
+
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
+	where
+		R: DeserializeOwned,
+		Params: ToRpcParams + Send,
+	{
+		(**self).request(method, params)
+	}
+
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
+	where
+		R: DeserializeOwned + fmt::Debug + 'a,
+	{
+		(**self).batch_request(batch)
+	}
+}
+
+impl<C: SubscriptionClientT + ?Sized> SubscriptionClientT for Arc<C> {
+	fn subscribe<'a, Notif, Params>(
+		&self,
+		subscribe_method: &'a str,
+		params: Params,
+		unsubscribe_method: &'a str,
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	where
+		Params: ToRpcParams + Send,
+		Notif: DeserializeOwned,
+	{
+		(**self).subscribe(subscribe_method, params, unsubscribe_method)
+	}
+
+	fn subscribe_to_method<Notif>(
+		&self,
+		method: &str,
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	where
+		Notif: DeserializeOwned,
+	{
+		(**self).subscribe_to_method(method)
+	}
+}
+
+impl<C: ClientT + ?Sized> ClientT for Box<C> {
+	fn notification<Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<(), Error>> + Send
+	where
+		Params: ToRpcParams + Send,
+	{
+		(**self).notification(method, params)
+	}
+
+	fn request<R, Params>(&self, method: &str, params: Params) -> impl Future<Output = Result<R, Error>> + Send
+	where
+		R: DeserializeOwned,
+		Params: ToRpcParams + Send,
+	{
+		(**self).request(method, params)
+	}
+
+	fn batch_request<'a, R>(
+		&self,
+		batch: BatchRequestBuilder<'a>,
+	) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
+	where
+		R: DeserializeOwned + fmt::Debug + 'a,
+	{
+		(**self).batch_request(batch)
+	}
+}
+
+impl<C: SubscriptionClientT + ?Sized> SubscriptionClientT for Box<C> {
+	fn subscribe<'a, Notif, Params>(
+		&self,
+		subscribe_method: &'a str,
+		params: Params,
+		unsubscribe_method: &'a str,
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	where
+		Params: ToRpcParams + Send,
+		Notif: DeserializeOwned,
+	{
+		(**self).subscribe(subscribe_method, params, unsubscribe_method)
+	}
+
+	fn subscribe_to_method<Notif>(
+		&self,
+		method: &str,
+	) -> impl Future<Output = Result<Subscription<Notif>, Error>> + Send
+	where
+		Notif: DeserializeOwned,
+	{
+		(**self).subscribe_to_method(method)
+	}
+}
+
 /// Marker trait to determine whether a type implements `Send` or not.
 #[cfg(target_arch = "wasm32")]
 pub trait MaybeSend {}
@@ -825,5 +981,65 @@ impl<T: Serialize> ToJson for Result<T, Error> {
 			Ok(v) => serde_json::value::to_raw_value(v),
 			Err(e) => serde_json::value::to_raw_value(&e.to_string()),
 		}
+	}
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::params::ArrayParams;
+
+	struct DummyClient;
+
+	impl ClientT for DummyClient {
+		fn notification<Params>(&self, _method: &str, _params: Params) -> impl Future<Output = Result<(), Error>> + Send
+		where
+			Params: ToRpcParams + Send,
+		{
+			async { Ok(()) }
+		}
+
+		fn request<R, Params>(&self, _method: &str, _params: Params) -> impl Future<Output = Result<R, Error>> + Send
+		where
+			R: DeserializeOwned,
+			Params: ToRpcParams + Send,
+		{
+			async {
+				let val: R = serde_json::from_str("\"dummy\"").map_err(Error::ParseError)?;
+				Ok(val)
+			}
+		}
+
+		fn batch_request<'a, R>(
+			&self,
+			_batch: BatchRequestBuilder<'a>,
+		) -> impl Future<Output = Result<BatchResponse<'a, R>, Error>> + Send
+		where
+			R: DeserializeOwned + fmt::Debug + 'a,
+		{
+			async { Ok(BatchResponse::new(0, vec![], 0)) }
+		}
+	}
+
+	#[tokio::test]
+	async fn test_client_t_for_arc_and_box_and_ref() {
+		async fn call_client<C: ClientT>(c: C) -> Result<String, Error> {
+			c.request("test", ArrayParams::new()).await
+		}
+
+		let client = DummyClient;
+
+		// &C
+		assert_eq!(call_client(&client).await.unwrap(), "dummy");
+
+		// Arc<C>
+		let arc_client = Arc::new(client);
+		assert_eq!(call_client(arc_client.clone()).await.unwrap(), "dummy");
+
+		// Box<C>
+		let box_client = Box::new(DummyClient);
+		assert_eq!(call_client(box_client).await.unwrap(), "dummy");
 	}
 }
