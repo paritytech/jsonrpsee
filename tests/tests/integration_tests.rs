@@ -987,6 +987,50 @@ async fn http_correct_content_type_required() {
 }
 
 #[tokio::test]
+async fn http_oversized_chunked_request_returns_413() {
+	use http_body_util::StreamBody;
+	use hyper::{Method, Request, StatusCode, body::Bytes};
+	use hyper_util::client::legacy::Client;
+	use jsonrpsee_test_utils::helpers::oversized_request;
+
+	init_logger();
+
+	const MAX_REQUEST_BODY_SIZE: u32 = 100;
+
+	let config = ServerConfig::builder().max_request_body_size(MAX_REQUEST_BODY_SIZE).build();
+	let server = ServerBuilder::with_config(config).build("127.0.0.1:0").await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("say_hello", |_, _, _| "hello").unwrap();
+	let addr = server.local_addr().unwrap();
+	let handle = server.start(module);
+
+	let uri = format!("http://{addr}");
+	let http_client = Client::builder(TokioExecutor::new()).build_http();
+
+	// A body without a known length is sent with chunked transfer encoding.
+	let chunks = [
+		Ok::<_, std::convert::Infallible>(hyper::body::Frame::data(Bytes::from_static(
+			br#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#,
+		))),
+		Ok(hyper::body::Frame::data(Bytes::from(vec![b' '; MAX_REQUEST_BODY_SIZE as usize]))),
+	];
+	let req = Request::builder()
+		.method(Method::POST)
+		.uri(&uri)
+		.header("content-type", "application/json")
+		.body(StreamBody::new(futures_util::stream::iter(chunks)))
+		.expect("request builder");
+
+	let res = http_client.request(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(std::str::from_utf8(&body).unwrap(), oversized_request(MAX_REQUEST_BODY_SIZE));
+
+	handle.stop().unwrap();
+	handle.stopped().await;
+}
+
+#[tokio::test]
 async fn http_cors_preflight_works() {
 	use hyper::{Method, Request};
 	use hyper_util::client::legacy::Client;

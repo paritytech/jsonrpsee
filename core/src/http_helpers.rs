@@ -29,7 +29,7 @@
 use crate::BoxError;
 use bytes::{Buf, Bytes};
 use http_body::Frame;
-use http_body_util::{BodyExt, Limited};
+use http_body_util::{BodyExt, LengthLimitError, Limited};
 use std::{
 	pin::Pin,
 	task::{Context, Poll},
@@ -147,7 +147,12 @@ where
 	let mut is_single = None;
 
 	while let Some(frame_or_err) = limited_body.frame().await {
-		let frame = frame_or_err.map_err(HttpError::Stream)?;
+		let frame = match frame_or_err {
+			Ok(frame) => frame,
+			// `Limited` reports exceeding the configured limit as a `LengthLimitError`.
+			Err(err) if err.is::<LengthLimitError>() => return Err(HttpError::TooLarge),
+			Err(err) => return Err(HttpError::Stream(err)),
+		};
 		let Some(data) = frame.data_ref() else {
 			continue;
 		};
