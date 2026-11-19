@@ -30,11 +30,11 @@ use std::str::FromStr;
 use super::RpcDescription;
 use crate::{
 	helpers::{generate_where_clause, is_option},
-	rpc_macro::RpcFnArg,
+	rpc_macro::{RPC_DISCOVER_METHOD, RpcFnArg},
 };
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
-use syn::Attribute;
+use syn::{Attribute, Type};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -62,7 +62,8 @@ impl RpcDescription {
 	}
 
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
-		let methods = self.methods.iter().map(|method| {
+		// skip discover method, as we render it seperatly
+		let methods = self.methods.iter().filter(|m| m.name != RPC_DISCOVER_METHOD).map(|method| {
 			let docs = &method.docs;
 			let mut method_sig = method.signature.clone();
 
@@ -101,10 +102,64 @@ impl RpcDescription {
 			}
 		});
 
+		let discover_method = if self.discover {
+			self.rpc_render_discover_method()
+		} else {
+			quote! {}
+		};
+
 		Ok(quote! {
 			#(#methods)*
 			#(#subscriptions)*
+			#discover_method
 		})
+	}
+
+	fn rpc_render_discover_method(&self) -> TokenStream2 {
+		let title = self.trait_def.ident.to_string();
+		// skip discover method itself, we don't want to appear it in the doc, for now.
+		let methods = self.methods.iter().filter(|m| m.name != RPC_DISCOVER_METHOD);
+
+		let names = methods.clone().map(|m| m.name.to_string());
+		let docs = methods.clone().map(|m| m.docs.to_string());
+		let param_expansion = methods.clone().map(|m| {
+			let param_names = m.params.iter().map(|p| p.arg_pat.ident.to_string()).collect::<Vec<String>>();
+			let param_types = m.params.iter().map(|p| &p.ty).collect::<Vec<&Type>>();
+
+			// generate code for generating schema from types and content descriptor for each parameter
+			quote! {
+				#({
+					let __schema: Schema = schema!(#[inline] #param_types).into();
+					jsonrpsee::open_rpc::ContentDescriptor::new(#param_names, __schema.try_into().expect("invalid schema"))
+				}),*
+			}
+		});
+		let return_types = methods.map(|m| {
+			m.returns
+				.as_ref()
+				.map(|r| {
+					let r = extract_ok_value_from_return_type(r);
+					quote! {{
+						let __schema: Schema = schema!(#[inline] #r).into();
+						Some(jsonrpsee::open_rpc::ContentDescriptor::new("return".to_string(), __schema.try_into().expect("invalid schema")))
+					}}
+				})
+				.unwrap_or_else(|| quote! { None })
+		});
+
+		quote! {
+			async fn discover(&self) -> Result<jsonrpsee::open_rpc::OpenRpc, std::convert::Infallible> {
+				use jsonrpsee::open_rpc::utoipa::{schema, openapi::{RefOr, Schema}};
+				pub use jsonrpsee::open_rpc::utoipa;
+
+				let __response = jsonrpsee::open_rpc::OpenRpc::new(#title)
+				#(
+					.with_method(#names, #docs, std::vec![#param_expansion], #return_types)
+				)*;
+
+				Ok(__response)
+			}
+		}
 	}
 
 	/// Helper that will ignore results of `register_*` method calls, and panic if there have been
@@ -456,5 +511,27 @@ impl RpcDescription {
 		};
 
 		(parsing, params_fields)
+	}
+}
+
+/// This method extracts the `T` from `Result<T, E>` or `RpcResult<T, E>` types,
+/// otherwise returns the original type.
+fn extract_ok_value_from_return_type(r: &syn::Type) -> &syn::Type {
+	match r {
+		syn::Type::Path(type_path)
+			if type_path
+				.path
+				.segments
+				.last()
+				.map(|s| s.ident == "Result" || s.ident == "RpcResult")
+				.unwrap_or(false) =>
+		{
+			if let syn::PathArguments::AngleBracketed(ref args) = type_path.path.segments.last().unwrap().arguments {
+				if let Some(syn::GenericArgument::Type(ty)) = args.args.first() { ty } else { r }
+			} else {
+				r
+			}
+		}
+		_ => r,
 	}
 }

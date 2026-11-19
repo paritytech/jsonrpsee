@@ -101,3 +101,5 @@ cfg_client_or_server! {
 cfg_client! {
 	pub use jsonrpsee_core::rpc_params;
 }
+
+pub use open_rpc;

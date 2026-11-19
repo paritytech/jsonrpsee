@@ -81,6 +81,7 @@ tower-http = "0.6"
 tracing = "0.1.34"
 url = "2.4"
 wasm-bindgen-futures = "0.4.19"
+open-rpc = { git = "https://github.com/Velnbur/open-rpc", branch = "feature/utoipa-integration" }
 
 # Dev dependencies
 anyhow = "1"
