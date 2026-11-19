@@ -418,6 +418,16 @@ async fn batch_request_with_failed_call_gives_proper_error() {
 }
 
 #[tokio::test]
+async fn error_with_unknown_field_works() {
+	let err = run_request_with_response(error_with_unknown_field(Id::Num(0_u64)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
+	assert_error_response(err, ErrorObject::from(ErrorCode::ServerError(-32000)).into_owned());
+}
+
+#[tokio::test]
 async fn is_connected_works() {
 	init_logger();
 
