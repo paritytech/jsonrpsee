@@ -573,7 +573,9 @@ async fn connect(
 				None => Ok(EitherStream::Plain(socket)),
 				Some(connector) => {
 					let server_name: rustls_pki_types::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {host} {e:?}").into()))?;
-					let tls_stream = connector.connect(server_name.to_owned(), socket).await?;
+					let tls_stream = tokio::time::timeout(timeout_dur, connector.connect(server_name.to_owned(), socket))
+						.await
+						.map_err(|_| WsHandshakeError::Timeout(timeout_dur))??;
 					Ok(EitherStream::Tls(tls_stream))
 				}
 			}
@@ -813,5 +815,38 @@ mod tests {
 			let resolved = resolve_sockaddrs(&url, Duration::from_secs(1)).await.unwrap();
 			assert_eq!(resolved, url.socket_addrs(|| None).unwrap());
 		}
+	}
+
+	// A peer that accepts the TCP connection but never answers the TLS ClientHello must not leave
+	// `build` pending: the TLS handshake is bounded by the connection timeout.
+	#[cfg(feature = "tls")]
+	#[tokio::test]
+	async fn tls_handshake_is_bounded_by_timeout() {
+		use super::WsTransportClientBuilder;
+
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		// Accept the connection, keep the socket open and never reply to the ClientHello.
+		tokio::spawn(async move {
+			let _socket = listener.accept().await.unwrap();
+			std::future::pending::<()>().await;
+		});
+
+		let _ = rustls::crypto::ring::default_provider().install_default();
+		let config = rustls::ClientConfig::builder()
+			.with_root_certificates(rustls::RootCertStore::empty())
+			.with_no_client_auth();
+		let url = Url::parse(&format!("wss://{addr}")).unwrap();
+		let timeout = Duration::from_millis(100);
+
+		let err = tokio::time::timeout(
+			Duration::from_secs(5),
+			WsTransportClientBuilder::default().with_custom_cert_store(config).connection_timeout(timeout).build(url),
+		)
+		.await
+		.expect("build should be bounded by the connection timeout")
+		.unwrap_err();
+
+		assert!(matches!(err, WsHandshakeError::Timeout(t) if t == timeout), "{err:?}");
 	}
 }
