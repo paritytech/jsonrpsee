@@ -222,7 +222,6 @@ impl PendingSubscriptionSink {
 	/// once reject has been called.
 	pub async fn reject(self, err: impl Into<ErrorObjectOwned>) {
 		let err = MethodResponse::subscription_error(self.id, err.into());
-		_ = self.inner.send(err.to_json()).await;
 		_ = self.subscribe.send(err);
 	}
 
@@ -239,13 +238,8 @@ impl PendingSubscriptionSink {
 		);
 		let success = response.is_success();
 
-		// TODO: #1052
-		//
-		// Ideally the message should be sent only once.
-		//
-		// The same message is sent twice here because one is sent directly to the transport layer and
-		// the other one is sent internally to accept the subscription.
-		self.inner.send(response.to_json()).await.map_err(|_| PendingSubscriptionAcceptError)?;
+		// Send the response only once through the internal channel so that it is observed by the
+		// RPC logger/middleware and delivered by the transport like any other method response (#1052).
 		self.subscribe.send(response).map_err(|_| PendingSubscriptionAcceptError)?;
 
 		if success {

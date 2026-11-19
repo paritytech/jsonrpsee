@@ -367,7 +367,7 @@ impl Methods {
 		buf_size: usize,
 		subscription_permit: SubscriptionPermit,
 	) -> RawRpcResponse {
-		let (tx, mut rx) = mpsc::channel(buf_size);
+		let (tx, rx) = mpsc::channel(buf_size);
 		// The extensions is always empty when calling the method directly because decoding an JSON-RPC
 		// request doesn't have any extensions.
 		let Request { id, method, params, .. } = req;
@@ -386,15 +386,7 @@ impl Methods {
 			Some(MethodCallback::Subscription(cb)) => {
 				let conn_state =
 					SubscriptionState { conn_id, id_provider: &RandomIntegerIdProvider, subscription_permit };
-				let res = (cb)(id, params, MethodSink::new(tx.clone()), conn_state, ext).await;
-
-				// This message is not used because it's used for metrics so we discard in other to
-				// not read once this is used for subscriptions.
-				//
-				// The same information is part of `res` above.
-				let _ = rx.recv().await.expect("Every call must at least produce one response; qed");
-
-				res
+				(cb)(id, params, MethodSink::new(tx.clone()), conn_state, ext).await
 			}
 			Some(MethodCallback::Unsubscription(cb)) => (cb)(id, params, conn_id, max_response_size, ext),
 		};

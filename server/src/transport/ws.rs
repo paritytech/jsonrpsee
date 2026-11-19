@@ -183,9 +183,9 @@ where
 			// The request isn't needed anymore while waiting to send the response.
 			drop(data);
 
-			// Subscriptions are handled by the subscription callback and
+			// Subscription responses are delivered here just like any other method response;
 			// "ordinary notifications" should not be sent back to the client.
-			if rp.is_method_call() || rp.is_batch() {
+			if rp.is_method_call() || rp.is_batch() || rp.is_subscription() {
 				let is_success = rp.is_success();
 				let (json, mut on_close, _) = rp.into_parts();
 
